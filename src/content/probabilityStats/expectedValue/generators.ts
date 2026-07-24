@@ -1,0 +1,2054 @@
+import type { Rng } from "@/lib/rng";
+import type {
+  Difficulty,
+  Flashcard,
+  NumericQuestion,
+  NumericQuestionGenerator,
+  Question,
+  QuestionGenerator,
+} from "@/types/content";
+import type FractionType from "fraction.js";
+import {
+  F,
+  allSameCoinsProb,
+  convertAllEV,
+  couponCollectorAll,
+  couponCollectorPartial,
+  decText,
+  dieMean,
+  dieSecondMoment,
+  dieVariance,
+  exactDecimals,
+  expectedDistinctAfterDraws,
+  expectedRecords,
+  expectedTrialsPairSame,
+  firstMarkerSpacingEV,
+  fracText,
+  geometricMemorylessTotal,
+  geometricSumEV,
+  harmonic,
+  higherWhenDifferEV,
+  maxOfDiceEV,
+  meetWithinProb,
+  negBinomialEV,
+  oneRerollFeeEV,
+  oneRerollUniformEV,
+  overlapProbTwoWindows,
+  twoDiceMatchProb,
+  uniformOrderStatEV,
+  waldEV,
+} from "./ev";
+import { mixNumericGenerators, mixQuestionGenerators } from "../../mixFamilies";
+
+/**
+ * Parametric generators + per-family misconception taxonomy for the
+ * Probability & Statistics → Expected Value subcategory.
+ *
+ * Expected Value is a CLUSTER of ~25 solution-method families, not a single
+ * repeating formula, so the generators are grouped by family. Every scalar is
+ * produced by the exact rational solver in `./ev.ts`; every distractor
+ * (`quiz` choices / `numeric` commonErrors) is a re-derived, NAMED
+ * misconception, guaranteed distinct and ≠ the answer.
+ *
+ * Mode per family (see `./levels.ts` for the justification):
+ *   • `numeric`   — families whose answer is a clean, exact scalar the learner
+ *                   should compute (optimal-stopping game values, geometric /
+ *                   recursion waits, indicator/linearity counts, conditional
+ *                   expectation & geometric-probability areas).
+ *   • `quiz`      — families where NAMING the mistake is the teaching point
+ *                   (the 1/36 dice-match trap, CLT variance addition, Wald's
+ *                   wrong count, walk duration i·N vs i(N−i)).
+ *   • `flashcard` — divergent-EV sentinels ("infinite / diverges", trap = a
+ *                   tempting finite sum) and coin-simulation PROCEDURES
+ *                   (reveal the procedure/formula, not a graded scalar).
+ *
+ * NONE of the 85 source-dataset questions are user-facing — they live only in
+ * `./expectedValue.test.ts` as hidden fixtures; all playable items here are
+ * freshly generated with different names/numbers.
+ */
+
+/* ========================================================================== */
+/*  Shared helpers                                                             */
+/* ========================================================================== */
+
+interface Choice {
+  text: string;
+  rationale: string;
+}
+
+/**
+ * Assemble + shuffle MC choices so the answer position never leaks. Distractors
+ * whose text collides with the correct answer or an earlier option are dropped
+ * (keeps `choices` distinct, as `levels.test.ts` enforces); at most 4 options.
+ */
+function assembleChoices(
+  rng: Rng,
+  correct: Choice,
+  distractors: Choice[],
+): Pick<Question, "choices" | "correctIndex" | "distractorRationale"> {
+  const chosen: Choice[] = [correct];
+  const seen = new Set<string>([correct.text]);
+  for (const d of distractors) {
+    if (seen.has(d.text)) continue;
+    seen.add(d.text);
+    chosen.push(d);
+    if (chosen.length >= 4) break;
+  }
+  const order = rng.shuffle(chosen.map((_, i) => i));
+  const shuffled = order.map((i) => chosen[i]);
+  return {
+    choices: shuffled.map((c) => c.text),
+    correctIndex: order.indexOf(0),
+    distractorRationale: shuffled.map((c) => c.rationale),
+  };
+}
+
+/** Deduping accumulator for `numeric` commonErrors (rounded to `dp`, ≠ answer). */
+function numericErrors(
+  answer: number,
+  dp: number,
+): {
+  errors: { value: number; feedback: string }[];
+  push: (raw: FractionType | number, feedback: string) => void;
+} {
+  const f = 10 ** dp;
+  const seen = new Set<number>([Math.round(answer * f)]);
+  const errors: { value: number; feedback: string }[] = [];
+  const push = (raw: FractionType | number, feedback: string) => {
+    const v = typeof raw === "number" ? raw : raw.valueOf();
+    if (!Number.isFinite(v)) return;
+    const rounded = Math.round(v * f) / f;
+    const k = Math.round(rounded * f);
+    if (seen.has(k)) return;
+    seen.add(k);
+    errors.push({ value: rounded, feedback });
+  };
+  return { errors, push };
+}
+
+/** Number of decimals to grade a numeric answer at (exact if terminating). */
+function gradeDp(f: FractionType, cap = 3): number {
+  return exactDecimals(f, cap);
+}
+
+/** Combine several Question generators into one that picks per call. */
+export const mixQuiz = (pool: QuestionGenerator[]): QuestionGenerator =>
+  mixQuestionGenerators(pool);
+
+/** Combine several numeric generators into one that picks per call. */
+export const mixNumeric = (
+  pool: NumericQuestionGenerator[],
+): NumericQuestionGenerator => mixNumericGenerators(pool);
+
+const money = (f: FractionType, dp: number) => `$${decText(f, dp)}`;
+
+/* ========================================================================== */
+/* ==========================  NUMERIC FAMILIES  ============================= */
+/* ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 1 — Optimal stopping / reroll games  (numeric)                       */
+/* -------------------------------------------------------------------------- */
+
+const REROLL_SCENARIOS = [
+  { die: "an", item: "electronic die", who: "the house" },
+  { die: "a", item: "casino die", who: "the dealer" },
+  { die: "a", item: "prize die", who: "the carnival" },
+];
+
+/** Fair dN, roll once, keep or take a (possibly fee'd) mandatory second roll. */
+export function buildOneRerollInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10, 12, 20]);
+  const fee = rng.pick([0, 0, 1, 2, 3]);
+  const value = oneRerollFeeEV(N, F(fee));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+  const sc = rng.pick(REROLL_SCENARIOS);
+  const mean = dieMean(N);
+  const rerollValue = mean.sub(F(fee));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    mean,
+    `You reported the plain average of one roll, ${fracText(mean)}. But you get to KEEP a good first roll and only reroll a bad one — the option to stop is worth extra.`,
+  );
+  push(
+    rerollValue,
+    `That's the value of choosing to reroll (${fracText(mean)} − ${fee}). It's the fallback, not the game value — you only take it when your first roll is below it.`,
+  );
+  push(
+    F(N),
+    `That's the maximum face. You don't always get the top face — you keep the first roll only when it beats the reroll's value.`,
+  );
+
+  const feeText =
+    fee === 0
+      ? "discard it and take a mandatory second roll"
+      : `pay ${money(F(fee), 0)} to take a mandatory second roll (you're then paid that roll minus the ${money(F(fee), 0)} fee)`;
+
+  const prompt =
+    `A game uses a fair ${N}-sided die. You roll once; you may keep the face value in dollars, or ${feeText}. ` +
+    `Playing optimally to maximize your expected ${fee === 0 ? "payout" : "net payout"}, what is the value of the game? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `The reroll is worth ${fracText(mean)}${fee ? ` − ${fee} = ${fracText(rerollValue)}` : ""} (a fresh d${N} averages ${fracText(mean)}${fee ? `, minus the ${fee} fee` : ""}). ` +
+    `Keep your first roll v iff v ≥ ${decText(rerollValue, 2)}; otherwise reroll. Averaging max(v, ${decText(rerollValue, 2)}) over the ${N} equally-likely faces gives ` +
+    `E = ${fracText(value)} ≈ ${decText(value, dp)}. The option to stop on a high roll is what lifts the value above the plain average.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-reroll-${N}-${fee}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Optimal stopping (one reroll)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: `Expected Value · Optimal stopping · ${sc.who}`,
+    },
+  };
+}
+
+/** Continuous one-reroll: voucher ~ Uniform(0, M); keep or one fresh draw. E = 5M/8. */
+export function buildContinuousRerollInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const M = rng.pick([80, 120, 160, 200, 240]);
+  const value = oneRerollUniformEV(F(M));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(M, 2),
+    `That's the plain mean of a single draw (M/2). But you can keep a high first draw and reroll a low one, so the value beats the mean.`,
+  );
+  push(
+    F(M),
+    `That's the maximum possible voucher. You can't guarantee the top of the range.`,
+  );
+  push(
+    F(3 * M, 4),
+    `That's the mean of only the upper half (E[V | V ≥ M/2] = 3M/4). You forgot the half of the time you reroll into a fresh mean-M/2 draw.`,
+  );
+
+  const prompt =
+    `A machine prints a voucher worth a Uniform(0, ${money(F(M), 0)}) amount. After seeing it you may cash it in, or shred it and take one fresh, mandatory voucher instead. ` +
+    `Playing optimally, what is your expected payout? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `A fresh voucher averages ${money(F(M, 2), 0)}, so keep the first voucher v iff v ≥ ${money(F(M, 2), 0)}. ` +
+    `E = ½·(mean of the low half = ${money(F(M, 4), 0)}) + ½·(E[V | V ≥ ${money(F(M, 2), 0)}] = ${money(F(3 * M, 4), 0)}) = ${money(value, dp)}, i.e. 5M/8.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-voucher-${M}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Optimal stopping (continuous one reroll)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Optimal stopping (continuous)",
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 2 — Geometric, negative-binomial & first-step recursion  (numeric)   */
+/* -------------------------------------------------------------------------- */
+
+/** E[rolls to the r-th target face] on a fair dN = r·N (negative binomial). */
+export function buildNegBinomialInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10, 12, 20]);
+  const r = rng.pick([1, 1, 2, 3]);
+  const value = negBinomialEV(r, F(1, N));
+  const answer = value.valueOf();
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    F(N),
+    `That's the wait for the FIRST target (1/p = ${N}). You need the ${ordinal(r)}, which is r geometric waits: r·${N}.`,
+  );
+  push(
+    F(1, N),
+    `That's the per-roll probability p = 1/${N}, not the expected number of rolls, which is 1/p summed r times.`,
+  );
+  push(
+    value.sub(F(r)),
+    `You counted only the FAILURES before each success (r·(1/p − 1)). The wait 1/p per success COUNTS the successful roll too.`,
+  );
+
+  const ord = ordinal(r);
+  const prompt =
+    `You roll a fair ${N}-sided die repeatedly. What is the expected number of rolls until a specific face (say, the "${N}") appears for the ${ord} time?`;
+
+  const explanation =
+    `Each appearance of the target face is a geometric wait with p = 1/${N}, so it averages ${N} rolls. ` +
+    `Reaching the ${ord} appearance is the sum of ${r} independent such waits: E = ${r}·${N} = ${answer} (negative binomial mean r/p).`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-negbin-${N}-${r}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "Geometric / negative binomial (r/p)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Geometric / negative binomial",
+    },
+  };
+}
+
+/** E[rolls to see the SAME face twice in a row] on a fair dN = (1+p)/p² = N²+N. */
+export function buildPairSameInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([4, 6, 8, 10, 12]);
+  const value = expectedTrialsPairSame(F(1, N)); // = N² + N
+  const answer = value.valueOf();
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    F(N * N),
+    `That's 1/p² = ${N}² — the wait for a SPECIFIC ordered pair. A same-face pair also needs one extra wait to roll the first of the two matching faces, giving (1+p)/p² = ${N}²+${N}.`,
+  );
+  push(
+    F(2 * N),
+    `You doubled the single geometric wait (2·${N}). Two-in-a-row is far longer because a mismatch restarts the second slot.`,
+  );
+  push(
+    F(N),
+    `That's the wait for a single target face (1/p). Matching the PREVIOUS face twice in a row is quadratically longer.`,
+  );
+
+  const prompt =
+    `You roll a fair ${N}-sided die repeatedly. What is the expected number of rolls to see the same face value appear twice in a row?`;
+
+  const explanation =
+    `Let E be the wait. First roll (anything) costs 1; then with p = 1/${N} the next roll matches and you stop, else you restart with the new face: ` +
+    `E = 1 + (1 − p)/p · ... which closes to (1 + p)/p² = ${N}² + ${N} = ${answer}. (Self-overlap makes this longer than a fixed ordered pair, 1/p² = ${N * N}.)`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-pairsame-${N}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "First-step recursion (two in a row, general p)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · First-step recursion",
+    },
+  };
+}
+
+/** Geometric memorylessness: given m failures already, E[total trials] = m + 1/p. */
+export function buildMemorylessInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10, 12]);
+  const m = rng.pick([2, 3, 4, 5, 8]);
+  const value = geometricMemorylessTotal(F(1, N), m); // m + N
+  const answer = value.valueOf();
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    F(N),
+    `That's the remaining wait 1/p = ${N}. Memorylessness says the remaining wait is UNCHANGED — but the question asks for the TOTAL count from the start, so add the ${m} rolls already made.`,
+  );
+  push(
+    F(m),
+    `That's just the ${m} rolls already taken; you still expect a fresh geometric wait of ${N} more.`,
+  );
+  push(
+    F(N).sub(F(m)),
+    `You SUBTRACTED the elapsed rolls, as if waiting already gets you "closer". The geometric distribution is memoryless: the remaining wait stays 1/p = ${N} regardless.`,
+  );
+
+  const prompt =
+    `You roll a fair ${N}-sided die until a specific face appears. Given that it has NOT appeared in the first ${m} rolls, what is the expected TOTAL number of rolls (counting from the very start) until it appears?`;
+
+  const explanation =
+    `The geometric distribution is memoryless: after ${m} failures the remaining wait is still a fresh 1/p = ${N} rolls. ` +
+    `The total from the start is therefore ${m} + ${N} = ${answer}. The classic slip is reporting ${N} and forgetting to add the ${m} rolls already made.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-memoryless-${N}-${m}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "Geometric memorylessness (m + 1/p)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Geometric memorylessness",
+    },
+  };
+}
+
+/** First-step running sum: roll dN, add face; faces ≤ t continue, > t stop. */
+export function buildRunningSumInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10]);
+  const t = rng.int(2, N - 2); // stop when face > t
+  const p = F(N - t, N); // P(stop) each roll
+  const mean = dieMean(N);
+  const value = waldEV(F(1).div(p), mean); // E[rolls]·E[face]
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    mean,
+    `That's the average of a single roll. The game pays the SUM of all rolls, and you roll ${fracText(F(1).div(p))} times on average — multiply.`,
+  );
+  push(
+    F(1).div(p),
+    `That's the expected NUMBER of rolls (1/p), not the expected sum. Multiply by the average face value ${fracText(mean)} (Wald's identity).`,
+  );
+  push(
+    F(1).div(p).sub(F(1)).mul(mean),
+    `You used (E[N] − 1) rolls — undercounting by one. Every roll, including the final stopping roll, contributes to the sum.`,
+  );
+
+  const prompt =
+    `You roll a fair ${N}-sided die repeatedly, adding up the face values, and stop as soon as a roll shows a value greater than ${t}. ` +
+    `What is the expected total sum of all your rolls? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Each roll stops the game with probability p = ${fracText(p)}, so the expected number of rolls is 1/p = ${fracText(F(1).div(p))}. ` +
+    `Each roll averages ${fracText(mean)}. By Wald's identity E[sum] = E[#rolls]·E[face] = ${fracText(F(1).div(p))}·${fracText(mean)} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-runsum-${N}-${t}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "First-step recursion / Wald (running sum)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · First-step recursion",
+    },
+  };
+}
+
+/** Geometric-sum carnival game: pay `perRound` in expectation, continue w.p. c. */
+export function buildGeometricSumInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10]);
+  const perRound = dieMean(N); // paid the die face each round
+  const cont = rng.pick([F(1, 4), F(1, 3), F(1, 2), F(2, 5)]);
+  const value = geometricSumEV(perRound, cont);
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    perRound,
+    `That's one round's payout. The game continues with probability ${fracText(cont)}, so you play 1/(1−${fracText(cont)}) rounds on average — scale up.`,
+  );
+  push(
+    perRound.mul(cont),
+    `You multiplied by the continue probability instead of dividing by (1 − continue). Total EV = perRound / (1 − pContinue).`,
+  );
+  push(
+    perRound.div(cont),
+    `You divided by the continue probability. It should be divided by (1 − pContinue), the per-round STOP probability.`,
+  );
+
+  const prompt =
+    `A carnival game pays you the face value of a fair ${N}-sided die each round (averaging ${fracText(perRound)}). After each round the game continues with probability ${fracText(cont)}, otherwise it ends. ` +
+    `What is your expected total payout? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Expected rounds = 1/(1 − ${fracText(cont)}) = ${fracText(F(1).div(F(1).sub(cont)))}. Each round pays ${fracText(perRound)}, so total EV = perRound/(1 − pContinue) = ${fracText(perRound)}/${fracText(F(1).sub(cont))} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-geomsum-${N}-${fracText(cont).replace("/", "_")}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Geometric sum (perRound / (1 − pContinue))",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Geometric sum",
+    },
+  };
+}
+
+/** "Convert all": N slots, one converted per hit; E[draws to convert all r] = N·H_r. */
+export function buildConvertAllInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([3, 4, 5, 6]);
+  const r = N; // start all-unconverted for a clean N·H_N story
+  const value = convertAllEV(N, r);
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(N),
+    `That's just N draws. Each successive conversion gets harder (a smaller target set), so the waits are ${N}/${N} + ${N}/${N - 1} + … + ${N}/1.`,
+  );
+  push(
+    F(N * r),
+    `You used N geometric waits of length N each (N·r). But only the LAST conversion has probability 1/N; earlier ones are easier.`,
+  );
+  push(
+    harmonic(r),
+    `That's the harmonic number H_${r} alone. Each wait is N/(remaining), so multiply by N: E = N·H_${r}.`,
+  );
+
+  const prompt =
+    `An urn holds ${N} orbs, all initially the wrong color. Each turn you pick one orb uniformly at random and recolor it to the target color (already-correct orbs can be re-picked and stay correct). ` +
+    `What is the expected number of turns until all ${N} orbs are the target color? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `When k orbs are still wrong, the chance a turn fixes a new one is k/${N}, a geometric wait of ${N}/k. ` +
+    `Summing as k goes ${N}→1: E = ${N}·(1/1 + 1/2 + … + 1/${N}) = ${N}·H_${N} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-convertall-${N}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Sum of geometrics with shrinking success set (N·H_r)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Coupon-collector variant",
+    },
+  };
+}
+
+/** "Other than K": roll dN until face ≠ K; paid that face. E = mean of the other faces. */
+export function buildOtherThanInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10]);
+  const excluded = rng.int(1, N);
+  // Mean of {1..N} \ {excluded}.
+  let sum = 0;
+  for (let k = 1; k <= N; k++) if (k !== excluded) sum += k;
+  const value = F(sum, N - 1);
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    dieMean(N),
+    `That's the mean of ALL ${N} faces. The paying roll is conditioned on being ≠ ${excluded}, so it's uniform over the OTHER ${N - 1} faces.`,
+  );
+  push(
+    F(sum, N),
+    `You summed the ${N - 1} paying faces but divided by ${N} instead of ${N - 1}. Given "not ${excluded}", there are only ${N - 1} equally-likely outcomes.`,
+  );
+
+  const prompt =
+    `You roll a fair ${N}-sided die repeatedly until you get a value other than ${excluded}, and you are paid the value of that final roll. ` +
+    `What is the fair value of this game? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Rolls of ${excluded} just restart the game, so the paying roll is uniform over the other ${N - 1} faces. ` +
+    `Its mean is (${sum})/${N - 1} = ${fracText(value)} ≈ ${decText(value, dp)}. (A memoryless wait doesn't change the conditional distribution of the paying roll.)`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-otherthan-${N}-${excluded}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Conditional uniform mean",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · EV of a wager",
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 3 — Indicators & linearity of expectation  (numeric)                 */
+/* -------------------------------------------------------------------------- */
+
+/** Coupon collector: expected COST to collect all n coupons at `cost` each. */
+export function buildCouponInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.pick([4, 5, 6, 8, 10]);
+  const cost = rng.pick([1, 2, 5]);
+  const boxes = couponCollectorAll(n); // n·H_n
+  const value = boxes.mul(F(cost));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(n * cost),
+    `That's n boxes at ${money(F(cost), 0)} — as if each new coupon took exactly one box. Later coupons are rarer, so E[boxes] = n·H_n, not n.`,
+  );
+  push(
+    couponCollectorPartial(n, n - 1).mul(F(cost)),
+    `You dropped the final coupon's term. The LAST coupon has probability 1/n, so it alone costs n boxes on average — the single biggest term.`,
+  );
+  push(
+    boxes,
+    `That's the expected number of BOXES (${fracText(boxes)}); the question asks for the total COST, so multiply by ${money(F(cost), 0)}.`,
+  );
+
+  const prompt =
+    `A set has ${n} distinct collectible coupons, one uniformly random per ${money(F(cost), 0)} box. ` +
+    `What is the expected total cost to complete the whole set? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `With k distinct coupons held, the wait for a new one is geometric with mean ${n}/(${n}−k). ` +
+    `Summing: E[boxes] = ${n}·(1/${n} + 1/${n - 1} + … + 1/1) = ${n}·H_${n} = ${fracText(boxes)}. Cost = ${fracText(boxes)}·${money(F(cost), 0)} = ${money(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-coupon-${n}-${cost}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Coupon collector (n·H_n)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Coupon collector",
+    },
+  };
+}
+
+/** Distinct types seen after m draws from n types: n·(1 − ((n−1)/n)^m). */
+export function buildDistinctInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.pick([5, 6, 8, 10]);
+  const m = rng.int(3, n + 2);
+  const value = expectedDistinctAfterDraws(n, m);
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(Math.min(m, n)),
+    `That assumes every draw is a NEW type (min(m, n)). Repeats are likely, so the expected distinct count is strictly below that.`,
+  );
+  push(
+    F(n),
+    `That's all ${n} types. With only ${m} draws you won't usually see them all.`,
+  );
+  push(
+    F(m).mul(F(1, n)).mul(F(n)),
+    `You used E = m (m draws × 1 each) — ignoring collisions. Use indicators: each type is present w.p. 1 − ((n−1)/n)^m.`,
+  );
+
+  const prompt =
+    `A machine dispenses one of ${n} equally-likely colors each turn, independently. You take ${m} turns. ` +
+    `What is the expected number of DISTINCT colors you end up with? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `By indicators + linearity, each color appears with probability 1 − ((${n}−1)/${n})^${m}. ` +
+    `Summing over ${n} colors: E = ${n}·(1 − (${n - 1}/${n})^${m}) = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-distinct-${n}-${m}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Indicators + linearity (distinct count)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Indicators & linearity",
+    },
+  };
+}
+
+/** Expected number of records (running maxima) among n distinct values = H_n. */
+export function buildRecordsInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.pick([5, 6, 8, 10, 12]);
+  const value = expectedRecords(n); // H_n
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(n),
+    `That's all ${n} items. Only the running maxima count; item k is a record w.p. 1/k, so E = H_${n}, far below ${n}.`,
+  );
+  push(
+    F(1),
+    `Only the first item is a GUARANTEED record; the rest are records with probability 1/k. Add them: 1 + 1/2 + … + 1/${n}.`,
+  );
+  push(
+    F(n, 2),
+    `Half of ${n} is a guess. The exact count is the harmonic number H_${n} = Σ 1/k.`,
+  );
+
+  const prompt =
+    `${n} plants of distinct random heights are examined left to right. You note a plant iff it is taller than every plant seen so far. ` +
+    `What is the expected number of plants you note? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Plant k is a running maximum iff it's the tallest of the first k — probability 1/k (all orders equally likely). ` +
+    `By linearity E = 1 + 1/2 + … + 1/${n} = H_${n} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-records-${n}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Records / harmonic sum (H_n)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Records / harmonic",
+    },
+  };
+}
+
+/** Empty boxes: K balls into B boxes; E[empty] = B·((B−1)/B)^K. */
+export function buildEmptyBoxesInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const B = rng.pick([5, 6, 8, 10, 20]);
+  const K = rng.int(B, 2 * B);
+  const value = F(B).mul(F(B - 1, B).pow(K));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(Math.max(B - K, 0)),
+    `That's B − K, as if each ball filled a distinct box. Balls collide, so many boxes get 2+ and others stay empty; use P(empty) = ((B−1)/B)^K.`,
+  );
+  push(
+    F(B).mul(F(1, B).pow(K)),
+    `You used P(box empty) = (1/B)^K (the chance ALL balls hit one box), instead of ((B−1)/B)^K (the chance a ball MISSES this box, every time).`,
+  );
+
+  const prompt =
+    `${K} balls are thrown independently and uniformly into ${B} boxes. ` +
+    `What is the expected number of EMPTY boxes? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `A given box is missed by one ball w.p. (${B}−1)/${B}, and by all ${K} balls w.p. (${B - 1}/${B})^${K}. ` +
+    `By linearity over ${B} boxes: E[empty] = ${B}·(${B - 1}/${B})^${K} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-emptyboxes-${B}-${K}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Indicators + linearity (empty boxes)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Indicators & linearity",
+    },
+  };
+}
+
+/** First-marker spacing: E[cards to the first of c markers in a deck of D] = (D+1)/(c+1). */
+export function buildFirstMarkerInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const D = rng.pick([40, 48, 52, 30]);
+  const c = rng.pick([2, 3, 4, 5]);
+  const value = firstMarkerSpacingEV(D, c); // (D+1)/(c+1)
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(D - c, c + 1),
+    `That's the expected size of one GAP between markers, (D−c)/(c+1). You still have to turn the marker itself, so add 1: (D+1)/(c+1).`,
+  );
+  push(
+    F(D, c),
+    `You split D cards into c blocks (D/c). The c markers create c+1 gaps, and you must add the marker you land on.`,
+  );
+
+  const prompt =
+    `A shuffled deck of ${D} cards contains ${c} special "marker" cards. You turn cards one at a time. ` +
+    `What is the expected number of cards turned over to reach the FIRST marker? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `The ${c} markers split the ${D - c} non-markers into ${c + 1} equal expected gaps of (${D}−${c})/(${c}+1) each. ` +
+    `Reaching the first marker means crossing one gap and turning the marker: E = (${D}−${c})/(${c}+1) + 1 = (${D}+1)/(${c}+1) = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-firstmarker-${D}-${c}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Symmetric spacings ((D+1)/(c+1))",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Symmetry / spacings",
+    },
+  };
+}
+
+/** Warming spells: find n so E[#increasing windows of length w] = target = 2. */
+export function buildWarmingSpellsInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const w = rng.pick([4, 5]);
+  const target = rng.pick([2, 3]);
+  const factorial = fact(w);
+  const n = target * factorial + (w - 1); // (n − (w−1))/w! = target
+  const answer = n;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    F(target * factorial),
+    `You solved (n)/w! = target and forgot the boundary. There are n − (w−1) windows of length ${w}, so n = target·${w}! + (${w}−1).`,
+  );
+  push(
+    F(target * factorial + w),
+    `Off by one on the window count: a length-${w} window starting at day i needs days up to i+${w}−1, giving n − ${w - 1} windows, not n − ${w}.`,
+  );
+
+  const prompt =
+    `Daily temperatures are i.i.d. continuous readings over n days. A "warming spell" begins on day i if ${w} consecutive readings strictly increase (day i < i+1 < … < i+${w - 1}). ` +
+    `For what n is the expected number of warming spells exactly ${target}?`;
+
+  const explanation =
+    `Any ${w} specific readings are strictly increasing w.p. 1/${w}! = 1/${factorial}. There are n − ${w - 1} length-${w} windows, so ` +
+    `E = (n − ${w - 1})/${factorial}. Setting (n − ${w - 1})/${factorial} = ${target} gives n = ${target}·${factorial} + ${w - 1} = ${answer}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-warming-${w}-${target}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "Indicators over overlapping windows (solve for n)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Indicators & linearity",
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 7 — Conditional expectation & geometric probability  (numeric)       */
+/* -------------------------------------------------------------------------- */
+
+/** Faster-sixes conditional geometric: E[A | A < B] = 1/(1 − q²), q = 1 − p. */
+export function buildConditionalGeoInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const M = rng.pick([2, 3, 4, 6]); // p = 1/M
+  const p = F(1, M);
+  const q = F(1).sub(p);
+  const value = F(1).div(F(1).sub(q.pow(2))); // 1/(1 − q²)
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(1).div(p),
+    `That's the UNconditional geometric mean 1/p = ${fracText(F(1).div(p))}. Conditioning on "A finished first" makes A's count smaller than average.`,
+  );
+  push(
+    F(1).div(F(1).sub(q)),
+    `That's 1/(1 − q) = 1/p again. The conditioning uses 1 − q² (both players' first-round survival), not 1 − q.`,
+  );
+
+  const prompt =
+    `Two players each roll a fair die until their first success, where success has probability p = ${fracText(p)} per roll, independently. ` +
+    `Given that player A needed STRICTLY FEWER rolls than player B, what is the expected number of rolls A made? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `With q = 1 − p = ${fracText(q)}: P(A < B) = pq/(1 − q²) and E[A·1{A<B}] = pq/(1 − q²)². Dividing, ` +
+    `E[A | A < B] = 1/(1 − q²) = ${fracText(value)} ≈ ${decText(value, dp)}. Winning the race shortens A's expected count below the plain 1/p = ${fracText(F(1).div(p))}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-condgeo-${M}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Conditional expectation of a geometric race",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Conditional expectation / geometric",
+    },
+  };
+}
+
+/** Overlap of two uniform-start windows over a horizon D. */
+export function buildOverlapInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const D = rng.pick([20, 24, 30, 40]);
+  const a = rng.int(6, Math.floor(D / 2));
+  const b = rng.int(6, Math.floor(D / 2));
+  const value = overlapProbTwoWindows(F(D), F(a), F(b));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(a + b, D),
+    `You added the two durations over the horizon ((a+b)/D). Overlap is a 2-D area question on the D×D square, not a 1-D ratio.`,
+  );
+  push(
+    F(1).sub(F(D - a, D).mul(F(D - b, D))),
+    `You multiplied the two "no-slack" probabilities as if the non-overlap regions were independent. They're two triangles: P = 1 − ((D−a)² + (D−b)²)/(2D²).`,
+  );
+
+  const prompt =
+    `Two events each start at a uniformly random time in [0, ${D}] days (independently). The first lasts ${a} days, the second lasts ${b} days. ` +
+    `What is the probability their active windows overlap at some point? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Plot the two start times in a ${D}×${D} square. They MISS if one finishes before the other starts — two right triangles of legs (${D}−${a}) and (${D}−${b}). ` +
+    `P(overlap) = 1 − ((${D}−${a})² + (${D}−${b})²)/(2·${D}²) = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-overlap-${D}-${a}-${b}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Geometric probability (area / overlap)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Geometric probability (area)",
+    },
+  };
+}
+
+/** Meet-within: X,Y ~ Uniform(0,L); P(|X−Y| ≤ t) = 1 − ((L−t)/L)². */
+export function buildMeetWithinInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const L = rng.pick([30, 60, 20, 15]);
+  const t = rng.int(3, Math.floor(L / 2));
+  const value = meetWithinProb(F(L), F(t));
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(t, L),
+    `That's the 1-D guess t/L. The event |X−Y| ≤ t is a diagonal BAND in the L×L square; its area is 1 − ((L−t)/L)².`,
+  );
+  push(
+    F(2 * t, L),
+    `You used 2t/L (band width over L). The correct area subtracts the two corner triangles: 1 − ((L−t)/L)².`,
+  );
+  push(
+    F(t, L).pow(2),
+    `That's (t/L)² — the area of a small square, not the diagonal band. The band's complement is two triangles of leg (L−t).`,
+  );
+
+  const prompt =
+    `Two friends each arrive at a uniformly random time within a ${L}-minute window (independently) and wait ${t} minutes for the other. ` +
+    `What is the probability they meet? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `They meet iff |X − Y| ≤ ${t}. On the ${L}×${L} square of arrival times, the "miss" region is two triangles of leg (${L}−${t}), area (${L}−${t})². ` +
+    `So P(meet) = 1 − ((${L}−${t})/${L})² = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-meet-${L}-${t}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Geometric probability (meeting problem)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Geometric probability (area)",
+    },
+  };
+}
+
+/** E[max of `d` fair dN] via P(max ≥ k). */
+export function buildMaxDiceInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([6, 8, 10]);
+  const d = rng.pick([2, 3]);
+  const value = maxOfDiceEV(N, d);
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    dieMean(N),
+    `That's the mean of ONE die, ${fracText(dieMean(N))}. The maximum of ${d} dice is biased upward — strictly above a single die's mean.`,
+  );
+  push(
+    F(N),
+    `That's the top face ${N}. You only get the max face when every die is high; on average the max is below ${N}.`,
+  );
+
+  const prompt =
+    `You roll ${d} fair ${N}-sided dice and keep the HIGHEST value shown. ` +
+    `What is the expected value of that maximum? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `Use the tail sum E[max] = Σ_{k=1}^{${N}} P(max ≥ k) = Σ_{k=1}^{${N}} (1 − ((k−1)/${N})^${d}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
+    `Taking the best of ${d} rolls beats a single die's mean of ${fracText(dieMean(N))}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-maxdice-${N}-${d}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Order statistics (max of dice)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Order statistics",
+    },
+  };
+}
+
+/** E[k-th smallest of n i.i.d. Uniform(0,1)] = k/(n+1). */
+export function buildUniformSpacingInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.pick([3, 4, 5, 7, 9]);
+  const k = rng.int(1, n);
+  const value = uniformOrderStatEV(k, n); // k/(n+1)
+  const dp = gradeDp(value, 3);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(k, n),
+    `That's k/n — dividing by the number of points. The n points create n+1 equal expected gaps, so the k-th is at k/(n+1).`,
+  );
+  push(
+    F(k - 1, n),
+    `Off by one in the numerator. The k-th smallest sits at k/(n+1), not (k−1)/n.`,
+  );
+
+  const prompt =
+    `${n} points are dropped independently and uniformly on the interval [0, 1]. ` +
+    `What is the expected position of the ${ordinal(k)}-smallest point? (Round to ${dp} decimals.)`;
+
+  const explanation =
+    `The ${n} points split [0, 1] into ${n + 1} gaps whose expected lengths are all equal to 1/(${n}+1). ` +
+    `The ${ordinal(k)}-smallest point sits after ${k} such gaps: E = ${k}/(${n}+1) = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ev-unifspacing-${n}-${k}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Continuous order statistics (k/(n+1))",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Expected Value · Order statistics / spacings",
+    },
+  };
+}
+
+/* ========================================================================== */
+/* ============================  QUIZ FAMILIES  ============================== */
+/* ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 4 — Elementary & combinatorial probability  (quiz)                   */
+/* -------------------------------------------------------------------------- */
+
+/** THE 1/N vs 1/N² trap: P(second roll matches the first) = 1/N. */
+export function buildTwoDiceMatchInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([4, 6, 8, 10, 12, 20]);
+  const correctF = twoDiceMatchProb(N); // 1/N
+  const answer = fracText(correctF);
+
+  const correct: Choice = {
+    text: fracText(correctF),
+    rationale: `Correct — the first roll can be anything; the second matches it with probability 1/${N}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: fracText(F(1, N * N)),
+      rationale: `The classic 1/${N}² trap: you fixed BOTH dice to a specific value. But the first roll is free — only the second needs to match, so it's 1/${N}.`,
+    },
+    {
+      text: fracText(F(2, N)),
+      rationale: `You doubled the probability. There's exactly one matching face out of ${N}, giving 1/${N}.`,
+    },
+    {
+      text: fracText(F(1, N - 1)),
+      rationale: `You divided by ${N}−1 (the "other" faces). All ${N} faces are possible for the second roll, so it's 1/${N}.`,
+    },
+  ];
+
+  const prompt =
+    `You roll one fair ${N}-sided die twice. What is the probability that the second roll shows the SAME value as the first?`;
+  const explanation =
+    `The first roll sets the target — any value works. The second roll then matches it with probability 1/${N}. ` +
+    `The tempting 1/${N}² is the probability of a SPECIFIC pair (e.g. two 3s); here we don't care WHICH value repeats, so the answer is 1/${N}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-match-${N}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Elementary probability (1/N vs 1/N² trap)",
+      source: "Expected Value · Elementary probability",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** P(second roll DIFFERS from the first) = (N−1)/N (complement). */
+export function buildDifferInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([4, 6, 8, 10, 12]);
+  const correctF = F(N - 1, N);
+  const answer = fracText(correctF);
+
+  const correct: Choice = {
+    text: fracText(correctF),
+    rationale: `Correct — P(match) = 1/${N}, so P(differ) = 1 − 1/${N} = ${N - 1}/${N}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: fracText(F(1, N)),
+      rationale: `That's P(the rolls MATCH). The question asks for the complement, differ: 1 − 1/${N}.`,
+    },
+    {
+      text: fracText(F(N - 1, N * N)),
+      rationale: `You counted (${N}−1) favorable pairs over ${N}² ordered pairs but the first roll is free — divide the ${N}−1 "different" second-roll faces by ${N}.`,
+    },
+    {
+      text: fracText(F(1, 2)),
+      rationale: `A coin-flip guess. There are ${N}−1 differing faces out of ${N}, which is ${N - 1}/${N}, not ½.`,
+    },
+  ];
+
+  const prompt =
+    `You roll one fair ${N}-sided die twice. What is the probability the two rolls show DIFFERENT values?`;
+  const explanation =
+    `Easiest via the complement: the rolls match w.p. 1/${N}, so they differ w.p. 1 − 1/${N} = ${N - 1}/${N}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-differ-${N}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Complement (differ = 1 − match)",
+      source: "Expected Value · Elementary probability",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** P(n fair coin flips all show the same face) = 1/2^(n−1). */
+export function buildAllSameCoinsInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const n = rng.pick([2, 3, 4, 5]);
+  const correctF = allSameCoinsProb(n); // 1/2^(n-1)
+  const answer = fracText(correctF);
+
+  const correct: Choice = {
+    text: fracText(correctF),
+    rationale: `Correct — there are 2 all-same sequences (all-H, all-T) out of 2^${n}, so 2/2^${n} = 1/2^${n - 1}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: fracText(F(1, 2 ** n)),
+      rationale: `You counted only ONE all-same sequence. There are TWO (all heads AND all tails), so double it: 1/2^${n - 1}.`,
+    },
+    {
+      text: fracText(F(1, 2)),
+      rationale: `That's the chance a single flip is heads. All ${n} flips agreeing is much rarer: 1/2^${n - 1}.`,
+    },
+    {
+      text: fracText(F(1, 2 ** (n + 1))),
+      rationale: `Too small — you over-counted the flips. Only ${n}−1 "extra" flips must match the first, giving 1/2^${n - 1}.`,
+    },
+  ];
+
+  const prompt =
+    `You flip a fair coin ${n} times. What is the probability that all ${n} flips show the same face?`;
+  const explanation =
+    `Fix the first flip; the remaining ${n - 1} must all match it: (1/2)^${n - 1}. Equivalently, 2 favorable sequences (all-H, all-T) out of 2^${n} = 1/2^${n - 1}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-allsame-${n}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Elementary probability (all-same coins)",
+      source: "Expected Value · Elementary probability",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** Three-dice payoff EV: all-same +a, exactly-two-same +b, all-different −c. */
+export function buildThreeDicePayoffInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const a = rng.pick([12, 15, 16, 18]);
+  const b = rng.pick([10, 12, 14]);
+  const c = rng.pick([3, 4, 5, 6]);
+  // Counts out of 216 (three d6): all same 6, exactly two same 90, all diff 120.
+  const ev = F(6 * a + 90 * b - 120 * c, 216);
+  const dp = 2;
+  const answer = decText(ev, dp);
+
+  const unweighted = F(a + b - c, 3);
+  const positiveOnly = F(6 * a + 90 * b, 216);
+
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — weight by P(all same)=6/216, P(two same)=90/216, P(all diff)=120/216: (6·${a}+90·${b}−120·${c})/216.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(unweighted, dp),
+      rationale: `You averaged the three payoffs equally. The outcomes are NOT equally likely — "exactly two same" (90/216) dominates.`,
+    },
+    {
+      text: decText(positiveOnly, dp),
+      rationale: `You ignored the all-different LOSS. The −${c} outcome happens 120/216 of the time and must be subtracted.`,
+    },
+    {
+      text: decText(F(a), dp),
+      rationale: `That's the best-case payoff (all three same). It only happens 6/216 of the time, so the expected value is far lower.`,
+    },
+  ];
+
+  const prompt =
+    `You roll three fair six-sided dice. All three the same pays $${a}; exactly two the same pays $${b}; all three different loses $${c}. ` +
+    `What is the expected payoff per roll (to ${dp} decimals)?`;
+  const explanation =
+    `Out of 216 outcomes: all same = 6, exactly two same = 90, all different = 120. ` +
+    `E = (6·${a} + 90·${b} − 120·${c})/216 = ${fracText(ev)} ≈ ${decText(ev, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-3dice-${a}-${b}-${c}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "EV over dice outcomes (weight by probability)",
+      source: "Expected Value · EV of a wager",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** E[higher of two dN if they differ, else 0]. */
+export function buildHigherDifferInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([6, 8, 10]);
+  const ev = higherWhenDifferEV(N);
+  const dp = 2;
+  const answer = decText(ev, dp);
+  const fullMax = maxOfDiceEV(N, 2); // E[max] without the "else 0"
+
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — sum max(x,y) over the ${N}²−${N} unequal ordered pairs, divide by ${N}²: ${fracText(ev)}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(fullMax, dp),
+      rationale: `That's E[max of two dice] WITHOUT the "else 0" rule. Ties pay 0 here, which pulls the expectation down.`,
+    },
+    {
+      text: decText(dieMean(N), dp),
+      rationale: `That's a single die's mean, ${fracText(dieMean(N))}. Paying the HIGHER of two rolls skews the payoff upward (before the tie penalty).`,
+    },
+    {
+      text: decText(F(N), dp),
+      rationale: `That's the top face. You rarely roll the maximum, and ties pay nothing.`,
+    },
+  ];
+
+  const prompt =
+    `You roll a fair ${N}-sided die twice. If the two rolls differ you are paid the HIGHER value; if they're equal you get $0. ` +
+    `What is the expected payoff (to ${dp} decimals)?`;
+  const explanation =
+    `Over all ${N}² ordered pairs, sum the higher value on the ${N}²−${N} unequal pairs (equal pairs contribute 0) and divide by ${N}²: ` +
+    `E = ${fracText(ev)} ≈ ${decText(ev, dp)}. Dropping the "else 0" would overstate it as E[max] = ${decText(fullMax, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-higherdiffer-${N}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Conditional EV over max of two dice",
+      source: "Expected Value · Conditional expectation",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 5 — Distributions, variance & CLT  (quiz)                            */
+/* -------------------------------------------------------------------------- */
+
+/** E[H·(n−H)] for H ~ Binomial(n, ½) = n(n−1)/4. */
+export function buildHeadsTimesTailsInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const n = rng.pick([8, 12, 20, 40, 100]);
+  const correct = F(n * (n - 1), 4); // integer
+  const answer = String(correct.valueOf());
+
+  const naiveProduct = F(n * n, 4); // E[H]·E[T] = (n/2)²
+  const correctC: Choice = {
+    text: String(correct.valueOf()),
+    rationale: `Correct — E[H(n−H)] = nE[H] − E[H²] = ${n}·${n / 2} − ${n * n / 4 + n / 4} = n(n−1)/4.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: String(naiveProduct.valueOf()),
+      rationale: `You used E[H]·E[T] = (n/2)². But E[H·T] ≠ E[H]·E[T] — H and T are perfectly dependent (T = n − H), so you must use E[H²] = Var + mean².`,
+    },
+    {
+      text: String(F(n * (n - 1), 2).valueOf()),
+      rationale: `Off by a factor of 2 — you forgot to divide the pair count correctly. The variance of a fair binomial is n/4, giving n(n−1)/4.`,
+    },
+    {
+      text: String(F(n * n, 2).valueOf()),
+      rationale: `That's n²/2, far too large. The product of heads and tails maxes near n²/4 and averages n(n−1)/4.`,
+    },
+  ];
+
+  const prompt =
+    `You flip ${n} fair coins and multiply the number of heads by the number of tails. What is the expected value of that product?`;
+  const explanation =
+    `Let H be the head count, so tails = ${n} − H and the product is H(${n} − H) = ${n}H − H². ` +
+    `E[H] = ${n / 2}, Var(H) = ${n}/4, so E[H²] = Var + mean² = ${n / 4} + ${(n / 2) ** 2} = ${n * n / 4 + n / 4}. ` +
+    `E = ${n}·${n / 2} − ${n * n / 4 + n / 4} = ${correct.valueOf()} = n(n−1)/4.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-headstails-${n}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Variance / E[X²] (dependent product)",
+      source: "Expected Value · Variance / E[X²]",
+      ...assembleChoices(rng, correctC, distractors),
+    },
+  };
+}
+
+/** E[X²] of a fair dN = (N+1)(2N+1)/6. */
+export function buildSecondMomentInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([4, 6, 8, 10, 12]);
+  const ev = dieSecondMoment(N);
+  const dp = 2;
+  const answer = decText(ev, dp);
+
+  const meanSq = dieMean(N).pow(2); // (E[X])²
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — E[X²] = (N+1)(2N+1)/6 = ${fracText(ev)}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(meanSq, dp),
+      rationale: `You squared the MEAN, (E[X])² = ${fracText(meanSq)}. E[X²] = Var(X) + (E[X])² is strictly larger.`,
+    },
+    {
+      text: decText(dieVariance(N), dp),
+      rationale: `That's Var(X) = ${fracText(dieVariance(N))}. E[X²] is Var PLUS the squared mean, not the variance alone.`,
+    },
+    {
+      text: decText(dieMean(N), dp),
+      rationale: `That's E[X] = ${fracText(dieMean(N))}, the first moment. You want the SECOND moment E[X²].`,
+    },
+  ];
+
+  const prompt = `A fair ${N}-sided die shows X. What is E[X²] (to ${dp} decimals)?`;
+  const explanation =
+    `Directly, E[X²] = (1² + 2² + … + ${N}²)/${N} = (N+1)(2N+1)/6 = ${fracText(ev)} ≈ ${decText(ev, dp)}. ` +
+    `Note E[X²] = Var(X) + (E[X])² = ${fracText(dieVariance(N))} + ${fracText(meanSq)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-2ndmoment-${N}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Second moment E[X²]",
+      source: "Expected Value · Variance / E[X²]",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** E[X²] of an Exponential(λ) = 2/λ². */
+export function buildExpMomentInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const lambda = rng.pick([2, 3, 4, 5]);
+  const ev = F(2, lambda * lambda);
+  const dp = 3;
+  const answer = decText(ev, dp);
+
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — for Exp(λ), E[X²] = 2/λ² = 2/${lambda * lambda}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(F(1, lambda * lambda), dp),
+      rationale: `That's (E[X])² = 1/λ². You forgot the factor 2: E[X²] = Var + mean² = 1/λ² + 1/λ² = 2/λ².`,
+    },
+    {
+      text: decText(F(1, lambda), dp),
+      rationale: `That's the MEAN 1/λ. The second moment E[X²] = 2/λ² is different.`,
+    },
+    {
+      text: decText(F(2, lambda), dp),
+      rationale: `That's 2/λ. The exponent on λ should be 2: E[X²] = 2/λ².`,
+    },
+  ];
+
+  const prompt = `Let X ~ Exponential(rate λ = ${lambda}). What is E[X²] (to ${dp} decimals)?`;
+  const explanation =
+    `For an exponential, E[X] = 1/λ and Var(X) = 1/λ², so E[X²] = Var + mean² = 1/λ² + 1/λ² = 2/λ² = 2/${lambda * lambda} = ${decText(ev, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-expmoment-${lambda}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Moments of the exponential (2/λ²)",
+      source: "Expected Value · Continuous distribution moments",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** E[sum of k i.i.d. Uniform(0, L)] = kL/2 (linearity). */
+export function buildSumUniformsInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const k = rng.pick([2, 3, 4]);
+  const L = rng.pick([1, 2, 6, 10]);
+  const ev = F(k * L, 2);
+  const dp = 2;
+  const answer = decText(ev, dp);
+
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — each U(0,${L}) has mean ${L}/2; by linearity the sum of ${k} has mean ${k}·${L}/2.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(F(L, 2), dp),
+      rationale: `That's the mean of ONE uniform. You forgot to multiply by the ${k} independent draws.`,
+    },
+    {
+      text: decText(F(k * L), dp),
+      rationale: `That's k·L — you forgot each uniform averages L/2, not L.`,
+    },
+    {
+      text: decText(F(L), dp),
+      rationale: `That's the max of a single draw. The sum of ${k} draws averages ${k}·${L}/2.`,
+    },
+  ];
+
+  const prompt =
+    `You add up ${k} independent Uniform(0, ${L}) random values. What is the expected value of the sum (to ${dp} decimals)?`;
+  const explanation =
+    `Linearity of expectation: E[sum] = ${k}·E[U] = ${k}·(${L}/2) = ${fracText(ev)} = ${decText(ev, dp)}. (The exact shape of the convolution is irrelevant to the mean.)`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-sumunif-${k}-${L}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Continuous convolution / linearity (kL/2)",
+      source: "Expected Value · Continuous convolution",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** CLT variance addition: Var(D − H) = Var(D) + Var(H) for independent D, H. */
+export function buildCltVarianceInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const { coins, dice, N } = rng.pick([
+    { coins: 600, dice: 100, N: 6 },
+    { coins: 400, dice: 60, N: 6 },
+    { coins: 200, dice: 48, N: 6 },
+    { coins: 100, dice: 36, N: 6 },
+  ]);
+  const varH = F(coins, 4); // Var(Bin(coins, ½)) = coins/4
+  const varD = F(dice).mul(dieVariance(N)); // dice · (N²−1)/12
+  const total = varD.add(varH);
+  const dp = 2;
+  const answer = decText(total, dp);
+
+  const correct: Choice = {
+    text: decText(total, dp),
+    rationale: `Correct — variance ADDS for independent sums, even for a difference: Var(D−H) = Var(D) + Var(H).`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(varD.sub(varH).abs(), dp),
+      rationale: `You SUBTRACTED the variances because the quantity is a difference. Variance always adds for independent terms: Var(D−H) = Var(D)+Var(H).`,
+    },
+    {
+      text: decText(varD, dp),
+      rationale: `That's only the dice variance. You must also add the coin-total variance ${fracText(varH)}.`,
+    },
+    {
+      text: decText(varH, dp),
+      rationale: `That's only the coin variance. Add the dice-total variance ${fracText(varD)} too.`,
+    },
+  ];
+
+  const prompt =
+    `You have ${coins} fair coins (each head = 1 point) and ${dice} fair six-sided dice (each worth its face). ` +
+    `Let D be your dice total and H your coin total. To apply the CLT to D − H, what is Var(D − H) (to ${dp} decimals)?`;
+  const explanation =
+    `Var(H) = ${coins}·(½·½) = ${fracText(varH)}. Var(one die) = (6²−1)/12 = ${fracText(dieVariance(N))}, so Var(D) = ${dice}·${fracText(dieVariance(N))} = ${fracText(varD)}. ` +
+    `For INDEPENDENT variables variance adds — including for a difference — so Var(D − H) = ${fracText(varD)} + ${fracText(varH)} = ${fracText(total)} ≈ ${decText(total, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-cltvar-${coins}-${dice}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "CLT / variance addition",
+      source: "Expected Value · Normal approximation / CLT",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 6 — Martingales & random walks  (quiz)                               */
+/* -------------------------------------------------------------------------- */
+
+/** Symmetric ±1 walk from i in [0, N]: P(reach N before 0) = i/N. */
+export function buildWalkReachInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([10, 20, 50, 100]);
+  const i = rng.int(Math.floor(N / 4), Math.floor((3 * N) / 4));
+  const correctF = F(i, N);
+  const dp = 2;
+  const answer = decText(correctF, dp);
+
+  const correct: Choice = {
+    text: decText(correctF, dp),
+    rationale: `Correct — for a fair walk, P(hit N before 0) = i/N = ${i}/${N} (the martingale/gambler's-ruin result).`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(F(N - i, N), dp),
+      rationale: `That's P(hit 0 first) = (N−i)/N. The question asks for reaching N, which is i/N.`,
+    },
+    {
+      text: decText(F(1, 2), dp),
+      rationale: `A symmetry guess. The walk is fair per step, but starting closer to one end skews the hitting probability to i/N.`,
+    },
+    {
+      text: decText(F(i, N - i), dp),
+      rationale: `That's the ODDS i:(N−i) written as a ratio, not a probability. Normalize by the total distance N: i/N.`,
+    },
+  ];
+
+  const prompt =
+    `A token does a symmetric ±1 random walk, starting ${i} steps from one wall and ${N - i} steps from the other (walls at 0 and ${N}). ` +
+    `What is the probability it reaches the FAR wall (position ${N}) before returning to 0? (to ${dp} decimals)`;
+  const explanation =
+    `Position is a martingale, so by optional stopping E[final] = start: P·${N} + (1−P)·0 = ${i}, giving P = ${i}/${N} = ${decText(correctF, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-walkreach-${N}-${i}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Martingale / gambler's ruin (reach probability i/N)",
+      source: "Expected Value · Martingales / random walks",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** Expected duration of a symmetric walk from i in [0, N] = i(N−i). */
+export function buildWalkDurationInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([10, 20, 50, 100]);
+  const i = rng.int(Math.floor(N / 4), Math.floor((3 * N) / 4));
+  const correctN = i * (N - i);
+  const answer = String(correctN);
+
+  const correct: Choice = {
+    text: String(correctN),
+    rationale: `Correct — expected steps to absorption = i·(N−i) = ${i}·${N - i} = ${correctN} (from the martingale Y²−t).`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: String(i * N),
+      rationale: `You used i·N, dropping the −i. The correct duration is i·(N−i) — steps needed to travel to EITHER wall.`,
+    },
+    {
+      text: String((N - i) * (N - i)),
+      rationale: `That's (N−i)² — one distance squared. The symmetric answer is the PRODUCT of the two distances, i·(N−i).`,
+    },
+    {
+      text: String(N),
+      rationale: `That's just the width. Expected duration grows quadratically: i·(N−i).`,
+    },
+  ];
+
+  const prompt =
+    `A token does a symmetric ±1 random walk between walls at 0 and ${N}, starting ${i} steps from the low wall. ` +
+    `What is the expected number of steps until it hits EITHER wall?`;
+  const explanation =
+    `Y_t² − t is a martingale, so E[duration] = E[Y_end²] = P·(${N - i})² + (1−P)·${i}² with P = ${i}/${N}. ` +
+    `This simplifies to i·(N−i) = ${i}·${N - i} = ${correctN}. The common trap i·N drops the −i term.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-walkdur-${N}-${i}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Optional stopping / walk duration (i(N−i))",
+      source: "Expected Value · Martingales / random walks",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** Wald: roll dN until same face as previous; pay the sum. E = (1+N)·(N+1)/2. */
+export function buildWaldInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const N = rng.pick([6, 8, 10, 12]);
+  const count = F(1 + N); // 1 + 1/p, p = 1/N
+  const mean = dieMean(N);
+  const ev = waldEV(count, mean);
+  const dp = 2;
+  const answer = decText(ev, dp);
+
+  const correct: Choice = {
+    text: decText(ev, dp),
+    rationale: `Correct — E[rolls] = 1 + ${N} = ${1 + N}, mean face ${fracText(mean)}; Wald: E[sum] = ${1 + N}·${fracText(mean)}.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: decText(waldEV(F(N), mean), dp),
+      rationale: `You used E[rolls] = ${N} (=1/p). But the FIRST roll can't match anything, so it's 1 + 1/p = ${1 + N} rolls.`,
+    },
+    {
+      text: decText(mean, dp),
+      rationale: `That's the average of ONE roll. The game pays the SUM of all rolls — multiply by the expected count via Wald.`,
+    },
+    {
+      text: decText(F(N).mul(F(N)), dp),
+      rationale: `You multiplied count by ${N} rather than the mean face ${fracText(mean)}. Wald uses E[value per term], not the number of faces.`,
+    },
+  ];
+
+  const prompt =
+    `You roll a fair ${N}-sided die until a roll matches the immediately preceding roll; the game ends and pays the SUM of every roll made. ` +
+    `What is the expected payout (to ${dp} decimals)?`;
+  const explanation =
+    `The number of rolls is 1 (the first) plus a geometric wait to match it: E[rolls] = 1 + ${N} = ${1 + N}. Each roll averages ${fracText(mean)}. ` +
+    `By Wald's identity E[sum] = E[rolls]·E[face] = ${1 + N}·${fracText(mean)} = ${fracText(ev)} ≈ ${decText(ev, dp)}.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-wald-${N}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Wald's identity (E[N]·E[X])",
+      source: "Expected Value · Wald's identity",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/** Martingale doubling: bankroll 2^k − 1, min bet 1; EV of the fair game = 0. */
+export function buildMartingaleDoublingInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: string; question: Question } {
+  const k = rng.pick([5, 6, 7, 8]);
+  const bankroll = 2 ** k - 1;
+  const answer = "0";
+
+  const correct: Choice = {
+    text: "0",
+    rationale: `Correct — a fair coin makes every bet zero-EV, and no betting SYSTEM changes that: E = 0.`,
+  };
+  const distractors: Choice[] = [
+    {
+      text: "1",
+      rationale: `You counted only the WIN path (+$1 with prob ${2 ** k - 1}/${2 ** k}) and ignored the ruin: (1/${2 ** k})·(−${bankroll}) exactly cancels it.`,
+    },
+    {
+      text: String(-bankroll),
+      rationale: `That's the loss on the ruin path only (prob 1/${2 ** k}). Weight it against the ${2 ** k - 1}/${2 ** k} chance of +$1 — they sum to 0.`,
+    },
+    {
+      text: String(bankroll),
+      rationale: `That's the whole bankroll as if guaranteed profit. Doubling can't beat a fair game; the expected value is 0.`,
+    },
+  ];
+
+  const prompt =
+    `You bet on a fair coin, doubling your stake after each loss and stopping at the first win or at bankruptcy. You start with $${bankroll} and a $1 minimum bet ` +
+    `(so you can absorb ${k} straight losses). What is the expected value of this strategy?`;
+  const explanation =
+    `You either win before ${k} losses (net +$1, probability ${2 ** k - 1}/${2 ** k}) or lose ${k} in a row (net −$${bankroll}, probability 1/${2 ** k}). ` +
+    `E = (${2 ** k - 1}/${2 ** k})·(+1) + (1/${2 ** k})·(−${bankroll}) = 0. No staking system beats a fair game.`;
+
+  return {
+    answer,
+    question: {
+      id: `ev-martingale-${k}`,
+      prompt,
+      explanation,
+      difficulty,
+      concept: "Martingale betting (fair game EV = 0)",
+      source: "Expected Value · Martingale betting",
+      ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/* ========================================================================== */
+/* ==========================  FLASHCARD FAMILY  ============================= */
+/* ========================================================================== */
+
+/* -------------------------------------------------------------------------- */
+/*  LEVEL 8 — Divergent EV sentinels & coin-simulation procedures (flashcard)  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Special-case families the pipeline MUST NOT grade as a scalar:
+ *   • Divergent EV (St.-Petersburg-type): the answer is "infinite / diverges";
+ *     the tempting finite sum (a convergent doubling-prize analog) is the trap.
+ *   • Coin-simulation PROCEDURES / formulas (Von Neumann extractor, dyadic
+ *     maps, rejection sampling, irrational binary expansion): the answer is a
+ *     procedure or formula, not a number to grade.
+ * All are freshly-worded scenarios — no verbatim source-dataset text.
+ */
+export const expectedValueFlashcards: Flashcard[] = [
+  {
+    id: "ev-fc-divergent-triple",
+    prompt:
+      "A game: roll a fair die repeatedly. A 1 or 2 lets you continue; the first time you roll 3–6 the game stops on that roll, say roll n, and pays 3ⁿ dollars. What is the fair value (expected payout) of this game?",
+    answer:
+      "The expected value is INFINITE (the series diverges) — there is no finite fair price.",
+    explanation:
+      "Stopping on roll n has probability (1/3)^(n−1)·(2/3), and it pays 3ⁿ. Each term contributes 3ⁿ·(1/3)^(n−1)·(2/3) = 3·(2/3) = 2 dollars — a constant. So E = 2 + 2 + 2 + … diverges to +∞. The trap is to treat the shrinking probabilities as if they beat the growing prize: they don't, because prize×probability stays ≥ a positive constant. Contrast a DOUBLING prize 2ⁿ with the same continuation: then each term is 2ⁿ·(1/3)^(n−1)·(2/3) = (2/3)·(2/3)^(n−1), a geometric series summing to a FINITE $2 — that finite number is exactly the tempting wrong answer here. Whenever prize growth × survival probability has ratio ≥ 1, the EV is infinite.",
+    difficulty: "medium",
+    concept: "Divergent EV (St. Petersburg type)",
+    source: "Expected Value · Divergent EV",
+  },
+  {
+    id: "ev-fc-divergent-wheel",
+    prompt:
+      "On night n (n = 1, 2, 3, …) a wheel has n + 3 equal sectors, exactly one of which is a jackpot, so P(jackpot on night n) = 1/(n + 3). You spin once per night until you first hit the jackpot. Let W be the night of your first jackpot. What is E[W]?",
+    answer:
+      "E[W] is INFINITE — you win with probability 1, but the expected waiting time diverges.",
+    explanation:
+      "Use the tail-sum formula E[W] = Σ_{n≥0} P(W > n). Surviving (no jackpot) through night n has probability (3/4)·(4/5)·…·((n+3)/(n+4)) = 3/(n+4) by telescoping, so P(W > n) = 3/(n+4). Then E[W] = Σ_{n≥0} 3/(n+4), a tail of the harmonic series, which diverges. So although P(W < ∞) = 1 (the product of miss-probabilities → 0, meaning you WILL win eventually), the MEAN wait is infinite. The lesson: 'wins almost surely' and 'finite expected time' are different — a heavy 1/n tail makes the mean blow up even when the event is certain.",
+    difficulty: "hard",
+    concept: "Divergent EV (harmonic tail)",
+    source: "Expected Value · Divergent EV",
+  },
+  {
+    id: "ev-fc-vonneumann",
+    prompt:
+      "You have a biased coin that lands Heads with unknown probability p ∈ (0, 1). Describe a procedure that produces a perfectly fair 50/50 outcome, and give the expected number of biased flips it uses.",
+    answer:
+      "Von Neumann extractor: flip twice; HT → 'Heads', TH → 'Tails', HH or TT → discard and repeat. Expected flips = 1/(p(1−p)) (which is 4 when p = ½).",
+    explanation:
+      "HT and TH are equally likely — P(HT) = p(1−p) = P(TH) — for ANY bias p, so mapping them to the two outcomes is exactly fair; HH/TT are thrown away and you retry. Each round uses 2 flips and succeeds (produces an output) with probability 2p(1−p), so the expected number of rounds is 1/(2p(1−p)) and the expected number of flips is 2/(2p(1−p)) = 1/(p(1−p)). This is a PROCEDURE-plus-formula answer, not a single number — the flip count depends on p (minimized at p = ½, where it is 4).",
+    difficulty: "medium",
+    concept: "Simulating fairness (Von Neumann extractor)",
+    source: "Expected Value · Simulating probabilities with a coin",
+  },
+  {
+    id: "ev-fc-dyadic",
+    prompt:
+      "Using a perfectly FAIR coin, describe a procedure that outputs 'Heads' with probability exactly 3/8 and 'Tails' with probability 5/8.",
+    answer:
+      "Flip the fair coin 3 times (8 equally-likely sequences); map any 3 chosen sequences (e.g. HHH, HHT, HTH) to 'Heads' and the other 5 to 'Tails'.",
+    explanation:
+      "Three fair flips give 2³ = 8 equally-likely length-3 sequences, each with probability 1/8. Assigning exactly 3 of them to 'Heads' yields P(Heads) = 3/8 and the remaining 5 give 5/8 — exact, because 3/8 is dyadic (denominator a power of 2). This is the general recipe for any k/2ⁿ target: flip n times and label k of the 2ⁿ outcomes as success. The answer is the mapping/procedure, not a graded scalar.",
+    difficulty: "easy",
+    concept: "Fair coin → dyadic probability",
+    source: "Expected Value · Simulating probabilities with a coin",
+  },
+  {
+    id: "ev-fc-rejection",
+    prompt:
+      "Using a fair coin, explain how to simulate an event of probability 2/9, and compute the expected number of flips until the procedure outputs a 'success'.",
+    answer:
+      "2/9 isn't dyadic: flip 4 times (16 sequences), keep 9 and discard 7; within the kept 9, label 2 as 'success', 7 as 'failure'. Expected flips to a success = 32.",
+    explanation:
+      "Four fair flips give 16 equally-likely outcomes. Reserve 9 of them as a 'valid round' (discard-and-retry on the other 7); inside a valid round, 2 of the 9 are 'success', matching 2/9. Per round of 4 flips, P(success) = 2/16 = 1/8, so by the geometric distribution the expected number of ROUNDS to a success is 8, and expected FLIPS = 4·8 = 32. This routes as reasoning (the procedure) plus the derived count, not a bare number to grade — the construction is the point.",
+    difficulty: "medium",
+    concept: "Rejection sampling with a fair coin",
+    source: "Expected Value · Simulating probabilities with a coin",
+  },
+  {
+    id: "ev-fc-irrational",
+    prompt:
+      "Using a fair coin, how would you simulate an event with an IRRATIONAL probability such as 1/π? What can you say about the number of flips required?",
+    answer:
+      "Write the target in binary, 1/π = 0.b₁b₂b₃…₂, and generate bits by flipping: compare the flipped bitstream to the target's bits (Knuth–Yao), stopping as soon as the comparison is decided. It halts with probability 1, but there is NO finite upper bound on the number of flips.",
+    explanation:
+      "Each fair flip is one bit of a uniform random real U ∈ [0,1). Output 'success' iff U < 1/π. You reveal bits of U one at a time and compare to the binary expansion of 1/π: at the first position where they differ you know whether U < target or not and stop. Since the target is irrational its expansion never terminates, so no fixed number of flips always suffices — but the probability of still being undecided after m bits is 2^(−m) → 0, so the procedure terminates almost surely (expected flips is finite, ~2, but unbounded worst case). The deliverable is the procedure and this halting argument, not a single scalar.",
+    difficulty: "hard",
+    concept: "Simulating an irrational probability (binary expansion)",
+    source: "Expected Value · Simulating probabilities with a coin",
+  },
+];
+
+/* ========================================================================== */
+/*  Small arithmetic helpers                                                   */
+/* ========================================================================== */
+
+function fact(n: number): number {
+  let f = 1;
+  for (let k = 2; k <= n; k++) f *= k;
+  return f;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/* ========================================================================== */
+/*  Named generators (adapters used by the levels + verification tests)        */
+/* ========================================================================== */
+
+// Level 1 — Optimal stopping (numeric)
+export const genOneReroll = (rng: Rng): NumericQuestion =>
+  buildOneRerollInstance(rng, "easy").numeric;
+export const genContinuousReroll = (rng: Rng): NumericQuestion =>
+  buildContinuousRerollInstance(rng, "medium").numeric;
+
+// Level 2 — Geometric / recursion (numeric)
+export const genNegBinomial = (rng: Rng): NumericQuestion =>
+  buildNegBinomialInstance(rng, "easy").numeric;
+export const genPairSame = (rng: Rng): NumericQuestion =>
+  buildPairSameInstance(rng, "medium").numeric;
+export const genMemoryless = (rng: Rng): NumericQuestion =>
+  buildMemorylessInstance(rng, "easy").numeric;
+export const genRunningSum = (rng: Rng): NumericQuestion =>
+  buildRunningSumInstance(rng, "medium").numeric;
+export const genGeometricSum = (rng: Rng): NumericQuestion =>
+  buildGeometricSumInstance(rng, "medium").numeric;
+export const genConvertAll = (rng: Rng): NumericQuestion =>
+  buildConvertAllInstance(rng, "medium").numeric;
+export const genOtherThan = (rng: Rng): NumericQuestion =>
+  buildOtherThanInstance(rng, "easy").numeric;
+
+// Level 3 — Indicators & linearity (numeric)
+export const genCoupon = (rng: Rng): NumericQuestion =>
+  buildCouponInstance(rng, "easy").numeric;
+export const genDistinct = (rng: Rng): NumericQuestion =>
+  buildDistinctInstance(rng, "medium").numeric;
+export const genRecords = (rng: Rng): NumericQuestion =>
+  buildRecordsInstance(rng, "easy").numeric;
+export const genEmptyBoxes = (rng: Rng): NumericQuestion =>
+  buildEmptyBoxesInstance(rng, "medium").numeric;
+export const genFirstMarker = (rng: Rng): NumericQuestion =>
+  buildFirstMarkerInstance(rng, "easy").numeric;
+export const genWarmingSpells = (rng: Rng): NumericQuestion =>
+  buildWarmingSpellsInstance(rng, "hard").numeric;
+
+// Level 4 — Elementary & combinatorial (quiz)
+export const genTwoDiceMatch = (rng: Rng): Question =>
+  buildTwoDiceMatchInstance(rng, "easy").question;
+export const genDiffer = (rng: Rng): Question =>
+  buildDifferInstance(rng, "easy").question;
+export const genAllSameCoins = (rng: Rng): Question =>
+  buildAllSameCoinsInstance(rng, "easy").question;
+export const genThreeDicePayoff = (rng: Rng): Question =>
+  buildThreeDicePayoffInstance(rng, "medium").question;
+export const genHigherDiffer = (rng: Rng): Question =>
+  buildHigherDifferInstance(rng, "medium").question;
+
+// Level 5 — Distributions, variance & CLT (quiz)
+export const genHeadsTimesTails = (rng: Rng): Question =>
+  buildHeadsTimesTailsInstance(rng, "medium").question;
+export const genSecondMoment = (rng: Rng): Question =>
+  buildSecondMomentInstance(rng, "medium").question;
+export const genExpMoment = (rng: Rng): Question =>
+  buildExpMomentInstance(rng, "medium").question;
+export const genSumUniforms = (rng: Rng): Question =>
+  buildSumUniformsInstance(rng, "medium").question;
+export const genCltVariance = (rng: Rng): Question =>
+  buildCltVarianceInstance(rng, "hard").question;
+
+// Level 6 — Martingales & random walks (quiz)
+export const genWalkReach = (rng: Rng): Question =>
+  buildWalkReachInstance(rng, "medium").question;
+export const genWalkDuration = (rng: Rng): Question =>
+  buildWalkDurationInstance(rng, "hard").question;
+export const genWald = (rng: Rng): Question =>
+  buildWaldInstance(rng, "medium").question;
+export const genMartingaleDoubling = (rng: Rng): Question =>
+  buildMartingaleDoublingInstance(rng, "medium").question;
+
+// Level 7 — Conditional expectation & geometric probability (numeric)
+export const genConditionalGeo = (rng: Rng): NumericQuestion =>
+  buildConditionalGeoInstance(rng, "hard").numeric;
+export const genOverlap = (rng: Rng): NumericQuestion =>
+  buildOverlapInstance(rng, "medium").numeric;
+export const genMeetWithin = (rng: Rng): NumericQuestion =>
+  buildMeetWithinInstance(rng, "medium").numeric;
+export const genMaxDice = (rng: Rng): NumericQuestion =>
+  buildMaxDiceInstance(rng, "medium").numeric;
+export const genUniformSpacing = (rng: Rng): NumericQuestion =>
+  buildUniformSpacingInstance(rng, "medium").numeric;

@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Quant Trader Prep — OPTIONAL AI "flavor / open-ended" layer. A SEPARATE,
+  additive stack (it does NOT touch the working auth/data stack in
+  quant-trader-prep.yaml): its own AWS Lambda + API Gateway HTTP API with a
+  Cognito JWT authorizer that points at the EXISTING User Pool (passed in as
+  parameters). The Lambda reads the LLM provider API key from SSM Parameter
+  Store (SecureString) at runtime — the key is NEVER in the browser bundle or in
+  this template. NOTE: the LLM API is an EXTERNAL PAID service and is NOT part of
+  the AWS Free Tier (see infra/AI_SETUP.md). The AWS pieces here (Lambda, HTTP
+  API, a tiny on-demand DynamoDB quota table) are Free-Tier-friendly at pilot
+  scale.
+
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: quant-trader-prep
+    Description: Prefix for AI resource names.
+
+  UserPoolId:
+    Type: String
+    Description: >
+      EXISTING Cognito User Pool id (the `UserPoolId` output of the main stack).
+      Used to build the JWT authorizer issuer.
+
+  UserPoolClientId:
+    Type: String
+    Description: >
+      EXISTING Cognito app client id (the `UserPoolClientId` output of the main
+      stack). Used as the JWT authorizer audience.
+
+  AiProvider:
+    Type: String
+    Default: openai
+    AllowedValues: [openai, openai-compatible, anthropic]
+    Description: >
+      Which LLM API the Lambda calls. "openai" / "openai-compatible" both use the
+      OpenAI-compatible /chat/completions path with AiBaseUrl + Bearer key (works
+      for raw OpenAI OR a gateway like TrueFoundry). "anthropic" uses Anthropic's
+      native API. Default OpenAI.
+
+  AiBaseUrl:
+    Type: String
+    Default: https://api.openai.com/v1
+    Description: >
+      OpenAI-compatible base URL for the openai / openai-compatible provider.
+      Default is the raw OpenAI API (so nothing changes for a plain-OpenAI key).
+      For the TrueFoundry AI Gateway SaaS use https://gateway.truefoundry.ai
+      (self-hosted deployments use their own gateway URL from the Playground).
+      Ignored when AiProvider=anthropic.
+
+  AiModel:
+    Type: String
+    Default: gpt-4o-mini
+    Description: >
+      Model id: gpt-4o-mini for raw OpenAI, claude-3-5-haiku-latest for Anthropic,
+      or the TrueFoundry `provider_account/model_name` form (e.g.
+      openai-main/gpt-4o-mini) when pointing AiBaseUrl at TrueFoundry.
+
+  AiSsmParam:
+    Type: String
+    Default: /quant-trader-prep/ai/api-key
+    Description: >
+      Name of the SSM SecureString parameter holding the LLM API key. You create
+      it out-of-band (never in CloudFormation) — see infra/AI_SETUP.md.
+
+  DailyQuota:
+    Type: Number
+    Default: 50
+    Description: >
+      Per-user per-day AI call cap (spend guard). Set to 0 to disable the quota
+      check.
+
+  CorsOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173,http://localhost:4173"
+    Description: Allowed CORS origins for the AI endpoint (add your prod URL).
+
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) IAM permissions-boundary policy ARN to attach to EVERY IAM role
+      this stack creates. Leave blank for normal accounts. REQUIRED in restricted
+      sandbox accounts whose boundary denies iam:CreateRole unless the new role
+      carries the same boundary (e.g. arn:aws:iam::<acct>:policy/InternSandboxBoundary).
+
+# ---------------------------------------------------------------------------
+Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
+
+# ---------------------------------------------------------------------------
+Resources:
+  # ---- Tiny on-demand table backing the per-user daily quota counter.
+  AiQuotaTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-ai-quota"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ---- Role for the AI Lambda: logs + read the SSM SecureString + quota table.
+  AiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ReadAiKeyAndQuota
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # Read ONLY the one SecureString parameter that holds the API key.
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${AiSsmParam}"
+              # Decrypt the SecureString (AWS-managed SSM key), scoped via ssm.
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    "kms:ViaService": !Sub "ssm.${AWS::Region}.amazonaws.com"
+              # The quota counter table.
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt AiQuotaTable.Arn
+
+  # ---- The AI Lambda. Placeholder inline code is replaced by deploy-ai.sh with
+  #      the real handler in infra/lambda/ai-flavor/index.mjs (which uses the
+  #      runtime-bundled AWS SDK + global fetch — no packaging needed).
+  AiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-ai"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt AiFunctionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          AI_PROVIDER: !Ref AiProvider
+          AI_BASE_URL: !Ref AiBaseUrl
+          AI_MODEL: !Ref AiModel
+          AI_SSM_PARAM: !Ref AiSsmParam
+          AI_DAILY_QUOTA: !Ref DailyQuota
+          AI_QUOTA_TABLE: !Ref AiQuotaTable
+          ALLOW_ORIGIN: !Select [0, !Ref CorsOrigins]
+      Code:
+        ZipFile: |
+          // PLACEHOLDER — replaced by infra/deploy-ai.sh (update-function-code).
+          // Fails safe until the real handler is uploaded.
+          exports.handler = async () => ({
+            statusCode: 503,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ok: false,
+              error: "AI Lambda code not deployed yet — run infra/deploy-ai.sh",
+            }),
+          });
+
+  # ---- HTTP API (v2) with a native Cognito JWT authorizer (same User Pool).
+  AiHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${ProjectName}-ai-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: !Ref CorsOrigins
+        AllowMethods: [POST, OPTIONS]
+        AllowHeaders: [authorization, content-type]
+
+  AiJwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref AiHttpApi
+      AuthorizerType: JWT
+      Name: cognito-jwt
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClientId
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+
+  AiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref AiHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AiFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  AiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AiHttpApi
+      RouteKey: "POST /ai"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AiJwtAuthorizer
+      Target: !Sub "integrations/${AiIntegration}"
+
+  AiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref AiHttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  AiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AiHttpApi}/*"
+
+# ---------------------------------------------------------------------------
+Outputs:
+  AiEndpoint:
+    Description: VITE_AI_ENDPOINT (base URL — the client POSTs to `${endpoint}/ai`)
+    Value: !GetAtt AiHttpApi.ApiEndpoint
+  AiFunctionName:
+    Description: Lambda function name (used by deploy-ai.sh update-function-code)
+    Value: !Ref AiFunction

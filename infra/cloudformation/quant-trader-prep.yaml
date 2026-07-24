@@ -1,0 +1,428 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Quant Trader Prep — AWS Free-Tier backend. Amazon Cognito (User Pool with
+  username + email alias + optional Google IdP) for auth, a Cognito Identity
+  Pool that mints fine-grained temporary credentials, Amazon DynamoDB
+  (PAY_PER_REQUEST / on-demand) for owner-scoped per-user progress, and an
+  AWS Lambda + API Gateway (HTTP API, JWT authorizer) skeleton for privileged /
+  server-only writes. Everything here is inside the AWS Always-Free / Free-Tier
+  envelope at pilot scale — no provisioned capacity, no paid tiers.
+
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: quant-trader-prep
+    Description: Prefix for all resource names.
+
+  CallbackUrls:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173/,http://localhost:4173/"
+    Description: >
+      OAuth callback URLs for the app client (Google Hosted-UI redirect).
+      Add your Vercel/prod URL here too, e.g. https://yourapp.vercel.app/.
+
+  LogoutUrls:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173/,http://localhost:4173/"
+    Description: OAuth sign-out URLs for the app client.
+
+  GoogleClientId:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) Google OAuth Web client ID. Leave blank to deploy WITHOUT
+      Google federation (username/email still work); re-deploy with a value to
+      turn Google on.
+
+  GoogleClientSecret:
+    Type: String
+    Default: ""
+    NoEcho: true
+    Description: (Optional) Google OAuth Web client secret. Pairs with GoogleClientId.
+
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) IAM permissions-boundary policy ARN to attach to EVERY IAM role
+      this stack creates. Leave blank for normal accounts. REQUIRED in restricted
+      sandbox accounts whose boundary denies iam:CreateRole unless the new role
+      carries the same boundary (e.g. arn:aws:iam::<acct>:policy/InternSandboxBoundary).
+
+# ---------------------------------------------------------------------------
+Conditions:
+  HasGoogle: !Not [!Equals [!Ref GoogleClientId, ""]]
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
+
+# ---------------------------------------------------------------------------
+Resources:
+  # ---- Auto-confirm trigger: keeps the local-first "sign up & you're in" UX.
+  # (For production email verification, disable this trigger — see AWS_SETUP.md.)
+  AutoConfirmRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  AutoConfirmFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-auto-confirm"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt AutoConfirmRole.Arn
+      Timeout: 5
+      Code:
+        ZipFile: |
+          // Cognito PreSignUp trigger: auto-confirm the user (and auto-verify
+          // their email if supplied) so sign-up needs no emailed code — mirrors
+          // the app's local-first "create account & enter" flow.
+          exports.handler = async (event) => {
+            event.response.autoConfirmUser = true;
+            if (event.request.userAttributes && event.request.userAttributes.email) {
+              event.response.autoVerifyEmail = true;
+            }
+            return event;
+          };
+
+  AutoConfirmInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AutoConfirmFunction
+      Action: lambda:InvokeFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt UserPool.Arn
+
+  # ---- Cognito User Pool: username + email alias, weak-but-app-matching policy.
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-users"
+      AliasAttributes:
+        - email
+      UsernameConfiguration:
+        CaseSensitive: false
+      AutoVerifiedAttributes:
+        - email
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Required: false
+          Mutable: true
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      LambdaConfig:
+        PreSignUp: !GetAtt AutoConfirmFunction.Arn
+
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      # Domain must be globally unique across AWS; the account id keeps it so.
+      Domain: !Sub "${ProjectName}-${AWS::AccountId}"
+      UserPoolId: !Ref UserPool
+
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogle
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: "openid email profile"
+      AttributeMapping:
+        email: email
+        username: sub
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ProjectName}-web"
+      UserPoolId: !Ref UserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      # Referencing GoogleIdentityProvider via !Ref (rather than the literal
+      # "Google") makes the client depend on the IdP so it's created first —
+      # but ONLY when HasGoogle is true, since Fn::If evaluates just the taken
+      # branch. When Google is off, the [COGNITO] branch has no reference to
+      # the (absent) resource, so the template stays valid.
+      SupportedIdentityProviders: !If
+        - HasGoogle
+        - [COGNITO, !Ref GoogleIdentityProvider]
+        - [COGNITO]
+      CallbackURLs: !Ref CallbackUrls
+      LogoutURLs: !Ref LogoutUrls
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+      AllowedOAuthFlowsUserPoolClient: true
+
+  # ---- Cognito Identity Pool: exchanges the user-pool JWT for scoped AWS creds.
+  IdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub "${ProjectName}_identity"
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ClientId: !Ref UserPoolClient
+          ProviderName: !GetAtt UserPool.ProviderName
+          ServerSideTokenCheck: true
+
+  # ---- DynamoDB: on-demand, one owner-scoped progress item per user.
+  ProgressTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-progress"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  # ---- DynamoDB: server-only table (freshness pipeline / privileged writes).
+  #      The authenticated role has NO access here — only the API Lambda does.
+  FirmFormatReportsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-firm-format-reports"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+
+  # ---- IAM role assumed by AUTHENTICATED end users (owner-scoped DynamoDB).
+  AuthenticatedRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-authenticated"
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref IdentityPool
+              "ForAnyValue:StringLike":
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: OwnerScopedProgress
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # A user may only touch the item whose partition key equals THEIR
+              # own Cognito identity id — enforced by dynamodb:LeadingKeys.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:BatchGetItem
+                  - dynamodb:BatchWriteItem
+                Resource:
+                  - !GetAtt ProgressTable.Arn
+                Condition:
+                  "ForAllValues:StringEquals":
+                    "dynamodb:LeadingKeys":
+                      - "${cognito-identity.amazonaws.com:sub}"
+        - PolicyName: InvokeApi
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: execute-api:Invoke
+                Resource: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+  IdentityPoolRoleAttachment:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref IdentityPool
+      Roles:
+        authenticated: !GetAtt AuthenticatedRole.Arn
+
+  # ---- API Lambda (privileged / server-only writes) + its role.
+  ApiFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ServerSideTables
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              # The server (this Lambda) can write the privileged tables that
+              # the client role is NOT allowed to touch (scored attempts, quotas,
+              # firm-format reports — PRD §13). Progress is read/write too so the
+              # server can do trusted merges if needed.
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt ProgressTable.Arn
+                  - !GetAtt FirmFormatReportsTable.Arn
+
+  ApiFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-api"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt ApiFunctionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          PROGRESS_TABLE: !Ref ProgressTable
+          FIRM_FORMAT_REPORTS_TABLE: !Ref FirmFormatReportsTable
+      Code:
+        ZipFile: |
+          // Privileged API skeleton. API Gateway's JWT authorizer has already
+          // verified the Cognito access token, so the caller's identity is
+          // trustworthy here. This is where server-only writes (scored attempts,
+          // AI usage quotas, firm-format reports) and truth-withheld scoring go.
+          exports.handler = async (event) => {
+            const claims =
+              (event.requestContext &&
+                event.requestContext.authorizer &&
+                event.requestContext.authorizer.jwt &&
+                event.requestContext.authorizer.jwt.claims) || {};
+            const sub = claims.sub || null;
+            return {
+              statusCode: 200,
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                ok: true,
+                sub,
+                route: event.routeKey || null,
+                message: "quant-trader-prep API skeleton — add privileged handlers here.",
+              }),
+            };
+          };
+
+  # ---- HTTP API (v2) with a native Cognito JWT authorizer.
+  HttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${ProjectName}-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: !Ref CallbackUrls
+        AllowMethods: [GET, POST, PUT, DELETE, OPTIONS]
+        AllowHeaders: [authorization, content-type]
+
+  HttpJwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref HttpApi
+      AuthorizerType: JWT
+      Name: cognito-jwt
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClient
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPool}"
+
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref HttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt ApiFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref HttpApi
+      RouteKey: "ANY /{proxy+}"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref HttpJwtAuthorizer
+      Target: !Sub "integrations/${ApiIntegration}"
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref HttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  ApiInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*"
+
+# ---------------------------------------------------------------------------
+Outputs:
+  Region:
+    Description: VITE_AWS_REGION
+    Value: !Ref AWS::Region
+  UserPoolId:
+    Description: VITE_COGNITO_USER_POOL_ID
+    Value: !Ref UserPool
+  UserPoolClientId:
+    Description: VITE_COGNITO_USER_POOL_CLIENT_ID
+    Value: !Ref UserPoolClient
+  IdentityPoolId:
+    Description: VITE_COGNITO_IDENTITY_POOL_ID
+    Value: !Ref IdentityPool
+  CognitoDomain:
+    Description: VITE_COGNITO_DOMAIN (Hosted-UI domain for Google sign-in)
+    Value: !Sub "${ProjectName}-${AWS::AccountId}.auth.${AWS::Region}.amazoncognito.com"
+  ProgressTableName:
+    Description: VITE_DYNAMODB_TABLE
+    Value: !Ref ProgressTable
+  FirmFormatReportsTableName:
+    Description: Server-only table (no client access)
+    Value: !Ref FirmFormatReportsTable
+  ApiBaseUrl:
+    Description: VITE_API_BASE_URL
+    Value: !GetAtt HttpApi.ApiEndpoint
