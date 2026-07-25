@@ -1,0 +1,235 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import type { ArenaOp, ArenaPreset, BoardKind } from "@/lib/arena/config";
+import { configHash } from "@/lib/arena/config";
+import type { AnsweredItem } from "@/lib/arena/scoring";
+import { buildReport, type RunReport } from "@/lib/arena/analytics";
+import {
+  recordLocalRun,
+  trailing7DayMedian,
+  type KeyValueStore,
+  type PersonalBest,
+} from "@/lib/arena/localPb";
+import { arenaQuestionStream, streamPrompt } from "@/lib/leaderboard/seed";
+import { arenaItemStream } from "@/content/arena/generators";
+import {
+  isLeaderboardEnabled,
+  requestRankedSeed,
+  submitRankedRun,
+} from "@/lib/leaderboard/client";
+import { PresetPicker } from "@/components/arena/PresetPicker";
+import { ArenaRunner, type PlayItem } from "@/components/arena/ArenaRunner";
+import { PostRunReport } from "@/components/arena/PostRunReport";
+import { Leaderboard } from "@/components/arena/Leaderboard";
+import { ChevronLeftIcon } from "@/components/icons";
+
+type Phase = "pick" | "run" | "report";
+
+/** Minimal, SSR-safe localStorage accessor for the local PB store. */
+function store(): KeyValueStore {
+  return {
+    getItem: (k) => {
+      try {
+        return typeof localStorage !== "undefined"
+          ? localStorage.getItem(k)
+          : null;
+      } catch {
+        return null;
+      }
+    },
+    setItem: (k, v) => {
+      try {
+        if (typeof localStorage !== "undefined") localStorage.setItem(k, v);
+      } catch {
+        /* ignore quota / privacy-mode errors */
+      }
+    },
+  };
+}
+
+function boardOf(preset: ArenaPreset): BoardKind {
+  return preset.mode === "optiver" ? "optiver" : "zetamac";
+}
+
+function rankedEligible(preset: ArenaPreset): boolean {
+  return (
+    isLeaderboardEnabled() &&
+    preset.packs.length === 1 &&
+    preset.packs[0] === "int"
+  );
+}
+
+/**
+ * SpeedArenaPage — the /arena route (thin). Orchestrates PresetPicker →
+ * ArenaRunner → PostRunReport + Leaderboard. All scoring/timing/analytics live
+ * in the pure `arena/*` + `leaderboard/*` modules; this page only wires state.
+ *
+ * Fully functional with the AI layer AND the leaderboard OFF: casual runs play
+ * the local packs generator and record a local personal best. A ranked run (only
+ * when the leaderboard is enabled and the preset is integer-only) requests a
+ * server seed, plays the shared deterministic stream, and submits its answers
+ * for server-authoritative re-scoring.
+ */
+export function SpeedArenaPage() {
+  const [phase, setPhase] = useState<Phase>("pick");
+  const [preset, setPreset] = useState<ArenaPreset | null>(null);
+  const [items, setItems] = useState<PlayItem[]>([]);
+  const [runId, setRunId] = useState(0);
+  const [seed, setSeed] = useState<number | null>(null);
+  const [report, setReport] = useState<RunReport | null>(null);
+  const [pb, setPb] = useState<PersonalBest | null>(null);
+  const [isNewBest, setIsNewBest] = useState(false);
+  const [trend, setTrend] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const start = async (p: ArenaPreset) => {
+    setLoading(true);
+    try {
+      const count = Math.min(
+        p.questionCap ?? Math.ceil(p.durationSec * 3),
+        2000,
+      );
+      let play: PlayItem[];
+      let usedSeed: number | null = null;
+
+      if (rankedEligible(p)) {
+        const issued = await requestRankedSeed(boardOf(p), configHash(p));
+        if (issued) {
+          usedSeed = issued.seed;
+          play = arenaQuestionStream(issued.seed, p).map((s) => ({
+            id: s.id,
+            prompt: streamPrompt(s),
+            answer: s.answer,
+            op: s.op as ArenaOp,
+          }));
+        } else {
+          play = casualItems(p, count);
+        }
+      } else {
+        play = casualItems(p, count);
+      }
+
+      setPreset(p);
+      setSeed(usedSeed);
+      setItems(play);
+      setRunId((n) => n + 1);
+      setPhase("run");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const casualItems = (p: ArenaPreset, count: number): PlayItem[] => {
+    const localSeed = Date.now() % 2_000_000_000;
+    return arenaItemStream(localSeed, p, count).map((it) => ({
+      id: it.id,
+      prompt: it.prompt,
+      answer: it.answer,
+      op: it.op,
+      decimals: it.decimals,
+    }));
+  };
+
+  const finish = (answered: AnsweredItem[], elapsedMs: number) => {
+    if (!preset) return;
+    const rep = buildReport(answered, preset, {});
+    const board = boardOf(preset);
+    const cfg = configHash(preset);
+    const { pb: newPb, isNewBest: nb } = recordLocalRun(
+      store(),
+      board,
+      cfg,
+      rep.score,
+      Date.now(),
+    );
+    setReport(rep);
+    setPb(newPb);
+    setIsNewBest(nb);
+    setTrend(trailing7DayMedian(store(), board, cfg, Date.now()));
+    setPhase("report");
+
+    // Ranked submission (server re-scores; fire-and-forget, never blocks UI).
+    // The server independently regrades every value against the SAME
+    // deterministic stream, so we send a value that reproduces the client's
+    // grade exactly: the stream answer for a correct item, a guaranteed-wrong
+    // value for a wrong item, and null for a skip. This keeps the server the
+    // authoritative scorer while guaranteeing client/server score parity.
+    if (seed !== null && rankedEligible(preset)) {
+      const answerById = new Map(items.map((i) => [i.id, i.answer]));
+      void submitRankedRun({
+        board,
+        configHash: cfg,
+        seed,
+        answers: answered.map((a) => {
+          const correctVal = answerById.get(a.id) ?? 0;
+          const value = a.skipped
+            ? null
+            : a.correct
+              ? correctVal
+              : correctVal + 1;
+          return { id: a.id, value, rtMs: a.rtMs };
+        }),
+        clientElapsedMs: elapsedMs,
+      });
+    }
+  };
+
+  const currentPreset = preset;
+
+  return (
+    <div className="relative min-h-[100dvh] bg-bg">
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <div className="mb-6 flex items-center justify-between">
+          <Link to="/" className="btn-ghost !px-2 !py-1 text-sm">
+            <ChevronLeftIcon width={16} height={16} /> Home
+          </Link>
+          <span className="label text-accent">Speed Arena</span>
+        </div>
+
+        {phase === "pick" && (
+          <div className="space-y-6">
+            <header>
+              <h1 className="font-display text-3xl font-black text-primary">
+                Speed Arena
+              </h1>
+              <p className="mt-1 text-sm text-secondary">
+                Timed mental-math drills in the Zetamac / Optiver mold. Reasoning
+                stays untimed elsewhere — this is pure speed practice.
+              </p>
+            </header>
+            <PresetPicker onStart={start} />
+            {loading && (
+              <p className="label text-center text-muted">Preparing run…</p>
+            )}
+          </div>
+        )}
+
+        {phase === "run" && currentPreset && (
+          <ArenaRunner
+            key={runId}
+            items={items}
+            preset={currentPreset}
+            onFinish={finish}
+          />
+        )}
+
+        {phase === "report" && report && currentPreset && (
+          <div className="space-y-6">
+            <PostRunReport
+              report={report}
+              pb={pb}
+              isNewBest={isNewBest}
+              trend={trend}
+              onAgain={() => setPhase("pick")}
+            />
+            <Leaderboard
+              board={boardOf(currentPreset)}
+              configHash={configHash(currentPreset)}
+              pb={pb}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

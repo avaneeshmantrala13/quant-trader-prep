@@ -6,6 +6,7 @@ import { getCasinoStation } from "./stations";
 import { CasinoMapBackground } from "./MapBackground";
 import { celebrateCasino } from "./celebrate";
 import { CasinoTableOfContents } from "./TableOfContents";
+import { CasinoDashboard } from "./Dashboard";
 
 /**
  * "Casino Felt" — an elegant card-room aesthetic for a probability/EV product.
@@ -112,4 +113,5 @@ export const casinoTheme: Theme = {
   getMapStation: getCasinoStation,
   celebration: celebrateCasino,
   TableOfContents: CasinoTableOfContents,
+  Dashboard: CasinoDashboard,
 };

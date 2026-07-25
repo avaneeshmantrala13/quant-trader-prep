@@ -253,6 +253,7 @@ function CalibrationSketch({ className }: { className?: string }) {
 const BY_MOTIF: Record<LevelIllustrationContext["motif"], IllustrationComponent> =
   {
     probability: ProbabilitySketch,
+    mathQuestions: MentalMathSketch,
     mentalMath: MentalMathSketch,
     brainteasers: BrainteaserSketch,
     interviewGames: InterviewGamesSketch,

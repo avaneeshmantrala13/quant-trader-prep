@@ -5,6 +5,7 @@ import { getCyberpunkIllustration } from "./illustrations";
 import { getCyberpunkStation } from "./stations";
 import { CyberpunkMapBackground } from "./MapBackground";
 import { CyberpunkTableOfContents } from "./TableOfContents";
+import { CyberpunkDashboard } from "./Dashboard";
 import { celebrateCyberpunk } from "./celebrate";
 
 /**
@@ -116,4 +117,5 @@ export const cyberpunkTheme: Theme = {
   getMapStation: getCyberpunkStation,
   celebration: celebrateCyberpunk,
   TableOfContents: CyberpunkTableOfContents,
+  Dashboard: CyberpunkDashboard,
 };

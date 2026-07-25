@@ -4,6 +4,7 @@ import { useProgress } from "@/context/ProgressContext";
 import { getTrack } from "@/content";
 import { materializeLevel, materializeNumericLevel } from "@/content/materialize";
 import {
+  DIFFICULTY_META,
   isFlashcardLevel,
   isNumericLevel,
   type Flashcard,
@@ -32,6 +33,36 @@ import { isAiLayerEnabled, requestFlavoredVariant } from "@/lib/aiFlavor";
 import { resolveFlavoredItem } from "@/lib/flavorPractice";
 import { countQuizCorrect, countNumericCorrect, roundScore } from "@/lib/score";
 import { celebrate } from "@/lib/celebrate";
+import { topicKeyForLevel, tierDifficultyKey } from "@/lib/mastery/topicKey";
+import { predictSuccess, seedTierDifficulty } from "@/lib/mastery/elo";
+import { recordCalibrationPair } from "@/lib/calibration/sessionLog";
+import { planRoundReview } from "@/lib/adaptivity/review";
+import { buildHintLadder } from "@/lib/tutor/hintLadder";
+import { deriveWorkedSteps } from "@/lib/tutor/faded";
+import {
+  resolveQuizTag,
+  resolveNumericTag,
+  resolveQuizMisconceptionKeys,
+  resolveNumericMisconceptionKeys,
+} from "@/lib/tutor/misconception";
+import { TutorController } from "@/components/tutor/TutorController";
+import { HintLadder, type SiblingWorked } from "@/components/tutor/HintLadder";
+import { REMEDIATION_MODE } from "@/lib/remediation/config";
+import {
+  remediationStep,
+  type RemediationAction,
+  type RemediationInput,
+} from "@/lib/remediation/policy";
+import {
+  descendTo,
+  startRemediation,
+  type RemediationSession,
+} from "@/lib/remediation/session";
+import { buildProbeItem, type ProbeItem } from "@/lib/remediation/probe";
+import {
+  misconceptionTagOf,
+  prereqNode,
+} from "@/content/remediation/prereqDAG";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { StampSeal } from "@/components/visuals/StampSeal";
@@ -59,9 +90,28 @@ export function LessonPage() {
 
 function QuizLevel({ track, level }: { track: Track; level: Level }) {
   const navigate = useNavigate();
-  const { getLevelProgress, getResume, saveResume, clearResume, recordAttempt } =
-    useProgress();
+  const {
+    progress,
+    getLevelProgress,
+    getResume,
+    saveResume,
+    clearResume,
+    recordAttempt,
+    recordItemAttempt,
+    getTopicMastery,
+    setReviewSchedule,
+  } = useProgress();
   const { themeDef } = useTheme();
+
+  // Phase 2: topic identity + Phase-1 mastery snapshot drive the tutor loop and
+  // the per-item `recordItemAttempt` fold (COORDINATION §2.3/§2.4).
+  const topicKey = useMemo(
+    () => topicKeyForLevel(track.id, level),
+    [track.id, level],
+  );
+  const mastery = getTopicMastery(topicKey);
+  const theta = mastery?.theta ?? 0;
+  const topicN = mastery?.n ?? 0;
 
   const unlocked = useMemo(() => {
     const idx = track.levels.findIndex((l) => l.id === level.id);
@@ -120,6 +170,21 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     bonusSigsRef.current = new Set();
   }, [seed]);
 
+  // When the current PRIMARY question appeared (for `recordItemAttempt.responseMs`).
+  const questionShownAtRef = useRef<number>(Date.now());
+  useEffect(() => {
+    questionShownAtRef.current = Date.now();
+  }, [index, phase]);
+
+  // Phase 4: per-topic consecutive-miss counter (session-local, never persisted)
+  // + the active remediation trigger. Both reset each new round (seed change).
+  const missStreakRef = useRef<Record<string, number>>({});
+  const [remediation, setRemediation] = useState<RemediationInput | null>(null);
+  useEffect(() => {
+    missStreakRef.current = {};
+    setRemediation(null);
+  }, [seed]);
+
   if (!unlocked) return <Navigate to={`/track/${track.id}`} replace />;
 
   const persist = (nextIndex: number, nextAnswers: (number | null)[]) => {
@@ -149,9 +214,81 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     next[index] = choice;
     setAnswers(next);
     persist(index, next);
+    // Phase 2: fold this ONE PRIMARY answer into topic mastery (Phase-1 hook).
+    // Called exactly once per primary question (the `answered` guard + disabled
+    // choice buttons prevent a double-fire). NEVER called from `QuizPractice`.
+    if (q) {
+      const correct = choice === q.correctIndex;
+      const responseMs = Date.now() - questionShownAtRef.current;
+      // Phase 5 calibration: log (predictedProbability, outcome) for the
+      // reliability diagram. The prediction is the guessing-corrected
+      // predictSuccess computed from the PRE-answer mastery snapshot (`theta`
+      // this render) + the current tier difficulty. PRIMARY answers only —
+      // never bonus practice (COORDINATION §2 / PHASE_5 §5).
+      const tierD =
+        progress.tierDifficulty?.[tierDifficultyKey(topicKey, level.difficulty)] ??
+        seedTierDifficulty(level.difficulty);
+      const predicted = predictSuccess(theta, tierD, q.choices.length);
+      recordCalibrationPair(topicKey, predicted, correct ? 1 : 0);
+      recordItemAttempt({
+        topicKey,
+        tier: level.difficulty,
+        correct,
+        mode: "quiz",
+        kOptions: q.choices.length,
+        chosenIndex: choice,
+        misconceptions: resolveQuizMisconceptionKeys(topicKey, q, choice),
+        responseMs,
+        at: new Date().toISOString(),
+      });
+      // Phase 4: on a REPEATED miss (never the first), the pure policy decides
+      // whether to descend the prerequisite DAG. Isolated from scoring/mastery
+      // gate — the branch only ever calls `recordItemAttempt` for prereqs.
+      maybeTriggerRemediation(correct, responseMs, () =>
+        misconceptionTagOf(resolveQuizTag(q, choice)),
+      );
+    }
+  };
+
+  // Update the per-topic miss streak and, if `remediationStep` decides to
+  // descend/teach on this repeated miss, arm the remediation branch. Guarded by
+  // `REMEDIATION_MODE`; a first miss / slip / non-foundational level is a no-op.
+  const maybeTriggerRemediation = (
+    correct: boolean,
+    responseMs: number,
+    tagOf: () => string | undefined,
+  ) => {
+    if (REMEDIATION_MODE !== "dag") return;
+    const streak = correct ? 0 : (missStreakRef.current[topicKey] ?? 0) + 1;
+    missStreakRef.current[topicKey] = streak;
+    if (correct || remediation) return;
+    const m = getTopicMastery(topicKey);
+    const input: RemediationInput = {
+      topicKey,
+      theta: m?.theta ?? 0,
+      alpha: m?.alpha ?? 1,
+      beta: m?.beta ?? 1,
+      n: m?.n ?? 0,
+      consecutiveMisses: streak,
+      // "At the floor tier" ≈ the level itself is already foundational (intro/easy);
+      // harder levels ease within-topic first (Elo lowers the tier) before descent.
+      atFloorTier: DIFFICULTY_META[level.difficulty].order <= 1,
+      misconceptionTag: tagOf(),
+      responseFast: responseMs < 4000,
+      depthThisSession: 0,
+    };
+    const action = remediationStep(input);
+    if (
+      action.kind === "descend" ||
+      action.kind === "teach-link" ||
+      action.kind === "floor-teach"
+    ) {
+      setRemediation(input);
+    }
   };
 
   const goNext = () => {
+    setRemediation(null);
     if (index < questions.length - 1) {
       const ni = index + 1;
       setIndex(ni);
@@ -165,6 +302,12 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     const score = roundScore(correctCount, questions.length);
     const r = recordAttempt(level.id, score, level.masteryThreshold);
     clearResume(level.id);
+    // Seam 1: persist the SM-2 spaced-review schedule for this topic. The pure
+    // `planRoundReview` uses the canonical (Phase-4) `scheduleReview`: a cleared
+    // topic advances the ladder, a due-and-missed review resets it, everything
+    // else is a no-op. Additive — never touches score/mastery/locking.
+    const plan = planRoundReview(getTopicMastery(topicKey), new Date().toISOString());
+    if (plan) setReviewSchedule(topicKey, plan.reviewDue, plan.reviewStep);
     setResult({
       mastered: r.mastered,
       isNewMastery: r.isNewMastery,
@@ -232,10 +375,13 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
         {phase === "lesson" && (
-          <LessonIntro
+          <TutorController
             level={level}
-            onStart={startQuiz}
             illustration={Illustration ? <Illustration /> : null}
+            roundQuestions={questions}
+            theta={theta}
+            n={topicN}
+            onStart={startQuiz}
           />
         )}
 
@@ -250,21 +396,37 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
             isLast={index === questions.length - 1}
             onSelect={select}
             onNext={goNext}
+            hintLevel={level}
           />
         )}
 
-        {/* Bonus practice: fresh same-concept parametric item, never scored. */}
-        {phase === "quiz" && q && answered && canRegenerateQuiz(level) && (
+        {/* Phase 4 remediation: bounded backtracking down the prereq DAG. */}
+        {phase === "quiz" && q && answered && remediation && (
           <div className="mt-4">
-            <QuizPractice
-              key={q.id}
-              level={level}
-              current={q}
-              roundSigs={roundSigs}
-              bonusSigsRef={bonusSigsRef}
+            <RemediationFlow
+              key={`${q.id}-rem`}
+              origin={remediation}
+              onExit={() => setRemediation(null)}
             />
           </div>
         )}
+
+        {/* Bonus practice: fresh same-concept parametric item, never scored. */}
+        {phase === "quiz" &&
+          q &&
+          answered &&
+          !remediation &&
+          canRegenerateQuiz(level) && (
+            <div className="mt-4">
+              <QuizPractice
+                key={q.id}
+                level={level}
+                current={q}
+                roundSigs={roundSigs}
+                bonusSigsRef={bonusSigsRef}
+              />
+            </div>
+          )}
 
         {phase === "summary" && result && (
           <Summary
@@ -779,6 +941,7 @@ function QuizCard({
   onNext,
   headerLabel,
   nextLabel,
+  hintLevel,
 }: {
   question: Question;
   number: number;
@@ -792,8 +955,46 @@ function QuizCard({
   headerLabel?: string;
   /** Overrides the advance-button label (used for bonus practice). */
   nextLabel?: string;
+  /**
+   * When present, a WRONG answer shows the answer-withholding hint ladder
+   * (PHASE_2 §5/§6) instead of the immediate explanation — the level is used to
+   * regenerate a same-family worked sibling for rung 3. Purely presentational:
+   * this NEVER records mastery (that is `recordItemAttempt` in the players).
+   */
+  hintLevel?: Level;
 }) {
   const isCorrect = answered && selected === question.correctIndex;
+
+  // Build the answer-withholding hint ladder for a WRONG primary/bonus answer.
+  const ladder = useMemo(
+    () =>
+      answered && !isCorrect && selected !== null && hintLevel
+        ? buildHintLadder({
+            question,
+            chosenIndex: selected,
+            misconceptionTag: resolveQuizTag(question, selected),
+          })
+        : null,
+    [answered, isCorrect, selected, hintLevel, question],
+  );
+  // Regenerate a same-family worked sibling for the ladder's rung 3 (completion).
+  const sibling = useMemo<SiblingWorked | null>(() => {
+    if (!ladder || !hintLevel) return null;
+    const sib = generateFreshQuestion(
+      hintLevel,
+      freshPracticeSeed(),
+      question.family,
+      question,
+      true,
+      question,
+    );
+    if (!sib) return null;
+    return {
+      prompt: sib.prompt,
+      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ladder, hintLevel, question]);
 
   return (
     <div className="animate-print-in space-y-4">
@@ -869,17 +1070,28 @@ function QuizCard({
             </span>
           </div>
           <div className="space-y-2 bg-surface p-4">
-            {!isCorrect &&
-              selected !== null &&
-              question.distractorRationale?.[selected] && (
-                <p className="text-sm text-primary">
-                  <span className="label text-bear">Your error · </span>
-                  {question.distractorRationale[selected]}
+            {isCorrect ? (
+              <p className="text-sm leading-relaxed text-secondary">
+                {question.explanation}
+              </p>
+            ) : ladder ? (
+              // Answer-withholding: the ladder holds "your error" (rung 1) through
+              // the full worked solution (rung 5), revealed one rung at a time.
+              <HintLadder rungs={ladder} siblingWorked={sibling} />
+            ) : (
+              <>
+                {selected !== null &&
+                  question.distractorRationale?.[selected] && (
+                    <p className="text-sm text-primary">
+                      <span className="label text-bear">Your error · </span>
+                      {question.distractorRationale[selected]}
+                    </p>
+                  )}
+                <p className="text-sm leading-relaxed text-secondary">
+                  {question.explanation}
                 </p>
-              )}
-            <p className="text-sm leading-relaxed text-secondary">
-              {question.explanation}
-            </p>
+              </>
+            )}
             {question.needsVerification && (
               <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
                 Hand-authored · flagged for expert verification
@@ -1023,9 +1235,27 @@ function Summary({
 
 function NumericLevel({ track, level }: { track: Track; level: Level }) {
   const navigate = useNavigate();
-  const { getLevelProgress, getResume, saveResume, clearResume, recordAttempt } =
-    useProgress();
+  const {
+    progress,
+    getLevelProgress,
+    getResume,
+    saveResume,
+    clearResume,
+    recordAttempt,
+    recordItemAttempt,
+    getTopicMastery,
+    setReviewSchedule,
+  } = useProgress();
   const { themeDef } = useTheme();
+
+  // Phase 2: topic identity + Phase-1 mastery snapshot (mirrors QuizLevel).
+  const topicKey = useMemo(
+    () => topicKeyForLevel(track.id, level),
+    [track.id, level],
+  );
+  const mastery = getTopicMastery(topicKey);
+  const theta = mastery?.theta ?? 0;
+  const topicN = mastery?.n ?? 0;
 
   const unlocked = useMemo(() => {
     const idx = track.levels.findIndex((l) => l.id === level.id);
@@ -1082,6 +1312,20 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     bonusSigsRef.current = new Set();
   }, [seed]);
 
+  // When the current PRIMARY question appeared (for `recordItemAttempt.responseMs`).
+  const questionShownAtRef = useRef<number>(Date.now());
+  useEffect(() => {
+    questionShownAtRef.current = Date.now();
+  }, [index, phase]);
+
+  // Phase 4: per-topic consecutive-miss counter (session-local) + active trigger.
+  const missStreakRef = useRef<Record<string, number>>({});
+  const [remediation, setRemediation] = useState<RemediationInput | null>(null);
+  useEffect(() => {
+    missStreakRef.current = {};
+    setRemediation(null);
+  }, [seed]);
+
   if (!unlocked) return <Navigate to={`/track/${track.id}`} replace />;
 
   const persist = (nextIndex: number, nextAnswers: (number | null)[]) => {
@@ -1109,9 +1353,70 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     next[index] = value;
     setAnswers(next);
     persist(index, next);
+    // Phase 2: fold this ONE PRIMARY answer into topic mastery (Phase-1 hook).
+    // Exactly once per primary question; NEVER called from `NumericPractice`.
+    if (q) {
+      const correct = numericMatches(q, value);
+      const responseMs = Date.now() - questionShownAtRef.current;
+      // Phase 5 calibration: log (predictedProbability, outcome). Numeric items
+      // are no-guess, so predictSuccess is called WITHOUT kOptions. PRIMARY
+      // answers only — never bonus practice (COORDINATION §2 / PHASE_5 §5).
+      const tierD =
+        progress.tierDifficulty?.[tierDifficultyKey(topicKey, level.difficulty)] ??
+        seedTierDifficulty(level.difficulty);
+      const predicted = predictSuccess(theta, tierD);
+      recordCalibrationPair(topicKey, predicted, correct ? 1 : 0);
+      recordItemAttempt({
+        topicKey,
+        tier: level.difficulty,
+        correct,
+        mode: "numeric",
+        chosenValue: value,
+        misconceptions: resolveNumericMisconceptionKeys(topicKey, q, value),
+        responseMs,
+        at: new Date().toISOString(),
+      });
+      maybeTriggerRemediation(correct, responseMs, () =>
+        misconceptionTagOf(resolveNumericTag(q, value)),
+      );
+    }
+  };
+
+  // See QuizLevel: arm the DAG remediation branch on a REPEATED miss only.
+  const maybeTriggerRemediation = (
+    correct: boolean,
+    responseMs: number,
+    tagOf: () => string | undefined,
+  ) => {
+    if (REMEDIATION_MODE !== "dag") return;
+    const streak = correct ? 0 : (missStreakRef.current[topicKey] ?? 0) + 1;
+    missStreakRef.current[topicKey] = streak;
+    if (correct || remediation) return;
+    const m = getTopicMastery(topicKey);
+    const input: RemediationInput = {
+      topicKey,
+      theta: m?.theta ?? 0,
+      alpha: m?.alpha ?? 1,
+      beta: m?.beta ?? 1,
+      n: m?.n ?? 0,
+      consecutiveMisses: streak,
+      atFloorTier: DIFFICULTY_META[level.difficulty].order <= 1,
+      misconceptionTag: tagOf(),
+      responseFast: responseMs < 4000,
+      depthThisSession: 0,
+    };
+    const action = remediationStep(input);
+    if (
+      action.kind === "descend" ||
+      action.kind === "teach-link" ||
+      action.kind === "floor-teach"
+    ) {
+      setRemediation(input);
+    }
   };
 
   const goNext = () => {
+    setRemediation(null);
     if (index < questions.length - 1) {
       const ni = index + 1;
       setIndex(ni);
@@ -1125,6 +1430,9 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     const score = roundScore(correctCount, questions.length);
     const r = recordAttempt(level.id, score, level.masteryThreshold);
     clearResume(level.id);
+    // Seam 1: persist the SM-2 spaced-review schedule (see QuizLevel.finish).
+    const plan = planRoundReview(getTopicMastery(topicKey), new Date().toISOString());
+    if (plan) setReviewSchedule(topicKey, plan.reviewDue, plan.reviewStep);
     setResult({
       mastered: r.mastered,
       isNewMastery: r.isNewMastery,
@@ -1192,11 +1500,13 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
         {phase === "lesson" && (
-          <LessonIntro
+          <TutorController
             level={level}
-            onStart={() => setPhase("quiz")}
             illustration={Illustration ? <Illustration /> : null}
-            startLabel="Start Sizing ▸"
+            roundQuestions={questions}
+            theta={theta}
+            n={topicN}
+            onStart={() => setPhase("quiz")}
           />
         )}
 
@@ -1211,21 +1521,37 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
             isLast={index === questions.length - 1}
             onSubmit={submit}
             onNext={goNext}
+            hintLevel={level}
           />
         )}
 
-        {/* Bonus practice: fresh same-concept parametric item, never scored. */}
-        {phase === "quiz" && q && answered && canRegenerateNumeric(level) && (
+        {/* Phase 4 remediation: bounded backtracking down the prereq DAG. */}
+        {phase === "quiz" && q && answered && remediation && (
           <div className="mt-4">
-            <NumericPractice
-              key={q.id}
-              level={level}
-              current={q}
-              roundSigs={roundSigs}
-              bonusSigsRef={bonusSigsRef}
+            <RemediationFlow
+              key={`${q.id}-rem`}
+              origin={remediation}
+              onExit={() => setRemediation(null)}
             />
           </div>
         )}
+
+        {/* Bonus practice: fresh same-concept parametric item, never scored. */}
+        {phase === "quiz" &&
+          q &&
+          answered &&
+          !remediation &&
+          canRegenerateNumeric(level) && (
+            <div className="mt-4">
+              <NumericPractice
+                key={q.id}
+                level={level}
+                current={q}
+                roundSigs={roundSigs}
+                bonusSigsRef={bonusSigsRef}
+              />
+            </div>
+          )}
 
         {phase === "summary" && result && (
           <NumericSummary
@@ -1256,6 +1582,7 @@ function NumericCard({
   onNext,
   headerLabel,
   nextLabel,
+  hintLevel,
 }: {
   question: NumericQuestion;
   number: number;
@@ -1269,6 +1596,8 @@ function NumericCard({
   headerLabel?: string;
   /** Overrides the advance-button label (used for bonus practice). */
   nextLabel?: string;
+  /** When present, a WRONG answer shows the answer-withholding hint ladder. */
+  hintLevel?: Level;
 }) {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -1289,6 +1618,36 @@ function NumericCard({
       ? gradeNumeric(question, String(entered))
       : null;
   const isCorrect = grade?.correct ?? false;
+
+  // Answer-withholding hint ladder for a WRONG numeric answer (PHASE_2 §5/§6).
+  const ladder = useMemo(
+    () =>
+      answered && !isCorrect && entered !== null && hintLevel
+        ? buildHintLadder({
+            question,
+            chosenValue: entered,
+            misconceptionTag: resolveNumericTag(question, entered),
+          })
+        : null,
+    [answered, isCorrect, entered, hintLevel, question],
+  );
+  const sibling = useMemo<SiblingWorked | null>(() => {
+    if (!ladder || !hintLevel) return null;
+    const sib = generateFreshNumericQuestion(
+      hintLevel,
+      freshPracticeSeed(),
+      question.family,
+      question,
+      true,
+      question,
+    );
+    if (!sib) return null;
+    return {
+      prompt: sib.prompt,
+      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ladder, hintLevel, question]);
 
   const handleSubmit = () => {
     if (answered) return;
@@ -1385,32 +1744,42 @@ function NumericCard({
             </span>
           </div>
           <div className="space-y-2 bg-surface p-4">
-            {!isCorrect && (
-              <p className="text-sm text-primary">
-                <span className="label text-bear">
-                  {isMoney ? "Correct stake · " : "Correct answer · "}
-                </span>
-                <span className="num font-semibold">
-                  {unit}
-                  {formatNumericAnswer(question)}
-                </span>
-                {entered !== null && (
-                  <span className="text-secondary">
-                    {"  "}(you entered {unit}
-                    {entered.toLocaleString("en-US")})
+            {isCorrect ? (
+              <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
+                {question.explanation}
+              </p>
+            ) : ladder ? (
+              // Answer-withholding: the correct value + worked explanation live
+              // inside the ladder's reveal (rung 5), shown only after the rungs.
+              <HintLadder rungs={ladder} siblingWorked={sibling} />
+            ) : (
+              <>
+                <p className="text-sm text-primary">
+                  <span className="label text-bear">
+                    {isMoney ? "Correct stake · " : "Correct answer · "}
                   </span>
+                  <span className="num font-semibold">
+                    {unit}
+                    {formatNumericAnswer(question)}
+                  </span>
+                  {entered !== null && (
+                    <span className="text-secondary">
+                      {"  "}(you entered {unit}
+                      {entered.toLocaleString("en-US")})
+                    </span>
+                  )}
+                </p>
+                {grade.matchedError && (
+                  <p className="text-sm text-primary">
+                    <span className="label text-bear">Your error · </span>
+                    {grade.matchedError.feedback}
+                  </p>
                 )}
-              </p>
+                <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
+                  {question.explanation}
+                </p>
+              </>
             )}
-            {!isCorrect && grade.matchedError && (
-              <p className="text-sm text-primary">
-                <span className="label text-bear">Your error · </span>
-                {grade.matchedError.feedback}
-              </p>
-            )}
-            <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
-              {question.explanation}
-            </p>
             {question.needsVerification && (
               <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
                 Hand-authored · flagged for expert verification
@@ -1576,6 +1945,274 @@ function PracticeHeader() {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Remediation (Phase 4) — bounded backtracking down the prerequisite DAG.    */
+/*                                                                             */
+/*  Triggered on a REPEATED miss (never the first) when `remediationStep`      */
+/*  decides to descend/teach. It walks DOWN the static DAG, probing each        */
+/*  prerequisite at its ~85%-predicted tier, stops at the first passed probe    */
+/*  (teach the edge up), the graph floor, or the depth cap — then teaches the   */
+/*  foundation using the SAME QuizCard/NumericCard + Phase-2 hint ladder.       */
+/*                                                                             */
+/*  Remediation items call `recordItemAttempt` for the PREREQ topic (so its     */
+/*  mastery updates) but are ISOLATED like bonus practice: they never touch     */
+/*  the round score, `recordAttempt`, resume, or `LevelProgress.mastered`.      */
+/*  All policy logic lives in pure, tested `src/lib/remediation/**` modules;    */
+/*  this component is a thin renderer. Guarded by `REMEDIATION_MODE === "dag"`. */
+/* -------------------------------------------------------------------------- */
+
+function RemediationFlow({
+  origin,
+  onExit,
+}: {
+  /** The origin-node decision input built by the lesson player on a repeated miss. */
+  origin: RemediationInput;
+  onExit: () => void;
+}) {
+  const { recordItemAttempt, getTopicMastery } = useProgress();
+  const [session, setSession] = useState<RemediationSession>(() =>
+    startRemediation(origin.topicKey),
+  );
+  const [action, setAction] = useState<RemediationAction>(() =>
+    remediationStep({ ...origin, depthThisSession: 0 }),
+  );
+  const [probe, setProbe] = useState<ProbeItem | null>(null);
+  const [teachItem, setTeachItem] = useState<ProbeItem | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [entered, setEntered] = useState<number | null>(null);
+  const [pending, setPending] = useState<RemediationAction | null>(null);
+  const shownAtRef = useRef<number>(Date.now());
+
+  // Materialize content for the current decision: a probe on `descend`, a worked
+  // example on `teach-link`/`floor-teach`. Advancing the depth counter happens
+  // here so it stays in lockstep with the descent.
+  useEffect(() => {
+    if (action.kind === "descend") {
+      const p = buildProbeItem(action.toTopicKey, freshPracticeSeed());
+      setProbe(p);
+      setSelected(null);
+      setEntered(null);
+      setPending(null);
+      shownAtRef.current = Date.now();
+      setSession((s) => descendTo(s, action.toTopicKey));
+      // No materializable item at the prereq ⇒ teach the foundation directly.
+      if (!p) setAction({ kind: "floor-teach", atTopicKey: action.toTopicKey });
+    } else if (action.kind === "teach-link" || action.kind === "floor-teach") {
+      setTeachItem(buildProbeItem(action.atTopicKey, freshPracticeSeed()));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action]);
+
+  const answered = selected !== null || entered !== null;
+
+  // Fold ONE probe answer into the PREREQ topic's mastery, then stage the next
+  // descent/teach decision (applied on "Continue"). Never scores the round.
+  const stageNext = (
+    topicKey: string,
+    correct: boolean,
+    tag: string | undefined,
+  ) => {
+    const m = getTopicMastery(topicKey);
+    setPending(
+      remediationStep({
+        topicKey,
+        theta: m?.theta ?? 0,
+        alpha: m?.alpha ?? 1,
+        beta: m?.beta ?? 1,
+        n: m?.n ?? 0,
+        consecutiveMisses: correct ? 0 : 1,
+        atFloorTier: true,
+        misconceptionTag: tag,
+        responseFast: false,
+        depthThisSession: session.depth,
+      }),
+    );
+  };
+
+  const answerQuiz = (choice: number) => {
+    if (!probe?.question || answered) return;
+    const correct = choice === probe.question.correctIndex;
+    setSelected(choice);
+    recordItemAttempt({
+      topicKey: probe.topicKey,
+      tier: probe.level.difficulty,
+      correct,
+      mode: "quiz",
+      kOptions: probe.question.choices.length,
+      chosenIndex: choice,
+      misconceptions: resolveQuizMisconceptionKeys(
+        probe.topicKey,
+        probe.question,
+        choice,
+      ),
+      responseMs: Date.now() - shownAtRef.current,
+      at: new Date().toISOString(),
+    });
+    stageNext(
+      probe.topicKey,
+      correct,
+      correct
+        ? undefined
+        : misconceptionTagOf(resolveQuizTag(probe.question, choice)),
+    );
+  };
+
+  const answerNumeric = (value: number) => {
+    if (!probe?.numericQuestion || answered) return;
+    const correct = numericMatches(probe.numericQuestion, value);
+    setEntered(value);
+    recordItemAttempt({
+      topicKey: probe.topicKey,
+      tier: probe.level.difficulty,
+      correct,
+      mode: "numeric",
+      chosenValue: value,
+      misconceptions: resolveNumericMisconceptionKeys(
+        probe.topicKey,
+        probe.numericQuestion,
+        value,
+      ),
+      responseMs: Date.now() - shownAtRef.current,
+      at: new Date().toISOString(),
+    });
+    stageNext(
+      probe.topicKey,
+      correct,
+      correct
+        ? undefined
+        : misconceptionTagOf(resolveNumericTag(probe.numericQuestion, value)),
+    );
+  };
+
+  const advance = () => {
+    if (pending) setAction(pending);
+  };
+
+  const interstitial = (
+    <div className="flex items-center justify-between">
+      <span className="label text-accent">Shoring Up the Foundation</span>
+      <span className="chip border-subtle text-secondary">
+        Not scored · builds mastery
+      </span>
+    </div>
+  );
+
+  const teachNode =
+    action.kind === "teach-link" || action.kind === "floor-teach"
+      ? prereqNode(action.atTopicKey)
+      : undefined;
+
+  return (
+    <div className="animate-print-in space-y-4 border-t-2 border-dashed border-accent pt-5">
+      {interstitial}
+      <p className="text-sm text-secondary">
+        Good — you're in the productive zone, not simply &ldquo;wrong.&rdquo; Two
+        misses in a row here usually means a foundation underneath needs a quick
+        top-up. Let&rsquo;s check it, then climb straight back.
+      </p>
+
+      {action.kind === "descend" && probe && (
+        <>
+          <p className="text-xs text-muted">
+            Prerequisite check ·{" "}
+            <span className="text-secondary">{probe.level.title}</span>
+          </p>
+          {probe.mode === "quiz" && probe.question ? (
+            <QuizCard
+              key={probe.question.id}
+              question={probe.question}
+              number={0}
+              total={0}
+              answered={answered}
+              selected={selected}
+              isLast={false}
+              onSelect={answerQuiz}
+              onNext={advance}
+              headerLabel="Foundation Probe"
+              nextLabel="Continue ▸"
+              hintLevel={probe.level}
+            />
+          ) : probe.numericQuestion ? (
+            <NumericCard
+              key={probe.numericQuestion.id}
+              question={probe.numericQuestion}
+              number={0}
+              total={0}
+              answered={answered}
+              entered={entered}
+              isLast={false}
+              onSubmit={answerNumeric}
+              onNext={advance}
+              headerLabel="Foundation Probe"
+              nextLabel="Continue ▸"
+              hintLevel={probe.level}
+            />
+          ) : null}
+        </>
+      )}
+
+      {teachNode && (
+        <div className="panel p-5">
+          <span className="label text-accent">
+            {action.kind === "floor-teach"
+              ? "Foundation · Start Here"
+              : "Bridge Up · How It Composes"}
+          </span>
+          <h3 className="mt-2 font-display text-lg font-semibold text-primary">
+            {teachNode.label}
+          </h3>
+          {teachNode.topicKey && teachItem?.level.lesson.keyIdea && (
+            <div className="mt-3 border-l-2 border-accent bg-surface-muted px-4 py-3">
+              <div className="label text-accent">Key idea</div>
+              <div className="mt-1 font-display text-base font-semibold text-primary">
+                {teachItem.level.lesson.keyIdea}
+              </div>
+            </div>
+          )}
+          {teachItem && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm font-medium text-primary">
+                {teachItem.question?.prompt ?? teachItem.numericQuestion?.prompt}
+              </p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
+                {teachItem.question?.explanation ??
+                  teachItem.numericQuestion?.explanation}
+              </p>
+            </div>
+          )}
+          <button onClick={onExit} className="btn-primary mt-4 w-full">
+            Got the foundation — resume the lesson ▸
+          </button>
+        </div>
+      )}
+
+      {action.kind === "exit" && (
+        <div className="panel p-5">
+          <p className="text-sm text-secondary">
+            That looked like a slip more than a gap — no detour needed. Keep
+            going.
+          </p>
+          <button onClick={onExit} className="btn-primary mt-3 w-full">
+            Resume the lesson ▸
+          </button>
+        </div>
+      )}
+
+      {action.kind === "retry-in-place" && (
+        <div className="panel p-5">
+          <p className="text-sm text-secondary">
+            Let&rsquo;s ease the difficulty and try one more here before digging
+            deeper.
+          </p>
+          <button onClick={onExit} className="btn-primary mt-3 w-full">
+            Resume the lesson ▸
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuizPractice({
   level,
   current,
@@ -1703,6 +2340,7 @@ function QuizPractice({
           onNext={aiEnabled ? reset : generate}
           headerLabel="Bonus Practice"
           nextLabel={aiEnabled ? "Practice another ↻" : "Generate another like this ↻"}
+          hintLevel={level}
         />
       )}
     </div>
@@ -1834,6 +2472,7 @@ function NumericPractice({
           onNext={aiEnabled ? reset : generate}
           headerLabel="Bonus Practice"
           nextLabel={aiEnabled ? "Practice another ↻" : "Generate another like this ↻"}
+          hintLevel={level}
         />
       )}
     </div>

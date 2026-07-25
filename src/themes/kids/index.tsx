@@ -6,6 +6,7 @@ import { getKidsStation } from "./stations";
 import { KidsMapBackground } from "./MapBackground";
 import { kidsCelebrate } from "./celebrate";
 import { KidsTableOfContents } from "./TableOfContents";
+import { KidsDashboard } from "./Dashboard";
 
 /**
  * "Kids / Cartoon" — a happy, playful world of candy colors, chunky rounded
@@ -101,4 +102,5 @@ export const kidsTheme: Theme = {
   getMapStation: getKidsStation,
   celebration: kidsCelebrate,
   TableOfContents: KidsTableOfContents,
+  Dashboard: KidsDashboard,
 };

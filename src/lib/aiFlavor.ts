@@ -33,6 +33,7 @@ import {
   type EnvLike,
 } from "./aiConfig";
 import { readAwsConfig } from "./awsConfig";
+import { containsFinalAnswer } from "./tutor/answerWithholding";
 
 /* -------------------------------------------------------------------------- */
 /*  Public result types                                                        */
@@ -149,10 +150,63 @@ export function verifyFlavor(
 }
 
 /* -------------------------------------------------------------------------- */
+/*  The NO-FINAL-ANSWER guard (Phase 7 — hint phrasing must never reveal it)   */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * True iff `candidate` LEAKS the final `answer`. This is the Phase-7 addition
+ * that lets the AI layer rephrase a Phase-2 hint rung WITHOUT ever emitting the
+ * solution: a rephrased rung (rungs 1–4 withhold the answer) that now contains
+ * the answer value is rejected and the deterministic rung is kept instead.
+ *
+ * Deliberately reuses Phase-2's `containsFinalAnswer` (answer-withholding
+ * verifier) verbatim, so the "does this text state the answer?" decision is the
+ * SAME code that already guards the hint ladder — one source of truth, matching
+ * plain numbers, `$1,000`-style currency, `12%` percentages and `a/b` fractions
+ * with formatting tolerance.
+ */
+export function verifyNoFinalAnswer(
+  candidate: string,
+  answer: number | string,
+  tolerance = 0,
+): boolean {
+  return containsFinalAnswer(candidate, answer, tolerance);
+}
+
+/**
+ * The HINT guardrail (Phase 7). A rephrased hint rung is acceptable ONLY when
+ * it (a) preserves every required context number and introduces no new number
+ * (the existing `verifyFlavor` number-preservation check) AND (b) does NOT state
+ * the final answer (`verifyNoFinalAnswer === false`). On any failure the caller
+ * MUST discard the LLM text and keep the ORIGINAL deterministic rung — the hint
+ * logic/order is always Phase-2's; the LLM only ever changes wording.
+ */
+export function verifyHint(
+  originalRung: string,
+  candidate: string,
+  opts: {
+    answer: number | string;
+    requiredNumbers?: string[];
+    /** Tolerance for the numeric answer-leak check (default exact). */
+    tolerance?: number;
+  },
+): GuardrailResult {
+  const base = verifyFlavor(originalRung, candidate, {
+    requiredNumbers: opts.requiredNumbers,
+    disallowNewNumbers: true,
+  });
+  if (!base.ok) return base;
+  if (verifyNoFinalAnswer(candidate, opts.answer, opts.tolerance)) {
+    return { ok: false, reason: "leaks final answer" };
+  }
+  return { ok: true };
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Env plumbing (read import.meta.env lazily; nothing runs at module load)    */
 /* -------------------------------------------------------------------------- */
 
-function env(): EnvLike {
+export function env(): EnvLike {
   // `import.meta.env` is defined by Vite (and vitest). Kept behind a function so
   // module import has no side effects and tests can exercise the pure helpers.
   return import.meta.env as unknown as EnvLike;
@@ -192,10 +246,11 @@ function readCognitoIdToken(e: EnvLike): string | null {
   return get(`CognitoIdentityServiceProvider.${clientId}.${last}.idToken`);
 }
 
-async function postAi(
+export async function postAi(
   cfg: AiConfig,
   e: EnvLike,
   body: unknown,
+  signal?: AbortSignal,
 ): Promise<Record<string, unknown> | null> {
   try {
     const headers: Record<string, string> = {
@@ -207,6 +262,7 @@ async function postAi(
       method: "POST",
       headers,
       body: JSON.stringify(body),
+      signal,
     });
     if (!res.ok) {
       // eslint-disable-next-line no-console

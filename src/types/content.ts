@@ -29,6 +29,15 @@ export interface Question {
   concept?: string;
   /** Parallel to `choices`. Rationale for each option (why a student might pick it). */
   distractorRationale?: string[];
+  /**
+   * OPTIONAL, additive (Phase 1 — COORDINATION §6.2). Parallel to `choices`:
+   * `misconceptions[i]` is a machine-readable misconception TAG for choice `i`
+   * (e.g. "base_rate_neglect"). Phases 2–4 backfill these topic-by-topic; the
+   * mastery layer folds `misconceptionKey(topicKey, tag)` when present and falls
+   * back to `idx:<chosenIndex>` otherwise, so misconception tracking works even
+   * before a topic is tagged. Never required — all 834 existing items omit it.
+   */
+  misconceptions?: string[];
   /** Hand-authored hard items flagged for expert human verification. */
   needsVerification?: boolean;
   /** Schema / genre reference (e.g. "Green Book style", "Optiver mental math"). */
@@ -94,7 +103,17 @@ export interface NumericQuestion {
    * error taxonomy: forgot to subtract q, used the implied prob, wrong odds→b
    * conversion, forgot to divide by b, bet the win probability, …).
    */
-  commonErrors?: { value: number; feedback: string }[];
+  commonErrors?: {
+    value: number;
+    feedback: string;
+    /**
+     * OPTIONAL, additive (Phase 1 — COORDINATION §6.2). A machine-readable
+     * misconception TAG for this specific wrong value. When present the mastery
+     * layer folds `misconceptionKey(topicKey, tag)`; otherwise it falls back to
+     * `err:<value>`. Never required.
+     */
+    misconception?: string;
+  }[];
   /** Hand-authored / flagged for expert verification. */
   needsVerification?: boolean;
   /** Schema / genre reference. */
@@ -231,6 +250,7 @@ export interface Level {
 
 export type MotifKey =
   | "probability"
+  | "mathQuestions"
   | "mentalMath"
   | "brainteasers"
   | "interviewGames"

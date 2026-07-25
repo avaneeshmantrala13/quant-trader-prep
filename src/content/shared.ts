@@ -75,6 +75,16 @@ export interface QuestionParts {
   difficulty: Difficulty;
   concept?: string;
   distractorRationaleByValue?: Record<string, string>;
+  /**
+   * OPTIONAL, additive (Phase 4 — COORDINATION §6.2). Keyed by distractor VALUE
+   * (like {@link QuestionParts.distractorRationaleByValue}): a machine-readable
+   * misconception TAG for the wrong answer with that value. When any value is
+   * tagged, {@link assemble} emits a parallel (shuffle-aligned)
+   * `Question.misconceptions` array (untagged choices → "" like the correct one)
+   * so the mastery layer folds `misconceptionKey(topicKey, tag)` and the tutor's
+   * confront mapping fires. Omitted ⇒ the field is left off (byte-identical).
+   */
+  misconceptionByValue?: Record<string, string>;
   source?: string;
 }
 
@@ -122,6 +132,13 @@ export function assemble(rng: Rng, parts: QuestionParts): Question {
             "A plausible but incorrect value."),
       )
     : undefined;
+  // Parallel misconception tags, aligned to the SAME shuffle as `choices`
+  // (untagged / correct choices → ""), emitted only when any value is tagged.
+  const misconceptions = parts.misconceptionByValue
+    ? choices.map((c) =>
+        c === parts.correct ? "" : (parts.misconceptionByValue?.[c] ?? ""),
+      )
+    : undefined;
   return {
     id: parts.id,
     prompt: parts.prompt,
@@ -131,6 +148,7 @@ export function assemble(rng: Rng, parts: QuestionParts): Question {
     difficulty: parts.difficulty,
     concept: parts.concept,
     distractorRationale,
+    ...(misconceptions ? { misconceptions } : {}),
     source: parts.source,
   };
 }

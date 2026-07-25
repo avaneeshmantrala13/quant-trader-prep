@@ -167,6 +167,8 @@ export function getCasinoLevelIllustration(
   switch (ctx.motif) {
     case "probability":
       return DiceScene(i);
+    case "mathQuestions":
+      return ChipStackScene(i);
     case "mentalMath":
       return ChipStackScene(i);
     case "brainteasers":

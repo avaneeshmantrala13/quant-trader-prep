@@ -403,6 +403,7 @@ const PROBABILITY_BY_INDEX: IllustrationComponent[] = [
 
 const MOTIF_FALLBACK = {
   probability: CoinFlipScene,
+  mathQuestions: CalculatorScene,
   mentalMath: CalculatorScene,
   brainteasers: IdeaBulbScene,
   interviewGames: MarketMakerScene,

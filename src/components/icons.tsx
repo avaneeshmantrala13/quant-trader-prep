@@ -150,11 +150,20 @@ export function BoltIcon(props: IconProps) {
   );
 }
 
+export function SigmaIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M17 5H7l6 7-6 7h10" />
+    </svg>
+  );
+}
+
 export const MOTIF_ICON: Record<
   MotifKey,
   (props: IconProps) => JSX.Element
 > = {
   probability: DiceIcon,
+  mathQuestions: SigmaIcon,
   mentalMath: BoltIcon,
   brainteasers: BrainIcon,
   interviewGames: CardsIcon,

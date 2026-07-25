@@ -7,6 +7,16 @@ import {
   roundTripFamily,
   walkOfferDownFamily,
 } from "./generators";
+import {
+  binaryWeightsFamily,
+  digitProductFamily,
+  houseOfCardsFamily,
+  modularHatsFamily,
+  pigeonholeFamily,
+  subtractionGameFamily,
+  trailingZerosFamily,
+  twoBallsFamily,
+} from "./techniqueGenerators";
 
 /**
  * Brainteasers — hand-authored from famous, well-established puzzles (fresh
@@ -259,9 +269,256 @@ const hard: Flashcard[] = [
   },
 ];
 
+/* ========================================================================== */
+/*  NEW — Techniques Toolkit (datasets 3–8): technique-grouped static one-offs */
+/*  Fresh framings inspired by the dataset puzzles (never reused verbatim);    */
+/*  the dataset originals live only as hidden solver fixtures in the tests.    */
+/* ========================================================================== */
+
+/** Level "Counting & Pigeonhole" — summation / counting / number-theory / pigeonhole. */
+const countingPigeonhole: Flashcard[] = [
+  {
+    id: "bt-count-threes",
+    prompt:
+      "If you write out every whole number from 1 to 100,000 (one hundred thousand), how many times in total does the digit 3 appear?",
+    answer:
+      "50,000 times. For a nonzero digit written across 1…10^k, the count is k·10^(k−1); here k = 5, so 5·10^4 = 50,000.",
+    explanation:
+      "Think of every number 1…100000 padded to 5 digit slots (00001 … 100000; the extra 100000 contributes no 3s). As all 5-digit strings 00000–99999 run through, each of the 5 positions independently cycles through 0–9 with perfect uniformity, so each position shows a '3' exactly one-tenth of the time: 100000 ÷ 10 = 10,000 threes per position. Across the 5 positions that is 5 × 10,000 = 50,000. This 'digit-odometer' counting gives the general formula: digit d (1–9) appears k·10^(k−1) times over 1…10^k. The lesson is to count by POSITION, not by scanning numbers.",
+    difficulty: "easy",
+    concept: "Digit counting by position (k·10^(k−1))",
+    source: "Brainteasers · Simplification (How Many Twos, fresh variant)",
+  },
+  {
+    id: "bt-count-handshakes",
+    prompt:
+      "Fifteen people are at a party; some shake hands, some don't (no one shakes their own hand and a given pair shakes at most once). Prove that at least two people must have shaken exactly the same number of hands.",
+    answer:
+      "It is always true. Each person's handshake count is one of 0,1,…,14 (15 values), but 0 and 14 cannot both occur, leaving only 14 possible values for 15 people — so two people share a count.",
+    explanation:
+      "Each of the 15 people shook somewhere between 0 and 14 hands, which looks like 15 possible values for 15 people — not yet a forced repeat. The key observation removes one value: if someone shook 14 hands they shook everyone's, so NOBODY could have shaken 0; conversely a 0 rules out any 14. So the counts actually lie among only 14 possibilities (either 0–13 or 1–14). By the PIGEONHOLE PRINCIPLE, distributing 15 people into at most 14 possible counts forces two people into the same count. The subtle step is spotting that 0 and 14 are mutually exclusive, which shrinks the pigeonholes from 15 to 14.",
+    difficulty: "easy",
+    concept: "Pigeonhole principle (mutually-exclusive extremes)",
+    source: "Brainteasers · Pigeonhole (Handshakes, fresh variant)",
+  },
+  {
+    id: "bt-count-points-square",
+    prompt:
+      "Fifty points are scattered anywhere inside a 1-by-1 square. Show that some 1/4-by-1/4 sub-square (an axis-aligned quarter-by-quarter tile) must contain at least 4 of the points.",
+    answer:
+      "Cut the square into a 4×4 grid of 16 tiles, each 1/4 by 1/4. Since 16·3 = 48 < 50, the points cannot be spread ≤ 3 per tile, so some tile holds ≥ 4.",
+    explanation:
+      "Partition the unit square into 16 congruent 1/4 × 1/4 tiles (a 4-by-4 grid) — these are the pigeonholes. If every tile held at most 3 points, the whole square could hold at most 16 × 3 = 48 points. But there are 50 > 48 points, a contradiction, so at least one tile must contain at least ⌈50/16⌉ = 4 points. This is the geometric form of the PIGEONHOLE PRINCIPLE: chop the region into fewer cells than you have objects (scaled by the per-cell cap) and some cell is forced to overflow. (A point on a boundary can be assigned to either adjacent tile without affecting the count.)",
+    difficulty: "medium",
+    concept: "Geometric pigeonhole (grid cells)",
+    source: "Brainteasers · Pigeonhole (Catching Ants, fresh variant)",
+  },
+  {
+    id: "bt-count-partition",
+    prompt:
+      "Can the numbers 1, 2, 3, …, 15 be split into three groups so that every group has the same sum? If so, give one such split; if not, explain why.",
+    answer:
+      "Yes. The total 1+…+15 = 120 divides evenly into three groups of 40, e.g. {15, 14, 11}, {13, 12, 9, 6}, and {10, 8, 7, 5, 4, 3, 2, 1}.",
+    explanation:
+      "First apply the necessary DIVISIBILITY condition: the grand total is the triangular number 1+2+…+15 = 15·16/2 = 120, and an equal 3-way split requires each group to sum to 120 ÷ 3 = 40 (an integer — so it is not ruled out). Then construct one greedily by placing the largest remaining numbers to hit 40: {15, 14, 11} = 40; {13, 12, 9, 6} = 40; the rest {10, 8, 7, 5, 4, 3, 2, 1} also sums to 40. The two-part lesson: compute the total with the triangular-number formula and check divisibility FIRST (if 120 weren't a multiple of 3 the task would be impossible), then build the partition.",
+    difficulty: "medium",
+    concept: "Triangular sum + equal-partition (divisibility check)",
+    source: "Brainteasers · Summation (Clock Parts, fresh variant)",
+  },
+  {
+    id: "bt-count-coin-weighing",
+    prompt:
+      "You have 6 stacks of coins. Genuine coins weigh exactly 10 g each; exactly ONE stack is counterfeit, with every coin in it weighing 11 g. You have a digital scale you may use only ONCE (a single weighing that reads total grams). How do you identify the counterfeit stack?",
+    answer:
+      "Take 1 coin from stack 1, 2 from stack 2, …, 6 from stack 6 (21 coins) and weigh them together. Genuine, they'd read 210 g; the reading minus 210 equals the counterfeit stack's number.",
+    explanation:
+      "One weighing gives one number, so you must ENCODE each stack's identity into that number. Take i coins from stack i, for i = 1…6 — that is 1+2+…+6 = 21 coins, which would weigh 21 × 10 = 210 g if all genuine. Each counterfeit coin adds exactly 1 g, and stack k contributes exactly k of the counterfeit coins to your sample, so the total excess over 210 g is precisely k grams. Read the scale, subtract 210, and the difference is the counterfeit stack's number (e.g. a reading of 214 g ⇒ stack 4). The trick is a POSITIONAL (weighted) encoding: giving stack i a distinct multiplicity i makes the single measured deviation spell out the culprit.",
+    difficulty: "medium",
+    concept: "Positional encoding in one measurement",
+    source: "Brainteasers · Summation (Coin Imbalance, fresh variant)",
+  },
+];
+
+/** Level "Invariants & Parity" — parity/invariant/mirror/pairing arguments. */
+const invariantsParity: Flashcard[] = [
+  {
+    id: "bt-inv-coffee-cream",
+    prompt:
+      "You have a cup of coffee and a cup of cream. You take one spoonful of cream, stir it into the coffee, then take one spoonful of the (now mixed) coffee and stir it back into the cream. After this exchange, is there more cream in the coffee cup, or more coffee in the cream cup?",
+    answer:
+      "Exactly equal amounts. There is precisely as much cream in the coffee cup as there is coffee in the cream cup.",
+    explanation:
+      "Track the CONSERVATION INVARIANT: each cup ends with the same TOTAL volume it started with (one spoon out, one spoon back). So whatever volume of coffee now sits in the cream cup must have been displaced by an equal volume of cream that left it — i.e. the coffee cup gave up exactly that much coffee and received exactly that much cream in return. Formally, the cream missing from the cream cup all lives in the coffee cup, and since the cream cup is back to its original volume, the 'hole' left by that missing cream is filled by exactly the same volume of coffee. No mixing ratios or spoon sizes matter. The answer is forced purely by volume bookkeeping — the classic 'water-and-wine' invariant.",
+    difficulty: "medium",
+    concept: "Conservation invariant (volume bookkeeping)",
+    source: "Brainteasers · Symmetry (Water and Wine, fresh variant)",
+  },
+  {
+    id: "bt-inv-fair-from-biased",
+    prompt:
+      "You have a biased coin that lands heads with probability 0.7 and tails with probability 0.3 (you don't know these numbers exactly, only that it is biased and 0 < p < 1). Using only this coin, how can you simulate a perfectly fair 50/50 decision between two friends?",
+    answer:
+      "Flip the coin twice. If you get Heads-then-Tails, friend A wins; if Tails-then-Heads, friend B wins; if you get two matching flips (HH or TT), discard and repeat.",
+    explanation:
+      "Use VON NEUMANN's trick, which exploits a symmetry between the two ordered outcomes. In two independent flips, P(HT) = p(1−p) and P(TH) = (1−p)p — these are EQUAL regardless of the unknown bias p. The matching outcomes HH (prob p²) and TT (prob (1−p)²) carry the bias, so you simply throw them away and reflip. Conditioned on getting one of the two unequal-looking-but-equal-probability outcomes HT or TH, each has probability exactly 1/2. Because p(1−p) > 0, the procedure ends with probability 1 (the expected number of flip-pairs is 1/(2p(1−p))). The insight: pairing outcomes symmetrically cancels the unknown bias.",
+    difficulty: "medium",
+    concept: "Von Neumann fair-coin extraction (symmetry cancels bias)",
+    source: "Brainteasers · Symmetry (Unfair Coin, fresh variant)",
+  },
+  {
+    id: "bt-inv-mutilated-board",
+    prompt:
+      "Take a standard 8×8 chessboard and cut off two diagonally OPPOSITE corner squares, leaving 62 squares. You have 31 dominoes, each covering exactly two adjacent squares. Can the 31 dominoes tile the mutilated board exactly, with no overlaps or gaps?",
+    answer:
+      "No — it is impossible. The two opposite corners are the same color, so the board loses 2 squares of one color, leaving 32 of one color and 30 of the other; every domino must cover one of each.",
+    explanation:
+      "The COLORING INVARIANT settles it. On a chessboard the two diagonally opposite corners are always the SAME color (say both white), so removing them leaves 30 white and 32 black squares. Now note that any domino, covering two ADJACENT squares, always sits on exactly one white and one black square. Hence 31 dominoes would cover exactly 31 white and 31 black squares. But the mutilated board has 30 white and 32 black — the counts don't match 31–31 — so no tiling can exist. The whole impossibility follows from a parity/coloring argument, without trying any arrangements: find a quantity every domino preserves (here the white−black balance) and show the target violates it.",
+    difficulty: "medium",
+    concept: "Coloring parity invariant (tiling impossibility)",
+    source: "Brainteasers · Logical (Mutilated Chessboard, fresh variant)",
+  },
+  {
+    id: "bt-inv-foxes-rabbit",
+    prompt:
+      "On an enchanted island live 100 identical, perfectly logical foxes and one magic rabbit. Any fox may eat the rabbit — but a fox that does so instantly turns INTO the (new) magic rabbit, which the remaining foxes could then eat, and so on. Every fox prefers to be a live fox over a rabbit, and prefers being an eaten-but-not-a-target over being eaten. Assuming all foxes are hungry but supremely rational, does the rabbit get eaten?",
+    answer:
+      "No — with 100 foxes (an even number) the rabbit survives. The outcome flips with parity: an even number of foxes ⇒ safe, an odd number ⇒ eaten.",
+    explanation:
+      "Use PARITY INDUCTION from the base case. With 1 fox: it simply eats the rabbit (it then becomes the rabbit, but there are no other foxes left to eat it), so 1 fox ⇒ rabbit eaten. With 2 foxes: if a fox eats the rabbit it becomes the rabbit and now faces the '1 fox' situation — where that lone remaining fox WILL eat it. Foreseeing this, neither fox eats, so 2 foxes ⇒ rabbit safe. In general, a fox eats only if doing so leaves an even number of foxes behind (making the fox-turned-rabbit safe). So the state alternates: n foxes ⇒ eaten iff n is ODD. Since 100 is even, every fox knows eating would doom it, so the rabbit is never touched. The key is reducing to the smallest case and tracking the parity that flips at each step.",
+    difficulty: "medium",
+    concept: "Parity induction (reduce to base case)",
+    source: "Brainteasers · Simplification (Tigers vs Sheep, fresh variant)",
+  },
+  {
+    id: "bt-inv-last-ball",
+    prompt:
+      "A bag holds 20 red marbles and 14 blue marbles. Repeat this until one marble remains: draw two marbles at random; if they are the SAME color, put one BLUE marble back (discarding both drawn); if they are DIFFERENT colors, put the RED one back (discarding the blue). What color is the final marble?",
+    answer:
+      "Blue. The number of red marbles never changes parity — it starts even (20), so it stays even and must end at 0, leaving a blue marble.",
+    explanation:
+      "Find the INVARIANT: track the parity (odd/even) of the RED count. Consider each move. Two reds drawn (same color) → both removed, one blue added → reds drop by 2 (parity unchanged). Two blues drawn (same color) → both removed, one blue added → reds unchanged (parity unchanged). One red + one blue (different) → the red goes back, the blue is discarded → reds unchanged (parity unchanged). In every case the number of reds changes by 0 or −2, so its PARITY is invariant throughout. It starts at 20, which is even, so it remains even forever and the game can only end with 0 reds — hence the last marble is blue. (Had reds started odd, they'd end at 1 and the last marble would be red.) The blue count is a red herring; only red-parity matters.",
+    difficulty: "hard",
+    concept: "Parity invariant (monovariant)",
+    source: "Brainteasers · Logical (The Last Ball, fresh variant)",
+  },
+  {
+    id: "bt-inv-blind-sort",
+    prompt:
+      "In a completely dark room there are 48 identical coins on a table; exactly 15 of them are currently heads-up and the rest tails-up. You cannot see or feel which is which, but you can move coins and flip any coin you choose. How do you split the coins into two groups that contain the SAME number of heads-up coins?",
+    answer:
+      "Separate any 15 coins into their own pile and flip ALL 15 of them. The flipped pile and the remaining 33 coins will then have equal numbers of heads.",
+    explanation:
+      "Use a COMPLEMENTATION invariant. Scoop off any 15 coins (matching the known total of 15 heads) and call the number of heads that happen to be in this pile X — you don't and can't know X. Then the other 33 coins contain the remaining 15 − X heads. Now FLIP every coin in the 15-pile: each of its X heads becomes a tail and each of its 15 − X tails becomes a head, so the 15-pile now shows 15 − X heads. That exactly matches the 15 − X heads in the other pile. It works for any hidden value of X because flipping turns 'heads in the pile' into 'tails in the pile' and vice versa — the size of the split (15, the head-count) is the only thing you need to know.",
+    difficulty: "hard",
+    concept: "Complementation invariant (flip trick)",
+    source: "Brainteasers · Symmetry (Blind Sorting, fresh variant)",
+  },
+  {
+    id: "bt-inv-last-penny",
+    prompt:
+      "Two players take turns placing identical circular coins flat on a circular table. Coins may not overlap and may not hang off the edge; a player who cannot place a coin on their turn loses. You move first. What is your winning strategy?",
+    answer:
+      "Place your first coin dead-center on the table. Thereafter, mirror every coin your opponent plays by putting yours at the point diametrically opposite (symmetric through the center). You can always move, so your opponent is the first who cannot.",
+    explanation:
+      "Exploit the table's CENTRAL SYMMETRY. Open by covering the exact center. From then on, whenever the opponent places a coin somewhere, respond by placing yours at the mirror-image position through the center. Because the center is already taken, the opponent's coin never sits on the center, so its mirror point is a DIFFERENT location; and by symmetry that mirror spot is empty and non-overlapping precisely because the opponent's coin fit its spot. Thus every time the opponent has a legal move, so do you (its reflection). Since the table is finite the game must end, and by this pairing it is always the opponent who first runs out of room. The first-move-plus-mirror strategy converts the whole game into a symmetry you control.",
+    difficulty: "hard",
+    concept: "Symmetry / mirroring strategy (first-player win)",
+    source: "Brainteasers · Symmetry (Last Penny, fresh variant)",
+  },
+  {
+    id: "bt-inv-casino-pairs",
+    prompt:
+      "A dealer shuffles a deck of 40 cards — 20 red and 20 black — and turns them face-up two at a time. If a pair is both black, you keep it; if both red, the dealer keeps it; if mixed, it's discarded. Whoever collects more cards at the end wins $100 (a tie pays nothing). What is a fair price to pay to play this game?",
+    answer:
+      "$0 — the game is always a tie, so it is worth nothing. Your black-pair count always equals the dealer's red-pair count, no matter how the deck falls.",
+    explanation:
+      "Find the PAIRING INVARIANT. The 40 cards split into 20 pairs; say there are p black-black pairs (yours), q red-red pairs (dealer's), and m mixed pairs. Count the reds: each red-red pair uses 2 reds, each mixed pair uses 1 red, and black-black pairs use 0, so 2q + m = 20 (total reds). Counting blacks the same way gives 2p + m = 20 (total blacks). Subtracting, 2q + m = 2p + m ⇒ p = q. So you and the dealer ALWAYS win the same number of pairs — the result is a guaranteed tie every single time. Since a tie pays $0 with certainty, the game's expected value is exactly $0, and a rational player would pay nothing to play. The invariant (equal counts of the two colors ⇒ equal same-color pairs) makes the randomness irrelevant.",
+    difficulty: "hard",
+    concept: "Pairing / counting invariant (guaranteed tie)",
+    source: "Brainteasers · Symmetry (Casino's Offer, fresh variant)",
+  },
+];
+
+/** Level "Games, Induction & Lateral Logic" — games, backward induction, lateral. */
+const gamesInductionLateral: Flashcard[] = [
+  {
+    id: "bt-game-knaves",
+    prompt:
+      "On an island every inhabitant is either a knight (who always tells the truth) or a knave (who always lies). You meet two islanders, A and B. A says: 'At least one of us two is a knave.' From this statement alone, what is A, and what is B?",
+    answer:
+      "A is a knight and B is a knave.",
+    explanation:
+      "Test A's type against the truth-value of A's statement. Suppose A were a KNAVE. Then A's statement 'at least one of us is a knave' would actually be TRUE (A himself is a knave) — but knaves only make false statements, a contradiction. So A cannot be a knave; A is a KNIGHT. Since knights tell the truth, A's statement is true: at least one of A, B is a knave. A is the knight, so the knave must be B. Hence A = knight, B = knave. The method is the standard knights-and-knaves move: assume a speaker's type, then require their statement's truth to match (true for a knight, false for a knave), and keep whichever assignment is consistent.",
+    difficulty: "medium",
+    concept: "Truth-teller/liar consistency reasoning",
+    source: "Brainteasers · Logical (Knights and Knaves, fresh variant)",
+  },
+  {
+    id: "bt-game-cucumbers",
+    prompt:
+      "A grocer receives 200 pounds of cucumbers that are 99% water by weight. Left in the sun, they dry out until they are 98% water by weight. What is the total weight of the cucumbers now?",
+    answer:
+      "100 pounds.",
+    explanation:
+      "Anchor on the quantity that does NOT change: the dry (non-water) matter. Initially the cucumbers are 99% water, so the dry solids are 1% of 200 lb = 2 lb, and only water evaporates — the 2 lb of solids stay fixed. After drying, the cucumbers are 98% water, meaning the solids are now 2% of the new total weight W. So 2 lb = 2% × W = 0.02·W, giving W = 2 ÷ 0.02 = 100 lb. The result feels shocking (a 1-point drop in water percentage halves the weight) precisely because intuition tracks the water while the INVARIANT is the dry mass: a small change in the water fraction forces a large change in total weight to keep the fixed 2 lb of solids at the right proportion.",
+    difficulty: "medium",
+    concept: "Fixed-quantity invariant (percentage trap)",
+    source: "Brainteasers · Logical (Watermelon, fresh variant)",
+  },
+  {
+    id: "bt-game-horse-race",
+    prompt:
+      "You have 49 horses and a track with exactly 7 lanes, so you can race 7 horses at a time. You have no timer — each race only reveals the finishing ORDER of those 7 horses. What is the minimum number of races that guarantees identifying the 3 fastest horses overall?",
+    answer:
+      "9 races. (In general, finding the top 3 among L² horses with L lanes takes L + 2 races: L·L → 7 heats, 1 race of heat-winners, and 1 final of the remaining contenders.)",
+    explanation:
+      "Step 1: split the 49 horses into 7 heats of 7 and race each — 7 races — fully ranking every heat. Step 2 (race 8): race the 7 heat-winners; the winner here is the fastest horse overall. Label the heats A, B, C, … by how their winners placed (A's winner first, B's second, …). Step 3: only 5 horses can still be 2nd or 3rd overall — A's 2nd and 3rd (they trail only A1), B's 1st and 2nd (B1 lost only to A1), and C's 1st (lost only to A1 and B1); heats D–G are eliminated. Race those 5 in one final (race 9); its top two are the overall 2nd and 3rd. Total 7 + 1 + 1 = 9. The trick is realizing that after the winners' race, the pool of possible medalists collapses to a fixed small set — exactly L + 2 races for L² horses.",
+    difficulty: "medium",
+    concept: "Tournament / partial ordering (top-3 selection)",
+    source: "Brainteasers · Logical (Horse Race, fresh variant)",
+  },
+  {
+    id: "bt-game-explorers",
+    prompt:
+      "Four explorers — ranked 4 (most senior) down to 1 — must divide 30 gold nuggets. The most senior proposes a split; then ALL explorers (including the proposer) vote. If at least half vote yes, it passes; otherwise the proposer is expelled with nothing and the next-most-senior proposes, and so on. Every explorer is perfectly rational and greedy, values survival above gold, and gold above being generous. How many nuggets does the most senior explorer keep?",
+    answer:
+      "29 nuggets. The optimal proposal is {senior: 29, next: 0, third: 1, junior: 0}, which passes 2 votes to 2 (half of 4).",
+    explanation:
+      "Solve by BACKWARD INDUCTION from the smallest subgame up. With 2 explorers left, the senior of the two needs only half of 2 votes — his own — so he keeps all 30 and the other gets 0. With 3 left, the proposer needs one extra vote beyond his own; the explorer who'd get 0 in the 2-player outcome will accept a single nugget, so the split is {29, 0, 1}. With all 4, the proposer needs two of four votes (his own plus one more). Looking at the 3-player result {29, 0, 1} (for the juniors below him), the explorer slated to get 0 there is the cheapest to buy — hand that one explorer 1 nugget for their yes vote. So the senior proposes {29, 0, 1, 0}: his own vote plus the bribed explorer's makes 2 ≥ half of 4, and it passes. Each voter compares the offer to what they'd get after the proposer is expelled, so the proposer buys exactly the cheapest majority — keeping 29.",
+    difficulty: "hard",
+    concept: "Backward induction / game theory (cheapest majority)",
+    source: "Brainteasers · Simplification (Pirates, fresh variant)",
+  },
+  {
+    id: "bt-game-fox-duck",
+    prompt:
+      "A duck sits at the center of a circular pond. A fox waits on the bank; it cannot swim, but it runs along the shore at 4 times the duck's swimming speed. The duck can reach the water's edge and fly, but only if it can touch land while the fox is not right there. Can the duck escape?",
+    answer:
+      "Yes. Because the fox's speed ratio (4) is below the critical value π + 1 ≈ 4.14, the duck can escape.",
+    explanation:
+      "Compare ANGULAR speeds. While the duck stays within radius r/4 of the center (r = pond radius), it can circle fast enough to keep the center directly between itself and the fox: at radius ρ the duck's angular speed is v/ρ, which beats the fox's angular speed 4v/r whenever ρ < r/4. So the duck spirals out to just inside radius r/4, positioned diametrically opposite the fox. From there it makes a straight dash to the nearest shore: its swim distance is a bit over r − r/4 = 3r/4, while the fox, starting on the far side, must run half the circumference, π·r, to reach the duck's landing point. The fox covers π·r at speed 4v (time π·r/4v ≈ 0.785 r/v) while the duck covers ~3r/4 at speed v (time 0.75 r/v) — the duck lands first. This works exactly because 4 < π + 1 ≈ 4.14, the threshold ratio at which the shore-run and the dash tie; a faster fox (ratio ≥ π+1) would catch it.",
+    difficulty: "expert",
+    concept: "Pursuit / angular-speed comparison (spiral then dash)",
+    source: "Brainteasers · Logical (Fox vs Duck, fresh variant)",
+  },
+  {
+    id: "bt-game-wythoff",
+    prompt:
+      "Two players share two piles of chocolates: one pile of 10 and one of 15. On your turn you must either eat any positive number of chocolates from a SINGLE pile, or eat an EQUAL positive number from BOTH piles. Whoever eats the last chocolate wins. You move first — can you force a win, and what is your first move?",
+    answer:
+      "Yes. Eat 1 chocolate from the pile of 10, leaving the position (9, 15). From there you can always respond to keep your opponent in a losing 'cold' position and take the last chocolate.",
+    explanation:
+      "This is WYTHOFF'S game, whose losing ('cold') positions for the player to move are the pairs (⌊nφ⌋, ⌊nφ²⌋) where φ = (1+√5)/2 ≈ 1.618 — for example (0,0), (1,2), (3,5), (4,7), (6,10), (9,15), …. Each nonzero pile-count appears in exactly one cold pair, and from any cold position every legal move lands you in a 'hot' (winning-for-the-mover) position, while from any hot position there is a move back to a cold one. The start (10, 15) is hot; the nearest cold position is (9, 15), reached by eating 1 chocolate from the pile of 10. After that, whatever your opponent does you can always move to the next cold pair, and since the piles only shrink you will be the one to reach (0,0) — i.e. eat the last chocolate. The whole game reduces to steering onto the golden-ratio (Beatty) cold pairs.",
+    difficulty: "expert",
+    concept: "Wythoff's game (golden-ratio cold positions)",
+    source: "Brainteasers · Logical (The Last Chocolate, fresh variant)",
+  },
+];
+
 const levels: Level[] = [
   {
     id: "bt-1",
+    section: "Core Puzzles",
     title: "Logic Warm-Ups",
     subtitle: "Rates, optimization, and lateral thinking",
     blurb:
@@ -286,6 +543,7 @@ const levels: Level[] = [
   },
   {
     id: "bt-2",
+    section: "Core Puzzles",
     title: "Classic Puzzles",
     subtitle: "Weighings, encodings, and the Monty Hall trap",
     blurb:
@@ -309,6 +567,7 @@ const levels: Level[] = [
   },
   {
     id: "bt-3",
+    section: "Core Puzzles",
     title: "Hard Brainteasers",
     subtitle: "Induction, game theory, and protocols",
     blurb:
@@ -328,6 +587,88 @@ const levels: Level[] = [
       keyIdea: "Shrink to the base case; find the invariant; induct upward.",
       whyInterviewers:
         "These separate candidates who memorized answers from those who can derive them.",
+    },
+  },
+  {
+    id: "bt-4",
+    section: "Techniques Toolkit",
+    title: "Counting & Pigeonhole",
+    subtitle: "Triangular sums, number theory, and the pigeonhole principle",
+    blurb:
+      "Counting-technique flashcards: triangular sums (house of cards, two-ball drops), trailing zeros, digit products, binary weights, and pigeonhole thresholds.",
+    difficulty: "medium",
+    mode: "flashcard",
+    masteryThreshold: 0.75,
+    flashcards: countingPigeonhole,
+    // Six parametric counting families generate infinitely (bonus only); the
+    // hand-authored one-offs above are the fixed mastery deck.
+    flashcardGenerators: [
+      pigeonholeFamily,
+      houseOfCardsFamily,
+      twoBallsFamily,
+      trailingZerosFamily,
+      digitProductFamily,
+      binaryWeightsFamily,
+    ],
+    lesson: {
+      paragraphs: [
+        "A huge fraction of puzzles are secretly COUNTING problems. Two moves dominate: (1) recognize a triangular sum 1+2+…+n = n(n+1)/2 (stacked rows, shrinking-step searches), and (2) the pigeonhole principle — if items outnumber the boxes (times the per-box cap), some box overflows.",
+        "Number-theory counts follow the same spirit: trailing zeros of n! count factors of 5 (Σ⌊n/5^i⌋), the smallest number with a given digit product is built greedily from 9 down to 2, and single-pan weights should be powers of two. Reason it out, reveal, and be honest.",
+      ],
+      keyIdea:
+        "Count by structure: triangular sums, factor counts, and pigeonhole thresholds (boxes·(m−1)+1).",
+      whyInterviewers:
+        "Tests whether you set up an exact count instead of guessing or enumerating by hand.",
+    },
+  },
+  {
+    id: "bt-5",
+    section: "Techniques Toolkit",
+    title: "Invariants & Parity",
+    subtitle: "Quantities that never change — parity, mirroring, and checksums",
+    blurb:
+      "Invariant flashcards: parity monovariants (last marble), coloring parity, conservation, mirror strategies, complementation, and modular-checksum hat lines.",
+    difficulty: "hard",
+    mode: "flashcard",
+    masteryThreshold: 0.7,
+    flashcards: invariantsParity,
+    // The prisoners'-hats modular-checksum family generates infinitely (n, k);
+    // the invariant/parity/mirror one-offs above are the fixed mastery deck.
+    flashcardGenerators: [modularHatsFamily],
+    lesson: {
+      paragraphs: [
+        "The most powerful single trick in puzzle-solving: find an INVARIANT — a quantity that every allowed move leaves unchanged (or a parity that never flips). If the goal state would violate the invariant, it's impossible; if the invariant pins down the end state, you get the answer for free.",
+        "Symmetry is the same idea in disguise: mirror your opponent through a center, pair outcomes to cancel a bias (von Neumann), or broadcast one modular checksum so everyone downstream can decode their own hat. Look for what CAN'T change.",
+      ],
+      keyIdea:
+        "Identify a conserved quantity or parity; the goal is forced (or forbidden) by it.",
+      whyInterviewers:
+        "Separates candidates who search blindly from those who find the structural invariant.",
+    },
+  },
+  {
+    id: "bt-6",
+    section: "Techniques Toolkit",
+    title: "Games, Induction & Lateral Logic",
+    subtitle: "Backward induction, combinatorial games, and classic traps",
+    blurb:
+      "Strategy flashcards: subtraction/Nim-style games, Wythoff pairs, backward-induction bargaining, pursuit, tournament selection, and famous lateral traps.",
+    difficulty: "expert",
+    mode: "flashcard",
+    masteryThreshold: 0.7,
+    flashcards: gamesInductionLateral,
+    // The count-to-target subtraction-game family generates infinitely (target,
+    // maxStep); the lateral/induction one-offs above are the fixed mastery deck.
+    flashcardGenerators: [subtractionGameFamily],
+    lesson: {
+      paragraphs: [
+        "Combinatorial games fall to BACKWARD INDUCTION: find the losing ('cold') positions by working back from the end, then always hand your opponent one. Subtraction games reduce to arithmetic mod (max step + 1); Wythoff's game hides its cold positions in the golden ratio.",
+        "Bargaining puzzles (splitting loot) use the same shrink-to-the-base-case logic, and the lateral classics (the dehydrating produce, the pursuit on the pond) reward finding the one quantity that actually matters. Derive it — don't recall it.",
+      ],
+      keyIdea:
+        "Work backward from the end: label cold positions, then force the opponent onto them.",
+      whyInterviewers:
+        "These reveal whether you can build a strategy from first principles under pressure.",
     },
   },
 ];

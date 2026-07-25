@@ -31,6 +31,7 @@ import {
   uniformConditional,
 } from "./cp";
 import { mixNumericGenerators, mixQuestionGenerators } from "../../mixFamilies";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 
 /**
  * Parametric generators + per-family misconception taxonomy for the
@@ -65,18 +66,31 @@ import { mixNumericGenerators, mixQuestionGenerators } from "../../mixFamilies";
 interface Choice {
   text: string;
   rationale: string;
+  /**
+   * OPTIONAL machine-readable misconception TAG for this distractor (Phase 2 —
+   * COORDINATION §6.2 / §2.4). Kept parallel to `choices` in the emitted
+   * `Question.misconceptions`, shuffled in lockstep so the tag always tracks its
+   * choice. Drives the hint-ladder confront mapping (`CONFRONT_BY_TAG`). The
+   * correct choice carries no tag (empty string placeholder).
+   */
+  misconception?: string;
 }
 
 /**
  * Assemble + shuffle MC choices so the answer position never leaks. Distractors
  * colliding with the correct answer or an earlier option are dropped (choices
- * stay distinct, as `levels.test.ts` enforces); at most 4 options.
+ * stay distinct, as `levels.test.ts` enforces); at most 4 options. When any
+ * choice carries a misconception tag, a parallel (shuffled) `misconceptions`
+ * array is emitted; otherwise the field is omitted so untagged families stay
+ * byte-identical.
  */
 function assembleChoices(
   rng: Rng,
   correct: Choice,
   distractors: Choice[],
-): Pick<Question, "choices" | "correctIndex" | "distractorRationale"> {
+): Pick<Question, "choices" | "correctIndex" | "distractorRationale"> & {
+  misconceptions?: string[];
+} {
   const chosen: Choice[] = [correct];
   const seen = new Set<string>([correct.text]);
   for (const d of distractors) {
@@ -87,10 +101,14 @@ function assembleChoices(
   }
   const order = rng.shuffle(chosen.map((_, i) => i));
   const shuffled = order.map((i) => chosen[i]);
+  const hasTags = shuffled.some((c) => c.misconception);
   return {
     choices: shuffled.map((c) => c.text),
     correctIndex: order.indexOf(0),
     distractorRationale: shuffled.map((c) => c.rationale),
+    ...(hasTags
+      ? { misconceptions: shuffled.map((c) => c.misconception ?? "") }
+      : {}),
   };
 }
 
@@ -99,20 +117,29 @@ function numericErrors(
   answer: number,
   dp: number,
 ): {
-  errors: { value: number; feedback: string }[];
-  push: (raw: FractionType | number, feedback: string) => void;
+  errors: { value: number; feedback: string; misconception?: string }[];
+  push: (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => void;
 } {
   const f = 10 ** dp;
   const seen = new Set<number>([Math.round(answer * f)]);
-  const errors: { value: number; feedback: string }[] = [];
-  const push = (raw: FractionType | number, feedback: string) => {
+  const errors: { value: number; feedback: string; misconception?: string }[] =
+    [];
+  const push = (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => {
     const v = typeof raw === "number" ? raw : raw.valueOf();
     if (!Number.isFinite(v)) return;
     const rounded = Math.round(v * f) / f;
     const k = Math.round(rounded * f);
     if (seen.has(k)) return;
     seen.add(k);
-    errors.push({ value: rounded, feedback });
+    errors.push({ value: rounded, feedback, ...(misconception ? { misconception } : {}) });
   };
   return { errors, push };
 }
@@ -183,6 +210,7 @@ export function buildTableInstance(
     {
       text: fracText(F(favorable, 4)),
       rationale: `The REVERSED conditional (Pine-Property trap): ${favorable}/4 is P(above | ${sc.cols[targetCol]}) — the chance a ${sc.cols[targetCol]} figure is high — not the asked P(${sc.cols[targetCol]} | above), which divides by the ${total} survivors.`,
+      misconception: MISCONCEPTION.reversedConditional,
     },
     {
       text: fracText(F(favorable, 16)),
@@ -291,6 +319,7 @@ export function buildGivenSumInstance(
     {
       text: fracText(F(favorable, 2 * survivors)),
       rationale: `You halved by treating the pairs as UNORDERED. The sample space of two distinct dice is ordered — there are ${survivors} ordered survivors, not ${survivors / 2}.`,
+      misconception: MISCONCEPTION.orderedVsUnordered,
     },
     {
       text: fracText(F(1, survivors)),
@@ -342,6 +371,7 @@ export function buildBertrandInstance(
     {
       text: fracText(naive),
       rationale: `The naive answer counts DISCS not faces: ${g}/(${g}+${m}). But an all-green disc shows green twice as often, so seeing green is evidence for it — weight by faces: ${2 * g}/${2 * g + m}.`,
+      misconception: MISCONCEPTION.facesNotObjects,
     },
     {
       text: fracText(F(1, 2)),
@@ -450,6 +480,7 @@ export function buildBayesTestInstance(
     {
       text: decText(sens, dp),
       rationale: `BASE-RATE NEGLECT: you reported the test's sensitivity P(+ | disease) = ${sensPct}% as if it were the posterior P(disease | +). With a ${prevPct}% base rate, most positives are false positives.`,
+      misconception: MISCONCEPTION.baseRateNeglect,
     },
     {
       text: decText(F(1).sub(fpr), dp),
@@ -499,6 +530,7 @@ export function buildWhichDieInstance(
     {
       text: fracText(F(1, N1)),
       rationale: `You reported the LIKELIHOOD P(roll ${r} | d${N1}) = 1/${N1} as the posterior. Bayes flips and normalises this.`,
+      misconception: MISCONCEPTION.likelihoodAsPosterior,
     },
     {
       text: fracText(F(1, 2)),
@@ -615,6 +647,7 @@ export function buildInversionInstance(
     {
       text: decText(pBA, dp),
       rationale: `You reported the given direction P(B|A) = ${pBApct}% as the answer. The question asks the REVERSED conditional P(A|B); rescale by P(A)/P(B).`,
+      misconception: MISCONCEPTION.reversedConditional,
     },
     {
       text: decText(pBA.mul(pA), dp),
@@ -729,6 +762,7 @@ export function buildLotpLineInstance(
   push(
     F(r1pct + r2pct, 200),
     `You averaged the two defect rates equally. Weight each by its production SHARE (${w1pct}% vs ${100 - w1pct}%), not 50/50.`,
+    MISCONCEPTION.equalWeightMixture,
   );
   push(
     F(r1pct, 100),
@@ -781,6 +815,7 @@ export function buildUniformInstance(
   push(
     F(w, b - a),
     `MEMORYLESS error: w/(b−a) treats the uniform like an exponential. Uniform is NOT memoryless — given it has run past ${g}, the remaining time is uniform on (${g}, ${b}), a ${b - g}-unit window.`,
+    MISCONCEPTION.memorylessUniform,
   );
   push(
     F(w, b),

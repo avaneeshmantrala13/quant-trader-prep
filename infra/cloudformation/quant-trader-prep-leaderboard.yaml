@@ -1,0 +1,246 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Quant Trader Prep — Speed Arena LEADERBOARD (Phase 6). A SEPARATE, additive
+  stack (it does NOT touch the main auth/data stack or the AI stack): its own
+  server-authoritative Lambda + API Gateway HTTP API with a Cognito JWT
+  authorizer pointed at the EXISTING User Pool (passed in as parameters), plus
+  ONE provisioned DynamoDB table. Free-Tier fit: the table is PROVISIONED at
+  25 WCU / 25 RCU (on-demand has NO free requests), Standard class, and has NO
+  GSIs — the bounded top-N shard design avoids any sort-by-score index. A ranked
+  submit is ~3–4 tiny writes; reads are a single GetItem ⇒ ≈ $0/month at pilot
+  scale. See infra/lambda/leaderboard/index.mjs for the data model.
+
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: quant-trader-prep
+    Description: Prefix for leaderboard resource names.
+
+  UserPoolId:
+    Type: String
+    Description: >
+      EXISTING Cognito User Pool id (the `UserPoolId` output of the main stack).
+      Used to build the JWT authorizer issuer.
+
+  UserPoolClientId:
+    Type: String
+    Description: >
+      EXISTING Cognito app client id (the `UserPoolClientId` output of the main
+      stack). Used as the JWT authorizer audience.
+
+  TopN:
+    Type: Number
+    Default: 40
+    Description: Max entries kept per league/week top-N shard (30–50 recommended).
+
+  LeagueCount:
+    Type: Number
+    Default: 20
+    Description: >
+      Number of weekly leagues users are bucketed into (deterministic by user
+      sub). Smaller cohorts reduce low-performer demoralization (RCT, §4D).
+
+  RankedPerHour:
+    Type: Number
+    Default: 60
+    Description: Per-user ranked submissions/hour cap (anti-cheat honesty). 0 disables.
+
+  ReadCapacity:
+    Type: Number
+    Default: 25
+    Description: PROVISIONED RCU (Free-Tier: 25). Do NOT switch to on-demand.
+
+  WriteCapacity:
+    Type: Number
+    Default: 25
+    Description: PROVISIONED WCU (Free-Tier: 25). Do NOT switch to on-demand.
+
+  CorsOrigins:
+    Type: CommaDelimitedList
+    Default: "http://localhost:5173,http://localhost:4173"
+    Description: Allowed CORS origins for the leaderboard endpoint (add your prod URL).
+
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) IAM permissions-boundary policy ARN attached to EVERY IAM role
+      this stack creates. Leave blank for normal accounts; REQUIRED in restricted
+      sandbox accounts whose boundary denies iam:CreateRole unless the new role
+      carries the same boundary.
+
+# ---------------------------------------------------------------------------
+Conditions:
+  HasPermissionsBoundary: !Not [!Equals [!Ref PermissionsBoundaryArn, ""]]
+
+# ---------------------------------------------------------------------------
+Resources:
+  # ---- The ONE leaderboard table: PROVISIONED (25/25), Standard, NO GSIs.
+  #      Single-table design (PK/SK) holds PB items, weekly bests, per-user
+  #      rate-limit counters, and bounded top-N shards. A `ttl` attribute
+  #      auto-expires the rate-limit rows.
+  LeaderboardTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-leaderboard"
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref ReadCapacity
+        WriteCapacityUnits: !Ref WriteCapacity
+      TableClass: STANDARD
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ---- Role for the leaderboard Lambda: logs + this one table.
+  LeaderboardFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      PermissionsBoundary: !If [HasPermissionsBoundary, !Ref PermissionsBoundaryArn, !Ref "AWS::NoValue"]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: LeaderboardTableAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt LeaderboardTable.Arn
+
+  # ---- The Lambda. Placeholder inline code is replaced by
+  #      infra/deploy-leaderboard.sh (which zips index.mjs + scoring.mjs).
+  LeaderboardFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-leaderboard"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt LeaderboardFunctionRole.Arn
+      Timeout: 15
+      MemorySize: 256
+      Environment:
+        Variables:
+          LEADERBOARD_TABLE: !Ref LeaderboardTable
+          TOPN: !Ref TopN
+          LEAGUE_COUNT: !Ref LeagueCount
+          RANKED_PER_HOUR: !Ref RankedPerHour
+          ALLOW_ORIGIN: !Select [0, !Ref CorsOrigins]
+      Code:
+        ZipFile: |
+          // PLACEHOLDER — replaced by infra/deploy-leaderboard.sh.
+          export const handler = async () => ({
+            statusCode: 503,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ok: false,
+              error: "Leaderboard Lambda code not deployed yet — run infra/deploy-leaderboard.sh",
+            }),
+          });
+
+  # ---- HTTP API (v2) with a native Cognito JWT authorizer (same User Pool).
+  LeaderboardHttpApi:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub "${ProjectName}-leaderboard-api"
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: !Ref CorsOrigins
+        AllowMethods: [POST, OPTIONS]
+        AllowHeaders: [authorization, content-type]
+
+  LeaderboardJwtAuthorizer:
+    Type: AWS::ApiGatewayV2::Authorizer
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      AuthorizerType: JWT
+      Name: cognito-jwt
+      IdentitySource:
+        - "$request.header.Authorization"
+      JwtConfiguration:
+        Audience:
+          - !Ref UserPoolClientId
+        Issuer: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${UserPoolId}"
+
+  LeaderboardIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt LeaderboardFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  # Three routes → one integration; the handler dispatches on the path suffix.
+  LeaderboardSeedRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      RouteKey: "POST /leaderboard/seed"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref LeaderboardJwtAuthorizer
+      Target: !Sub "integrations/${LeaderboardIntegration}"
+
+  LeaderboardSubmitRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      RouteKey: "POST /leaderboard/submit"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref LeaderboardJwtAuthorizer
+      Target: !Sub "integrations/${LeaderboardIntegration}"
+
+  LeaderboardBoardRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      RouteKey: "POST /leaderboard/board"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref LeaderboardJwtAuthorizer
+      Target: !Sub "integrations/${LeaderboardIntegration}"
+
+  LeaderboardStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref LeaderboardHttpApi
+      StageName: $default
+      AutoDeploy: true
+
+  LeaderboardInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref LeaderboardFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${LeaderboardHttpApi}/*"
+
+# ---------------------------------------------------------------------------
+Outputs:
+  LeaderboardEndpoint:
+    Description: VITE_LEADERBOARD_ENDPOINT (base URL — client POSTs to `${endpoint}/leaderboard/*`)
+    Value: !GetAtt LeaderboardHttpApi.ApiEndpoint
+  LeaderboardFunctionName:
+    Description: Lambda function name (used by deploy-leaderboard.sh update-function-code)
+    Value: !Ref LeaderboardFunction
+  LeaderboardTableName:
+    Description: DynamoDB table name
+    Value: !Ref LeaderboardTable

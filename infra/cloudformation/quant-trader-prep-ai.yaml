@@ -10,6 +10,14 @@ Description: >
   the AWS Free Tier (see infra/AI_SETUP.md). The AWS pieces here (Lambda, HTTP
   API, a tiny on-demand DynamoDB quota table) are Free-Tier-friendly at pilot
   scale.
+  The single POST /ai endpoint serves ALL Lambda modes, selected by the request
+  body `mode` field: "flavor" (default, verifier-gated reskin), "open-ended"
+  (unverified flashcard), plus the Phase-7 additions "hint" (rephrase ONE
+  deterministic hint rung's wording, re-guarded to never leak the answer) and
+  "self-explain" (narrate around the client verifier's FIXED correctness verdict;
+  the LLM can never change a grade). No new endpoint, env var, or quota is needed
+  — the new modes reuse this same route, JWT authorizer, SSM key, and per-user
+  DailyQuota counter.
 
 # ---------------------------------------------------------------------------
 Parameters:

@@ -23,7 +23,7 @@
  * A "section" is a maximal contiguous run of levels sharing the same `section`
  * value. A boundary is ANY change in `section` between adjacent levels. Levels
  * with no `section` (`undefined`) form their own contiguous topic(s): tracks
- * that don't use sections at all (Mental Math, Brainteasers, Interview Games)
+ * that don't use sections at all (Mental Math, Interview Games)
  * collapse to a single topic, so they keep the original strictly-sequential
  * behavior with only their first level unlocked. This mirrors the visual
  * `startsSection` divider rule, except it also treats unlabeled runs as topics

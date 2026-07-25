@@ -337,10 +337,10 @@ const levels: Level[] = [
 
 export const probabilityTrack: Track = {
   id: "probability",
-  title: "Probability / Math",
+  title: "Probability & Statistics",
   tagline: "Probability from the ground up to interview-hard",
   description:
-    "Learn probability from sample spaces to Bayes and expectation with fresh, exactly-verified problems — then size real bets with the Kelly criterion and face genuine quant-interview-grade challenges.",
+    "Reason under uncertainty — sample spaces, Bayes, and expectation up to Kelly sizing, Markov chains, and game theory, with fresh, exactly-verified problems.",
   motif: "probability",
   // Core probability route, then the Betting & Sizing subcategory (numeric
   // free-entry Kelly factory). Future Probability & Statistics subcategories

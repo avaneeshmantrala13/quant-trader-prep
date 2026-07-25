@@ -210,7 +210,7 @@ export function CurriculumVisual({ linked = false }: { linked?: boolean }) {
   const mods = [
     { motif: "probability" as const, id: "probability", name: "Probability", n: "5 levels" },
     { motif: "mentalMath" as const, id: "mental-math", name: "Mental Math", n: "4 levels" },
-    { motif: "brainteasers" as const, id: "brainteasers", name: "Brainteasers", n: "3 levels" },
+    { motif: "brainteasers" as const, id: "brainteasers", name: "Brainteasers", n: "6 levels" },
     { motif: "interviewGames" as const, id: "interview-games", name: "Interview Games", n: "5 levels" },
   ];
   return (

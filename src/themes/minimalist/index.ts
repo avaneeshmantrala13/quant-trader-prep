@@ -4,6 +4,7 @@ import { MinimalBackground } from "./Background";
 import { getMinimalistStation } from "./stations";
 import { MinimalistMapBackground } from "./MapBackground";
 import { MinimalistTableOfContents } from "./TableOfContents";
+import { MinimalistDashboard } from "./Dashboard";
 
 /**
  * "Minimalist" — Swiss / International typographic style meets Dieter Rams
@@ -102,4 +103,5 @@ export const minimalistTheme: Theme = {
   MapBackground: MinimalistMapBackground,
   getMapStation: getMinimalistStation,
   TableOfContents: MinimalistTableOfContents,
+  Dashboard: MinimalistDashboard,
 };

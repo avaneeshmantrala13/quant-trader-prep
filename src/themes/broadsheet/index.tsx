@@ -4,6 +4,7 @@ import { BASE_DARK, BASE_LIGHT, BASE_SHAPE, BASE_TYPOGRAPHY } from "../base";
 import { getBroadsheetStation } from "./stations";
 import { BroadsheetMapBackground } from "./MapBackground";
 import { BroadsheetTableOfContents } from "./TableOfContents";
+import { BroadsheetDashboard } from "./Dashboard";
 
 /**
  * The default theme — "a trader's desk rendered as a financial broadsheet"
@@ -33,4 +34,5 @@ export const broadsheetTheme: Theme = {
   MapBackground: BroadsheetMapBackground,
   getMapStation: getBroadsheetStation,
   TableOfContents: BroadsheetTableOfContents,
+  Dashboard: BroadsheetDashboard,
 };

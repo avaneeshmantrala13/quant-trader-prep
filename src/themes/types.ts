@@ -1,5 +1,7 @@
 import type { ComponentType } from "react";
 import type { Difficulty, LevelMode, MotifKey } from "@/types/content";
+import type { MasteryState } from "@/lib/mastery/verdict";
+import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
 
 /**
  * ============================================================================
@@ -215,6 +217,119 @@ export interface TocViewProps {
 /** A theme's whole-page Table of Contents renderer. */
 export type TableOfContentsComponent = ComponentType<TocViewProps>;
 
+/* -------------------------------------------------------------------------- */
+/*  DASHBOARD — per-theme whole-page rendering contract                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A single friendly misconception chip. `label` is ALWAYS a short,
+ * human-readable description of the concept the learner struggles with
+ * (resolved by `@/lib/dashboard/misconceptionLabels`) — NEVER a raw key like
+ * "idx:1" or "<topicKey>::option 0". `key` is the underlying namespaced
+ * misconception key, exposed only as a stable React key / de-dupe id.
+ */
+export interface DashboardMisconception {
+  /** Stable id (the raw namespaced misconception key). NOT for display. */
+  key: string;
+  /** Short, human-readable description of the struggle. Safe to render. */
+  label: string;
+}
+
+/**
+ * One fully display-ready per-topic entry. This is a flattened projection of a
+ * Phase-1 `TopicVerdict` (+ friendly labels + a deep link) — a theme ONLY styles
+ * these fields; it never reads the raw mastery model, recomputes a verdict, or
+ * fetches data.
+ */
+export interface DashboardTopicEntry {
+  /** Canonical topic identity (`${trackId}::${section}`). Use as a React key. */
+  topicKey: string;
+  /** Nice, human-readable topic name (e.g. "Conditional Probability & Bayes"). */
+  name: string;
+  /** Parent track title (e.g. "Probability & Statistics"). */
+  trackTitle: string;
+  /**
+   * Calibration-aware verdict. UNCERTAIN is FIRST-CLASS — a theme must render it
+   * distinctly and NEVER round it to STRONG or WEAK.
+   */
+  verdict: MasteryState;
+  /** True once the topic has any graded evidence (n > 0); else the bar is empty. */
+  hasEvidence: boolean;
+  /** Beta posterior MEAN mastery in [0,1] (meaningful only when hasEvidence). */
+  mean: number;
+  /** 95% credible-interval LOWER bound in [0,1] (the "confidently weak" signal). */
+  ciLow: number;
+  /** 95% credible-interval UPPER bound in [0,1]. */
+  ciHigh: number;
+  /** Elo skill θ on the logit scale. */
+  theta: number;
+  /** Number of graded items in this topic. */
+  gradedCount: number;
+  /** True when a spaced (SM-2) review is currently due for this topic. */
+  reviewDue: boolean;
+  /** Friendly misconception chips (already humanized; never raw keys). */
+  misconceptions: DashboardMisconception[];
+  /** Deep-link route to practice this topic (its first level). */
+  href: string;
+}
+
+/**
+ * The recommended NEXT FOCUS — the top unlocked, non-mastered weakness. Absent
+ * when there is no clear weak spot yet (e.g. no graded evidence).
+ */
+export interface DashboardRecommendation {
+  topicKey: string;
+  /** Nice topic name. */
+  name: string;
+  /** Parent track title. */
+  trackTitle: string;
+  /** CI_low in [0,1] — why this surfaced (worst, most-confident). */
+  ciLow: number;
+  /** Deep-link route to start practicing it. */
+  href: string;
+}
+
+/**
+ * Props passed to a theme's whole-page Dashboard renderer. The PAGE
+ * (`src/pages/DashboardPage.tsx`) owns ALL data + behavior: it reads Phase-1
+ * verdicts via `useDashboardData`, orders them with the pure ranking/reliability
+ * modules, resolves friendly misconception labels, and builds every route here.
+ * A theme's `Dashboard` component is a PURE PRESENTATIONAL CONSUMER of these
+ * props — no data fetching, no mastery math, no locking, no route construction.
+ * It must:
+ *   • render the recommended focus, the per-topic entries, the weakness ranking,
+ *     the reviews-due list, and the reliability diagram,
+ *   • link topics/reviews via their provided `href` (locked/gating never applies
+ *     — the dashboard is read-only over already-unlocked-or-evidenced topics),
+ *   • stay responsive (360px → ≥1280px), respect light/dark, and be WCAG-AA.
+ */
+export interface DashboardViewProps {
+  /** True once the learner has completed the calibration warm-up (diagnostic). */
+  diagnosticDone: boolean;
+  /** Route to (re)run the calibration warm-up. */
+  diagnosticHref: string;
+  /** Route back to the Table of Contents (the dashboard's "back" affordance). */
+  contentsHref: string;
+  /** The recommended next focus, or undefined when there's no clear weak spot. */
+  recommended?: DashboardRecommendation;
+  /** Every topic in the curriculum, curriculum order (cards / grid). */
+  topics: DashboardTopicEntry[];
+  /** Evidenced topics ranked ascending by CI_low (worst-most-confident first). */
+  weaknesses: DashboardTopicEntry[];
+  /** Topics with a spaced review due now (earliest-due first). */
+  due: DashboardTopicEntry[];
+  /**
+   * Pooled reliability-diagram data: points (`bins`), the Brier reliability gap
+   * (`relGap`) + Brier score, the total pair count, and the "when you say ~80%,
+   * you're right X%" headline. `count === 0` ⇒ render the honest
+   * insufficient-data state (never fabricate a curve).
+   */
+  reliability: ReliabilityDiagramData;
+}
+
+/** A theme's whole-page Dashboard renderer. */
+export type DashboardComponent = ComponentType<DashboardViewProps>;
+
 export interface Theme {
   /** Stable unique id; must equal the folder name under `src/themes/`. */
   id: string;
@@ -270,6 +385,17 @@ export interface Theme {
    * always works even before a theme implements this hook.
    */
   TableOfContents?: TableOfContentsComponent;
+  /**
+   * Optional whole-page renderer for the Mastery Dashboard (`/dashboard`). The
+   * dashboard page computes ALL data + routes and hands them to this component
+   * via `DashboardViewProps`; the theme ONLY styles the page in its own
+   * aesthetic (headline focus, per-topic cards, weakness ranking, reviews-due,
+   * reliability diagram). It performs NO data fetching, mastery math, or route
+   * construction. Omit it to fall back to the app's `BaseDashboard`, so the page
+   * always works even before a theme implements this hook. Per-theme
+   * implementations live at `src/themes/<id>/Dashboard.tsx`.
+   */
+  Dashboard?: DashboardComponent;
   /** Optional celebration flourish, overrides the default confetti on mastery. */
   celebration?: () => void;
 

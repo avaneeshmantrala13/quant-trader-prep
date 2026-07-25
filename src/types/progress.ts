@@ -1,4 +1,5 @@
 import type { NumericQuestion, Question } from "./content";
+import type { TierDifficultyMap, TopicMasteryMap } from "./mastery";
 
 export interface LevelProgress {
   bestScore: number; // 0..1, best fraction correct achieved
@@ -30,24 +31,34 @@ export interface ResumeState {
 }
 
 export interface UserProgress {
-  version: number;
+  version: number; // was 1; Phase 1 writes 2 (see src/lib/mastery/migrate.ts)
   levelProgress: Record<string, LevelProgress>;
   resume: Record<string, ResumeState>;
   xp: number;
   streak: number;
   lastActiveDate: string; // YYYY-MM-DD
   createdAt: string;
+  // ---- NEW (Phase 1 — Mastery & Calibration). All OPTIONAL so v1 saves load
+  //      unchanged; migrateProgress fills them with empty maps (COORDINATION §2.2). ----
+  /** Per-topic Elo θ + Beta(α,β) posterior + misconception flags (src/types/mastery.ts). */
+  topicMastery?: TopicMasteryMap;
+  /** Per (topic,tier) Elo difficulty d[topic,τ]. Key = `${topicKey}#${difficulty}`. */
+  tierDifficulty?: TierDifficultyMap;
+  /** Set once, after the diagnostic is completed or skipped (Phase 3). */
+  diagnosticDoneAt?: string;
 }
 
 export function emptyProgress(): UserProgress {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    version: 1,
+    version: 2,
     levelProgress: {},
     resume: {},
     xp: 0,
     streak: 0,
     lastActiveDate: today,
     createdAt: new Date().toISOString(),
+    topicMastery: {},
+    tierDifficulty: {},
   };
 }

@@ -30,6 +30,7 @@ import {
 /* Which card suit represents each motif on the felt. */
 const MOTIF_SUIT: Record<MotifKey, Suit> = {
   probability: "spade",
+  mathQuestions: "diamond",
   mentalMath: "diamond",
   brainteasers: "club",
   interviewGames: "heart",

@@ -377,7 +377,7 @@ function ClosingCTA() {
 /* ---------------- Footer ---------------- */
 function Footer() {
   const cols = [
-    ["Sections", ["Probability / Math", "Mental Math", "Brainteasers", "Interview Games"]],
+    ["Sections", ["Probability & Statistics", "Mental Math", "Brainteasers", "Interview Games"]],
     ["The Product", ["The Roadmap", "Calibration Gym", "Socratic Tutor", "Fresh Questions"]],
     ["The Funnel", ["Online Assessment", "Technical Interview", "Superday Games"]],
   ] as const;

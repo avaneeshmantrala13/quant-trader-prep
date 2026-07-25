@@ -14,6 +14,15 @@
  *     too) and refuses if the math changed;
  *   - OPEN-ENDED mode: asks the LLM for a brand-new question and returns it as
  *     an explicitly-unverified flashcard (never graded as truth);
+ *   - HINT mode (Phase 7): rephrases ONE deterministic Phase-2 hint rung's
+ *     WORDING only, then re-guards server-side (preserve context numbers AND
+ *     never state the final answer — `verifyHint`). On any guardrail failure it
+ *     returns `{ok:false}` so the client keeps its original deterministic rung.
+ *     The LLM never chooses the hint logic or reveals the answer;
+ *   - SELF-EXPLAIN mode (Phase 7, decompose-then-verify): the CLIENT's verifier
+ *     has already decided correctness + the failed structural check; this branch
+ *     ONLY narrates encouragement around that FIXED verdict and echoes the
+ *     verdict back verbatim. The LLM can never flip correctness;
  *   - (optional) enforces a per-user DAILY QUOTA via a DynamoDB counter to cap
  *     spend, degrading gracefully to "no quota" when the table isn't configured.
  *
@@ -107,6 +116,73 @@ function verifyFlavor(original, candidate, requiredNumbers) {
   return { ok: true };
 }
 
+/* ------------------- no-final-answer guard (Phase 7, hint) ---------------- */
+// Server-side mirror of the client's Phase-2 `containsFinalAnswer` (defense in
+// depth): the hint-phrasing branch MUST refuse any rephrase that states the
+// final answer, whether written as a plain number, `$1,000` currency, `12%`
+// percentage, or `a/b` fraction. Deterministic; the LLM never decides this.
+function extractAnswerNumbers(text) {
+  const out = [];
+  const fracRe = /(\d+)\s*\/\s*(\d+)/g;
+  const consumed = [];
+  let m;
+  while ((m = fracRe.exec(text)) !== null) {
+    const denom = Number(m[2]);
+    if (denom !== 0) out.push(Number(m[1]) / denom);
+    consumed.push([m.index, m.index + m[0].length]);
+  }
+  const numRe = /-?\$?\s*\d[\d,]*(?:\.\d+)?\s*%?/g;
+  while ((m = numRe.exec(text)) !== null) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (consumed.some(([s, e]) => start < e && end > s)) continue;
+    const isPercent = /%\s*$/.test(m[0]);
+    const cleaned = m[0].replace(/[$,%\s]/g, "");
+    if (cleaned === "" || cleaned === "-") continue;
+    const n = Number(cleaned);
+    if (!Number.isFinite(n)) continue;
+    out.push(isPercent ? n / 100 : n);
+  }
+  return out;
+}
+function answerToNumber(value) {
+  const trimmed = String(value).trim();
+  const frac = /^(-?\d+)\s*\/\s*(\d+)$/.exec(trimmed);
+  if (frac) {
+    const denom = Number(frac[2]);
+    return denom === 0 ? null : Number(frac[1]) / denom;
+  }
+  const isPercent = /%\s*$/.test(trimmed);
+  const cleaned = trimmed.replace(/[$,%\s]/g, "");
+  if (!/^-?\d*\.?\d+$/.test(cleaned)) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return null;
+  return isPercent ? n / 100 : n;
+}
+function containsFinalAnswer(text, answer, tolerance = 0) {
+  if (!text) return false;
+  const answerNum = typeof answer === "number" ? answer : answerToNumber(answer);
+  if (answerNum !== null && Number.isFinite(answerNum)) {
+    const nums = extractAnswerNumbers(text);
+    if (nums.some((n) => Math.abs(n - answerNum) <= tolerance)) return true;
+    if (typeof answer !== "string") return false;
+  }
+  const norm = (s) => String(s).toLowerCase().replace(/\s+/g, " ").trim();
+  const needle = norm(answer);
+  if (needle.length === 0) return false;
+  return norm(text).includes(needle);
+}
+// The hint guardrail: preserve context numbers (no new numbers) AND never state
+// the answer. On failure the client keeps the ORIGINAL deterministic rung.
+function verifyHint(originalRung, candidate, answer, requiredNumbers) {
+  const base = verifyFlavor(originalRung, candidate, requiredNumbers);
+  if (!base.ok) return base;
+  if (containsFinalAnswer(candidate, answer)) {
+    return { ok: false, reason: "leaks-answer" };
+  }
+  return { ok: true };
+}
+
 /* --------------------------------- prompts -------------------------------- */
 function flavorMessages(body) {
   const sys =
@@ -132,6 +208,49 @@ function openEndedMessages(body) {
     '"prompt" (the question), "answer" (the concise final answer), and "explanation" (the full ' +
     "worked reasoning). No markdown, no extra keys.";
   const user = `Topic: ${body.topic}\nReturn the JSON now:`;
+  return { sys, user };
+}
+
+/**
+ * HINT mode (Phase 7): rephrase ONE deterministic hint rung's wording. The model
+ * must NOT choose the hint, add/remove/change any number, or state the final
+ * answer. The server re-guards the output; a violation → client keeps the rung.
+ */
+function hintMessages(body) {
+  const sys =
+    "You are a warm, concise quant tutor rewording a SINGLE coaching hint. Rewrite ONLY the " +
+    "wording of the hint below for clarity and encouragement. You MUST NOT reveal, state, or " +
+    "compute the final answer. You MUST keep EVERY number exactly as given and introduce NO new " +
+    "numbers. Keep it to one or two short sentences that nudge the learner's thinking WITHOUT " +
+    "giving the solution. Reply with ONLY the rephrased hint text, no preamble.";
+  const nums = (body.requiredNumbers || []).join(", ");
+  const user =
+    `Hint to reword:\n${body.rung}\n\n` +
+    (nums ? `Numbers that MUST appear unchanged: ${nums}\n` : "") +
+    "Do NOT state the final answer. Reword the hint now:";
+  return { sys, user };
+}
+
+/**
+ * SELF-EXPLAIN mode (Phase 7, decompose-then-verify): the VERIFIER has ALREADY
+ * decided correctness + which structural check failed. The model ONLY narrates
+ * encouragement/elaboration around that fixed verdict — it cannot change it.
+ */
+function selfExplainMessages(body) {
+  const sys =
+    "You are an encouraging quant tutor. The learner's explanation has ALREADY been graded by a " +
+    "deterministic verifier — that verdict is FINAL and you must NOT contradict or re-grade it. " +
+    "Given the verifier's verdict, write ONE or TWO short, supportive sentences of feedback: if " +
+    "correct, affirm the key reasoning; if incorrect, gently point at the failed check WITHOUT " +
+    "revealing the final answer. Reply with ONLY the feedback text, no preamble.";
+  const verdict = body.correct ? "CORRECT" : "INCORRECT";
+  const failed = body.failedCheck ? `Failed check: ${body.failedCheck}\n` : "";
+  const user =
+    `Question:\n${body.prompt}\n\n` +
+    `Verifier verdict: ${verdict}\n` +
+    failed +
+    `Learner's explanation:\n${body.explanation || "(none)"}\n\n` +
+    "Write the short feedback now (do NOT state the final answer):";
   return { sys, user };
 }
 
@@ -276,6 +395,39 @@ export const handler = async (event) => {
         answer: parsed.answer || "",
         explanation: parsed.explanation || "",
         verified: false,
+      });
+    }
+
+    if (body.mode === "hint") {
+      // Rephrase ONE deterministic rung's wording, then re-guard server-side:
+      // preserve the context numbers AND never leak the answer. On any failure
+      // we tell the client to keep its original deterministic rung.
+      const { sys, user } = hintMessages(body);
+      const candidate = await callLLM(key, sys, user, false);
+      const check = verifyHint(
+        body.rung || "",
+        candidate,
+        body.answer,
+        body.requiredNumbers,
+      );
+      if (!check.ok) {
+        return reply(200, { ok: false, error: `guardrail:${check.reason}` });
+      }
+      return reply(200, { ok: true, hint: candidate });
+    }
+
+    if (body.mode === "self-explain") {
+      // Decompose-then-verify: the client already ran the VERIFIER and sends its
+      // FIXED verdict (correct + failedCheck). The LLM ONLY narrates around it.
+      // We echo the verifier's verdict back verbatim and add advisory narration;
+      // the client ignores anything but the narration string regardless.
+      const { sys, user } = selfExplainMessages(body);
+      const narration = await callLLM(key, sys, user, false);
+      return reply(200, {
+        ok: true,
+        correct: !!body.correct,
+        failedCheck: body.failedCheck ?? null,
+        narration: narration || "",
       });
     }
 

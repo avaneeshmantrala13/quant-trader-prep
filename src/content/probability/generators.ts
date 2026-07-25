@@ -2,6 +2,7 @@ import type { Rng } from "@/lib/rng";
 import type { Question, QuestionGenerator } from "@/types/content";
 import { assemble, assembleDistinct, fmt, round } from "../shared";
 import { mixQuestionGenerators } from "../mixFamilies";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 
 /**
  * Probability generators with EXACT verifiers: the true answer is computed
@@ -141,6 +142,12 @@ function genConditional(rng: Rng): Question {
       [D(pBoth)]: "Forgot to divide by P(B); reported the joint P(A∩B).",
       [D(pB / pBoth)]: "Inverted the ratio.",
     },
+    // Phase 4: canonical tags for the reversed-conditional distractors (drive the
+    // remediation edge to L1 + the tutor's natural-frequency-tree confront).
+    misconceptionByValue: {
+      [D(pBoth / pA)]: MISCONCEPTION.reversedConditional,
+      [D(pB / pBoth)]: MISCONCEPTION.reversedConditional,
+    },
     source: "Conditional probability definition",
   });
 }
@@ -172,6 +179,11 @@ function genBayes(rng: Rng): Question {
         [D(sens)]: "Reported the sensitivity P(+|disease) — the inverse-probability fallacy (confusing P(D|+) with P(+|D)).",
         [D(sens * prior)]: "Computed only the numerator P(+|D)·P(D); forgot to normalize by total P(+).",
         [D(ignorePrior)]: "Ignored the prior/base rate entirely: P(+|D)/(P(+|D)+P(+|¬D)).",
+      },
+      // Phase 4: canonical tags — likelihood-as-posterior + base-rate neglect.
+      misconceptionByValue: {
+        [D(sens)]: MISCONCEPTION.likelihoodAsPosterior,
+        [D(ignorePrior)]: MISCONCEPTION.baseRateNeglect,
       },
       source: "Bayes disease-test (base-rate neglect schema)",
     };
@@ -236,6 +248,11 @@ function genCombinations(rng: Rng): Question {
         [fmt(perm)]: `Used permutations P(${n},${k}) = ${n}!/(${n}−${k})! — counted order as mattering.`,
         [fmt(withRepl)]: `Used ${n}^${k} — ordered selection WITH replacement.`,
         [fmt(naiveProduct)]: `Just multiplied n·k instead of using the combination formula.`,
+      },
+      // Phase 4: canonical tag — ordered-vs-unordered (drives the edge to Counting).
+      misconceptionByValue: {
+        [fmt(perm)]: MISCONCEPTION.orderedVsUnordered,
+        [fmt(withRepl)]: MISCONCEPTION.orderedVsUnordered,
       },
       source: "Counting (combinations vs permutations)",
     };

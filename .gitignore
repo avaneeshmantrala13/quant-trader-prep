@@ -1,10 +1,77 @@
-node_modules
-dist
-dist-ssr
+# =============================================================================
+# quant-trader-prep — .gitignore
+# Hardened so NO keys or secrets can ever be committed, even in a public repo.
+# =============================================================================
+
+# ---- Dependencies -----------------------------------------------------------
+node_modules/
+.pnp
+.pnp.js
+
+# ---- Build output -----------------------------------------------------------
+dist/
+dist-ssr/
+build/
+*.tsbuildinfo
+
+# ---- Local env / secrets ----------------------------------------------------
+# Never commit real env files. The ONLY env file allowed in git is the
+# placeholder template `.env.example`.
+.env
+.env.*
+!.env.example
 *.local
-.DS_Store
-.vscode/*
-!.vscode/extensions.json
+
+# ---- Keys, certs & credential material --------------------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.keystore
+*.jks
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ppk
+
+# ---- Cloud / service credentials --------------------------------------------
+# AWS CLI/SDK credential material and generic credential/secret files.
+.aws/
+aws.json
+credentials
+credentials.json
+*credentials*.json
+*secret*.json
+*service-account*.json
+*serviceAccount*.json
+gcp-*.json
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+
+# ---- Logs -------------------------------------------------------------------
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# ---- Editor / OS ------------------------------------------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# ---- Misc caches ------------------------------------------------------------
+.cache/
+coverage/

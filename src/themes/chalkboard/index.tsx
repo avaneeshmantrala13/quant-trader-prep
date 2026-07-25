@@ -5,6 +5,7 @@ import { getChalkboardIllustration } from "./illustrations";
 import { getChalkboardStation } from "./stations";
 import { ChalkboardMapBackground } from "./MapBackground";
 import { ChalkboardTableOfContents } from "./TableOfContents";
+import { ChalkboardDashboard } from "./Dashboard";
 
 /**
  * "Chalkboard" — a hand-drawn math-class aesthetic.
@@ -105,4 +106,5 @@ export const chalkboardTheme: Theme = {
   getLevelIllustration: getChalkboardIllustration,
   getMapStation: getChalkboardStation,
   TableOfContents: ChalkboardTableOfContents,
+  Dashboard: ChalkboardDashboard,
 };

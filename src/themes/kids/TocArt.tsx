@@ -112,6 +112,7 @@ export const MOTIF_MASCOT: Record<
   (props: MascotProps) => ReactElement
 > = {
   probability: DieMascot,
+  mathQuestions: CalcMascot,
   mentalMath: CalcMascot,
   brainteasers: BulbMascot,
   interviewGames: CardMascot,

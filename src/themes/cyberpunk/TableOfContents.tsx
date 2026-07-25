@@ -32,6 +32,7 @@ import { CyberpunkAnimations } from "./neon";
 
 const MOTIF_CODE: Record<MotifKey, string> = {
   probability: "PRB",
+  mathQuestions: "MTH",
   mentalMath: "NUM",
   brainteasers: "PZL",
   interviewGames: "MKT",

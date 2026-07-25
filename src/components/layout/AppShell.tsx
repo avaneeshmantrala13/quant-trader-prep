@@ -39,6 +39,9 @@ export function AppShell() {
 
   const navItems = [
     { to: "/", label: "Home", end: true },
+    { to: "/dashboard", label: "Dashboard", end: false },
+    { to: "/arena", label: "Speed Arena", end: false },
+    { to: "/diagnostic", label: "Recalibrate", end: false },
     ...TRACKS.map((t) => ({ to: `/track/${t.id}`, label: t.title, end: false })),
     { to: "/themes", label: "Themes", end: false },
   ];

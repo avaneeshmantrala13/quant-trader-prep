@@ -1,5 +1,6 @@
 import type { Track } from "@/types/content";
 import { probabilityTrack } from "./probability/levels";
+import { mathQuestionsTrack } from "./mathQuestions/levels";
 import { mentalMathTrack } from "./mentalMath/levels";
 import { brainteasersTrack } from "./brainteasers/levels";
 import { interviewGamesTrack } from "./interviewGames/levels";
@@ -16,9 +17,10 @@ export const calibrationGymTrack: Track = {
   comingSoon: true,
 };
 
-/** The four playable tabs, in recommended order, plus the teaser. */
+/** The playable tabs, in recommended order, plus the teaser. */
 export const TRACKS: Track[] = [
   probabilityTrack,
+  mathQuestionsTrack,
   mentalMathTrack,
   brainteasersTrack,
   interviewGamesTrack,

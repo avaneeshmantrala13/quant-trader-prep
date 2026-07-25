@@ -192,6 +192,7 @@ const CalibrationGauge: IllustrationComponent = ({ className }) => (
 const BY_MOTIF: Record<LevelIllustrationContext["motif"], IllustrationComponent> =
   {
     probability: ProbabilityTree,
+    mathQuestions: ComputeCore,
     mentalMath: ComputeCore,
     brainteasers: CyberLock,
     interviewGames: MarketTerminal,

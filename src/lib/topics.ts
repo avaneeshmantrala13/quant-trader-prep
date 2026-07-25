@@ -14,9 +14,10 @@
  * Probability, Combinatorial Analysis, …) is hard-coded, so the selector stays
  * correct if content is added, removed, or reordered later.
  *
- * Tracks whose levels carry NO `section` (Mental Math, Brainteasers, Interview
- * Games) collapse to a single topic — callers hide the selector when there is
- * 0/1 topic, so those tracks render exactly as before.
+ * Tracks whose levels carry NO `section` (Mental Math, Interview Games)
+ * collapse to a single topic — callers hide the selector when there is
+ * 0/1 topic, so those tracks render exactly as before. (Brainteasers now
+ * carries a "Core Puzzles" and a "Techniques Toolkit" section.)
  */
 
 /** The minimal shape needed to group levels into topics. */

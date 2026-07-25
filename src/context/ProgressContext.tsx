@@ -22,6 +22,15 @@ import {
   type ResumeState,
   type UserProgress,
 } from "@/types/progress";
+import type { ItemAttempt, TopicMastery } from "@/types/mastery";
+import { migrateProgress } from "@/lib/mastery/migrate";
+import {
+  applyDiagnosticSeed,
+  applyItemAttempt,
+  applyReviewSchedule,
+} from "@/lib/mastery/mastery";
+import { deriveVerdict, type TopicVerdict } from "@/lib/mastery/verdict";
+import { tierDifficultyKey, tierExposureKey } from "@/lib/mastery/topicKey";
 import { useAuth } from "./AuthContext";
 
 interface ProgressContextValue {
@@ -48,6 +57,52 @@ interface ProgressContextValue {
   completeFlashcardLevel: (
     levelId: string,
   ) => { isNewMastery: boolean; xpGained: number };
+  // ---- Phase 1: mastery & calibration (COORDINATION §2.3) ----
+  /**
+   * Fold ONE graded item into topic mastery + tier difficulty. Additive and
+   * INDEPENDENT of `recordAttempt` — it never touches `LevelProgress.mastered`
+   * (the unlock gate). Pure logic lives in `src/lib/mastery`.
+   */
+  recordItemAttempt: (a: ItemAttempt) => void;
+  /** Read the current (possibly undefined) mastery for a topic. */
+  getTopicMastery: (topicKey: string) => TopicMastery | undefined;
+  /** Derived, calibration-aware verdict for the dashboard/adaptivity (Phase 5). */
+  getTopicVerdict: (topicKey: string) => TopicVerdict;
+  /**
+   * Persist the SM-2 spaced-review schedule for a topic (COORDINATION §2.1
+   * `reviewDue`/`reviewStep`). Additive integration seam: Phase 4's climb-back /
+   * Phase 5's scheduler compute the next `{reviewDue, reviewStep}` (single owner:
+   * `scheduleReview` in `src/lib/remediation/climbBack.ts`) and persist it here.
+   * Creates a fresh TopicMastery entry when absent; NEVER touches `recordAttempt`,
+   * `recordItemAttempt`, `LevelProgress.mastered`, or the v1→v2 migration.
+   */
+  setReviewSchedule: (
+    topicKey: string,
+    reviewDue: string,
+    reviewStep: number,
+  ) => void;
+  /**
+   * Phase 3 (diagnostic) seed writer. OVERWRITES per-topic priors from a
+   * completed diagnostic run (via Phase-1 `applyDiagnosticSeed`) and stamps
+   * `diagnosticDoneAt`. An empty `seeds` array records a SKIP (timestamp only,
+   * nothing seeded). NEVER touches `LevelProgress.mastered` / locking — the
+   * diagnostic is non-scoring and non-gating (PHASE_3 §5/§7).
+   */
+  applyDiagnosticSeeds: (seeds: DiagnosticSeed[], at?: string) => void;
+}
+
+/**
+ * Minimal per-topic seed shape written by Phase 3. Kept structural (not an
+ * import of the Phase-3 module) so this Phase-1-owned context has no dependency
+ * on `src/lib/diagnostic`; it mirrors `TopicSeed` there.
+ */
+export interface DiagnosticSeed {
+  topicKey: string;
+  successes: number;
+  failures: number;
+  thetaSeed?: number;
+  /** Namespaced misconception keys tripped during the diagnostic. */
+  misconceptions?: string[];
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -59,14 +114,16 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   // progress immediately — no first-paint flash of "empty" progress that would
   // wrongly re-lock levels or drop resume/understood state.
   const [progress, setProgress] = useState<UserProgress>(() =>
-    username ? storage.loadProgress(username) : emptyProgress(),
+    username ? migrateProgress(storage.loadProgress(username)) : emptyProgress(),
   );
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reload whenever the active user changes (login / logout / switch).
+  // Reload whenever the active user changes (login / logout / switch). Every
+  // loaded blob is passed through migrateProgress so a v1 save upgrades to v2
+  // (empty mastery maps) without losing level mastery / xp / streak.
   useEffect(() => {
     if (username) {
-      setProgress(storage.loadProgress(username));
+      setProgress(migrateProgress(storage.loadProgress(username)));
     } else {
       setProgress(emptyProgress());
     }
@@ -187,6 +244,81 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [progress, update],
   );
 
+  const recordItemAttempt = useCallback(
+    (a: ItemAttempt) => {
+      update((p) => {
+        if (!p.topicMastery) p.topicMastery = {};
+        if (!p.tierDifficulty) p.tierDifficulty = {};
+        const dKey = tierDifficultyKey(a.topicKey, a.tier);
+        const expKey = tierExposureKey(a.topicKey, a.tier);
+        const dExposures = p.tierDifficulty[expKey] ?? 0;
+        const { mastery, tierD } = applyItemAttempt(
+          p.topicMastery[a.topicKey],
+          p.tierDifficulty[dKey],
+          a,
+          dExposures,
+        );
+        p.topicMastery[a.topicKey] = mastery;
+        p.tierDifficulty[dKey] = tierD;
+        p.tierDifficulty[expKey] = dExposures + 1;
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const getTopicMastery = useCallback(
+    (topicKey: string) => progress.topicMastery?.[topicKey],
+    [progress],
+  );
+
+  const getTopicVerdict = useCallback(
+    (topicKey: string) =>
+      deriveVerdict(progress.topicMastery?.[topicKey], topicKey),
+    [progress],
+  );
+
+  const setReviewSchedule = useCallback(
+    (topicKey: string, reviewDue: string, reviewStep: number) => {
+      update((p) => {
+        if (!p.topicMastery) p.topicMastery = {};
+        p.topicMastery[topicKey] = applyReviewSchedule(
+          p.topicMastery[topicKey],
+          reviewDue,
+          reviewStep,
+        );
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const applyDiagnosticSeeds = useCallback(
+    (seeds: DiagnosticSeed[], at?: string) => {
+      update((p) => {
+        if (!p.topicMastery) p.topicMastery = {};
+        const stamp = at ?? new Date().toISOString();
+        for (const s of seeds) {
+          const seeded = applyDiagnosticSeed(p.topicMastery[s.topicKey], {
+            successes: s.successes,
+            failures: s.failures,
+            thetaSeed: s.thetaSeed,
+            at: stamp,
+          });
+          // `applyDiagnosticSeed` preserves prior misconception flags but does
+          // not add new ones; fold in the diagnostic's tripped keys here.
+          for (const key of s.misconceptions ?? []) {
+            seeded.misconceptions[key] = (seeded.misconceptions[key] ?? 0) + 1;
+          }
+          p.topicMastery[s.topicKey] = seeded;
+        }
+        p.diagnosticDoneAt = stamp;
+        return p;
+      });
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -198,6 +330,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       getUnderstood,
       markUnderstood,
       completeFlashcardLevel,
+      recordItemAttempt,
+      getTopicMastery,
+      getTopicVerdict,
+      setReviewSchedule,
+      applyDiagnosticSeeds,
     }),
     [
       progress,
@@ -209,6 +346,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       getUnderstood,
       markUnderstood,
       completeFlashcardLevel,
+      recordItemAttempt,
+      getTopicMastery,
+      getTopicVerdict,
+      setReviewSchedule,
+      applyDiagnosticSeeds,
     ],
   );
 
