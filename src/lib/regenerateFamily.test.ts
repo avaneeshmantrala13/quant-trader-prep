@@ -145,9 +145,11 @@ describe('Button #1 "Generate another like this" preserves the question family',
     assertNumericFamilyPreserved(level);
   });
 
-  it("mentalMath tab — mixed([...])", () => {
-    const level = findMultiQuiz(mentalMathTrack.levels, "mentalMath");
-    assertQuizFamilyPreserved(level);
+  it("mentalMath tab — mixed([...]) (now free-response numeric)", () => {
+    // Mental-math drills are now free-response numeric (Phase-2), so family
+    // preservation is verified on the numeric regeneration path.
+    const level = findMultiNumeric(mentalMathTrack.levels, "mentalMath");
+    assertNumericFamilyPreserved(level);
   });
 
   it("interviewGames tab — mixEV([...])", () => {

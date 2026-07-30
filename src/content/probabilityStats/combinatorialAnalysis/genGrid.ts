@@ -132,7 +132,9 @@ export function genMultinomialPaths(rng: Rng): NumericQuestion {
     const ca = rng.int(2, 6);
     const cb = rng.int(2, 6);
     const cc = rng.int(2, 6);
-    if (ca + cb + cc <= 14) {
+    // Avoid the source multiset {6,4,2} (any ordering → 13860, Rooftop Drone).
+    const sorted = [ca, cb, cc].sort((x, y) => x - y).join(",");
+    if (ca + cb + cc <= 14 && sorted !== "2,4,6") {
       a = ca;
       b = cb;
       c = cc;
@@ -239,7 +241,8 @@ export function genAlternatingSteps(rng: Rng): NumericQuestion {
     const cx = rng.int(10, 16);
     const cy = rng.int(3, 6);
     const c = alternatingStepPathsCount(cx, cy, sA, sB);
-    if (c > 1n && c < 1000000n) {
+    // Avoid the source tuple (13,4) → 25 (Running Rabbit).
+    if (c > 1n && c < 1000000n && !(cx === 13 && cy === 4)) {
       X = cx;
       Y = cy;
       count = c;

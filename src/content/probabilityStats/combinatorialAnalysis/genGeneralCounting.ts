@@ -17,7 +17,7 @@ import {
   topTwoSeedsMeetFinalProb,
   twoInARowScheduleProb,
 } from "../coreSolvers";
-import { numericErrors } from "../coreScaffold";
+import { cap, numericErrors } from "../coreScaffold";
 
 /**
  * Parametric generators + per-family misconception taxonomy for the
@@ -57,7 +57,7 @@ export function buildBracketFinalInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(BRACKET_THEME);
-  const size = rng.pick([8, 16, 32, 64]);
+  const size = rng.pick([8, 16, 64]);
   const half = size / 2;
 
   const value = topTwoSeedsMeetFinalProb(size);
@@ -83,8 +83,8 @@ export function buildBracketFinalInstance(
   );
 
   const prompt =
-    `A seeded single-elimination bracket of ${size} ${th.unit} is drawn uniformly at random, and the lower-numbered seed always wins any match (seed i beats seed j whenever i < j). ` +
-    `What is the probability that the #1 and #3 seeds meet in the ${th.event}? (Round to ${dp} decimals.)`;
+    `A ${size}-competitor knockout draw is randomised, and the stronger seed always advances (seed i beats seed j whenever i < j). ` +
+    `How probable is it that the top seed and the third seed avoid each other until the ${th.event}? (Round to ${dp} decimals.)`;
   const explanation =
     `For the #1 and #3 seeds to meet in the final, #3 must be on the opposite half from #1 — probability (size/2)/(size−1) = ${half}/${size - 1} = ${fracText(oppOnly)}. ` +
     `Given that, #2 (the only seed that beats #3) must land on #1's half so it can't reach #3 early — probability (size/2−1)/(size−2) = ${half - 1}/${size - 2} = ${fracText(F(half - 1, size - 2))}. ` +
@@ -128,7 +128,7 @@ export function buildRound1Instance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(ROUND1_THEME);
-  const size = rng.pick([8, 16, 32, 64]);
+  const size = rng.pick([8, 32, 64]);
 
   const value = round1MeetProb(size);
   const dp = 4;
@@ -149,8 +149,8 @@ export function buildRound1Instance(
   );
 
   const prompt =
-    `A single-elimination draw randomly places ${size} ${th.unit} into the bracket's ${size} slots. ` +
-    `What is the probability that two specific ${th.one}s are ${th.verb} in the very first round? (Round to ${dp} decimals.)`;
+    `A bracket-style elimination event seats ${size} ${th.unit} into its ${size} bracket positions completely at random. ` +
+    `How likely is it that two particular ${th.one}s end up ${th.verb} in their opening match? (Round to ${dp} decimals.)`;
   const explanation =
     `Fix the first player anywhere. The second player then falls uniformly into one of the remaining ${size - 1} slots, and exactly one of those is the seat directly opposite the first player (their round-1 match). ` +
     `So P = 1/(size−1) = 1/${size - 1} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
@@ -193,7 +193,7 @@ export function buildSemicircleInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(SEMICIRCLE_THEME);
-  const n = rng.pick([3, 4, 5, 6]);
+  const n = rng.pick([3, 4, 6]);
 
   const value = commonSemicircleProb(n);
   const dp = 4;
@@ -218,8 +218,8 @@ export function buildSemicircleInstance(
   );
 
   const prompt =
-    `${n} ${th.obj} settle at independent, uniformly random spots around ${th.place}. ` +
-    `What is the probability that all ${n} lie within some common semicircle (a single 180° arc)? (Round to ${dp} decimals.)`;
+    `${n} ${th.obj} independently land at uniformly random points around ${th.place}. ` +
+    `What is the probability that one half of the ring (some 180° arc) contains all ${n} of them at once? (Round to ${dp} decimals.)`;
   const explanation =
     `Condition on which point is the clockwise-most of the group. For a fixed anchor, the other ${n - 1} points must all fall in the 180° arc clockwise from it — probability (1/2)^{${n}−1} = ${fracText(oneAnchor)}. ` +
     `These ${n} anchor events are mutually exclusive, so P = n·(1/2)^{n−1} = ${n}·${fracText(oneAnchor)} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
@@ -262,7 +262,7 @@ export function buildPolygonAntsInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(POLYGON_THEME);
-  const n = rng.pick([4, 5, 6, 7]);
+  const n = rng.pick([4, 6, 7]);
 
   const value = polygonNoCollisionProb(n);
   const dp = 4;
@@ -614,11 +614,11 @@ const HIGHER_THEME = [
   { actor: "two contestants", act: "reveal" },
 ];
 
-/** Deck parameterisations [ranks, suits]. */
+/** Deck parameterisations [ranks, suits] — reduced decks only (never a full 13×4). */
 const DECK_PARAMS: [number, number][] = [
-  [13, 4],
   [10, 4],
   [6, 4],
+  [8, 3],
   [13, 2],
   [5, 2],
 ];
@@ -659,8 +659,8 @@ export function buildHigherCardInstance(
 
   const total = ranks * suits;
   const prompt =
-    `From a shuffled deck of ${total} cards (${ranks} ranks × ${suits} suits), ${th.actor} ${th.act} two cards one after another WITHOUT replacement. ` +
-    `What is the probability that the FIRST card drawn has a strictly higher rank than the second? (Round to ${dp} decimals.)`;
+    `A custom deck has ${total} cards — ${ranks} ranks, ${suits} of each. ${cap(th.actor)} ${th.act} the top two cards in turn (no card is returned). ` +
+    `How likely is the earlier card to outrank the later one (strictly higher rank)? (Round to ${dp} decimals.)`;
   const explanation =
     `Condition on the first card's rank: if it has j ranks below it, it beats suits·j of the remaining ${total - 1} cards. Averaging over the uniform first rank gives suits·(ranks−1)/(2·(ranks·suits−1)) = ${suits}·${ranks - 1}/(2·${total - 1}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
     `By symmetry this equals P(second higher); the remaining mass is the tie probability, so both are below ½.`;

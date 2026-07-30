@@ -47,25 +47,42 @@ export function assembleChoices(
   };
 }
 
-/** Deduping accumulator for `numeric` commonErrors (rounded to `dp`, ≠ answer). */
+/**
+ * Deduping accumulator for `numeric` commonErrors (rounded to `dp`, ≠ answer).
+ *
+ * `push` accepts an OPTIONAL machine-readable `misconception` tag (PHASE_1/2
+ * error-mode catalogs): when supplied it is carried onto the `commonErrors`
+ * entry so the mastery layer folds `misconceptionKey(topicKey, tag)` and the
+ * hint ladder can key rung-1 coaching / the confront strategy off it. Omitting
+ * it is fully back-compatible (the mastery layer falls back to `err:<value>`).
+ */
 export function numericErrors(
   answer: number,
   dp: number,
 ): {
-  errors: { value: number; feedback: string }[];
-  push: (raw: FractionType | number, feedback: string) => void;
+  errors: { value: number; feedback: string; misconception?: string }[];
+  push: (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => void;
 } {
   const f = 10 ** dp;
   const seen = new Set<number>([Math.round(answer * f)]);
-  const errors: { value: number; feedback: string }[] = [];
-  const push = (raw: FractionType | number, feedback: string) => {
+  const errors: { value: number; feedback: string; misconception?: string }[] =
+    [];
+  const push = (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => {
     const v = typeof raw === "number" ? raw : raw.valueOf();
     if (!Number.isFinite(v)) return;
     const rounded = Math.round(v * f) / f;
     const k = Math.round(rounded * f);
     if (seen.has(k)) return;
     seen.add(k);
-    errors.push({ value: rounded, feedback });
+    errors.push({ value: rounded, feedback, ...(misconception ? { misconception } : {}) });
   };
   return { errors, push };
 }

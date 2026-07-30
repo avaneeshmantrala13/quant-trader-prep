@@ -24,7 +24,7 @@ export const markovGeneralFlashcards: Flashcard[] = [
     // GN66 — Tennis 2-or-3 sets — a decision via (2p−1)².
     id: "gen-fc-bestof3",
     prompt:
-      "In a best-of-three match (first to two sets), one player wins each set independently with probability p. Would you rather bet that the match ends in exactly TWO sets, or in exactly THREE sets? For which p is it a toss-up?",
+      "Two players contest a short series that stops the moment someone has taken two sets, so it runs either two or three sets in all. Each set is won independently by the same player with probability p. Would you rather bet the series is settled in exactly TWO sets, or that it stretches to a full THREE? At what value of p is the wager a coin-flip?",
     answer:
       "Bet on TWO sets. P(2 sets) − P(3 sets) = (2p − 1)², which is ≥ 0 for every p and strictly positive unless p = ½. So finishing in two sets is always at least as likely, and it is a genuine toss-up only when the players are exactly evenly matched (p = ½).",
     explanation:

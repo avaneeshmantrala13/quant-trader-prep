@@ -6,7 +6,6 @@ import { useTheme } from "@/context/ThemeContext";
 import { PLAYABLE_TRACKS } from "@/content";
 import type { Track } from "@/types/content";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
-import { TickerTape } from "@/components/visuals/TickerTape";
 import { CandlestickIcon, LogoutIcon, MoonIcon, SunIcon } from "@/components/icons";
 import {
   CurriculumVisual,
@@ -100,7 +99,6 @@ function LandingHeader() {
           )}
         </div>
       </div>
-      <TickerTape />
     </header>
   );
 }
@@ -307,7 +305,7 @@ function HowItWorks() {
   const steps = [
     ["01", "Learn", "A short, skippable briefing teaches exactly what you need — skip it if you already know."],
     ["02", "Practice fresh", "Answer generated, verifier-checked problems. Every wrong option is a real mistake, not a giveaway."],
-    ["03", "Master to unlock", "Clear the mastery bar to fill the node and unlock the next stop on your route."],
+    ["03", "Master to unlock", "Clear the mastery bar to complete a topic and unlock the next one."],
   ];
   return (
     <section className="mx-auto max-w-6xl border-t border-subtle px-4 py-12 sm:py-16">
@@ -345,8 +343,8 @@ function ClosingCTA() {
         <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-secondary">
           One roadmap, fresh problems, and calibration as your edge.{" "}
           {isAuthed
-            ? "Pick up your route and clear the next node."
-            : "Open an account and clear your first node in the next five minutes."}
+            ? "Pick up where you left off and clear your next topic."
+            : "Open a free account and clear your first topic today."}
         </p>
         <div className="mt-6 flex flex-col justify-center gap-2.5 sm:flex-row">
           {isAuthed ? (
@@ -440,10 +438,10 @@ export function LandingPage() {
             no="No. 01"
             kicker="The Roadmap"
             title="One clear path. Not a pile of tabs."
-            body="Every concept sits on a single ordered route drawn like a charted price path. The next stop glows; downstream nodes stay locked until you've earned them. You always know exactly what to do next — no more assembling your own curriculum from ten scattered sites."
+            body="One ordered path from fundamentals to interview-ready. Each topic unlocks only after you've mastered the last, so you always know exactly what to learn next — instead of piecing together your own curriculum from a dozen scattered sites."
             bullets={[
               "Beginner → expert, in a deliberate order",
-              "Mastery-gated: pass to unlock the next node",
+              "Mastery-gated: master this topic to unlock the next",
               "Your progress, streak, and best scores, saved",
             ]}
             visual={<RoadmapVisual />}
@@ -454,11 +452,11 @@ export function LandingPage() {
             kicker="The Calibration Gym"
             flag="Flagship · Coming soon"
             title="Price uncertainty. Beat the model."
-            body="The skill firms actually hire for is calibration — stating honest probabilities. Submit a probability under a timer, then a grand reveal scores you against an AI model on the same fresh problem. Confetti on a win; a real teaching moment on a loss. Your personal reliability curve shows exactly where you're overconfident."
+            body="Calibration — stating probabilities you can actually trust — is the skill firms hire for. Submit a probability under a timer, then a grand reveal scores you against an AI model on the same fresh problem. When you're wrong, you get the correct reasoning on the spot, not just a red X."
             bullets={[
-              "Proper-scoring grades calibration, not just correctness",
-              "Head-to-head vs a model on the identical problem",
-              "A reliability diagram that never lies to you",
+              "Scored on calibration, not just whether the answer was right",
+              "Go head-to-head with a model on the identical problem",
+              "A personal reliability curve that pinpoints where you're overconfident",
             ]}
             visual={<ReliabilityVisual />}
             reverse
@@ -468,9 +466,9 @@ export function LandingPage() {
             no="No. 03"
             kicker="Socratic Tutor"
             title="Hints that make you think — never the answer."
-            body="Stuck? The tutor nudges you one leading question at a time, escalating only as needed, and never hands over the final number while the problem is unsolved. You build the reasoning muscle interviewers probe for, instead of memorizing solutions."
+            body="Stuck? The tutor asks one leading question at a time, escalating only as much as you need, and never hands you the final number while the problem is still open. You build the reasoning interviewers actually probe for — instead of memorizing solutions you can't reproduce under pressure."
             bullets={[
-              "A ladder of hints, not a spoiler",
+              "A ladder of hints, never a spoiler",
               "The answer stays withheld until you've tried",
               "Full worked solution unlocked after you commit",
             ]}
@@ -481,11 +479,11 @@ export function LandingPage() {
             no="No. 04"
             kicker="Fresh Forever"
             title="Problems that can't be memorized or leaked."
-            body="Every question is generated from parameters and checked by an exact verifier, so the true answer is provably correct and a brand-new instance appears each time. Static banks get memorized and go stale the moment a firm changes its process. This one regenerates forever."
+            body="You'll never run out of practice, and you can't shortcut it by memorizing a leaked bank. Every problem is generated fresh and checked by an exact verifier, so the answer is provably correct and you get a brand-new instance each time — while static banks get memorized and go stale the moment a firm changes its test."
             bullets={[
               "Exact-verifier ground truth — never a wrong 'correct' answer",
               "Distractors are real mistakes, matched in length so nothing leaks",
-              "Infinite fresh reps per concept",
+              "Unlimited fresh reps on every concept",
             ]}
             visual={<FreshVisual />}
             reverse
@@ -496,7 +494,7 @@ export function LandingPage() {
             no="No. 05"
             kicker="Full Coverage"
             title="From your first sample space to a two-sided market."
-            body="Probability from the ground up, speed mental math, the classic brainteasers, and the expected-value and market-making games from real superdays. One product covers the whole funnel — online assessment, technical interview, and superday."
+            body="Probability from the ground up, speed mental math, the classic brainteasers, and the expected-value and market-making games from real superdays — one product for the whole funnel, from online assessment to technical interview to superday."
             bullets={[
               "Probability · Mental Math · Brainteasers · Interview Games",
               "Genuinely hard, interview-grade problems in the top tiers",
@@ -509,9 +507,9 @@ export function LandingPage() {
             no="No. 06"
             kicker="Speed Gate"
             title="Beat the clock where it counts."
-            body="Optiver's 80-in-8 and Jane Street's 60-in-8 are pass/fail gates before anything else. Drill fast, exact arithmetic and the odds↔probability conversions traders live on — fresh sets, every time, against the clock."
+            body="Timed mental-math gates like the 80-in-8 and 60-in-8 sprints screen candidates out before anything else. Drill the fast, exact arithmetic and the odds↔probability conversions traders live on — fresh sets every time, against the clock — so speed is never the thing that ends your interview."
             bullets={[
-              "Zetamac / Optiver-style timed drills",
+              "Zetamac-style timed mental-math sprints",
               "Two-digit products, divisions, %, fraction & odds conversions",
               "Track your best and push it higher",
             ]}

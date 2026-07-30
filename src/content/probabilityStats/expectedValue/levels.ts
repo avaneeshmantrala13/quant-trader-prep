@@ -1,20 +1,20 @@
 import type { Level } from "@/types/content";
 import {
   expectedValueFlashcards,
-  genAllSameCoins,
-  genCltVariance,
+  genAllSameCoinsNumeric,
+  genCltVarianceNumeric,
   genConditionalGeo,
   genContinuousReroll,
   genConvertAll,
   genCoupon,
-  genDiffer,
+  genDifferNumeric,
   genDistinct,
   genEmptyBoxes,
-  genExpMoment,
+  genExpMomentNumeric,
   genFirstMarker,
   genGeometricSum,
-  genHeadsTimesTails,
-  genHigherDiffer,
+  genHeadsTimesTailsNumeric,
+  genHigherDifferNumeric,
   genMartingaleDoubling,
   genMaxDice,
   genMeetWithin,
@@ -26,10 +26,10 @@ import {
   genPairSame,
   genRecords,
   genRunningSum,
-  genSecondMoment,
-  genSumUniforms,
-  genThreeDicePayoff,
-  genTwoDiceMatch,
+  genSecondMomentNumeric,
+  genSumUniformsNumeric,
+  genThreeDicePayoffNumeric,
+  genTwoDiceMatchNumeric,
   genUniformSpacing,
   genWald,
   genWalkDuration,
@@ -72,15 +72,15 @@ export const expectedValueLevels: Level[] = [
       "Nail the 1/N vs 1/N² dice-match trap, complements, all-same coins, and weighting dice payoffs by their true probabilities.",
     section: SECTION,
     difficulty: "easy",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.8,
     questionCount: 6,
-    generator: mixQuiz([
-      genTwoDiceMatch,
-      genDiffer,
-      genAllSameCoins,
-      genThreeDicePayoff,
-      genHigherDiffer,
+    numericGenerator: mixNumeric([
+      genTwoDiceMatchNumeric,
+      genDifferNumeric,
+      genAllSameCoinsNumeric,
+      genThreeDicePayoffNumeric,
+      genHigherDifferNumeric,
     ]),
     lesson: {
       paragraphs: [
@@ -90,6 +90,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "P(match) = 1/N (not 1/N²); EV weights every outcome by its probability.",
       whyInterviewers:
         "Miscounting the sample space is the #1 way candidates blow an easy EV question — desks want the count right cold.",
+      deepDive: {
+        whyItWorks:
+          "Expected value is the sum of each outcome's value times its probability, so it rests entirely on counting the sample space correctly and weighting every outcome — winners and losers alike — by its true chance.",
+        approach: [
+          "Enumerate the outcomes and their probabilities, fixing only what the problem actually fixes.",
+          "Assign each outcome its payoff or value.",
+          "Multiply each value by its probability.",
+          "Sum across all outcomes, including the ones that pay nothing or lose.",
+        ],
+        pitfalls: [
+          "Fixing both dice to a specific value when only a match is required.",
+          "Weighting outcomes by how memorable they are rather than by their probability.",
+          "Forgetting the losing or zero-payoff outcomes in the sum.",
+        ],
+      },
     },
   },
   {
@@ -116,6 +131,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "Keep iff roll ≥ continuation value; the option lifts EV above the mean.",
       whyInterviewers:
         "Pricing the option to act later — and not overpaying for it — is the core of trading a resettable position.",
+      deepDive: {
+        whyItWorks:
+          "Optimal stopping compares your current value against the expected value of continuing; the freedom to stop when you are ahead makes the game worth strictly more than a single draw's mean.",
+        approach: [
+          "Compute the continuation value — the expected result of choosing to go on, minus any fee.",
+          "Keep the current outcome only if it is at least the continuation value.",
+          "For each possible current outcome, take the better of keeping versus continuing.",
+          "Average that best-of over all equally-likely current outcomes.",
+        ],
+        pitfalls: [
+          "Always rerolling (or never rerolling) instead of using a threshold.",
+          "Comparing against the raw mean instead of the fee-adjusted continuation value.",
+          "Valuing the game at a single draw's average, ignoring the option's added worth.",
+        ],
+      },
     },
   },
   {
@@ -146,6 +176,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "Geometric 1/p; r-th success r/p; two-in-a-row (1+p)/p²; total wait m + 1/p.",
       whyInterviewers:
         "Expected waiting times underlie fill times, queueing, and 'how long until X' risk questions on every desk.",
+      deepDive: {
+        whyItWorks:
+          "Expected waits come from geometric reasoning — each independent trial succeeds with probability p, so the mean wait is 1/p — plus first-step recursion for patterns. Memorylessness means past failures never shorten what remains.",
+        approach: [
+          "Identify the per-trial success probability p.",
+          "For a single success use 1/p; for the r-th success add independent waits to r/p.",
+          "For patterns or runs, set up a first-step recursion over the partial-progress states.",
+          "Add any trials already spent on top of the remaining expected wait.",
+        ],
+        pitfalls: [
+          "Thinking elapsed failures reduce the remaining wait — it stays 1/p, so add the elapsed trials.",
+          "Treating a 'same face twice in a row' wait like a fixed target pair, when a mismatch restarts you.",
+          "Confusing the count of trials with the value accumulated (use Wald: expected count × expected term).",
+        ],
+      },
     },
   },
   {
@@ -175,6 +220,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "E[count] = Σ P(each event) — linearity holds even under dependence.",
       whyInterviewers:
         "Turning a scary joint-distribution count into a sum of easy probabilities is exactly the decomposition desks prize.",
+      deepDive: {
+        whyItWorks:
+          "Linearity of expectation lets you write any count as a sum of 0/1 indicators and add their individual probabilities — and it holds even when the indicators are dependent, so you never need the joint distribution.",
+        approach: [
+          "Express the quantity as a count of simple yes/no events.",
+          "Define a 0/1 indicator for each event.",
+          "Compute each indicator's probability, since its expectation equals P(event).",
+          "Sum those probabilities to get the expected count.",
+        ],
+        pitfalls: [
+          "Thinking linearity requires independence — it does not.",
+          "Miscounting the number of events, windows, or gaps being summed.",
+          "Dropping a boundary term, such as the last and hardest coupon's contribution.",
+        ],
+      },
     },
   },
   {
@@ -185,15 +245,15 @@ export const expectedValueLevels: Level[] = [
       "Compute E[X²], the head×tail product n(n−1)/4, exponential 2/λ², uniform-sum means, and CLT variance addition.",
     section: SECTION,
     difficulty: "medium",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.75,
     questionCount: 6,
-    generator: mixQuiz([
-      genSecondMoment,
-      genHeadsTimesTails,
-      genExpMoment,
-      genSumUniforms,
-      genCltVariance,
+    numericGenerator: mixNumeric([
+      genSecondMomentNumeric,
+      genHeadsTimesTailsNumeric,
+      genExpMomentNumeric,
+      genSumUniformsNumeric,
+      genCltVarianceNumeric,
     ]),
     lesson: {
       paragraphs: [
@@ -203,6 +263,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "E[X²] = Var + mean²; variance ADDS for independent sums and differences.",
       whyInterviewers:
         "Aggregating independent risks means adding variances — mishandle it and every portfolio/CLT estimate is wrong.",
+      deepDive: {
+        whyItWorks:
+          "The second moment obeys E[X²] = Var(X) + (E[X])², so it always exceeds the mean squared; and for independent variables both means and variances add — variances add even for a difference.",
+        approach: [
+          "Separate first moments (means) from second moments and variance.",
+          "Use E[X²] = Var + mean² rather than assuming E[X²] equals the mean squared.",
+          "For a product of dependent variables, do not split the expectation — account for the dependence.",
+          "For sums or differences of independent variables, combine the means with sign but ADD the variances.",
+        ],
+        pitfalls: [
+          "Assuming E[X²] equals (E[X])².",
+          "Treating E[XY] as E[X]·E[Y] when X and Y are dependent.",
+          "Subtracting variances for a difference instead of adding them.",
+        ],
+      },
     },
   },
   {
@@ -231,6 +306,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "Condition carefully; 2-D events are areas; k-th of n uniforms = k/(n+1).",
       whyInterviewers:
         "Geometric-probability and conditioning arguments separate candidates who can set up an integral from those who guess.",
+      deepDive: {
+        whyItWorks:
+          "Conditioning on an event can shift an expectation away from its unconditional value; close-together continuous events are two-dimensional area questions; and uniform points split an interval into equal expected gaps by symmetry.",
+        approach: [
+          "Check whether the question conditions on an event and adjust the expectation accordingly.",
+          "For 'within' continuous events, set up the two-dimensional region and take an area ratio.",
+          "For the max or min of several draws, use tail sums P(max ≥ k), or exploit symmetry.",
+          "For n uniform points, place the k-th smallest at k/(n+1) using equal expected spacings.",
+        ],
+        pitfalls: [
+          "Using the unconditional wait 1/p when the problem actually conditions on winning.",
+          "Reducing a two-dimensional 'meet within' event to a one-dimensional length ratio.",
+          "Dividing by n instead of n+1 for uniform order statistics.",
+        ],
+      },
     },
   },
   {
@@ -258,6 +348,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "Fair walk: reach prob i/N, duration i(N−i); no system beats EV = 0.",
       whyInterviewers:
         "Random-walk hitting times and 'can a system beat a fair game?' are staple risk-of-ruin desk questions.",
+      deepDive: {
+        whyItWorks:
+          "A fair ±1 walk is a martingale, so optional stopping gives hitting probability i/N and expected duration i(N−i); and because a fair game stays fair under any betting rule, its expected value is zero no matter the strategy.",
+        approach: [
+          "Recognize the fair walk or fair game as a martingale.",
+          "For the chance of hitting one wall first, use the linear probability i/N.",
+          "For the expected number of steps, use the duration i(N−i), not i·N.",
+          "For a betting system, note the expectation stays unchanged (still zero) regardless of the scheme.",
+        ],
+        pitfalls: [
+          "Confusing the hitting probability i/N with the expected duration.",
+          "Using i·N and dropping the −i in the duration.",
+          "Believing a doubling system turns a fair game into a positive-expectation one.",
+        ],
+      },
     },
   },
   {
@@ -279,6 +384,21 @@ export const expectedValueLevels: Level[] = [
       keyIdea: "Prize×prob ratio ≥ 1 ⇒ infinite EV; some answers are a procedure, not a number.",
       whyInterviewers:
         "Recognizing when an EV diverges — and when the 'answer' is a construction — shows real probabilistic maturity.",
+      deepDive: {
+        whyItWorks:
+          "An expected value is infinite when the payoff grows as fast as its probability shrinks, so each term of the sum stays above a positive constant and the series diverges; and some questions genuinely ask for a procedure or formula rather than a number.",
+        approach: [
+          "Write the expected value as a series of payoff × probability terms.",
+          "Check whether those terms shrink to zero fast enough for the series to converge.",
+          "If each term stays above a positive constant, conclude the expected value diverges to infinity.",
+          "When the answer is a construction, describe the procedure instead of forcing a scalar.",
+        ],
+        pitfalls: [
+          "Reporting a finite partial sum for a genuinely divergent expected value.",
+          "Assuming that winning with probability one implies a finite expected waiting time.",
+          "Forcing a single number when the correct answer is a procedure or 'infinite'.",
+        ],
+      },
     },
   },
 ];

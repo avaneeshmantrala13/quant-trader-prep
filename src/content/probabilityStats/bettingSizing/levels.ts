@@ -47,6 +47,21 @@ export const bettingSizingLevels: Level[] = [
       keyIdea: "f* = (b·p − q)/b; stake = f* × bankroll.",
       whyInterviewers:
         "Sizing discipline — betting the edge, not the win probability — separates good traders from lucky ones.",
+      deepDive: {
+        whyItWorks:
+          "Kelly picks the bet fraction that maximises long-run growth (expected log wealth), so you stake more when your edge or payoff is larger and nothing when you have no edge. The fraction (b·p − q)/b compares your true edge against the odds rather than betting the raw win chance.",
+        approach: [
+          "Read the setup to get the true win probability p (and q = 1 − p).",
+          "Convert the quoted odds to net odds b (profit per $1 staked).",
+          "Compute the Kelly fraction f* = (b·p − q)/b.",
+          "Multiply f* by the bankroll for the stake; if f* ≤ 0 there is no edge, so don't bet.",
+        ],
+        pitfalls: [
+          "Betting the win probability p (or the break-even/implied probability) directly as the fraction.",
+          "Forgetting to subtract q, or forgetting to divide by b.",
+          "Confusing the quoted odds with the net odds b.",
+        ],
+      },
     },
   },
   {
@@ -75,6 +90,21 @@ export const bettingSizingLevels: Level[] = [
       keyIdea: "p from binomial/enumeration; b = o−1 (decimal) or m/n (fractional).",
       whyInterviewers:
         "Fast, exact odds↔probability conversion under pressure is a core desk skill.",
+      deepDive: {
+        whyItWorks:
+          "The Kelly principle is unchanged — bet the edge (b·p − q)/b — but here the win probability comes from counting outcomes (a binomial over fair coins, an enumeration of the dice space). Kelly still needs an exact p and an exact net odds b.",
+        approach: [
+          "Count the favourable outcomes over the total to get p (binomial coefficients for coins, enumerate the outcome space for dice).",
+          "Convert the quoted odds to net odds b (decimal o → o−1; fractional m:n → m/n).",
+          "Set q = 1 − p and compute f* = (b·p − q)/b.",
+          "Multiply by the bankroll for the whole-dollar stake.",
+        ],
+        pitfalls: [
+          "Using the quoted decimal odds directly as b instead of subtracting 1.",
+          "Miscounting the outcome space (wrong 2ⁿ or 6ⁿ denominator, or missing winning cases).",
+          "Betting p directly rather than the Kelly fraction.",
+        ],
+      },
     },
   },
   {
@@ -103,6 +133,21 @@ export const bettingSizingLevels: Level[] = [
       keyIdea: "Negative line ⇒ b = 100/M; 'at least one' ⇒ 1 − P(none).",
       whyInterviewers:
         "Favorites and complement events are where careless sizing quietly leaks money.",
+      deepDive: {
+        whyItWorks:
+          "The same growth-optimal formula applies, but favorites (negative money lines) pay less than even, and complement events are far easier via 1 − P(none). Getting both b and p right on these framings is exactly where careless sizing leaks.",
+        approach: [
+          "Find the true win probability p, using complements where handy: P(at least one) = 1 − P(none).",
+          "Convert a negative money line −M to net odds b = 100/M (a favorite pays less than $1 per $1 staked).",
+          "Set q = 1 − p and compute f* = (b·p − q)/b.",
+          "Multiply by the bankroll for the stake.",
+        ],
+        pitfalls: [
+          "Flipping the negative-line conversion (using M/100 instead of 100/M).",
+          "Computing P(at least one) the hard way instead of 1 − P(none).",
+          "Forgetting to subtract q or to divide by b.",
+        ],
+      },
     },
   },
   {
@@ -136,6 +181,21 @@ export const bettingSizingLevels: Level[] = [
       keyIdea: "One formula, nine schemas: f* = (b·p − q)/b.",
       whyInterviewers:
         "Consistent, exact bet sizing across framings is exactly what a trading desk tests.",
+      deepDive: {
+        whyItWorks:
+          "One formula sizes every bet: Kelly stakes the edge (b·p − q)/b, never the raw win probability. The whole skill is recognising the source that gives p and the odds format that gives b, then applying the same computation.",
+        approach: [
+          "Read the setup for the true win probability p (cards, coins, or dice).",
+          "Identify the odds format and convert to net odds b (American ±M, decimal, or fractional).",
+          "Set q = 1 − p and compute f* = (b·p − q)/b.",
+          "Multiply by the bankroll; skip the bet if f* ≤ 0.",
+        ],
+        pitfalls: [
+          "Betting p directly, or using the break-even/implied probability as the stake fraction.",
+          "Forgetting to divide by b.",
+          "Mis-converting a negative money line or a decimal line.",
+        ],
+      },
     },
   },
 ];

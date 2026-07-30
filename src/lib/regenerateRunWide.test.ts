@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { Level, QuestionGenerator } from "@/types/content";
-import { materializeLevel } from "@/content/materialize";
+import { materializeLevel, materializeNumericLevel } from "@/content/materialize";
 import {
   MAX_REGEN_ATTEMPTS,
   generateFreshQuestion,
+  generateFreshNumericQuestion,
   questionSignature,
+  numericSignature,
 } from "@/lib/regenerate";
 import { PROB_GENERATORS } from "@/content/probability/generators";
-import { probabilityTrack } from "@/content/probability/levels";
+import { mixQuestionGenerators } from "@/content/mixFamilies";
 import { conditionalProbabilityLevels } from "@/content/probabilityStats/conditionalProbability/levels";
 
 /**
@@ -25,6 +27,20 @@ const baseLevel = {
   masteryThreshold: 0.8,
   questionCount: 5,
   lesson: { paragraphs: [] },
+};
+
+/**
+ * Synthetic multi-family QUIZ mix level from the still-quiz PROB_GENERATORS.
+ * Core-probability pr-1..3 are now free-response numeric (Phase-2), so the
+ * run-wide dedup guard uses this fixture to exercise the same quiz generators.
+ */
+const probMixQuizLevel: Level = {
+  ...baseLevel,
+  generator: mixQuestionGenerators([
+    PROB_GENERATORS.genUnion,
+    PROB_GENERATORS.genIntersectionIndep,
+    PROB_GENERATORS.genCombinations,
+  ]),
 };
 
 describe("bonus never collides with ANY of the round's originals", () => {
@@ -49,7 +65,7 @@ describe("bonus never collides with ANY of the round's originals", () => {
   });
 
   it("mixQuiz level: button #1 stays in-family AND avoids all originals", () => {
-    const level = probabilityTrack.levels[0]; // mix([...]) multi-family
+    const level = probMixQuizLevel; // mix([...]) multi-family
     const round = materializeLevel(level, 77);
     const roundSigs = new Set(round.map(questionSignature));
     const current = round[0];
@@ -69,7 +85,7 @@ describe("bonus never collides with ANY of the round's originals", () => {
   });
 
   it("accepts an ARRAY of items as the avoid-set too", () => {
-    const level = probabilityTrack.levels[0];
+    const level = probMixQuizLevel;
     const round = materializeLevel(level, 5);
     const sigs = new Set(round.map(questionSignature));
     for (let seed = 1; seed <= 100; seed++) {
@@ -78,23 +94,34 @@ describe("bonus never collides with ANY of the round's originals", () => {
     }
   });
 
-  it("probabilityStats mixQuiz level: bonus avoids all originals", () => {
+  it("probabilityStats multi-family numeric level (converted): bonus avoids all originals", () => {
+    // Conditional Probability's rich multi-family levels are now free-response
+    // numeric (Phase-2 conversion), so the run-wide dedup guarantee is verified
+    // on the numeric regeneration path. (cp-5 stays quiz but is a limited-variety
+    // Russian-Roulette decision family, unsuited to this collision-free assertion.)
     const level = conditionalProbabilityLevels.find(
-      (l) => Object.keys(l.generator?.families ?? {}).length >= 2,
+      (l) => Object.keys(l.numericGenerator?.families ?? {}).length >= 2,
     )!;
-    const round = materializeLevel(level, 31);
-    const roundSigs = new Set(round.map(questionSignature));
+    const round = materializeNumericLevel(level, 31);
+    const roundSigs = new Set(round.map(numericSignature));
     const current = round[0];
     for (let seed = 1; seed <= 200; seed++) {
-      const bonus = generateFreshQuestion(level, seed, current.family, roundSigs, true, current)!;
-      expect(roundSigs.has(questionSignature(bonus))).toBe(false);
+      const bonus = generateFreshNumericQuestion(
+        level,
+        seed,
+        current.family,
+        roundSigs,
+        true,
+        current,
+      )!;
+      expect(roundSigs.has(numericSignature(bonus))).toBe(false);
     }
   });
 });
 
 describe("successive bonuses in a run don't repeat earlier bonuses", () => {
   it("accumulates each new bonus into the avoid-set (button #2 whole-mix)", () => {
-    const level = probabilityTrack.levels[0];
+    const level = probMixQuizLevel;
     const round = materializeLevel(level, 7);
     // Mirror LessonPage: start from the round signatures, accumulate bonuses.
     const avoid = new Set(round.map(questionSignature));

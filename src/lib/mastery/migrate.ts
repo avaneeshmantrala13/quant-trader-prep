@@ -26,5 +26,10 @@ export function migrateProgress(raw: unknown): UserProgress {
     topicMastery: r.topicMastery ?? {},
     tierDifficulty: r.tierDifficulty ?? {},
     diagnosticDoneAt: r.diagnosticDoneAt,
+    // Additive, back-compatible: preserve the "onboarding tour shown once" UI
+    // flag so a completed/dismissed tour never re-auto-opens across reloads.
+    onboardingTourDoneAt: r.onboardingTourDoneAt,
+    // Additive, back-compatible: preserve diagnostic history if present.
+    diagnosticHistory: r.diagnosticHistory,
   };
 }

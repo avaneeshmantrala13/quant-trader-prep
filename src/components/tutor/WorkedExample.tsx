@@ -1,10 +1,19 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import type { DeepDiveView } from "@/lib/tutor/deepDive";
+import { hasDeepDive } from "@/lib/tutor/deepDive";
+import { DeepDivePanel } from "./DeepDivePanel";
 
 /**
  * Worked-example view (Sweller & Cooper 1985). Replaces the passive prologue for
  * new/low-θ learners: a fully worked same-family instance, studied step by step,
  * before they attempt the round. Thin — the steps/answer are derived upstream
  * (`deriveWorkedSteps` on the item's exact `explanation`).
+ *
+ * The two footer buttons are now genuinely distinct: the PRIMARY button proceeds
+ * into the questions; the SECONDARY button reveals an inline "Explain in more
+ * detail" deep-dive of THIS worked example (concept, why it works, full steps,
+ * pitfalls) — after which the learner can still proceed. Power users can ignore
+ * the deep dive and hit the primary button to skip straight into the questions.
  */
 export function WorkedExample({
   concept,
@@ -15,8 +24,8 @@ export function WorkedExample({
   illustration,
   onContinue,
   continueLabel = "I've studied this — start ▸",
-  skipLabel = "Skip — I know this",
-  onSkip,
+  deepDive,
+  detailLabel = "Explain in more detail ▾",
 }: {
   concept?: string;
   prompt: string;
@@ -26,9 +35,13 @@ export function WorkedExample({
   illustration?: ReactNode;
   onContinue: () => void;
   continueLabel?: string;
-  skipLabel?: string;
-  onSkip?: () => void;
+  /** Composed deeper walk-through; when absent the detail affordance is hidden. */
+  deepDive?: DeepDiveView;
+  detailLabel?: string;
 }) {
+  const [showDetail, setShowDetail] = useState(false);
+  const canExpand = !!deepDive && hasDeepDive(deepDive);
+
   return (
     <div className="animate-print-in space-y-5">
       <article className="panel-ruled p-6">
@@ -62,15 +75,32 @@ export function WorkedExample({
             </div>
           </div>
         )}
+
+        {showDetail && deepDive && (
+          <div className="mt-5">
+            <DeepDivePanel
+              view={deepDive}
+              onStart={onContinue}
+              headingId="worked-deep-dive"
+            />
+          </div>
+        )}
       </article>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={onContinue} className="btn-primary flex-1">
           {continueLabel}
         </button>
-        <button onClick={onSkip ?? onContinue} className="btn-secondary flex-1">
-          {skipLabel}
-        </button>
+        {canExpand && (
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            aria-expanded={showDetail}
+            aria-controls="worked-deep-dive"
+            className="btn-secondary flex-1"
+          >
+            {showDetail ? "Hide the detailed explanation ▴" : detailLabel}
+          </button>
+        )}
       </div>
     </div>
   );

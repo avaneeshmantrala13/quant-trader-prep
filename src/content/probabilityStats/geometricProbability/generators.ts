@@ -11,6 +11,7 @@ import {
   tileFitProb,
 } from "../coreSolvers";
 import { type Choice, assembleChoices, numDp, numericErrors } from "../coreScaffold";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 
 /**
  * Parametric generators for the Probability & Statistics → **Geometric
@@ -97,6 +98,78 @@ export function buildGeoAreaInstance(
       concept: "Geometric probability (area ratio r²/R², not r/R)",
       source: "Geometric Probability · area ratio",
       ...assembleChoices(rng, correct, distractors),
+    },
+  };
+}
+
+/**
+ * FREE-RESPONSE (numeric) form of the disk area-trap — the PHASE_1/2 MCQ→free
+ * conversion of `buildGeoAreaInstance`. Same exact solver + same three genuine
+ * error modes (linear-vs-quadratic, complement, dimensional slip), now as a
+ * parametric error-mode catalog carrying a machine-readable `misconception` tag +
+ * an answer-withholding rung-1 coaching sentence. The learner types the
+ * probability as a fraction or decimal (graded by `gradeFreeResponse`).
+ */
+export function buildGeoAreaNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(DISK_THEME);
+  const R = rng.pick([4, 5, 6, 8, 10]);
+  const r = rng.int(2, R - 1);
+  const outer = rng.chance(0.5);
+
+  const inner = diskInnerProb(r, R); // r²/R²
+  const outerP = diskOuterProb(r, R); // 1 − r²/R²
+  const value = outer ? outerP : inner;
+  const dp = numDp(value);
+  const answer = Number(decText(value, dp));
+
+  const linear = outer ? F(R - r, R) : F(r, R); // 1 − r/R  or  r/R
+  const complement = outer ? inner : outerP;
+  const dimSlip = F(r * r, R); // r²/R
+
+  const event = outer
+    ? `lands FARTHER than ${r} units from the centre`
+    : `lands WITHIN ${r} units of the centre`;
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    linear,
+    `Close — it looks like you used the DISTANCE ratio ${outer ? `1 − ${r}/${R}` : `${r}/${R}`}. But a point uniform in a disk isn't uniform in distance: a ring at radius x has area growing like x. So should the probability grow like r or like r²?`,
+    "linear_not_area",
+  );
+  push(
+    complement,
+    `That's the OPPOSITE event. Re-read carefully — does the point ${event}? If you found the other case, what do you do to switch to this one?`,
+    MISCONCEPTION.complementConfusion,
+  );
+  push(
+    dimSlip,
+    `You squared the radius on top (r²) but left the bottom linear (${R}). For a probability the numerator and denominator must be the SAME kind of quantity (both areas) — what should the denominator be?`,
+    "dimensional_mismatch",
+  );
+
+  const prompt =
+    `${th.noun.charAt(0).toUpperCase() + th.noun.slice(1)} strikes a uniformly-random spot on ${th.surface} of radius ${R}. ` +
+    `What is the probability it ${event}? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `For a uniform point on a radius-${R} disk, P(distance ≤ x) = x²/R² — the AREA ratio, quadratic in x. ` +
+    `Here the answer is ${fracText(value)} ≈ ${decText(value, dp)}. The seductive ${fracText(linear)} comes from treating distance as uniform (linear r/R); it ignores that a thin ring at radius x has area ∝ x, so probability accumulates like x².`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-geoarea-num-${outer ? "out" : "in"}-${R}-${r}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Geometric probability (area ratio r²/R², not r/R)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Geometric Probability · area ratio",
     },
   };
 }
@@ -295,6 +368,8 @@ export function buildGlanceInstance(
 /* ========================================================================== */
 
 export const genGeoArea = (rng: Rng): Question => buildGeoAreaInstance(rng, "easy").question;
+export const genGeoAreaNumeric = (rng: Rng): NumericQuestion =>
+  buildGeoAreaNumericInstance(rng, "easy").numeric;
 export const genTileFit = (rng: Rng): NumericQuestion => buildTileFitInstance(rng, "medium").numeric;
 export const genMeeting = (rng: Rng): NumericQuestion => buildMeetingInstance(rng, "medium").numeric;
 export const genGlance = (rng: Rng): NumericQuestion => buildGlanceInstance(rng, "medium").numeric;

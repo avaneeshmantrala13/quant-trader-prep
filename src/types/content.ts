@@ -170,11 +170,48 @@ export interface FlashcardGenerator {
   families?: Record<string, FlashcardGenerator>;
 }
 
+/**
+ * OPTIONAL, additive (back-compatible) DEEPER explanation for a level's intro
+ * worked example — surfaced by the "Explain in more detail" action on the
+ * lesson-intro / worked-example screen (see `src/components/tutor/DeepDivePanel`).
+ *
+ * ACCURACY CONTRACT: every field here is CONCEPTUAL framing only (the mental
+ * model, the general method, and pitfalls stated in words). It must NOT restate
+ * concrete numeric results — all concrete numbers in the deep-dive panel are
+ * rendered from the level's OWN solver output (the worked steps, answer, and the
+ * distractor / common-error rationale), so the authored prose can never drift
+ * from what the questions actually test. When a level omits `deepDive`, the
+ * panel still renders a complete, solver-grounded walk-through as the fallback.
+ */
+export interface DeepDive {
+  /**
+   * One–three sentences: WHY this approach works — the underlying principle /
+   * mental model, in general terms (no problem-specific numbers).
+   */
+  whyItWorks?: string;
+  /**
+   * The general method as an ordered, conceptual checklist ("set up the sample
+   * space", "condition on the first step", …). Not tied to specific numbers —
+   * the concrete worked steps come from the solver and render alongside these.
+   */
+  approach?: string[];
+  /**
+   * Common misconceptions / traps for a confused beginner, stated in words.
+   * These are ADDED to the solver's own distractor / common-error rationale.
+   */
+  pitfalls?: string[];
+}
+
 export interface LessonContent {
   /** Short teaching paragraphs shown before the questions (skippable). */
   paragraphs: string[];
   keyIdea?: string;
   whyInterviewers?: string;
+  /**
+   * OPTIONAL deeper, solver-grounded walk-through surfaced by the intro's
+   * "Explain in more detail" action. Purely additive — see {@link DeepDive}.
+   */
+  deepDive?: DeepDive;
 }
 
 /**

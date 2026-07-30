@@ -13,6 +13,7 @@ import {
   DIAGNOSTIC_BLUEPRINT,
   ROUTER_SLOT_INDEX,
   diagnosticBaseItemCount,
+  diagnosticMaxItemCount,
 } from "@/content/diagnostic/blueprint";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 
@@ -30,7 +31,7 @@ function wrong(p: PlanItem): number {
 }
 
 describe("buildDiagnosticPlan (base, always-on slots)", () => {
-  it("produces 2 items for every NON-gated topic", () => {
+  it("produces itemsPerTopic items for every NON-gated topic", () => {
     const plan = buildDiagnosticPlan(7);
     expect(plan).toHaveLength(diagnosticBaseItemCount());
     DIAGNOSTIC_BLUEPRINT.forEach((slot, slotIndex) => {
@@ -38,8 +39,10 @@ describe("buildDiagnosticPlan (base, always-on slots)", () => {
       if (slot.gatedOnTopicKey) {
         expect(slotItems).toHaveLength(0); // gated slot injected later
       } else {
-        expect(slotItems).toHaveLength(2);
-        expect(slotItems.map((p) => p.indexInSlot)).toEqual([0, 1]);
+        expect(slotItems).toHaveLength(slot.itemsPerTopic);
+        expect(slotItems.map((p) => p.indexInSlot)).toEqual(
+          slot.itemsPerTopic === 2 ? [0, 1] : [0],
+        );
       }
     });
   });
@@ -152,10 +155,13 @@ describe("outcomesFromAnswers", () => {
     expect(firstSlot[1].misconceptionTag).toBeDefined();
   });
 
-  it("falls back to the slot's AUTHORED misconception tag on a miss", () => {
+  it("surfaces a real misconception tag on a router-slot miss (item tag or authored fallback)", () => {
     const plan = buildDiagnosticPlan(5);
-    // Miss the router slot's first item; its item carries no per-choice tag for
-    // pr-1, so the authored slot tag should surface (never idx:<i>).
+    // Miss the router slot's first item. pr-1 is now free-response numeric with
+    // tagged `commonErrors` (Phase-2), so a miss surfaces the item's OWN semantic
+    // tag; a tag-less item would fall back to the blueprint's authored tag.
+    // Either way the resolved tag must be a real semantic tag — never a raw
+    // idx:<i> / err:<value> fallback.
     const answers = plan.map((p) =>
       p.slotIndex === ROUTER_SLOT_INDEX && p.indexInSlot === 0 ? wrong(p) : null,
     );
@@ -163,9 +169,8 @@ describe("outcomesFromAnswers", () => {
     const missed = outcomes.find(
       (o) => o.topicKey === DIAGNOSTIC_BLUEPRINT[ROUTER_SLOT_INDEX].topicKey,
     );
-    expect(missed?.misconceptionTag).toBe(
-      DIAGNOSTIC_BLUEPRINT[ROUTER_SLOT_INDEX].misconceptionTag,
-    );
+    expect(missed?.misconceptionTag).toBeDefined();
+    expect(missed?.misconceptionTag).not.toMatch(/^(idx|err):/);
   });
 
   it("skips unanswered items", () => {
@@ -186,7 +191,29 @@ describe("integration: a full run (base + gated + tiebreak) seeds priors", () =>
     expect(seeds.some((s) => s.topicKey === MARKOV)).toBe(true);
     for (const seed of seeds) {
       const mastery = applyDiagnosticSeed(undefined, seed);
-      expect(mastery.n).toBeGreaterThanOrEqual(2);
+      // Every probed topic gets evidence (1-item breadth probes seed n≥1;
+      // 2-item core topics seed n≥2).
+      expect(mastery.n).toBeGreaterThanOrEqual(1);
     }
+  });
+});
+
+describe("worst-case item budget stays ≤ 30", () => {
+  it("all gates open + every 2-item base slot splits ⇒ ≤ 30 items", () => {
+    const base = buildDiagnosticPlan(77);
+    // For every base slot: item 0 CORRECT (opens any gate keyed on it), item 1
+    // WRONG (splits a 2-item slot ⇒ tiebreak). 1-item base slots: correct.
+    const answers = base.map((p) =>
+      p.indexInSlot === 0 ? p.item.correctIndex : wrong(p),
+    );
+    const follow = buildFollowUpPlan(77, base, answers);
+    const total = base.length + follow.length;
+    expect(total).toBe(diagnosticMaxItemCount());
+    expect(total).toBeLessThanOrEqual(30);
+    // Sanity: all 7 gated probes opened, and 6 tiebreaks were injected.
+    const gatedInjected = follow.filter((p) => p.indexInSlot < 2).length;
+    const tiebreaks = follow.filter((p) => p.indexInSlot === 2).length;
+    expect(gatedInjected).toBe(9); // 1+1+2+1+2+1+1
+    expect(tiebreaks).toBe(6);
   });
 });

@@ -13,6 +13,9 @@ import { combinatorialAnalysisLevels } from "./probabilityStats/combinatorialAna
 import { geometricProbabilityLevels } from "./probabilityStats/geometricProbability/levels";
 import { orderStatisticsLevels } from "./probabilityStats/orderStatistics/levels";
 import { varianceCovarianceCltLevels } from "./probabilityStats/varianceCovarianceClt/levels";
+import { poissonLevels } from "./probabilityStats/poisson/levels";
+import { continuousDistributionsLevels } from "./probabilityStats/continuousDistributions/levels";
+import { brownianMotionLevels } from "./probabilityStats/brownianMotion/levels";
 
 describe("every level is well-formed under its play mode", () => {
   for (const track of PLAYABLE_TRACKS) {
@@ -64,8 +67,10 @@ describe("every level is well-formed under its play mode", () => {
                 expect(Number.isInteger(q.answer)).toBe(true);
                 expect(q.answer).toBeGreaterThan(0);
               } else {
+                // Decimals-carrying free-response answers may be SIGNED — e.g. a
+                // correlation (−0.6) or a CLT z-argument (−2) — so only require
+                // finiteness, not non-negativity.
                 expect(Number.isFinite(q.answer)).toBe(true);
-                expect(q.answer).toBeGreaterThanOrEqual(0);
               }
               expect(q.explanation.trim().length).toBeGreaterThan(40);
               // Any common-error feedback must be finite and ≠ answer (at the
@@ -216,8 +221,8 @@ describe("Conditional Probability subcategory is registered and section-tagged",
 /* ========================================================================== */
 
 describe("Markov Chains subcategory is registered and section-tagged", () => {
-  it("exposes 7 levels, all tagged section 'Markov Chains'", () => {
-    expect(markovChainsLevels.length).toBe(7);
+  it("exposes 8 levels, all tagged section 'Markov Chains'", () => {
+    expect(markovChainsLevels.length).toBe(8);
     for (const lvl of markovChainsLevels) {
       expect(lvl.section).toBe("Markov Chains");
       expect(lvl.blurb.trim().length).toBeGreaterThan(10);
@@ -227,9 +232,11 @@ describe("Markov Chains subcategory is registered and section-tagged", () => {
     }
   });
 
-  it("uses all three play modes (quiz, numeric, flashcard)", () => {
+  it("uses numeric + flashcard modes (mc-5 converted to free-response; quiz no longer required)", () => {
+    // Phase-2 follow-up: mc-5 was converted MCQ→free-response, so Markov Chains
+    // may have no quiz level. The invariant is relaxed to require the graded
+    // free-response mode + the integrity flashcard mode.
     const modes = new Set(markovChainsLevels.map((l) => l.mode ?? "quiz"));
-    expect(modes.has("quiz")).toBe(true);
     expect(modes.has("numeric")).toBe(true);
     expect(modes.has("flashcard")).toBe(true);
   });
@@ -351,9 +358,10 @@ describe("Variance, Covariance & the CLT subcategory is registered and section-t
     }
   });
 
-  it("uses all three play modes (quiz, numeric, flashcard)", () => {
+  it("uses numeric + flashcard modes (vc-1 converted to free-response; quiz no longer required)", () => {
+    // Phase-2 follow-up: vc-1 was converted MCQ→free-response, so Variance/CLT
+    // may have no quiz level. Relaxed to require free-response + flashcard.
     const modes = new Set(varianceCovarianceCltLevels.map((l) => l.mode ?? "quiz"));
-    expect(modes.has("quiz")).toBe(true);
     expect(modes.has("numeric")).toBe(true);
     expect(modes.has("flashcard")).toBe(true);
   });
@@ -435,5 +443,107 @@ describe("Combinatorial Analysis subcategory is registered and section-tagged", 
     expect(sections.lastIndexOf("Core Probability")).toBeLessThan(
       sections.indexOf("Combinatorial Analysis"),
     );
+  });
+});
+
+/* ========================================================================== */
+/*  UT M362K/M362M coverage additions (Bucket 1 + Bucket 2).                    */
+/* ========================================================================== */
+
+const probTrack = () =>
+  PLAYABLE_TRACKS.find((t) => t.levels.some((l) => l.section === "Core Probability"))!;
+
+describe("Poisson Distribution & Process (Bucket 1)", () => {
+  it("exposes 2 numeric levels tagged 'Poisson Distribution & Process'", () => {
+    expect(poissonLevels.length).toBe(2);
+    for (const lvl of poissonLevels) {
+      expect(lvl.section).toBe("Poisson Distribution & Process");
+      expect(lvl.mode).toBe("numeric");
+      expect(lvl.blurb.length).toBeGreaterThan(10);
+      expect(lvl.blurb.length).toBeLessThanOrEqual(160);
+    }
+  });
+  it("is wired after Expected Value and before Betting & Sizing", () => {
+    const sections = probTrack().levels.map((l) => l.section);
+    expect(sections.lastIndexOf("Expected Value")).toBeLessThan(
+      sections.indexOf("Poisson Distribution & Process"),
+    );
+    expect(sections.lastIndexOf("Poisson Distribution & Process")).toBeLessThan(
+      sections.indexOf("Betting & Sizing"),
+    );
+  });
+});
+
+describe("Continuous Distributions (Bucket 1)", () => {
+  it("exposes 3 numeric levels tagged 'Continuous Distributions'", () => {
+    expect(continuousDistributionsLevels.length).toBe(3);
+    for (const lvl of continuousDistributionsLevels) {
+      expect(lvl.section).toBe("Continuous Distributions");
+      expect(lvl.mode).toBe("numeric");
+    }
+  });
+  it("is wired after Order Statistics and before Variance/CLT", () => {
+    const sections = probTrack().levels.map((l) => l.section);
+    expect(sections.lastIndexOf("Order Statistics")).toBeLessThan(
+      sections.indexOf("Continuous Distributions"),
+    );
+    expect(sections.lastIndexOf("Continuous Distributions")).toBeLessThan(
+      sections.indexOf("Variance, Covariance & the CLT"),
+    );
+  });
+});
+
+describe("Brownian Motion (Bucket 1)", () => {
+  it("exposes 1 expert numeric level tagged 'Brownian Motion'", () => {
+    expect(brownianMotionLevels.length).toBe(1);
+    expect(brownianMotionLevels[0].section).toBe("Brownian Motion");
+    expect(brownianMotionLevels[0].mode).toBe("numeric");
+    expect(brownianMotionLevels[0].difficulty).toBe("expert");
+  });
+  it("is wired after Markov Chains", () => {
+    const sections = probTrack().levels.map((l) => l.section);
+    expect(sections.lastIndexOf("Markov Chains")).toBeLessThan(
+      sections.indexOf("Brownian Motion"),
+    );
+  });
+});
+
+describe("Markov stationary distribution level (Bucket 1)", () => {
+  it("adds an mc-stationary numeric level inside the Markov Chains section", () => {
+    const st = markovChainsLevels.find((l) => l.id === "mc-stationary");
+    expect(st).toBeDefined();
+    expect(st!.section).toBe("Markov Chains");
+    expect(st!.mode).toBe("numeric");
+  });
+});
+
+describe("Extra Relevant Knowledge (Bucket 2)", () => {
+  it("bundles the untested-at-firms topics into ONE contiguous section at the END", () => {
+    const track = probTrack();
+    const sections = track.levels.map((l) => l.section);
+    const extra = track.levels.filter(
+      (l) => l.section === "Extra Relevant Knowledge",
+    );
+    // present, and the last section in the track
+    expect(extra.length).toBeGreaterThanOrEqual(7);
+    expect(sections[sections.length - 1]).toBe("Extra Relevant Knowledge");
+    // contiguous (a single run)
+    const first = sections.indexOf("Extra Relevant Knowledge");
+    const last = sections.lastIndexOf("Extra Relevant Knowledge");
+    expect(last - first + 1).toBe(extra.length);
+    // covers the required Bucket-2 families
+    const ids = new Set(extra.map((l) => l.id));
+    for (const id of [
+      "ek-mgf",
+      "ek-gamma",
+      "ek-joint",
+      "ek-branching",
+      "ek-ctmc",
+      "ek-limit",
+      "ek-markov-pn",
+      "ek-markov-class",
+    ]) {
+      expect(ids.has(id)).toBe(true);
+    }
   });
 });

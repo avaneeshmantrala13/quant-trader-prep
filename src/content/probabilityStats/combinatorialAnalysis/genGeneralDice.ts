@@ -158,13 +158,13 @@ export function buildParitySymmetryInstance(
   let mechanism: string;
 
   if (coinMode) {
-    const n = rng.pick([200, 500, 1000]);
+    const n = rng.pick([256, 400, 512]);
     value = evenHeadsProb(n); // = 1/2
     traps = PARITY_COIN_TRAPS;
     mechanism = `flipping the last of the ${n} coins toggles the parity of the head-count with probability ½`;
     prompt =
-      `A fair coin is tossed ${n} times. ` +
-      `What is the probability that the number of heads that come up is an even number?`;
+      `${n} fair coins are all flipped at once. ` +
+      `How likely is it that the tally of heads comes out even (a multiple of two)?`;
     id = `gen-parity-coin-${n}`;
   } else {
     const dice = rng.pick([2, 3, 4]);
@@ -172,8 +172,8 @@ export function buildParitySymmetryInstance(
     traps = PARITY_DICE_TRAPS;
     mechanism = `the last of the ${dice} dice makes the running total even with probability ½ regardless of the others`;
     prompt =
-      `You roll ${dice} fair 6-sided dice and add the pips. ` +
-      `What is the probability the total is an even number?`;
+      `You roll ${dice} fair 6-sided dice and total the pips. ` +
+      `How likely is that grand total to be even?`;
     id = `gen-parity-dice-${dice}`;
   }
 
@@ -228,13 +228,13 @@ export function buildDieCompareInstance(
   const distractors: Choice[] = [];
 
   if (selfMode) {
-    const faces = rng.pick([6, 8, 10, 12, 20]);
+    const faces = rng.pick([8, 10, 12, 20]);
     value = secondLessProb(faces); // (1 − 1/faces)/2
     id = `gen-diecmp-self-${faces}`;
     concept = "Dice comparison (halve the non-tie mass)";
     prompt =
-      `You roll one fair ${faces}-sided die, then roll it again. ` +
-      `What is the probability the second roll is strictly LESS than the first?`;
+      `The same fair ${faces}-faced die is thrown twice in succession. ` +
+      `How likely is the SECOND result to land strictly below the FIRST?`;
     explanation =
       `P(second = first) = 1/${faces}, so the remaining 1 − 1/${faces} splits equally between "<" and ">". ` +
       `Hence P(second < first) = (1 − 1/${faces})/2 = ${fracText(value)}.`;
@@ -255,17 +255,17 @@ export function buildDieCompareInstance(
   } else {
     const [small, big] = rng.pick([
       [6, 10],
+      [8, 12],
       [10, 20],
-      [20, 50],
-      [30, 50],
+      [6, 20],
       [4, 6],
     ]);
     value = biggerDieProb(small, big);
     id = `gen-diecmp-pair-${small}-${big}`;
     concept = "Dice comparison (unequal dice, condition on the larger)";
     prompt =
-      `You roll a fair ${small}-sided die and a fair ${big}-sided die. ` +
-      `What is the probability the ${big}-sided die shows strictly MORE than the ${small}-sided die?`;
+      `Two fair dice of different sizes are thrown once each — one with ${small} faces and one with ${big} faces. ` +
+      `What is the probability that the ${big}-face die outscores the ${small}-face die (comes up strictly greater)?`;
     explanation =
       `Condition on the d${big}. It exceeds ${small} outright w.p. (${big}−${small})/${big}; otherwise both land in 1..${small} and the strict-greater case is (${small}−1)/(2·${small}). ` +
       `Adding gives ${fracText(value)}.`;
@@ -327,12 +327,12 @@ export function buildDigitOrderInstance(
   const errorSpecs: { raw: Fraction; fb: string }[] = [];
 
   if (distinctMode) {
-    const L = rng.pick([2, 3]);
+    const L = rng.pick([2, 4]);
     value = allDifferentDigitsProb(L);
     id = `gen-digits-distinct-${L}`;
     prompt =
-      `A whole number is chosen uniformly at random from 1 to ${10 ** L}. ` +
-      `What is the probability that all of its digits are distinct (no digit repeats)? (Round to {dp} decimals.)`;
+      `An integer is picked uniformly from 1 up to ${10 ** L}. ` +
+      `How likely is it that no two of its digits are equal (every digit used at most once)? (Round to {dp} decimals.)`;
     explanation =
       `Count integers in [1, ${10 ** L}] whose digits never repeat, summing over each digit-length, then divide by ${10 ** L}: ${fracText(value)}. ` +
       `Padding with leading zeros or treating each digit as independently 9/10 both mis-count, because every new digit must avoid ALL previously used digits.`;
@@ -361,8 +361,8 @@ export function buildDigitOrderInstance(
     value = onesGreaterThanTensProb(); // 2/5
     id = `gen-digits-onesgt`;
     prompt =
-      `A 2-digit whole number (10 through 99) is chosen uniformly at random. ` +
-      `What is the probability that its ones digit is strictly larger than its tens digit? (Round to {dp} decimals.)`;
+      `Pick one of the two-digit numbers 10–99, each equally likely. ` +
+      `How often does the units place exceed the tens place (the last digit beats the first)? (Round to {dp} decimals.)`;
     explanation =
       `Among the 90 numbers 10–99, the favourable count is Σ over tens 1–9 of (9−tens) = 36, so the probability is 36/90 = ${fracText(value)}. ` +
       `It is NOT ½: the ones digit ranges 0–9 but the tens digit only 1–9, so P(ones>tens) < P(ones<tens); the ties P(ones=tens) also carve out mass.`;

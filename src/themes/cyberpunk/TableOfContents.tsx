@@ -107,7 +107,7 @@ function MarqueeHeader({
 
       <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
-          <span className="label text-accent">// Neon District · Directory</span>
+          <span className="label text-accent">// Neon District</span>
           <h1
             className="mt-1 font-display text-2xl font-black uppercase tracking-wide text-primary sm:text-3xl"
             style={{ textShadow: "0 0 18px rgb(var(--color-accent) / 0.45)" }}

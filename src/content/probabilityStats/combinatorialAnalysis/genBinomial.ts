@@ -115,7 +115,8 @@ const MORETAILS_THEME = [
  */
 export function genMoreTails(rng: Rng): NumericQuestion {
   const th = rng.pick(MORETAILS_THEME);
-  const n = rng.pick([6, 8, 10]);
+  // n ≠ 6: 6 coins "more tails" is the source's 22/64 tuple (More Tails).
+  const n = rng.pick([8, 10, 12]);
   const half = n / 2;
 
   const value = binomTailGE(n, HALF(), half + 1);
@@ -179,7 +180,8 @@ const RETURN_THEME = [
  */
 export function genReturnOrigin(rng: Rng): NumericQuestion {
   const th = rng.pick(RETURN_THEME);
-  const steps = rng.pick([6, 8, 10, 12]);
+  // steps ≠ 10: a 10-step return is the source's 0.246 tuple (Stock Price Coin Flip).
+  const steps = rng.pick([6, 8, 12, 14]);
   const half = steps / 2;
 
   const value = returnToOriginProb(steps);
@@ -245,7 +247,9 @@ const STEPCOUNT_THEME = [
 export function genStepCount(rng: Rng): NumericQuestion {
   const th = rng.pick(STEPCOUNT_THEME);
   const steps = rng.pick([8, 10, 12, 14]);
-  const end = rng.pick([0, 2, 4]); // (steps + end) always even here
+  let end = rng.pick([0, 2, 4]); // (steps + end) always even here
+  // Avoid the source tuple (12 steps, end +2 → C(12,7) = 792, Unit Steps).
+  if (steps === 12 && end === 2) end = rng.pick([0, 4]);
   const right = (steps + end) / 2;
 
   const value = stepSequencesCount(steps, end); // bigint
@@ -308,7 +312,8 @@ const LATTICE_THEME = [
  */
 export function genLatticeMeeting(rng: Rng): NumericQuestion {
   const th = rng.pick(LATTICE_THEME);
-  const n = rng.pick([3, 4, 5]);
+  // n ≠ 4: a 4×4 meeting is the source's 70/256 tuple (Meeting Your Friend).
+  const n = rng.pick([3, 5, 6]);
 
   const value = latticeMeetingProb(n);
   const dp = numDp(value);
@@ -373,7 +378,8 @@ const RACE_THEME = [
  */
 export function genRaceCondition(rng: Rng): NumericQuestion {
   const th = rng.pick(RACE_THEME);
-  const totalFlips = rng.pick([8, 10, 12]);
+  // totalFlips ≠ 10: a 10-flip race is the source's 0.254 tuple (Coin Race #2).
+  const totalFlips = rng.pick([8, 12, 14]);
   const targetTailsToLose = totalFlips / 2 - 2; // matches "loses unless ≤ that many"
   const rem = totalFlips - 1;
 

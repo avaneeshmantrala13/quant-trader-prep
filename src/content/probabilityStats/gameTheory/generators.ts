@@ -138,6 +138,10 @@ export function buildPdInstance(rng: Rng, difficulty: Difficulty): PdInstance {
     const payoffs: PdPayoffs = { R, S, T, P };
     if (!isPrisonersDilemma(payoffs)) continue;
     if (!uniqueInts([R, S, T, P])) continue;
+    // Originality: never emit a source-dataset payoff tuple (GT1 "Whose Turn Is
+    // It" is the only one reachable from these ranges). Skip it so no user-facing
+    // item reuses the source's exact incidental numbers.
+    if (R === 4 && S === 1 && T === 5 && P === 2) continue;
     const sc = rng.pick(PD_SCENARIOS);
     const answer = P; // (Defect, Defect) is the unique NE.
 
@@ -244,6 +248,18 @@ export function buildEntryInstance(
     if (!(cFight < cOut)) continue; // believed threat would deter → makes it a real trap
     const payoffSet = [cExpand, cHold, cOut, cFight];
     if (!uniqueInts(payoffSet)) continue;
+    // Originality: never emit the source GT4 "Challenger's Gambit" tuple exactly.
+    if (
+      cOut === 0 &&
+      iOut === 10 &&
+      cFight === -4 &&
+      iFight === -2 &&
+      cHold === 3 &&
+      iHold === 5 &&
+      cExpand === 6 &&
+      iExpand === 1
+    )
+      continue;
 
     const sc = rng.pick(ENTRY_SCENARIOS);
     const answer = cExpand;
@@ -302,9 +318,12 @@ export function buildEntryInstance(
 /*  FAMILY 3 — Spatial competition / Hotelling  (quiz)                        */
 /* ========================================================================== */
 
+// NOTE: deliberately avoids the source GT6 "Beach Carts" framing (beach /
+// sunbathers / ice-cream carts) so no user-facing item echoes that named
+// scenario. These are distinct Hotelling contexts.
 const HOTELLING_SCENARIOS: { place: string; buyers: string; vendor: string }[] =
   [
-    { place: "a straight beach", buyers: "sunbathers", vendor: "ice-cream cart" },
+    { place: "a subway platform", buyers: "commuters", vendor: "newsstand" },
     { place: "a single avenue", buyers: "shoppers", vendor: "coffee kiosk" },
     { place: "a long pier", buyers: "tourists", vendor: "food stall" },
   ];
@@ -319,7 +338,10 @@ export function buildHotellingInstance(
   rng: Rng,
   difficulty: Difficulty,
 ): HotellingInstance {
-  const customers = rng.int(20, 100) * 2; // even, so N/2 is a clean integer
+  // Even count in [40, 200] EXCLUDING 100 (the source GT6 "Beach Carts"
+  // count, whose N/2 = 50 answer we must not reproduce).
+  let customers = rng.int(20, 100) * 2;
+  while (customers === 100) customers = rng.int(20, 100) * 2;
   const answer = hotellingShare(customers);
   const sc = rng.pick(HOTELLING_SCENARIOS);
   const whole = customers;
@@ -387,7 +409,9 @@ export function buildBeautyInstance(
   rng: Rng,
   difficulty: Difficulty,
 ): BeautyInstance {
-  const max = rng.pick([100, 100, 60, 80]);
+  // Avoid max = 100: the source GT7 "Half the Average" uses the 0–100 range,
+  // so we draw from other ceilings to keep both wording and numbers distinct.
+  const max = rng.pick([80, 80, 60, 90]);
   const useHalf = rng.chance(0.5);
   const target = useHalf ? F(1, 2) : F(2, 3);
   const targetLabel = useHalf ? "half" : "two-thirds";
@@ -515,6 +539,8 @@ export function buildZeroSum2x2Instance(
     const c = rng.int(0, 9);
     const d = rng.int(1, 9);
     const m: ZeroSum2x2 = { a, b, c, d };
+    // Originality: never emit the source GT8 "Quoting Duel" matrix (4,1,2,4).
+    if (a === 4 && b === 1 && c === 2 && d === 4) continue;
     if (saddleValue2x2(m) !== null) continue; // must genuinely require mixing
     const sol = solveMixed2x2(m);
     if (sol.pTop.valueOf() <= 0 || sol.pTop.valueOf() >= 1) continue;
@@ -604,6 +630,17 @@ export function buildZeroSum3x2Instance(
         [core.c, core.d],
       ],
     };
+    // Originality: never emit the source GT9 "Redundant Quote" matrix
+    // (Top 5,1 · Middle 3,0 · Bottom 0,4).
+    if (
+      core.a === 5 &&
+      core.b === 1 &&
+      midL === 3 &&
+      midR === 0 &&
+      core.c === 0 &&
+      core.d === 4
+    )
+      continue;
     let dom;
     try {
       dom = solveDominance3x2(g);
@@ -706,9 +743,12 @@ export interface VolunteerInstance {
   numeric: NumericQuestion;
 }
 
+// NOTE: deliberately avoids the source GT11 "Who Calls the Landlord" framing
+// (tenants / phone the landlord / boiler) so no user-facing item echoes that
+// named scenario.
 const VOLUNTEER_SCENARIOS: { actors: string; action: string; good: string }[] =
   [
-    { actors: "tenants in a building", action: "phone the landlord", good: "the boiler is fixed" },
+    { actors: "open-source maintainers", action: "ship the security patch", good: "the vulnerability is closed" },
     { actors: "teammates on a desk", action: "stay late to file the report", good: "the report is filed" },
     { actors: "neighbours", action: "call the council", good: "the pothole is fixed" },
   ];
@@ -721,13 +761,15 @@ export function buildVolunteerInstance(
   // P(nobody) = (1/2)^N is a terminating decimal.
   const m = 2;
   const N = rng.pick([3, 4, 5]);
-  const b = rng.pick([80, 96, 64, 128]);
+  // Exclude b = 80: the source GT11 uses (N=4, b=80, c=10). All values below
+  // yield integer costs for N ∈ {3,4,5} and never reproduce that tuple.
+  const b = rng.pick([96, 64, 128]);
   let sol;
   try {
     sol = solveVolunteer({ N, m, b });
   } catch {
-    // Fall back to the canonical N=4, b=80 (c=10) item.
-    sol = solveVolunteer({ N: 4, m: 2, b: 80 });
+    // Fall back to an N=4, b=64 (c=8) item (never the source's b=80).
+    sol = solveVolunteer({ N: 4, m: 2, b: 64 });
   }
   const c = sol.c;
   const net = b - c;
@@ -829,11 +871,11 @@ export const gameTheoryFlashcards: Flashcard[] = [
   {
     id: "gt-fc-coord-1",
     prompt:
-      "Two market-makers independently decide whether to Build a deep book in a new product (pays 9 each only if BOTH build; a lone builder gets picked off for 0) or Stay Safe (a guaranteed 6). You can't communicate. What do you do, and why is there no single forced answer?",
+      "Two venture funds independently decide whether to Anchor a new co-investment (commit lead capital) or Pass. If BOTH anchor, the deal closes and each earns 8; a lone anchor is left stranded and earns 0; a fund that Passes keeps a safe 5 either way. You can't communicate. What do you do, and why is there no single forced answer?",
     answer:
-      "A stag hunt: two pure Nash equilibria — (Build, Build)=9 (payoff-dominant) and (Stay Safe, Stay Safe)=6 (risk-dominant) — plus a mixed NE where each Builds with probability m = 6/9 = 2/3. No dominant strategy; the outcome depends on trust / a focal point.",
+      "A stag hunt: two pure Nash equilibria — (Anchor, Anchor)=8 (payoff-dominant) and (Pass, Pass)=5 (risk-dominant) — plus a mixed NE where each Anchors with probability m = 5/8. No dominant strategy; the outcome depends on trust / a focal point.",
     explanation:
-      "Best-response is to MATCH the rival (Build if they Build, Stay Safe if they don't), so both matched profiles are equilibria. (Build,Build) is better for both (9 > 6) — payoff dominance — but Building alone collapses to 0, while Stay Safe guarantees 6 regardless. Against a coin-flip rival, Build averages ½·9+½·0 = 4.5 < 6, so Stay Safe is RISK-dominant. The mixed NE solves 9m = 6 ⟹ m = 2/3. Nothing in the matrix selects among them: a focal point (reputation, convention, a public commitment signal) is what tips players to the good equilibrium. That's why the honest answer is 'it depends on trust,' not a number.",
+      "Best-response is to MATCH the rival (Anchor if they Anchor, Pass if they don't), so both matched profiles are equilibria. (Anchor,Anchor) is better for both (8 > 5) — payoff dominance — but anchoring alone collapses to 0, while Pass guarantees 5 regardless. Against a coin-flip rival, Anchor averages ½·8+½·0 = 4 < 5, so Pass is RISK-dominant. The mixed NE makes the rival indifferent: 8m = 5 ⟹ m = 5/8. Nothing in the matrix selects among them: a focal point (reputation, convention, a public commitment signal) is what tips players to the good equilibrium. That's why the honest answer is 'it depends on trust,' not a number.",
     difficulty: "medium",
     concept: "Coordination / stag hunt (payoff- vs risk-dominance)",
     source: "Game Theory · coordination (reasoning-only)",
@@ -879,11 +921,11 @@ export const gameTheoryFlashcards: Flashcard[] = [
   {
     id: "gt-fc-repeated-1",
     prompt:
-      "Two market-makers meet daily forever. Each day: both Cooperate (wide spread) = 10 each; Undercut vs Cooperator = 13 (undercutter) / 5; both Undercut = 6 each. A profit t days out is worth δᵗ. Can they sustain cooperation, and with what strategy?",
+      "Two airlines fly the same route every season, indefinitely. Each season: both keep fares High (Cooperate) = 9 each; one Discounts while the other holds High = 14 (discounter) / 3; both Discount = 5 each. A profit t seasons out is worth δᵗ. Can they sustain cooperation, and with what strategy?",
     answer:
-      "One-shot, Undercut dominates → both grind to 6. With indefinite repetition and a grim-trigger strategy, cooperation is sustainable when δ ≥ (T−R)/(T−P) = (13−10)/(13−6) = 3/7 ≈ 0.43. It's an equilibrium, not the ONLY one (folk theorem) — perpetual undercutting is also an equilibrium.",
+      "One-shot, Discount dominates → both grind to 5. With indefinite repetition and a grim-trigger strategy, cooperation is sustainable when δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. It's an equilibrium, not the ONLY one (folk theorem) — perpetual discounting is also an equilibrium.",
     explanation:
-      "A single day is a Prisoner's Dilemma (13>10 and 6>5, so Undercut dominates; both earn 6). Repetition lets you punish: grim trigger = 'cooperate until you undercut, then undercut forever.' One-shot-deviation check: cooperating forever earns R/(1−δ); deviating earns T + δP/(1−δ). Cooperation survives when R/(1−δ) ≥ T + δP/(1−δ) ⟹ δ ≥ (T−R)/(T−P) = 3/7 ≈ 0.43. So if each values tomorrow at least ~43% as much as today, the wide-spread truce holds. Caveats the interviewer wants: (1) the folk theorem — many equilibria exist, so cooperation isn't guaranteed; (2) a KNOWN end date unravels it by backward induction; (3) in a noisy market, forgiving tit-for-tat survives mistakes better than unforgiving grim trigger.",
+      "A single season is a Prisoner's Dilemma (14>9 and 5>3, so Discount dominates; both earn 5). Repetition lets you punish: grim trigger = 'hold High until they Discount, then Discount forever.' One-shot-deviation check: cooperating forever earns R/(1−δ); deviating earns T + δP/(1−δ). Cooperation survives when R/(1−δ) ≥ T + δP/(1−δ) ⟹ δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. So if each values next season at least ~56% as much as this one, the high-fare truce holds. Caveats the interviewer wants: (1) the folk theorem — many equilibria exist, so cooperation isn't guaranteed; (2) a KNOWN end date unravels it by backward induction; (3) in a noisy market, forgiving tit-for-tat survives mistakes better than unforgiving grim trigger.",
     difficulty: "hard",
     concept: "Repeated game / folk theorem / grim trigger",
     source: "Game Theory · repeated game (reasoning-only)",

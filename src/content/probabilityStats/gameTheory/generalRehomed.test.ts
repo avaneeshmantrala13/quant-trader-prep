@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeFreeResponse, gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import { F, beachCoinOptimum, jumpingRobotsRoot, optimalSpread } from "../coreSolvers";
-import { genOptimalSpread, genOptimizeAgents } from "./genGeneralAgents";
+import {
+  genOptimalSpread,
+  genOptimizeAgents,
+  genOptimizeAgentsNumeric,
+} from "./genGeneralAgents";
 import { gameTheoryGeneralFlashcards } from "./generalFlashcards";
 import { gamePuzzleGeneralFlashcards } from "../gamePuzzle/generalFlashcards";
 
@@ -18,6 +22,7 @@ const r = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp;
 
 const NUMERIC_GENS: Record<string, (rng: Rng) => NumericQuestion> = {
   genOptimalSpread,
+  genOptimizeAgentsNumeric,
 };
 
 const QUIZ_GENS: Record<string, (rng: Rng) => Question> = {
@@ -96,6 +101,41 @@ describe("quiz generators: valid correct index + distinct, aligned choices", () 
       }
     });
   }
+});
+
+describe("optimizing-agents free-response conversion: tagged error modes + fraction grading", () => {
+  const VOCAB = new Set([
+    // ASK p* branch
+    "corner_always_participate",
+    "naive_participation_half",
+    "derivative_algebra_slip",
+    "reported_value_not_argmax",
+    // ASK P(success) branch
+    "reported_one_participant_rate",
+    "reported_both_participate_rate",
+    "reported_argmax_not_value",
+    "multiplied_success_rates",
+  ]);
+  it("every common error carries a family-vocabulary tag; the fraction answer still grades", () => {
+    const seen = new Set<string>();
+    for (const seed of SEEDS) {
+      const q = genOptimizeAgentsNumeric(new Rng(seed));
+      const dp = q.decimals ?? 0;
+      const errs = q.commonErrors ?? [];
+      expect(errs.length).toBeGreaterThanOrEqual(3);
+      for (const ce of errs) {
+        expect(ce.misconception).toBeTruthy();
+        expect(VOCAB.has(ce.misconception!)).toBe(true);
+        expect(ce.feedback.length).toBeGreaterThan(20);
+        seen.add(ce.misconception!);
+      }
+      // The exact answer, typed to its stored precision, grades correct via the
+      // free-response parser (fractions / decimals / expressions).
+      expect(gradeFreeResponse(q, q.answer.toFixed(dp)).correct).toBe(true);
+    }
+    // Both ask-branches occur across the seed set, so the union is rich.
+    expect(seen.size).toBeGreaterThanOrEqual(5);
+  });
 });
 
 const FINGERPRINTS = ["Going to the Beach", "Optimal Spread", "Jumping Robots"];

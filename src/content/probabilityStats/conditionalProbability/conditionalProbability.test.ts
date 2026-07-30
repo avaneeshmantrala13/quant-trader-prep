@@ -34,7 +34,7 @@ import {
   vacantRoomProb,
 } from "./cp";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeNumeric, gradeFreeResponse } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import * as G from "./generators";
 import { RR_KEEP, RR_SPIN } from "./generators";
@@ -381,6 +381,54 @@ function reDeriveNumeric(q: NumericQuestion): ReturnType<typeof F> {
       const [wn, wd] = n;
       return F(1).div(F(2).sub(F(wn, wd)));
     }
+    // MCQ→free-response conversions of the cp-1 (reduced sample space) families.
+    case "tablenum": {
+      const [favorable, total] = n;
+      return F(favorable, total);
+    }
+    case "bothnum": {
+      const [N] = n;
+      return F(1, 2 * N - 1);
+    }
+    case "gsumnum": {
+      const [N, s, face] = n;
+      let surv = 0;
+      let fav = 0;
+      for (let a = 1; a <= N; a++)
+        for (let b = 1; b <= N; b++)
+          if (a + b === s) {
+            surv++;
+            if (a === face || b === face) fav++;
+          }
+      return F(fav, surv);
+    }
+    case "bertnum": {
+      const [g, m] = n;
+      return F(2 * g, 2 * g + m);
+    }
+    case "allonnum": {
+      const [nn] = n;
+      return F(1, 2 ** nn - 1);
+    }
+    // MCQ→free-response conversions of the cp-2 (Bayes) families.
+    case "btnum": {
+      const [prev, sens, fpr] = n;
+      return F(prev * sens, prev * sens + (100 - prev) * fpr);
+    }
+    case "dienum": {
+      const [N1, N2] = n;
+      return F(N2, N1 + N2);
+    }
+    case "losernum": {
+      const [d, a, b, c, target] = n;
+      const losses = [F(d - a, d), F(d - b, d), F(d - c, d)];
+      const norm = losses.reduce((x, y) => x.add(y), F(0));
+      return losses[target].div(norm);
+    }
+    case "invnum": {
+      const [pA, pB, pBA] = n;
+      return F(pBA * pA, pB * 100);
+    }
     default:
       throw new Error(`no re-derivation for numeric family ${key}`);
   }
@@ -460,6 +508,29 @@ const NUMERIC_GENS: [string, (rng: Rng) => NumericQuestion][] = [
   ["genFirstToss", G.genFirstToss],
   ["genTie", G.genTie],
   ["genFirstStep", G.genFirstStep],
+  // cp-1 & cp-2 MCQ→free-response conversions (reduced sample space + Bayes).
+  ["genTableNumeric", G.genTableNumeric],
+  ["genBothNumeric", G.genBothNumeric],
+  ["genGivenSumNumeric", G.genGivenSumNumeric],
+  ["genBertrandNumeric", G.genBertrandNumeric],
+  ["genAllOnNumeric", G.genAllOnNumeric],
+  ["genBayesTestNumeric", G.genBayesTestNumeric],
+  ["genWhichDieNumeric", G.genWhichDieNumeric],
+  ["genCheerLoserNumeric", G.genCheerLoserNumeric],
+  ["genInversionNumeric", G.genInversionNumeric],
+];
+
+/** The cp-1 & cp-2 families converted from MCQ to free-response (numeric). */
+const CONVERTED_NUMERIC_GENS: [string, (rng: Rng) => NumericQuestion][] = [
+  ["genTableNumeric", G.genTableNumeric],
+  ["genBothNumeric", G.genBothNumeric],
+  ["genGivenSumNumeric", G.genGivenSumNumeric],
+  ["genBertrandNumeric", G.genBertrandNumeric],
+  ["genAllOnNumeric", G.genAllOnNumeric],
+  ["genBayesTestNumeric", G.genBayesTestNumeric],
+  ["genWhichDieNumeric", G.genWhichDieNumeric],
+  ["genCheerLoserNumeric", G.genCheerLoserNumeric],
+  ["genInversionNumeric", G.genInversionNumeric],
 ];
 
 const QUIZ_GENS: [string, (rng: Rng) => Question][] = [
@@ -508,6 +579,43 @@ describe("numeric generators: independent re-derivation + grading + distractors"
       }
     });
   }
+});
+
+describe("cp-1 & cp-2 free-response conversions: tagged error modes + fraction grading", () => {
+  for (const [name, gen] of CONVERTED_NUMERIC_GENS) {
+    it(`${name} — every commonError carries a misconception tag + coaching, and a fraction grades`, () => {
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        const dp = q.decimals ?? 0;
+        // Every error mode is a NAMED misconception with a rung-1 coaching line.
+        for (const ce of q.commonErrors ?? []) {
+          expect(ce.misconception, `${name} missing misconception tag`).toBeTruthy();
+          expect(ce.feedback.length).toBeGreaterThan(20);
+          // Rung-1 coaching must NOT leak the answer verbatim.
+          expect(ce.feedback).not.toContain(q.answer.toFixed(dp));
+        }
+        // The correct answer, typed as a fraction/decimal, still grades correct.
+        expect(gradeFreeResponse(q, q.answer.toFixed(dp)).correct).toBe(true);
+      }
+    });
+  }
+
+  it("reuses canonical MISCONCEPTION tags where they fit", () => {
+    const tags = new Set<string>();
+    for (const [, gen] of CONVERTED_NUMERIC_GENS) {
+      for (const seed of SEEDS) {
+        for (const ce of gen(new Rng(seed)).commonErrors ?? []) {
+          if (ce.misconception) tags.add(ce.misconception);
+        }
+      }
+    }
+    // Canonical tags that our converted families must surface.
+    expect(tags.has("reversed_conditional")).toBe(true);
+    expect(tags.has("base_rate_neglect")).toBe(true);
+    expect(tags.has("likelihood_as_posterior")).toBe(true);
+    expect(tags.has("ordered_vs_unordered")).toBe(true);
+    expect(tags.has("faces_not_objects")).toBe(true);
+  });
 });
 
 describe("quiz generators: independent re-derivation + distractor quality", () => {

@@ -1,12 +1,19 @@
 import type { NumericQuestion, Question } from "@/types/content";
 import { formatNumericAnswer } from "@/lib/numeric";
-import {
-  naturalFrequencyTree,
-  type NaturalFrequencyTree,
-} from "./naturalFrequency";
+import type { NaturalFrequencyTree } from "./naturalFrequency";
 import { MAX_TRIALS, type MonteCarloSpec } from "./monteCarlo";
 import { confrontForTag } from "./misconception";
 import { containsFinalAnswer } from "./answerWithholding";
+import { simLinkFor } from "./hintTopicHelp";
+import { planOfAttack } from "./planOfAttack";
+import {
+  arithmeticSlipCoaching,
+  domainPointerCoaching,
+  genericFallbackCoaching,
+  inferAnswerDomain,
+  isArithmeticSlip,
+  isOutOfDomain,
+} from "./errorModes";
 
 /**
  * The answer-WITHHOLDING hint ladder (PHASE_2 §5).
@@ -15,7 +22,8 @@ import { containsFinalAnswer } from "./answerWithholding";
  * five rungs keyed on the tripped misconception, escalating support while
  * WITHHOLDING the final answer until the last rung:
  *   1. name-trap        — name the specific error (never the answer).
- *   2. representation    — re-represent it (natural-frequency tree for Bayesian).
+ *   2. representation    — a GUIDED PLAN OF ATTACK: leading questions naming
+ *                          WHAT to determine at each step (never the method).
  *   3. worked-sibling    — study the same step on a fresh sibling, then redo.
  *   4. elicit-confront   — simulate/enumerate to confront a durable misconception.
  *   5. reveal            — only now, the full worked solution.
@@ -45,11 +53,13 @@ export interface HintRung {
     | NaturalFrequencyTree
     | MonteCarloSpec
     | { siblingPrompt: string };
+  /**
+   * Optional deep link to the single most relevant Simulations-tab sim
+   * (independent of `payload`). Set on rung 4 so the view can render a themed
+   * "Open <sim> →" button. Never contains the final answer.
+   */
+  simLink?: { href: string; title: string; blurb: string };
 }
-
-/** Generic, answer-free fallback when an authored rationale would leak the answer. */
-const GENERIC_NAME_TRAP =
-  "You tripped a common trap here. Re-read exactly what the question is conditioning on before you recompute — the mistake is usually in the set-up, not the arithmetic.";
 
 /** A stable non-negative seed derived from a string (for reproducible sims). */
 function hashSeed(s: string): number {
@@ -61,15 +71,6 @@ function hashSeed(s: string): number {
   return (h >>> 0) % 2_000_000_000 || 1;
 }
 
-/** Extract percentages from prompt text (for the Bayesian NF tree at rung 2). */
-function parsePercents(text: string): number[] {
-  const out: number[] = [];
-  const re = /(\d+(?:\.\d+)?)\s*%/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) out.push(Number(m[1]) / 100);
-  return out;
-}
-
 function isQuiz(q: Question | NumericQuestion): q is Question {
   return "choices" in q;
 }
@@ -79,15 +80,54 @@ function finalAnswerOf(q: Question | NumericQuestion): number | string {
   return isQuiz(q) ? q.choices[q.correctIndex] : q.answer;
 }
 
-/** Build a Bayesian natural-frequency tree from the prompt, if parseable. */
-function tryNaturalFrequencyTree(
-  q: Question | NumericQuestion,
-): NaturalFrequencyTree | null {
-  const pcts = parsePercents(q.prompt);
-  if (pcts.length < 3) return null;
-  const [prior, sens, fpr] = pcts;
-  if (prior <= 0 || prior >= 1) return null;
-  return naturalFrequencyTree({ prior, sens, fpr, total: 1000 });
+/**
+ * Corrective connectives/markers: a matched `feedback` string's NAMING clause
+ * (what the learner did) comes BEFORE any of these; the corrective directive
+ * (what to do instead) comes after. Ordered longest-safe first is unnecessary —
+ * we cut at the earliest occurrence of any marker.
+ */
+const CORRECTIVE_MARKERS = [
+  " but ",
+  " — ",
+  " – ",
+  "; ",
+  " you should",
+  " instead",
+  " to get",
+  " multiply",
+  " add (",
+  " subtract",
+  " divide",
+  " use 1",
+  "1 − p",
+  "1-p",
+];
+
+/**
+ * Reduce ANY matched rung-1 `feedback` to its NAME-ONLY clause: keep the part
+ * that names the mistake, drop a trailing corrective directive (the "but you
+ * should multiply", "instead …", "to get …" tail) so rung 1 never reveals the
+ * method. Central safety net for families whose inline feedback we don't edit.
+ *
+ * Cuts at the first corrective marker (case-insensitive). If that leaves too
+ * little (empty or < 15 chars — likely we clipped the naming clause itself),
+ * falls back to the feedback's first sentence. Never returns empty for non-empty
+ * input.
+ */
+export function nameOnlyCoaching(feedback: string): string {
+  if (!feedback) return feedback;
+  const lower = feedback.toLowerCase();
+  let cut = -1;
+  for (const marker of CORRECTIVE_MARKERS) {
+    const idx = lower.indexOf(marker);
+    if (idx !== -1 && (cut === -1 || idx < cut)) cut = idx;
+  }
+  let result = (cut === -1 ? feedback : feedback.slice(0, cut)).trim();
+  if (result.length < 15) {
+    const dot = feedback.indexOf(". ");
+    result = (dot === -1 ? feedback : feedback.slice(0, dot + 1)).trim();
+  }
+  return result || feedback;
 }
 
 /**
@@ -100,43 +140,64 @@ export function buildHintLadder(args: {
   chosenIndex?: number;
   chosenValue?: number;
   misconceptionTag?: string;
+  /** `Level.section` topic, threaded from the caller for topic-aware hints. */
+  section?: string;
 }): HintRung[] {
-  const { question, chosenIndex, chosenValue, misconceptionTag } = args;
+  const { question, chosenIndex, chosenValue, misconceptionTag, section } = args;
+  const family = question.family;
   const answer = finalAnswerOf(question);
   const confront = confrontForTag(misconceptionTag);
 
-  /* -- Rung 1: name the trap (sanitised so it never leaks the answer) -------- */
+  /* -- Rung 1: name the trap (name-ONLY; never the method or the answer) ----- */
+  // Prioritised behaviour (numeric free-response): (1) an out-of-domain value
+  // gets a basic sanity-check pointer; (2) a matched misconception is reduced to
+  // its NAME-ONLY clause; (3) a close-but-not-exact value gets an arithmetic-slip
+  // nudge; (4) otherwise the method-free generic nudge. Quiz items keep the
+  // distractor rationale, also passed through `nameOnlyCoaching`.
   let rung1Text = "";
   if (isQuiz(question) && chosenIndex != null) {
-    rung1Text = question.distractorRationale?.[chosenIndex] ?? "";
+    rung1Text = nameOnlyCoaching(question.distractorRationale?.[chosenIndex] ?? "");
   } else if (!isQuiz(question) && chosenValue != null) {
-    rung1Text =
-      question.commonErrors?.find((e) =>
-        question.decimals == null
-          ? e.value === chosenValue
-          : Math.round(e.value * 10 ** question.decimals) ===
-            Math.round(chosenValue * 10 ** question.decimals),
-      )?.feedback ?? "";
+    const matched = question.commonErrors?.find((e) =>
+      question.decimals == null
+        ? e.value === chosenValue
+        : Math.round(e.value * 10 ** question.decimals) ===
+          Math.round(chosenValue * 10 ** question.decimals),
+    );
+    if (typeof answer === "number") {
+      const domain = inferAnswerDomain({
+        section,
+        family,
+        unit: question.unit,
+        decimals: question.decimals,
+        answer,
+      });
+      if (isOutOfDomain(chosenValue, domain)) {
+        rung1Text = domainPointerCoaching(domain);
+      } else if (matched) {
+        rung1Text = nameOnlyCoaching(matched.feedback);
+      } else if (isArithmeticSlip(chosenValue, answer)) {
+        rung1Text = arithmeticSlipCoaching();
+      } else {
+        rung1Text = genericFallbackCoaching({ section, family });
+      }
+    } else if (matched) {
+      rung1Text = nameOnlyCoaching(matched.feedback);
+    }
   }
   if (!rung1Text || containsFinalAnswer(rung1Text, answer)) {
-    rung1Text = GENERIC_NAME_TRAP;
+    rung1Text = genericFallbackCoaching({ section, family });
   }
 
-  /* -- Rung 2: representation (natural-frequency tree for Bayesian) ---------- */
-  const nfTree =
-    confront === "nf-tree" ? tryNaturalFrequencyTree(question) : null;
-  const rung2: HintRung = nfTree
-    ? {
-        rung: 2,
-        kind: "representation",
-        text: `Re-express it as natural frequencies out of ${nfTree.total} people. Fill the two branch counts, then ask: which TWO counts do you divide to get the answer?`,
-        payload: nfTree,
-      }
-    : {
-        rung: 2,
-        kind: "representation",
-        text: "Draw the picture before reaching for a formula: lay the outcomes out concretely (a tree, a table, or the reduced sample space) and re-count what actually survives the conditioning.",
-      };
+  /* -- Rung 2: GUIDED PLAN OF ATTACK (leading questions, never the method) --- */
+  // Bridges rung 1 (names the mistake) → rung 3 (worked walkthrough). It names
+  // WHAT to determine at each step without stating the operation/rule/answer,
+  // and deliberately holds NO visualization (that is rung 4's simulation).
+  const rung2: HintRung = {
+    rung: 2,
+    kind: "representation",
+    text: planOfAttack({ section, family, misconceptionTag }),
+  };
 
   /* -- Rung 3: worked sibling (completion) ---------------------------------- */
   const rung3: HintRung = {
@@ -149,13 +210,21 @@ export function buildHintLadder(args: {
     },
   };
 
-  /* -- Rung 4: elicit-then-confront (simulate) ------------------------------ */
+  /* -- Rung 4: elicit-then-confront (open the exact sim) --------------------- */
+  // Resolve the single most relevant Simulations-tab sim for this item and
+  // point at it by name. The inline coin/dice ConfrontSim payload is retained
+  // (so the deterministic confront still renders) — the deep link is additive.
+  const sim = simLinkFor({ section, family, misconceptionTag });
+  const rung4Base: HintRung = {
+    rung: 4,
+    kind: "elicit-confront",
+    text: `Open the Simulations tab → “${sim.title}” and ${sim.blurb}`,
+    simLink: { href: sim.href, title: sim.title, blurb: sim.blurb },
+  };
   let rung4: HintRung;
   if (confront === "coin-sim") {
     rung4 = {
-      rung: 4,
-      kind: "elicit-confront",
-      text: "Predict what a long run of flips does after a streak — then run it. Each flip is INDEPENDENT, so watch the simulated frequency settle back toward its true value no matter what just happened.",
+      ...rung4Base,
       payload: {
         kind: "coin",
         trials: MAX_TRIALS,
@@ -165,9 +234,7 @@ export function buildHintLadder(args: {
     };
   } else if (confront === "dice-sim") {
     rung4 = {
-      rung: 4,
-      kind: "elicit-confront",
-      text: "Don't reason from a single outcome — simulate many independent trials and watch the long-run frequency, not the last result.",
+      ...rung4Base,
       payload: {
         kind: "dice",
         trials: MAX_TRIALS,
@@ -175,18 +242,9 @@ export function buildHintLadder(args: {
         params: { sides: 6, face: 6 },
       },
     };
-  } else if (confront === "nested-set") {
-    rung4 = {
-      rung: 4,
-      kind: "elicit-confront",
-      text: "The 'A and B' cases are a SUBSET of the 'A' cases — a subset can never be larger than the whole. Count the nested sets directly and compare.",
-    };
   } else {
-    rung4 = {
-      rung: 4,
-      kind: "elicit-confront",
-      text: "Commit to a prediction, then test it: enumerate or simulate many cases and compare the long-run frequency to your guess.",
-    };
+    // nested-set + generic: the named-sim deep link is the whole confront.
+    rung4 = rung4Base;
   }
 
   /* -- Rung 5: reveal (the only rung allowed to contain the answer) ---------- */

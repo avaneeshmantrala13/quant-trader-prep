@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { NumericQuestion, Question } from "@/types/content";
-import { buildHintLadder, type HintRung } from "./hintLadder";
+import { buildHintLadder, nameOnlyCoaching, type HintRung } from "./hintLadder";
 import { containsFinalAnswer } from "./answerWithholding";
 import { MISCONCEPTION } from "./misconception";
-import type { NaturalFrequencyTree } from "./naturalFrequency";
 import type { MonteCarloSpec } from "./monteCarlo";
+import { SIM_BY_ID } from "@/lib/simulations/catalog";
 
 const bayesQ: Question = {
   id: "cp-bayestest-1-80-9",
@@ -24,9 +24,6 @@ const bayesQ: Question = {
   misconceptions: ["", MISCONCEPTION.baseRateNeglect, "", ""],
 };
 
-function isNfTree(p: HintRung["payload"]): p is NaturalFrequencyTree {
-  return !!p && "branches" in p && "finalRatioBlank" in p;
-}
 function isMcSpec(p: HintRung["payload"]): p is MonteCarloSpec {
   return !!p && "kind" in p && "trials" in p;
 }
@@ -62,7 +59,7 @@ describe("buildHintLadder", () => {
     expect(containsFinalAnswer(ladder[4].text, answer)).toBe(true);
   });
 
-  it("a Bayesian item's rung 2 payload is a natural-frequency tree", () => {
+  it("a Bayesian item's rung 2 is a guided plan of attack (no NF-tree, answer withheld)", () => {
     const ladder = buildHintLadder({
       question: bayesQ,
       chosenIndex: 1,
@@ -70,10 +67,15 @@ describe("buildHintLadder", () => {
     });
     const rung2 = ladder[1];
     expect(rung2.kind).toBe("representation");
-    expect(isNfTree(rung2.payload)).toBe(true);
-    if (isNfTree(rung2.payload)) {
-      expect(rung2.payload.finalRatioBlank).toBe("8 / (8 + 95)");
-    }
+    // Rung 2 is now a plan, NOT a natural-frequency visualization (that would
+    // duplicate the Bayes NF simulation at rung 4).
+    expect(rung2.payload).toBeUndefined();
+    // Question-driven plan naming WHAT to determine — never the method/answer.
+    expect(rung2.text).toContain("?");
+    expect(rung2.text.toLowerCase()).toMatch(/plan|figure out|determine|which|what/);
+    const answer = bayesQ.choices[bayesQ.correctIndex];
+    expect(containsFinalAnswer(rung2.text, answer)).toBe(false);
+    expect(rung2.text.toLowerCase()).not.toMatch(/multiply|divide/);
   });
 
   it("a gambler's-fallacy tag yields a coin MonteCarloSpec at rung 4", () => {
@@ -153,6 +155,230 @@ describe("buildHintLadder", () => {
     expect(ladder[0].text).toContain("averaged");
     for (const rung of ladder.slice(0, 4)) {
       expect(containsFinalAnswer(rung.text, numQ.answer, 1e-9)).toBe(false);
+    }
+  });
+
+  const indepAndQ: Question = {
+    id: "ci-indep-1",
+    prompt:
+      "A fair coin is flipped and a fair die is rolled. What is the probability of BOTH heads and a six?",
+    choices: ["0.0833", "0.6667", "0.5833", "0.25"],
+    correctIndex: 0,
+    explanation: "Independent: P(H)·P(6) = 0.5 · (1/6) = 0.0833.",
+    difficulty: "easy",
+    distractorRationale: [
+      "Correct — multiply the two independent probabilities.",
+      "You added the probabilities instead of multiplying them.",
+      "Mixed up the operation on independent events.",
+      "Used the wrong die probability.",
+    ],
+    family: "genIntersectionIndep",
+  };
+
+  it("rung 2 is a guided plan of attack for a non-Bayesian item (answer + method withheld)", () => {
+    const ladder = buildHintLadder({
+      question: indepAndQ,
+      chosenIndex: 1,
+      misconceptionTag: MISCONCEPTION.conjunctionFallacy,
+      section: "Core Probability",
+    });
+    const rung2 = ladder[1];
+    expect(rung2.kind).toBe("representation");
+    // A question-driven plan that names WHAT to determine — never the operation
+    // ("multiply"/"add") and never a rung-4-style visualization.
+    expect(rung2.text).toContain("?");
+    expect(rung2.text.toLowerCase()).not.toMatch(
+      /multiply|\badd\b|subtract|divide|draw|venn|visualize|simulate/,
+    );
+    // Still answer-withholding.
+    const answer = indepAndQ.choices[indepAndQ.correctIndex];
+    expect(containsFinalAnswer(rung2.text, answer)).toBe(false);
+  });
+
+  it("rung 4 carries a catalog-valid simLink and answer-free pointer text", () => {
+    const ladder = buildHintLadder({
+      question: indepAndQ,
+      chosenIndex: 1,
+      misconceptionTag: MISCONCEPTION.conjunctionFallacy,
+      section: "Core Probability",
+    });
+    const rung4 = ladder[3];
+    expect(rung4.kind).toBe("elicit-confront");
+    // conjunction_fallacy resolves to the two-independent-events sim.
+    expect(rung4.simLink).toBeTruthy();
+    expect(rung4.simLink?.href).toBe("/simulations#two-independent-events");
+    expect(rung4.simLink?.href.startsWith("/simulations#")).toBe(true);
+    expect(rung4.simLink?.title).toBe(SIM_BY_ID["two-independent-events"].title);
+    // The pointer text names the sim and withholds the answer.
+    expect(rung4.text).toContain(SIM_BY_ID["two-independent-events"].title);
+    const answer = indepAndQ.choices[indepAndQ.correctIndex];
+    expect(containsFinalAnswer(rung4.text, answer)).toBe(false);
+  });
+
+  it("gambler's-fallacy rung 4 keeps the coin sim AND links to coin-flips", () => {
+    const coinQ: Question = {
+      id: "gf-2",
+      prompt:
+        "A fair coin has landed heads five times in a row. What is the probability the next flip is tails?",
+      choices: ["1/2", "5/6", "1/6", "6/7"],
+      correctIndex: 0,
+      explanation: "Flips are independent, so the answer is 1/2.",
+      difficulty: "easy",
+      misconceptions: ["", MISCONCEPTION.gamblersFallacy, "", ""],
+    };
+    const ladder = buildHintLadder({
+      question: coinQ,
+      chosenIndex: 1,
+      misconceptionTag: MISCONCEPTION.gamblersFallacy,
+      section: "Core Probability",
+    });
+    const rung4 = ladder[3];
+    // The inline confront payload survives...
+    expect(isMcSpec(rung4.payload)).toBe(true);
+    if (isMcSpec(rung4.payload)) {
+      expect(rung4.payload.kind).toBe("coin");
+    }
+    // ...and now ALSO deep-links to the coin-flips sim.
+    expect(rung4.simLink?.href).toBe("/simulations#coin-flips");
+    expect(rung4.simLink?.title).toBe(SIM_BY_ID["coin-flips"].title);
+    const answer = coinQ.choices[coinQ.correctIndex];
+    for (const rung of ladder.slice(0, 4)) {
+      expect(containsFinalAnswer(rung.text, answer)).toBe(false);
+    }
+  });
+});
+
+describe("nameOnlyCoaching", () => {
+  it("keeps the naming clause and strips a trailing corrective directive", () => {
+    const out = nameOnlyCoaching(
+      "It looks like you added the two probabilities — but you should multiply them.",
+    );
+    expect(out).toContain("added");
+    expect(out).not.toMatch(/multiply|should/i);
+  });
+
+  it("strips an 'instead' / 'to get' corrective tail but keeps the mistake name", () => {
+    expect(
+      nameOnlyCoaching("You averaged the two rates instead of weighting by share."),
+    ).toContain("averaged");
+    expect(
+      nameOnlyCoaching("You averaged the two rates instead of weighting by share."),
+    ).not.toMatch(/instead/i);
+  });
+
+  it("never returns empty; falls back to the first sentence when the cut is too short", () => {
+    expect(nameOnlyCoaching("")).toBe("");
+    const s = nameOnlyCoaching(
+      "Nope. You mislabeled the branch and mixed the conditionals up completely.",
+    );
+    expect(s.length).toBeGreaterThan(0);
+  });
+});
+
+describe("buildHintLadder rung-1 (prioritised numeric name-trap cases)", () => {
+  const baseNum = (over: Partial<NumericQuestion>): NumericQuestion => ({
+    id: "num-x",
+    prompt: "What is the probability?",
+    answer: 0.2,
+    decimals: 4,
+    difficulty: "easy",
+    explanation: "It is 0.2.",
+    unit: "",
+    ...over,
+  });
+
+  it("(a) an out-of-[0,1] probability entry yields the domain pointer (answer withheld)", () => {
+    const q = baseNum({ commonErrors: [] });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 1.4,
+      section: "Core Probability",
+    });
+    expect(ladder[0].kind).toBe("name-trap");
+    expect(ladder[0].text).toContain("[0, 1]");
+    expect(containsFinalAnswer(ladder[0].text, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("(b) a close-but-not-exact unmatched entry yields the arithmetic-slip nudge", () => {
+    const q = baseNum({ commonErrors: [] });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 0.19,
+      section: "Core Probability",
+    });
+    expect(ladder[0].text.toLowerCase()).toContain("arithmetic");
+    // No operational method, no answer.
+    expect(ladder[0].text).not.toMatch(/multiply|add\b/i);
+    expect(containsFinalAnswer(ladder[0].text, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("(c) a matched misconception entry names the mistake WITHOUT the corrective op or answer", () => {
+    const q = baseNum({
+      commonErrors: [
+        {
+          value: 0.9,
+          feedback:
+            "It looks like you added the two probabilities here. Re-read what the wording is asking you to combine.",
+          misconception: "and_means_add",
+        },
+      ],
+    });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 0.9,
+      section: "Core Probability",
+    });
+    expect(ladder[0].text).toContain("added");
+    expect(ladder[0].text).not.toMatch(/multiply|you should|instead/i);
+    expect(containsFinalAnswer(ladder[0].text, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("(d) a far-off unmatched entry yields the method-free generic nudge", () => {
+    const q = baseNum({
+      answer: 42,
+      decimals: undefined,
+      commonErrors: [],
+    });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 5,
+      section: "Core Puzzles",
+    });
+    expect(ladder[0].text.toLowerCase()).toContain("not the right answer");
+    expect(ladder[0].text).not.toMatch(
+      /multiply|order matters|probability × value/i,
+    );
+    expect(containsFinalAnswer(ladder[0].text, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("rungs 1–4 never leak the answer across all four rung-1 cases", () => {
+    const cases: { q: NumericQuestion; v: number; section: string }[] = [
+      { q: baseNum({ commonErrors: [] }), v: 1.4, section: "Core Probability" },
+      { q: baseNum({ commonErrors: [] }), v: 0.19, section: "Core Probability" },
+      {
+        q: baseNum({
+          commonErrors: [
+            {
+              value: 0.9,
+              feedback: "It looks like you added the two probabilities here.",
+              misconception: "and_means_add",
+            },
+          ],
+        }),
+        v: 0.9,
+        section: "Core Probability",
+      },
+      {
+        q: baseNum({ answer: 42, decimals: undefined, commonErrors: [] }),
+        v: 5,
+        section: "Core Puzzles",
+      },
+    ];
+    for (const { q, v, section } of cases) {
+      const ladder = buildHintLadder({ question: q, chosenValue: v, section });
+      for (const rung of ladder.slice(0, 4)) {
+        expect(containsFinalAnswer(rung.text, q.answer, 1e-9)).toBe(false);
+      }
     }
   });
 });

@@ -58,9 +58,11 @@ function roundedErrorPusher(
 /*  FAMILY 1 — Rig the Bags (probability optimization)  (numeric)             */
 /* ========================================================================== */
 
+// NOTE: deliberately avoids the source GP4 "Rig the Bags" framing (TV game show
+// / gold / black tokens) so no user-facing item echoes that named scenario.
 const BAG_SCENARIOS: { host: string; prize: string; good: string; bad: string }[] =
   [
-    { host: "a TV game show", prize: "the grand prize", good: "gold", bad: "black" },
+    { host: "an office holiday raffle", prize: "the headline prize", good: "silver", bad: "charcoal" },
     { host: "a trading-floor raffle", prize: "the bonus pool", good: "green", bad: "red" },
     { host: "a carnival stall", prize: "the jackpot", good: "white", bad: "blue" },
   ];
@@ -78,7 +80,9 @@ export function buildRigBagsInstance(
 ): RigBagsInstance {
   // Keep 26 tokens total (gold + black) so the optimum P = ½ + (gold−1)/50 is a
   // clean 2-dp terminating decimal; vary the gold/black split for variety.
-  const gold = rng.pick([6, 8, 11, 13, 16, 21]);
+  // Exclude gold = 13: the source GP4 uses the 13/13 split (answer 0.74), which
+  // we must not reproduce — every other split gives a different answer.
+  const gold = rng.pick([6, 8, 11, 16, 21]);
   const black = 26 - gold;
   const p = rigBagsClosedForm(gold, black); // exact optimum via the lone-gold trick
   const answer = Number(decText(p, DP));
@@ -138,8 +142,11 @@ export function buildRigBagsInstance(
 /*  FAMILY 2 — Arbitrage detection (implied-probability sum)  (numeric)       */
 /* ========================================================================== */
 
+// NOTE: avoids the source GP2 "Tennis Odds" quote pair (1.29 / 4.70). The
+// favourite/underdog pair below is still a sub-100% book (arbitrage) but uses
+// distinct odds.
 const ODDS_PAIRS: { o1: string; o2: string; a: string; b: string }[] = [
-  { o1: "1.29", o2: "4.70", a: "the favourite", b: "the underdog" },
+  { o1: "1.35", o2: "4.20", a: "the favourite", b: "the underdog" },
   { o1: "2.05", o2: "2.10", a: "Team Red", b: "Team Blue" },
   { o1: "2.10", o2: "2.10", a: "Player North", b: "Player South" },
   { o1: "1.85", o2: "2.40", a: "the champion", b: "the challenger" },
@@ -240,11 +247,11 @@ export const gamePuzzleFlashcards: Flashcard[] = [
   {
     id: "gp-fc-arb-single",
     prompt:
-      "A bookmaker offers a two-horse race: Comet at 7:4 and Blaze at 2:3 (m:n means a €n winning bet returns your €n plus €m). You have €100 (whole-euro bets, need not bet it all). Is there a guaranteed profit, and how would you stake it?",
+      "A bookmaker offers a two-horse race: Storm at 9:4 and Dash at 3:5 (m:n means a €n winning bet returns your €n plus €m). You have €100 (whole-euro bets, need not bet it all). Is there a guaranteed profit, and how would you stake it?",
     answer:
-      "Yes — an arbitrage. Payout multiples are Comet (7+4)/4 = 2.75 and Blaze (2+3)/3 ≈ 1.667. To guarantee ≥ €100 back you need ≥ 100/2.75 ≈ €36.4 on Comet and ≥ 100/1.667 = €60 on Blaze; those sum below €100, so e.g. €38 on Comet (→ €104.50) and €62 on Blaze (→ €103.33) wins whichever horse wins.",
+      "Yes — an arbitrage. Payout multiples are Storm (9+4)/4 = 3.25 and Dash (3+5)/5 = 1.6. To guarantee ≥ €100 back you need ≥ 100/3.25 ≈ €30.8 on Storm and ≥ 100/1.6 = €62.5 on Dash; those sum below €100, so e.g. €32 on Storm (→ €104) and €65 on Dash (→ €104) wins whichever horse wins.",
     explanation:
-      "Convert each quote to a payout multiple (stake × multiple = total return): Comet 11/4 = 2.75, Blaze 5/3 ≈ 1.667. Equivalently implied probabilities 1/2.75 = 0.364 and 1/1.667 = 0.600 sum to 0.964 < 1 — a sub-100% book, the signature of an arbitrage. Size each stake so its return covers the whole outlay: ≥100/2.75 ≈ €36.4 on Comet and ≥100/1.667 = €60 on Blaze. Since €36.4 + €60 < €100 you have slack, so any split respecting both minimums (e.g. €38 / €62) returns more than €100 regardless of outcome. The answer is the STRATEGY plus one representative book — there's no unique vector.",
+      "Convert each quote to a payout multiple (stake × multiple = total return): Storm 13/4 = 3.25, Dash 8/5 = 1.6. Equivalently implied probabilities 1/3.25 ≈ 0.308 and 1/1.6 = 0.625 sum to 0.933 < 1 — a sub-100% book, the signature of an arbitrage. Size each stake so its return covers the whole outlay: ≥100/3.25 ≈ €30.8 on Storm and ≥100/1.6 = €62.5 on Dash. Since €30.8 + €62.5 < €100 you have slack, so any split respecting both minimums (e.g. €32 / €65, €3 unbet) returns more than €100 regardless of outcome. The answer is the STRATEGY plus one representative book — there's no unique vector.",
     difficulty: "hard",
     concept: "Single-book arbitrage / value betting",
     source: "Game Puzzle · Arbitrage · Citadel Securities",

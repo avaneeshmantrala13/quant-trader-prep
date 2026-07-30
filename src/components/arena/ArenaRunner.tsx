@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ArenaOp, ArenaPreset } from "@/lib/arena/config";
 import { OPTIVER_COMPETITIVE, OPTIVER_PASS } from "@/lib/arena/config";
 import { scoreRun, type AnsweredItem } from "@/lib/arena/scoring";
+import { parseFreeResponse } from "@/lib/numeric";
 
 /** The common play shape (int stream OR the richer packs collapse to this). */
 export interface PlayItem {
@@ -21,11 +22,15 @@ function isCorrect(item: PlayItem, value: number): boolean {
   return Math.round(value * f) === Math.round(item.answer * f);
 }
 
+/**
+ * Free-response parse: accepts plain numbers, decimals, fractions (`1/4`), and
+ * simple `+ − × ÷ ( )` expressions via the shared `parseFreeResponse` grader, so
+ * the timed arena is genuinely free-response (not MCQ) and a learner can type an
+ * un-simplified answer. The timed flow is unchanged — this only widens what a
+ * keystroke can mean.
+ */
 function parse(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[,$\s]/g, "").replace(/%$/, "");
-  if (!/^[+-]?\d*\.?\d+$/.test(cleaned)) return null;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : null;
+  return parseFreeResponse(raw);
 }
 
 function clock(ms: number): string {

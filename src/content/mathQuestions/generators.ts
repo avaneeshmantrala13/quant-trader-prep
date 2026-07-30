@@ -50,18 +50,31 @@ import {
 /*  Local helpers                                                              */
 /* -------------------------------------------------------------------------- */
 
-/** Deduping accumulator for numeric `commonErrors` (rounded to `dp`, ≠ answer). */
+/**
+ * Deduping accumulator for numeric `commonErrors` (rounded to `dp`, ≠ answer).
+ *
+ * `push` accepts an OPTIONAL machine-readable `misconception` tag (PHASE_1/2
+ * error-mode catalogs): when supplied it is carried onto the `commonErrors`
+ * entry so the mastery layer folds `misconceptionKey(topicKey, tag)` and the
+ * hint ladder keys rung-1 coaching / the confront strategy off it. Omitting it
+ * stays byte-compatible with the pre-conversion numeric families.
+ */
 function numericErrors(answer: number, dp: number) {
   const f = 10 ** dp;
   const seen = new Set<number>([Math.round(answer * f)]);
-  const errors: { value: number; feedback: string }[] = [];
-  const push = (raw: number, feedback: string) => {
+  const errors: { value: number; feedback: string; misconception?: string }[] =
+    [];
+  const push = (raw: number, feedback: string, misconception?: string) => {
     if (!Number.isFinite(raw) || raw < 0) return;
     const rounded = Math.round(raw * f) / f;
     const key = Math.round(rounded * f);
     if (seen.has(key)) return;
     seen.add(key);
-    errors.push({ value: rounded, feedback });
+    errors.push({
+      value: rounded,
+      feedback,
+      ...(misconception ? { misconception } : {}),
+    });
   };
   return { errors, push };
 }
@@ -754,9 +767,9 @@ export function genCountMultiples(rng: Rng): Question {
 }
 
 const POND_THEME = [
-  { surface: "pond", grower: "lily pads", verb: "double" },
-  { surface: "petri dish", grower: "a bacterial film", verb: "doubles" },
-  { surface: "lake", grower: "an algae bloom", verb: "doubles" },
+  { surface: "pond", grower: "a mat of duckweed" },
+  { surface: "petri dish", grower: "a bacterial film" },
+  { surface: "lake", grower: "an algae bloom" },
 ];
 
 /** Doubling growth: 1/2^m coverage day = fullDay − m·period. (MQ27.) */
@@ -773,7 +786,7 @@ export function genDoublingCoverage(rng: Rng): Question {
     const daysNotPeriods = fullDay - m; // stepped back m DAYS, not m periods
     return {
       id: `mq-pond-${fullDay}-${period}-${m}`,
-      prompt: `On a ${th.surface}, the area covered by ${th.grower} ${th.verb} every ${period} days, and the whole ${th.surface} is fully covered on day ${fullDay}. On what day was it ${frac} covered?`,
+      prompt: `In a ${th.surface}, ${th.grower} spreads so that the area it occupies doubles every ${period} days. The ${th.surface} is entirely blanketed on day ${fullDay}. On which earlier day did it occupy just ${frac} of the surface?`,
       correct: fmt(correct),
       distractors: [fmt(oneStep), fmt(timeFallacy), fmt(daysNotPeriods)],
       explanation: `Each ${period}-day period doubles the coverage, so going from full to ${frac} means halving ${m} times: day ${fullDay} − ${m}·${period} = day ${fmt(correct)}.`,
@@ -940,7 +953,7 @@ export function genCircleRadius(rng: Rng): NumericQuestion {
   push(Math.round(Math.sqrt(cx * cx + cy * cy)), `√((D/2)²+(E/2)²) forgets to subtract the constant F=${F}.`);
 
   const prompt =
-    `A circle satisfies x² + y² ${sgn(D)}x ${sgn(E)}y ${sgn(F)} = 0. What is its radius?`;
+    `A circle in the xy-plane is described by the general-form equation x² + y² ${sgn(D)}x ${sgn(E)}y ${sgn(F)} = 0. What is the length of its radius?`;
   const explanation =
     `Complete the square: centre (${cx}, ${cy}), and r² = (${-D}/2)² + (${-E}/2)² − (${F}) = ${cx * cx} + ${cy * cy} − ${F} = ${rr * rr}. So r = ${answer}.`;
 
@@ -954,6 +967,378 @@ export function genCircleRadius(rng: Rng): NumericQuestion {
     unit: "",
     commonErrors: errors,
     source: "Math Questions · Geometry",
+  };
+}
+
+/* ========================================================================== */
+/*  MCQ → FREE-RESPONSE (numeric) CONVERSIONS  (PHASE_1/2)                      */
+/*                                                                             */
+/*  The COUNTING (mq-2) and NUMBER_THEORY (mq-4) families all answer with a    */
+/*  clean WHOLE-NUMBER count/sum/day, so they are eligible for free-response.  */
+/*  Each `gen<Family>Numeric` reuses the SAME exact solver as its quiz twin    */
+/*  (kept above, unchanged, so existing tests keep passing) and re-expresses   */
+/*  the quiz's genuine distractors as a parametric error-mode catalog: a wrong */
+/*  value + a snake_case misconception tag + an encouraging rung-1 coaching    */
+/*  line that NAMES the slip and asks a leading question WITHOUT the answer.    */
+/* ========================================================================== */
+
+/* ---- FAMILY 2 (mq-2) — COUNTING & ARRANGEMENTS → numeric ----------------- */
+
+/** Free-response twin of {@link genColdStorage}: ⌊L/s⌋·⌊W/s⌋·⌊H/s⌋ cubes. */
+export function genColdStorageNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(COLD_THEME);
+  const s = rng.pick([3, 4, 5]);
+  const dim = () => {
+    let d = rng.int(20, 40);
+    if (d % s === 0) d += 1; // ensure flooring actually bites
+    return d;
+  };
+  const L = dim();
+  const W = dim();
+  const H = dim();
+  const fL = Math.floor(L / s);
+  const fW = Math.floor(W / s);
+  const fH = Math.floor(H / s);
+  const answer = packedCubes([L, W, H], s);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    volumeTrap([L, W, H], s),
+    `Careful — that's the whole VOLUME ${fmt(L * W * H)} divided by ${s}³. Leftover space along an edge can't be pooled to hold another cube. Should you floor each edge first, or divide the volumes?`,
+    "volume_division_pack",
+  );
+  push(
+    Math.ceil(L / s) * Math.ceil(W / s) * Math.ceil(H / s),
+    `Close — but rounding each edge UP counts cubes that would poke out past the walls. When a whole cube must fit inside, which way do you round each edge?`,
+    "ceil_not_floor",
+  );
+  push(
+    fL * fW,
+    `You multiplied only two edges. What about the ${fH} layers stacked along the third dimension?`,
+    "dropped_third_dimension",
+  );
+
+  const prompt =
+    `A ${th.box} measures ${L}×${W}×${H} cm. How many solid ${s}×${s}×${s} cm ${th.item}s can be packed inside (no cutting, axis-aligned)? (Enter a whole number.)`;
+  const explanation =
+    `Fit ⌊${L}/${s}⌋=${fL} along one edge, ⌊${W}/${s}⌋=${fW} along another, and ⌊${H}/${s}⌋=${fH} along the last, then multiply: ${fL}·${fW}·${fH} = ${fmt(answer)}. You must FLOOR each dimension first, because the leftover on an edge can't hold another cube.`;
+
+  return {
+    id: `mq-cold-num-${L}-${W}-${H}-${s}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Packing count (floor per dimension, then multiply)",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Counting",
+  };
+}
+
+/** Free-response twin of {@link genGridRectangles}: C(n+1,2)² rectangles. */
+export function genGridRectanglesNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(GRID_THEME);
+  const n = rng.pick([6, 7, 8, 9, 10]);
+  const lines = choose(n + 1, 2);
+  const answer = gridRectangles(n);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    gridSquares(n),
+    `That counts only the equal-sided SQUARES. A rectangle traced on the grid lines need not have equal sides — must every rectangle be a square?`,
+    "squares_not_rectangles",
+  );
+  push(
+    lines,
+    `You picked one pair of lines (${lines} ways) in a single direction. A rectangle fixes a pair of lines in BOTH directions — how do two independent choices combine?`,
+    "one_dimension_only",
+  );
+  push(
+    n * n,
+    `${fmt(n * n)} counts just the smallest unit ${th.cell}s. What about the larger rectangles that span several ${th.cell}s at once?`,
+    "unit_cells_only",
+  );
+
+  const prompt =
+    `On an ${n}×${n} ${th.grid} (a grid of ${n}×${n} ${th.cell}s), how many rectangles of any size can be traced along the grid lines? (Enter a whole number.)`;
+  const explanation =
+    `A rectangle is fixed by choosing 2 of the ${n + 1} vertical lines and 2 of the ${n + 1} horizontal lines: C(${n + 1},2)·C(${n + 1},2) = ${lines}² = ${fmt(answer)}.`;
+
+  return {
+    id: `mq-rects-num-${n}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Rectangles on a grid = C(n+1,2)²",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Counting",
+  };
+}
+
+/** Free-response twin of {@link genWordArrangements}: n!/(2!·2!). */
+export function genWordArrangementsNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(WORD_THEME);
+  const singles = rng.int(3, 5);
+  const n = singles + 4; // + two letters that each appear twice
+  const alphabet = "MKPRTLNS".split("");
+  const chosen = rng.shuffle(alphabet).slice(0, singles + 2);
+  const letters: string[] = [];
+  letters.push(chosen[0], chosen[0], chosen[1], chosen[1]);
+  for (let i = 2; i < chosen.length; i++) letters.push(chosen[i]);
+  const word = rng.shuffle(letters).join("");
+  const answer = multinomial([2, 2, ...Array(singles).fill(1)]); // n!/(2!2!)
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    factorial(n),
+    `${n}! treats every character as distinct — but two of them repeat. When two identical letters swap places, do you get a genuinely NEW arrangement?`,
+    "ignored_repeats",
+  );
+  push(
+    factorial(n) / 2,
+    `You divided by 2! for only ONE of the doubled characters. How many characters appear twice, and does each need its own correction?`,
+    "one_repeat_only",
+  );
+  push(
+    factorial(n) / 8,
+    `That divides by one 2! too many. There are exactly two doubled characters — should you divide by 2!·2! or by 2!·2!·2!?`,
+    "over_divided_repeats",
+  );
+
+  const prompt =
+    `How many DISTINCT arrangements are there of the ${n} characters in the ${th.label} "${word}" (two characters each appear twice)? (Enter a whole number.)`;
+  const explanation =
+    `There are ${n}! orderings, but each repeated pair is interchangeable, so divide by 2! for EACH doubled character: ${n}!/(2!·2!) = ${fmt(factorial(n))}/4 = ${fmt(answer)}.`;
+
+  return {
+    id: `mq-word-num-${word}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Permutations of a multiset (repeated letters)",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Counting",
+  };
+}
+
+/** Free-response twin of {@link genRoundRobin}: meetings·C(n,2) games. */
+export function genRoundRobinNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(LEAGUE_THEME);
+  const n = rng.int(5, 12);
+  const meetings = rng.pick([2, 3]);
+  const once = choose(n, 2);
+  const answer = roundRobinGames(n, meetings);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    once,
+    `That counts each matchup only once. But every pair of ${th.side}s meets ${meetings} times — how should that scale the total?`,
+    "forgot_meetings",
+  );
+  push(
+    n * n,
+    `${fmt(n * n)} = ${n}² counts ordered pairs, including a ${th.side} paired with itself. Should a ${th.side} face itself, and does the order within a matchup matter?`,
+    "included_self_pairs",
+  );
+  push(
+    meetings * n * (n - 1),
+    `That treats "A hosts B" and "B hosts A" as different games. For an unordered matchup, what must ${n}·(${n}−1) be divided by?`,
+    "ordered_pairs_double_count",
+  );
+
+  const prompt =
+    `A ${th.comp} has ${n} ${th.side}s. Every pair of ${th.side}s plays each other exactly ${meetings} times. How many games are played in total? (Enter a whole number.)`;
+  const explanation =
+    `There are C(${n},2) = ${once} distinct pairings, and each is played ${meetings} times: ${meetings}·${once} = ${fmt(answer)}.`;
+
+  return {
+    id: `mq-league-num-${n}-${meetings}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Round-robin scheduling (combinations × meetings)",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Counting",
+  };
+}
+
+/* ---- FAMILY 4 (mq-4) — NUMBER THEORY & GROWTH → numeric ------------------ */
+
+/** Free-response twin of {@link genSumOddsRange}: sum of odds in [a,b]. */
+export function genSumOddsRangeNumeric(rng: Rng): NumericQuestion {
+  const a = rng.pick([20, 40, 50, 60, 100]);
+  const span = rng.pick([50, 60, 80, 100]);
+  const b = a + span;
+  const answer = sumOddsInRange(a, b);
+  const lo = a % 2 === 0 ? a + 1 : a;
+  const hi = b % 2 === 0 ? b - 1 : b;
+  const count = (hi - lo) / 2 + 1;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    sumRange(a, b),
+    `That sums EVERY integer in the range, not only the odd ones. Which half of the numbers should be left out?`,
+    "summed_all_integers",
+  );
+  push(
+    sumEvensInRange(a, b),
+    `That's the sum of the EVEN integers instead. Which parity did the question actually ask for?`,
+    "summed_evens_instead",
+  );
+  push(
+    count * count,
+    `Looks like "the first n odds sum to n²" — but that identity only holds for 1,3,5,… starting at 1. Does this range start at 1?`,
+    "n_squared_misapplied",
+  );
+
+  const prompt = `What is the sum of all ODD integers from ${a} to ${b} inclusive? (Enter a whole number.)`;
+  const explanation =
+    `The odd integers run ${lo}, ${lo + 2}, …, ${hi} — that's ${count} terms averaging (${lo}+${hi})/2 = ${(lo + hi) / 2}. Sum = ${count}·${(lo + hi) / 2} = ${fmt(answer)}.`;
+
+  return {
+    id: `mq-sumodds-num-${a}-${b}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Arithmetic series of odd numbers",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Number Theory",
+  };
+}
+
+/** Free-response twin of {@link genSumRange}: sum of a contiguous range. */
+export function genSumRangeNumeric(rng: Rng): NumericQuestion {
+  const a = rng.int(6, 16);
+  const b = a + rng.int(8, 20);
+  const answer = sumRange(a, b);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    sumRange(1, b),
+    `That sums from 1 up to ${b}. The range starts at ${a} — what do you subtract to drop the 1..${a - 1} head?`,
+    "forgot_lower_bound",
+  );
+  push(
+    answer - b,
+    `Looks like an off-by-one that stops at ${b - 1}. Is the final endpoint ${b} included when the range is "inclusive"?`,
+    "dropped_last_term",
+  );
+  push(
+    a * b,
+    `${a}·${b} just multiplies the endpoints. A run of consecutive integers is (#terms)×(average) — how many terms are there, and what's their average?`,
+    "multiplied_endpoints",
+  );
+
+  const prompt = `What is the sum of the consecutive integers from ${a} to ${b} inclusive? (Enter a whole number.)`;
+  const explanation =
+    `Sum(${a}..${b}) = ${b - a + 1} terms × average ${(a + b) / 2} = ${fmt(answer)}. (Equivalently Sum(1..${b}) − Sum(1..${a - 1}).)`;
+
+  return {
+    id: `mq-sumrange-num-${a}-${b}`,
+    prompt,
+    answer,
+    difficulty: "easy",
+    concept: "Sum of a contiguous integer range",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Number Theory",
+  };
+}
+
+/** Free-response twin of {@link genCountMultiples}: ⌊hi/d⌋−⌊(lo−1)/d⌋. */
+export function genCountMultiplesNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(MULT_THEME);
+  const d = rng.pick([7, 9, 11, 13, 37]);
+  const lo = rng.int(2, 6) * 100 + 1;
+  const hi = lo - 1 + rng.pick([300, 500, 700, 900]);
+  const answer = countMultiples(lo, hi, d);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    Math.floor((hi - lo) / d),
+    `That divides the SPAN ${fmt(hi - lo)} by ${d}, which can miss a boundary multiple. Counting multiples in [${fmt(lo)}, ${fmt(hi)}] is a difference of two floor-divisions — which two?`,
+    "span_over_d",
+  );
+  push(
+    Math.floor(hi / d),
+    `That counts multiples of ${d} from 1 up to ${fmt(hi)}, forgetting the ${fmt(lo)} lower cutoff. What should you subtract for the numbers below ${fmt(lo)}?`,
+    "forgot_lower_cutoff",
+  );
+  push(
+    Math.floor(lo / d),
+    `That only reaches the START of the range. Shouldn't you count multiples all the way up to ${fmt(hi)}, not just up to ${fmt(lo)}?`,
+    "up_to_start_only",
+  );
+
+  const prompt =
+    `Among the ${th.thing} numbered ${fmt(lo)} through ${fmt(hi)}, how many have a ${th.id} that is a multiple of ${d}? (Enter a whole number.)`;
+  const explanation =
+    `Multiples of ${d} up to ${fmt(hi)}: ⌊${fmt(hi)}/${d}⌋ = ${Math.floor(hi / d)}. Below ${fmt(lo)}: ⌊${fmt(lo - 1)}/${d}⌋ = ${Math.floor((lo - 1) / d)}. Difference = ${fmt(answer)}.`;
+
+  return {
+    id: `mq-mult-num-${d}-${lo}-${hi}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Counting multiples in an interval",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Number Theory",
+  };
+}
+
+/** Free-response twin of {@link genDoublingCoverage}: fullDay − m·period. */
+export function genDoublingCoverageNumeric(rng: Rng): NumericQuestion {
+  const th = rng.pick(POND_THEME);
+  const period = rng.pick([2, 3]);
+  const m = rng.pick([2, 3]);
+  const fullDay = rng.int(30, 48);
+  const answer = doublingDayForFraction(fullDay, period, m); // fullDay − m·period
+  const frac = `1/${2 ** m}`;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    fullDay - period,
+    `Day ${fullDay - period} steps back only ONE ${period}-day period — that's the HALF-covered day. To reach ${frac}, how many times must the coverage halve?`,
+    "one_period_only",
+  );
+  push(
+    Math.round(fullDay / 2 ** m),
+    `That applies the fraction ${frac} to the DAY NUMBER. Doubling scales the AREA each period, not the calendar day — should you divide the day, or step back whole periods?`,
+    "fraction_of_time_fallacy",
+  );
+  push(
+    fullDay - m,
+    `You stepped back ${m} DAYS, but coverage halves once per ${period}-day PERIOD. How many days is ${m} whole periods?`,
+    "days_not_periods",
+  );
+
+  const prompt =
+    `In a ${th.surface}, ${th.grower} spreads so that the area it occupies doubles every ${period} days. The ${th.surface} is entirely blanketed on day ${fullDay}. On which earlier day did it occupy just ${frac} of the surface? (Enter a whole number.)`;
+  const explanation =
+    `Each ${period}-day period doubles the coverage, so going from full back to ${frac} means halving ${m} times: day ${fullDay} − ${m}·${period} = day ${fmt(answer)}.`;
+
+  return {
+    id: `mq-pond-num-${fullDay}-${period}-${m}`,
+    prompt,
+    answer,
+    difficulty: "medium",
+    concept: "Doubling growth (work backward by periods)",
+    explanation,
+    unit: "",
+    commonErrors: errors,
+    source: "Math Questions · Number Theory",
   };
 }
 
@@ -988,6 +1373,14 @@ export const COUNTING = [
   genRoundRobin,
 ];
 
+/** Free-response (numeric) forms of the COUNTING families — mq-2 conversion. */
+export const COUNTING_NUMERIC = [
+  genColdStorageNumeric,
+  genGridRectanglesNumeric,
+  genWordArrangementsNumeric,
+  genRoundRobinNumeric,
+];
+
 export const ALGEBRA_SYSTEMS = [
   genTriangularTotal,
   genHeadsLegs,
@@ -1003,6 +1396,14 @@ export const NUMBER_THEORY = [
   genDoublingCoverage,
 ];
 
+/** Free-response (numeric) forms of the NUMBER_THEORY families — mq-4 conversion. */
+export const NUMBER_THEORY_NUMERIC = [
+  genSumOddsRangeNumeric,
+  genSumRangeNumeric,
+  genCountMultiplesNumeric,
+  genDoublingCoverageNumeric,
+];
+
 export const GEOMETRY = [
   genClockAngle,
   genPaintPots,
@@ -1010,7 +1411,24 @@ export const GEOMETRY = [
   genCircleRadius,
 ];
 
-/** All generators, for the verification test harness. */
+/**
+ * MCQ→free-response conversions (PHASE_1/2): the numeric twins of the mq-2
+ * COUNTING and mq-4 NUMBER_THEORY families, each carrying a tagged parametric
+ * error-mode catalog. Split out so the test can additionally assert every
+ * `commonError` on these families is tagged with a `misconception`.
+ */
+export const CONVERTED_NUMERIC_GENERATORS = {
+  genColdStorageNumeric,
+  genGridRectanglesNumeric,
+  genWordArrangementsNumeric,
+  genRoundRobinNumeric,
+  genSumOddsRangeNumeric,
+  genSumRangeNumeric,
+  genCountMultiplesNumeric,
+  genDoublingCoverageNumeric,
+};
+
+/** All numeric generators, for the verification test harness. */
 export const NUMERIC_GENERATORS = {
   genFillDrainTank,
   genTwoLegTrip,
@@ -1025,8 +1443,15 @@ export const NUMERIC_GENERATORS = {
   genPaintPots,
   genUnfoldedBox,
   genCircleRadius,
+  ...CONVERTED_NUMERIC_GENERATORS,
 };
 
+/**
+ * The ORIGINAL quiz generators for the mq-2 / mq-4 families. Kept exported +
+ * tested even though those levels now route to their numeric twins above — the
+ * multiple-choice items remain valid and the existing round-trip/fingerprint
+ * tests exercise them.
+ */
 export const QUIZ_GENERATORS = {
   genColdStorage,
   genGridRectangles,

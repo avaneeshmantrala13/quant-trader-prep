@@ -1,13 +1,18 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useProgress } from "@/context/ProgressContext";
 import { useTheme } from "@/context/ThemeContext";
 import { TRACKS } from "@/content";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
-import { TickerTape } from "@/components/visuals/TickerTape";
+import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
+import { ONBOARDING_TOUR_STEPS } from "@/lib/onboarding/steps";
+import { shouldShowOnboardingTour } from "@/lib/onboarding/tour";
 import {
   CandlestickIcon,
+  CloseIcon,
   LogoutIcon,
+  MenuIcon,
   MoonIcon,
   SunIcon,
 } from "@/components/icons";
@@ -34,23 +39,139 @@ function Readout({ label, value }: { label: string; value: string | number }) {
 
 export function AppShell() {
   const { username, logOut } = useAuth();
-  const { progress } = useProgress();
+  const { progress, markOnboardingTourDone } = useProgress();
   const { theme, toggleTheme } = useTheme();
+  const location = useLocation();
 
-  const navItems = [
+  // New-user onboarding tour. Auto-opens ONCE, right after the diagnostic is
+  // finished and the learner lands on an in-app route (trigger logic lives in
+  // the pure `shouldShowOnboardingTour`). We stamp the "shown once" flag on
+  // first auto-open so it never reappears on its own; it stays re-openable via
+  // the "Show tutorial" affordance below.
+  const [tourOpen, setTourOpen] = useState(false);
+  const autoStartedRef = useRef(false);
+
+  useEffect(() => {
+    if (autoStartedRef.current) return;
+    if (
+      shouldShowOnboardingTour(
+        progress.diagnosticDoneAt,
+        progress.onboardingTourDoneAt,
+        location.pathname,
+      )
+    ) {
+      autoStartedRef.current = true;
+      setTourOpen(true);
+      markOnboardingTourDone();
+    }
+  }, [
+    progress.diagnosticDoneAt,
+    progress.onboardingTourDoneAt,
+    location.pathname,
+    markOnboardingTourDone,
+  ]);
+
+  const closeTour = useCallback(() => {
+    setTourOpen(false);
+    markOnboardingTourDone();
+  }, [markOnboardingTourDone]);
+
+  /* ---- Hamburger navigation menu ----------------------------------------- */
+  // The nav is a single 3-line "hamburger" button that opens a themed, keyboard-
+  // accessible menu of every destination. `menuOpen` tracks a USER-driven open
+  // (focus-managed, Esc / click-outside close). The onboarding tour can also
+  // reveal the menu so its coach-marks can anchor to items that would otherwise
+  // be collapsed (`tourTarget`) — that open is passive (no focus trap / scrim)
+  // because the tour owns focus while it runs.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [tourTarget, setTourTarget] = useState<string | undefined>(undefined);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuBtnRef = useRef<HTMLButtonElement | null>(null);
+
+  // Every nav target lives inside the menu, so any anchored tour step (i.e. any
+  // target other than the hamburger button itself) needs the menu revealed.
+  const tourWantsMenu = tourTarget != null && tourTarget !== "menu";
+  const menuVisible = menuOpen || tourWantsMenu;
+
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
+
+  // User-open behaviors: move focus into the menu, close on Esc (restoring focus
+  // to the button), and close on an outside click. Skipped for a tour-driven
+  // reveal so the tour's own focus management is never fought.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const raf = window.requestAnimationFrame(() => {
+      menuRef.current
+        ?.querySelector<HTMLElement>('[role="menuitem"]')
+        ?.focus();
+    });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setMenuOpen(false);
+        menuBtnRef.current?.focus();
+      }
+    };
+    const onPointer = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (
+        !menuRef.current?.contains(t) &&
+        !menuBtnRef.current?.contains(t)
+      ) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("mousedown", onPointer);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("mousedown", onPointer);
+    };
+  }, [menuOpen]);
+
+  // Close the menu whenever the route changes (a menu item navigated).
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // `tour` tags a menu item with a stable `data-tour` hook so the onboarding
+  // coach-marks can anchor an arrow to it (see `@/lib/onboarding`). The tracks
+  // step points at the Table of Contents; probability gets its own hook; the
+  // new Simulations tab gets one too.
+  const navItems: {
+    to: string;
+    label: string;
+    end: boolean;
+    tour?: string;
+  }[] = [
     { to: "/", label: "Home", end: true },
-    { to: "/dashboard", label: "Dashboard", end: false },
-    { to: "/arena", label: "Speed Arena", end: false },
-    { to: "/diagnostic", label: "Recalibrate", end: false },
-    ...TRACKS.map((t) => ({ to: `/track/${t.id}`, label: t.title, end: false })),
-    { to: "/themes", label: "Themes", end: false },
+    { to: "/roadmap", label: "Roadmap", end: false },
+    { to: "/dashboard", label: "Dashboard", end: false, tour: "dashboard" },
+    { to: "/contents", label: "Table of Contents", end: false, tour: "contents" },
+    { to: "/simulations", label: "Simulations", end: false, tour: "simulations" },
+    { to: "/fermi", label: "Fermi Drill", end: false },
+    ...TRACKS.map((t) => ({
+      to: `/track/${t.id}`,
+      label: t.title,
+      end: false,
+      tour: t.id === "probability" ? "probability" : undefined,
+    })),
+    { to: "/arena", label: "Speed Arena", end: false, tour: "arena" },
+    { to: "/diagnostic", label: "Recalibrate", end: false, tour: "recalibrate" },
+    { to: "/themes", label: "Themes", end: false, tour: "themes" },
   ];
 
   return (
     <div className="relative min-h-[100dvh]">
       <ThemeBackground />
 
-      <header className="relative z-20 border-b-[3px] border-border-strong bg-surface">
+      {/* z-50 lifts the header's stacking context ABOVE the z-30 scrim (a root
+          sibling). The menu (z-40, a header descendant) therefore paints and
+          receives pointer events above the scrim. Event order on a menu-item
+          click: mousedown (target inside menuRef → click-outside handler no-ops)
+          → click → NavLink navigates + closeMenu(); route-change effect also
+          closes. The scrim (z-30) still dims main/footer (z-10). */}
+      <header className="relative z-50 border-b-[3px] border-border-strong bg-surface">
         {/* Meta / dateline bar */}
         <div className="border-b border-subtle">
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-4 py-1.5">
@@ -59,6 +180,22 @@ export function AppShell() {
             </span>
             <span className="label text-[9px] text-bull">● Markets Open</span>
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setTourOpen(true)}
+                className="btn-ghost !min-h-0 gap-1.5 !px-2 !py-1.5"
+                aria-label="Show tutorial"
+                title="Show the getting-started tutorial"
+              >
+                <span
+                  aria-hidden="true"
+                  className="grid h-4 w-4 place-items-center rounded-full border border-current text-[10px] font-bold leading-none"
+                >
+                  ?
+                </span>
+                <span className="label hidden text-[9px] sm:inline">
+                  Tutorial
+                </span>
+              </button>
               <button
                 onClick={toggleTheme}
                 className="btn-ghost !min-h-0 !px-2 !py-1.5"
@@ -83,21 +220,76 @@ export function AppShell() {
           </div>
         </div>
 
-        {/* Nameplate */}
+        {/* Nameplate + hamburger */}
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-          <NavLink to="/" className="flex items-center gap-3">
-            <span className="grid h-10 w-10 place-items-center border border-border-strong text-primary">
-              <CandlestickIcon width={22} height={22} />
-            </span>
-            <span className="flex flex-col leading-none">
-              <span className="font-display text-2xl font-black tracking-tight text-primary sm:text-3xl">
-                Quant Trader Prep
+          <div className="flex items-center gap-2">
+            {/* Hamburger: opens the full navigation menu. */}
+            <div className="relative">
+              <button
+                ref={menuBtnRef}
+                type="button"
+                data-tour="menu"
+                onClick={() => setMenuOpen((o) => !o)}
+                aria-label={menuOpen ? "Close navigation menu" : "Open navigation menu"}
+                aria-haspopup="menu"
+                aria-expanded={menuVisible}
+                aria-controls="app-nav-menu"
+                title="Navigation"
+                className="btn-ghost !min-h-0 gap-1.5 !px-2.5 !py-2"
+              >
+                {menuOpen ? (
+                  <CloseIcon width={20} height={20} />
+                ) : (
+                  <MenuIcon width={20} height={20} />
+                )}
+                <span className="label hidden text-[9px] sm:inline">Menu</span>
+              </button>
+
+              {menuVisible && (
+                <div
+                  id="app-nav-menu"
+                  ref={menuRef}
+                  role="menu"
+                  aria-label="Main navigation"
+                  className="absolute left-0 top-full z-40 mt-2 max-h-[70vh] w-64 overflow-y-auto rounded-md border border-border-strong bg-surface p-1 shadow-2xl motion-safe:animate-print-in"
+                >
+                  {navItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      role="menuitem"
+                      data-tour={item.tour}
+                      onClick={closeMenu}
+                      className={({ isActive }) =>
+                        `block rounded-sm px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
+                          isActive
+                            ? "bg-accent text-accent-contrast"
+                            : "text-secondary hover:bg-surface-muted hover:text-primary"
+                        }`
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <NavLink to="/" className="flex items-center gap-3">
+              <span className="grid h-10 w-10 place-items-center border border-border-strong text-primary">
+                <CandlestickIcon width={22} height={22} />
               </span>
-              <span className="label mt-1 hidden text-[9px] sm:block">
-                The Interview Desk · Beginner → Expert Edition
+              <span className="flex flex-col leading-none">
+                <span className="font-display text-2xl font-black tracking-tight text-primary sm:text-3xl">
+                  Quant Trader Prep
+                </span>
+                <span className="label mt-1 hidden text-[9px] sm:block">
+                  The Interview Desk · Beginner → Expert Edition
+                </span>
               </span>
-            </span>
-          </NavLink>
+            </NavLink>
+          </div>
 
           <div className="flex items-center gap-4">
             <Readout label="Streak" value={`${progress.streak}d`} />
@@ -105,33 +297,19 @@ export function AppShell() {
             <Readout label="XP" value={progress.xp} />
           </div>
         </div>
-
-        {/* Section nav */}
-        <nav className="border-t border-subtle">
-          <div className="mx-auto max-w-6xl px-2">
-            <div className="no-scrollbar flex gap-0 overflow-x-auto">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  className={({ isActive }) =>
-                    `whitespace-nowrap border-b-2 px-3.5 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
-                      isActive
-                        ? "border-accent text-accent"
-                        : "border-transparent text-secondary hover:text-primary"
-                    }`
-                  }
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        </nav>
-
-        <TickerTape />
       </header>
+
+      {/* Dimming scrim for a user-opened menu (closes on click; the tour uses
+          its own spotlight so no scrim is shown during a tour reveal). */}
+      {menuOpen && (
+        <button
+          type="button"
+          aria-hidden="true"
+          tabIndex={-1}
+          onClick={closeMenu}
+          className="fixed inset-0 z-30 cursor-default bg-black/20"
+        />
+      )}
 
       <main className="relative z-10 mx-auto max-w-6xl px-4 py-6 sm:py-8">
         <Outlet />
@@ -145,6 +323,13 @@ export function AppShell() {
           </span>
         </div>
       </footer>
+
+      <OnboardingTour
+        open={tourOpen}
+        steps={ONBOARDING_TOUR_STEPS}
+        onClose={closeTour}
+        onActiveTargetChange={setTourTarget}
+      />
     </div>
   );
 }

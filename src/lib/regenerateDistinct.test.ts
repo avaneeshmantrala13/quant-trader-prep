@@ -7,7 +7,7 @@ import type {
   QuestionGenerator,
 } from "@/types/content";
 import { PROB_GENERATORS } from "@/content/probability/generators";
-import { probabilityTrack } from "@/content/probability/levels";
+import { mixQuestionGenerators } from "@/content/mixFamilies";
 import {
   MAX_REGEN_ATTEMPTS,
   generateFreshFlashcard,
@@ -77,7 +77,16 @@ describe("quiz regeneration never returns the current item (small space)", () =>
 /* -------------------------------------------------------------------------- */
 
 describe("whole-level (button #2) regeneration never returns the current item", () => {
-  const level = probabilityTrack.levels[0]; // mix([...]) — multiple families
+  // Synthetic multi-family QUIZ mix from still-quiz PROB_GENERATORS (core pr-1..3
+  // are now free-response numeric).
+  const level: Level = {
+    ...baseLevel,
+    generator: mixQuestionGenerators([
+      PROB_GENERATORS.genUnion,
+      PROB_GENERATORS.genIntersectionIndep,
+      PROB_GENERATORS.genCombinations,
+    ]),
+  };
 
   it("with `avoid`, no seed reproduces the source content", () => {
     const source = generateFreshQuestion(level, 555)!;

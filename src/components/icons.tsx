@@ -84,31 +84,6 @@ export function CheckIcon(props: IconProps) {
   );
 }
 
-export function StarIcon(props: IconProps) {
-  return (
-    <svg {...base(props)} fill="currentColor" stroke="none">
-      <path d="M12 2.5l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3-5.8 3 1.1-6.5L2.6 9.3l6.5-.9L12 2.5Z" />
-    </svg>
-  );
-}
-
-export function FlameIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M12 3c1 3-2 4-2 7a2 2 0 0 0 4 0c0-1 0-1 .5-2 1.5 1.5 2.5 3 2.5 5a5 5 0 0 1-10 0c0-4 4-6 5-10Z" />
-    </svg>
-  );
-}
-
-export function TrophyIcon(props: IconProps) {
-  return (
-    <svg {...base(props)}>
-      <path d="M7 4h10v4a5 5 0 0 1-10 0V4Z" />
-      <path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M9 17h6M10 17v-2M14 17v-2M8 21h8" />
-    </svg>
-  );
-}
-
 export function SunIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
@@ -154,6 +129,31 @@ export function SigmaIcon(props: IconProps) {
   return (
     <svg {...base(props)}>
       <path d="M17 5H7l6 7-6 7h10" />
+    </svg>
+  );
+}
+
+export function MenuIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M6 6l12 12M18 6l-12 12" />
+    </svg>
+  );
+}
+
+export function ChartIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M4 4v16h16" />
+      <path d="M8 14l3-4 3 3 4-6" />
     </svg>
   );
 }

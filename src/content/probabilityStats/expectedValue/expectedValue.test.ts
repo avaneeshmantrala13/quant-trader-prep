@@ -34,7 +34,7 @@ import {
 } from "./ev";
 import { decText, fracText, meetWithinProb, uniformOrderStatEV } from "./ev";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeFreeResponse, gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import * as G from "./generators";
 
@@ -412,6 +412,47 @@ function reDeriveNumeric(q: NumericQuestion): ReturnType<typeof F> {
       const [nn, k] = n;
       return uniformOrderStatEV(k, nn);
     }
+    // MCQ→free-response conversions (ev-1 & ev-5).
+    case "matchnum": {
+      const [N] = n;
+      return F(1, N);
+    }
+    case "differnum": {
+      const [N] = n;
+      return F(N - 1, N);
+    }
+    case "allsamenum": {
+      const [nn] = n;
+      return F(1, 2 ** (nn - 1));
+    }
+    case "3dicenum": {
+      const [a, b, c] = n;
+      return F(6 * a + 90 * b - 120 * c, 216);
+    }
+    case "higherdiffernum": {
+      const [N] = n;
+      return higherWhenDifferEV(N);
+    }
+    case "2ndmomentnum": {
+      const [N] = n;
+      return dieSecondMoment(N);
+    }
+    case "headstailsnum": {
+      const [nn] = n;
+      return F(nn * (nn - 1), 4);
+    }
+    case "expmomentnum": {
+      const [lambda] = n;
+      return F(2, lambda * lambda);
+    }
+    case "sumunifnum": {
+      const [k, L] = n;
+      return F(k * L, 2);
+    }
+    case "cltvarnum": {
+      const [coins, dice] = n;
+      return F(coins, 4).add(F(dice).mul(dieVariance(6)));
+    }
     default:
       throw new Error(`no re-derivation for numeric family ${key}`);
   }
@@ -486,7 +527,33 @@ const NUMERIC_GENS: [string, (rng: Rng) => NumericQuestion][] = [
   ["genMeetWithin", G.genMeetWithin],
   ["genMaxDice", G.genMaxDice],
   ["genUniformSpacing", G.genUniformSpacing],
+  // ev-1 & ev-5 MCQ→free-response conversions.
+  ["genTwoDiceMatchNumeric", G.genTwoDiceMatchNumeric],
+  ["genDifferNumeric", G.genDifferNumeric],
+  ["genAllSameCoinsNumeric", G.genAllSameCoinsNumeric],
+  ["genThreeDicePayoffNumeric", G.genThreeDicePayoffNumeric],
+  ["genHigherDifferNumeric", G.genHigherDifferNumeric],
+  ["genSecondMomentNumeric", G.genSecondMomentNumeric],
+  ["genHeadsTimesTailsNumeric", G.genHeadsTimesTailsNumeric],
+  ["genExpMomentNumeric", G.genExpMomentNumeric],
+  ["genSumUniformsNumeric", G.genSumUniformsNumeric],
+  ["genCltVarianceNumeric", G.genCltVarianceNumeric],
 ];
+
+/** The ev-1 & ev-5 numeric generators, by canonical tag(s) they should carry. */
+const CONVERTED_NUMERIC_GENS: [string, (rng: Rng) => NumericQuestion, string?][] =
+  [
+    ["genTwoDiceMatchNumeric", G.genTwoDiceMatchNumeric],
+    ["genDifferNumeric", G.genDifferNumeric, "complement_confusion"],
+    ["genAllSameCoinsNumeric", G.genAllSameCoinsNumeric],
+    ["genThreeDicePayoffNumeric", G.genThreeDicePayoffNumeric, "equal_weight_mixture"],
+    ["genHigherDifferNumeric", G.genHigherDifferNumeric],
+    ["genSecondMomentNumeric", G.genSecondMomentNumeric],
+    ["genHeadsTimesTailsNumeric", G.genHeadsTimesTailsNumeric],
+    ["genExpMomentNumeric", G.genExpMomentNumeric],
+    ["genSumUniformsNumeric", G.genSumUniformsNumeric],
+    ["genCltVarianceNumeric", G.genCltVarianceNumeric],
+  ];
 
 const QUIZ_GENS: [string, (rng: Rng) => Question][] = [
   ["genTwoDiceMatch", G.genTwoDiceMatch],
@@ -536,6 +603,29 @@ describe("numeric generators: independent re-derivation + grading + distractors"
         expect(new Set(keys).size).toBe(keys.length);
         expect(q.answer).toBeGreaterThanOrEqual(0);
       }
+    });
+  }
+});
+
+describe("ev-1 & ev-5 free-response conversions: tagged error modes + fraction grading", () => {
+  for (const [name, gen, expectTag] of CONVERTED_NUMERIC_GENS) {
+    it(`${name} — every commonError is a NAMED misconception; accepts a fraction/decimal`, () => {
+      const seenTags = new Set<string>();
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        const dp = q.decimals ?? 0;
+        // Every error mode carries a machine-readable misconception tag +
+        // a substantive rung-1 coaching sentence that never states the answer.
+        for (const ce of q.commonErrors ?? []) {
+          expect(ce.misconception, `${name} untagged commonError`).toBeTruthy();
+          expect(ce.feedback.length).toBeGreaterThan(20);
+          if (ce.misconception) seenTags.add(ce.misconception);
+        }
+        // The correct answer, typed as a decimal, still grades correct via the
+        // free-response grader (fractions/expressions allowed).
+        expect(gradeFreeResponse(q, q.answer.toFixed(dp)).correct).toBe(true);
+      }
+      if (expectTag) expect(seenTags.has(expectTag)).toBe(true);
     });
   }
 });

@@ -13,6 +13,9 @@ import { TableOfContentsPage } from "./pages/TableOfContentsPage";
 import { DiagnosticPage } from "./pages/DiagnosticPage";
 import { SpeedArenaPage } from "./pages/SpeedArenaPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { RoadmapPage } from "./pages/RoadmapPage";
+import { SimulationsPage } from "./pages/SimulationsPage";
+import { FermiPage } from "./pages/FermiPage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -59,6 +62,19 @@ export default function App() {
               }
             />
 
+            {/* Readiness Roadmap — the ordered skill pathway + readiness meter
+                (own full-screen layout, like the Dashboard). Additive. */}
+            <Route
+              path="/roadmap"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <RoadmapPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
             {/* Authenticated app shell (track maps) */}
             <Route
               element={
@@ -71,6 +87,7 @@ export default function App() {
             >
               <Route path="/track/:trackId" element={<TrackPage />} />
               <Route path="/contents" element={<TableOfContentsPage />} />
+              <Route path="/simulations" element={<SimulationsPage />} />
               <Route path="/themes" element={<ThemesPage />} />
             </Route>
 
@@ -81,6 +98,19 @@ export default function App() {
                 <ProtectedRoute>
                   <RequireDiagnostic>
                     <LessonPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Dedicated Fermi estimation drill (its own full-screen layout,
+                self-contained — see FermiPage). */}
+            <Route
+              path="/fermi"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <FermiPage />
                   </RequireDiagnostic>
                 </ProtectedRoute>
               }

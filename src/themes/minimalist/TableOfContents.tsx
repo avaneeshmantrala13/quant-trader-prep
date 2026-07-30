@@ -31,13 +31,7 @@ export function MinimalistTableOfContents({
     <div className="font-sans pb-4">
       {/* ---- Masthead ---- */}
       <header>
-        <div className="flex items-center gap-3">
-          <span className="label text-accent">The Curriculum</span>
-          <span className="h-px flex-1 bg-border-strong" />
-          <span className="label">Full Index</span>
-        </div>
-
-        <div className="mt-5 flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <h1 className="font-display text-4xl font-extrabold leading-[0.95] tracking-tight text-primary sm:text-5xl">
               Table of

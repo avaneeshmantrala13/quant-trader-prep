@@ -18,12 +18,15 @@ import {
 } from "@/lib/progressOps";
 import {
   emptyProgress,
+  type DiagnosticResult,
   type LevelProgress,
   type ResumeState,
   type UserProgress,
 } from "@/types/progress";
+import { appendDiagnosticResult } from "@/lib/diagnostic/history";
 import type { ItemAttempt, TopicMastery } from "@/types/mastery";
 import { migrateProgress } from "@/lib/mastery/migrate";
+import { markOnboardingTourDoneInPlace } from "@/lib/onboarding/tour";
 import {
   applyDiagnosticSeed,
   applyItemAttempt,
@@ -89,6 +92,21 @@ interface ProgressContextValue {
    * diagnostic is non-scoring and non-gating (PHASE_3 §5/§7).
    */
   applyDiagnosticSeeds: (seeds: DiagnosticSeed[], at?: string) => void;
+  /**
+   * Append ONE completed diagnostic attempt to the additive `diagnosticHistory`
+   * (powers the Recalibrate improvement graph). Independent of
+   * `applyDiagnosticSeeds`: it never touches per-topic mastery, seeds, scoring,
+   * `LevelProgress.mastered`, locking, or the v1→v2 migration. Initializes the
+   * array when absent and appends immutably (capped) via `appendDiagnosticResult`.
+   */
+  recordDiagnosticResult: (result: DiagnosticResult) => void;
+  /**
+   * Stamp the additive `onboardingTourDoneAt` UI flag so the new-user
+   * onboarding tour "shows once". Purely additive (mirrors the diagnostic
+   * stamp): NEVER touches `recordAttempt`, `recordItemAttempt`,
+   * `LevelProgress.mastered`, locking, scoring, or the v1→v2 migration.
+   */
+  markOnboardingTourDone: (at?: string) => void;
 }
 
 /**
@@ -319,6 +337,26 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const recordDiagnosticResult = useCallback(
+    (result: DiagnosticResult) => {
+      update((p) => {
+        p.diagnosticHistory = appendDiagnosticResult(
+          p.diagnosticHistory,
+          result,
+        );
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const markOnboardingTourDone = useCallback(
+    (at?: string) => {
+      update((p) => markOnboardingTourDoneInPlace(p, at));
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -335,6 +373,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       getTopicVerdict,
       setReviewSchedule,
       applyDiagnosticSeeds,
+      recordDiagnosticResult,
+      markOnboardingTourDone,
     }),
     [
       progress,
@@ -351,6 +391,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       getTopicVerdict,
       setReviewSchedule,
       applyDiagnosticSeeds,
+      recordDiagnosticResult,
+      markOnboardingTourDone,
     ],
   );
 

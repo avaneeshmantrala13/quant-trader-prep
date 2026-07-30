@@ -476,7 +476,7 @@ export function ChalkboardTableOfContents({
           Σ p = 1
         </span>
         <div className="relative">
-          <span className="label text-accent">The Syllabus · Full Index</span>
+          <span className="label text-accent">The Syllabus</span>
           <h1 className="mt-1 font-display text-4xl font-black leading-none text-primary sm:text-5xl">
             Course Outline
           </h1>

@@ -35,6 +35,21 @@ export const orderStatisticsLevels: Level[] = [
       keyIdea: "P(min ∈ [lo,hi]) = ((b−lo)/(b−a))ⁿ − ((b−hi)/(b−a))ⁿ; one ordering = 1/n!; Exp median = ln2/λ.",
       whyInterviewers:
         "Order-statistic questions reward the 'all orderings equally likely' insight and the min's nth-power tail over brute-force integration.",
+      deepDive: {
+        whyItWorks:
+          "With independent draws, 'all draws exceed x' factorises into a product — an nth power for iid — and the minimum's tail is exactly that product. And when values are continuous (ties have probability 0), every one of the n! orderings is equally likely, and a median is simply where the CDF crosses ½.",
+        approach: [
+          "For the minimum, work through its tail: P(min > x) = P(all draws > x) = (fraction of the range above x)ⁿ.",
+          "Get an interval probability for the minimum as a difference of two such nth-power tails.",
+          "For one specific strict ordering of n continuous values, take 1 favourable arrangement out of n! equally likely ones → 1/n!.",
+          "For a continuous median, set the CDF equal to ½ and solve (for Exp(λ): 1 − e^{−λm} = ½ ⇒ m = ln2/λ).",
+        ],
+        pitfalls: [
+          "Dropping the exponent n on the minimum's tail (treating it like a single uniform's interval).",
+          "Treating pairwise comparisons as independent ½'s (1/2^{n−1}) instead of 1/n!.",
+          "Reporting the mean 1/λ for the exponential median instead of ln2/λ.",
+        ],
+      },
     },
   },
 ];

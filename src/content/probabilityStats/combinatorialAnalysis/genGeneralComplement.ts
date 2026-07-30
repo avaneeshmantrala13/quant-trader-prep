@@ -51,7 +51,8 @@ export function buildBothColorsInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(TWO_COLOUR_THEME);
-  const half = rng.pick([18, 20, 22, 24, 26]);
+  // half ≠ 26: a 26+26 pool drawn 3 would reproduce the source's 52-card tuple.
+  const half = rng.pick([18, 20, 22, 24]);
   const draw = rng.pick([3, 4]);
   const total = 2 * half;
 
@@ -125,7 +126,8 @@ export function buildContainsDigitInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(DIGIT_THEME);
-  const L = rng.pick([4, 5, 6, 7]);
+  // L ≠ 6: a 6-position string would reproduce the source's 1-in-a-million answer.
+  const L = rng.pick([4, 5, 7]);
   const d = rng.pick([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 
   const value = containsDigitProb(L);
@@ -203,7 +205,9 @@ export function buildSubIntervalInstance(
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(SUBINTERVAL_THEME);
   const [a, b] = rng.pick(SUBINTERVAL_F);
-  const k = rng.pick([2, 3, 4]);
+  let k = rng.pick([2, 3, 4]);
+  // Avoid the source tuple f = 2/5, k = 4 (its given whole-window prob is 609/625).
+  if (a === 2 && b === 5 && k === 4) k = rng.pick([2, 3]);
   const f = F(a, b);
 
   const whole = F(1).sub(f.pow(k) as FractionType); // P(≥1 in whole window) — GIVEN
@@ -273,7 +277,8 @@ export function buildProductEvenInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(DICE_THEME);
-  const dice = rng.pick([2, 3, 4]);
+  // dice ≠ 3: a 3-dice even-product is exactly the source's 7/8 answer.
+  const dice = rng.pick([2, 4, 5]);
   const faces = rng.pick([6, 8, 10]);
   const odd = faces / 2; // equal odd/even split
 
@@ -341,7 +346,8 @@ export function buildSmallestNInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(SMALLEST_N_THEME);
-  const pWin = rng.pick([0.05, 0.1, 0.12, 0.15, 0.2, 0.25]);
+  // pWin ≠ 0.15: (0.15, 0.95) is the source tuple (answer n = 19).
+  const pWin = rng.pick([0.05, 0.1, 0.12, 0.2, 0.25]);
   const threshold = rng.pick([0.9, 0.95, 0.99]);
 
   const answer = smallestNForAtLeastOne(pWin, threshold);
@@ -431,7 +437,9 @@ export function buildBinomTailInstance(
     k = rng.int(1, n - 1);
     value = dir === "le" ? binomTailLE(n, p, k) : binomTailGE(n, p, k);
     const v = value.valueOf();
-    if (v >= 0.02 && v <= 0.98) break;
+    // Avoid the source tuple Bin(6, 1/5) with P(X ≤ 2) (the "cakes" answer ≈ 0.9).
+    const isSourceTuple = n === 6 && pn === 1 && pd === 5 && dir === "le" && k === 2;
+    if (v >= 0.02 && v <= 0.98 && !isSourceTuple) break;
   }
 
   const dp = 3;

@@ -1,6 +1,11 @@
 import type { Level } from "@/types/content";
-import { mixNumeric, mixQuiz } from "../coreScaffold";
-import { genGeoArea, genGlance, genMeeting, genTileFit } from "./generators";
+import { mixNumeric } from "../coreScaffold";
+import {
+  genGeoAreaNumeric,
+  genGlance,
+  genMeeting,
+  genTileFit,
+} from "./generators";
 
 /**
  * Probability & Statistics — **Geometric Probability**: a focused topic
@@ -29,10 +34,10 @@ export const geometricProbabilityLevels: Level[] = [
       "Name the geometric-probability trap: for a point uniform in a disk, P(within radius r) grows like the AREA r²/R², not the distance r/R.",
     section: SECTION,
     difficulty: "easy",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.75,
     questionCount: 5,
-    generator: mixQuiz([genGeoArea]),
+    numericGenerator: mixNumeric([genGeoAreaNumeric]),
     lesson: {
       paragraphs: [
         "The signature geometric-probability trap is treating distance as uniform. For a point landing uniformly in a disk, P(within radius r) = r²/R², NOT r/R, because outer rings hold more AREA. Using the linear r/R (e.g. 2/5 instead of 4/25) is the classic linear-vs-quadratic mistake.",
@@ -41,6 +46,21 @@ export const geometricProbabilityLevels: Level[] = [
       keyIdea: "Disk probability ∝ r² (area), never r (distance); keep numerator and denominator the same dimension.",
       whyInterviewers:
         "This is a 'do you simplify or over-complicate' check — the tempting linear answer is exactly the wrong one.",
+      deepDive: {
+        whyItWorks:
+          "For a point spread uniformly over a region, probability is proportional to AREA, and area grows with the square of a linear dimension — so the chance of landing within radius r scales like r², not r.",
+        approach: [
+          "Recognize the outcome space is a two-dimensional region with uniform density.",
+          "Express the favourable event as a sub-region of that space.",
+          "Compute the probability as the ratio of favourable area to total area.",
+          "Square linear dimensions so numerator and denominator share the same (area) units.",
+        ],
+        pitfalls: [
+          "Treating radial distance as uniform and using a linear ratio instead of a squared one.",
+          "Answering the complement — the opposite event.",
+          "Squaring only the numerator, leaving numerator and denominator in different dimensions.",
+        ],
+      },
     },
   },
   {
@@ -63,6 +83,21 @@ export const geometricProbabilityLevels: Level[] = [
       keyIdea: "Draw the sample space, shade the favourable set, divide — areas for 2-D, lengths for 1-D.",
       whyInterviewers:
         "Meeting-in-a-square and chip-on-a-tile problems test whether you can set up the right geometric region.",
+      deepDive: {
+        whyItWorks:
+          "When outcomes are uniform over a geometric region, probability is the favourable measure divided by the total measure — an area ratio in two dimensions, a length ratio in one.",
+        approach: [
+          "Set up the sample space as a geometric region (a square for two uniform times, an interval for one).",
+          "Translate the favourable condition into an inequality and shade the corresponding sub-region.",
+          "Compute the favourable measure, often as the whole minus easy complementary pieces (corner triangles, edge margins).",
+          "Divide favourable measure by total measure, keeping both in the same dimension.",
+        ],
+        pitfalls: [
+          "Collapsing a two-dimensional area problem into a single one-dimensional length ratio.",
+          "Shrinking a region by one margin when the constraint applies on both sides.",
+          "Confusing the event with its complement when subtracting corner or edge pieces.",
+        ],
+      },
     },
   },
 ];

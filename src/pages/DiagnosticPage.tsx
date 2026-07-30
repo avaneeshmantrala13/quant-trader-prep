@@ -9,6 +9,12 @@ import {
   type PlanItem,
 } from "@/lib/diagnostic/run";
 import { diagnosticToSeeds, selfReportToSeed } from "@/lib/diagnostic/diagnosticSeed";
+import {
+  computeDiagnosticResult,
+  diagnosticTrend,
+} from "@/lib/diagnostic/history";
+import type { DiagnosticResult } from "@/types/progress";
+import { LineChart } from "@/components/simulations/charts/LineChart";
 import { ChevronLeftIcon } from "@/components/icons";
 
 /**
@@ -35,8 +41,14 @@ const DIAGNOSTIC_RESUME_ID = "__diagnostic__";
 
 export function DiagnosticPage() {
   const navigate = useNavigate();
-  const { applyDiagnosticSeeds, progress, saveResume, getResume, clearResume } =
-    useProgress();
+  const {
+    applyDiagnosticSeeds,
+    recordDiagnosticResult,
+    progress,
+    saveResume,
+    getResume,
+    clearResume,
+  } = useProgress();
 
   // Restore an in-progress base run (humane "answer later" — don't restart).
   // Only trust a snapshot whose shape still matches the current blueprint.
@@ -106,8 +118,17 @@ export function DiagnosticPage() {
     answers: (number | null)[],
     usedLane: Lane,
   ) => {
-    const seeds = diagnosticToSeeds(outcomesFromAnswers(plan, answers));
-    applyDiagnosticSeeds(seeds);
+    // Compute graded outcomes once; reuse for the seed stamp AND the history
+    // entry so both share a single timestamp.
+    const outcomes = outcomesFromAnswers(plan, answers);
+    const stamp = new Date().toISOString();
+    applyDiagnosticSeeds(diagnosticToSeeds(outcomes), stamp);
+    // Record this attempt for the improvement graph. Only the full lane grades
+    // items; skip empty attempts (e.g. "finish now" with nothing answered) so
+    // the trend never shows a degenerate 0% point. The self-report lane has no
+    // graded items and is intentionally NOT recorded (see submitSelfReport).
+    const result = computeDiagnosticResult(outcomes, stamp);
+    if (result.itemsAnswered > 0) recordDiagnosticResult(result);
     clearResume(DIAGNOSTIC_RESUME_ID);
     setLane(usedLane);
     setPhase("summary");
@@ -215,6 +236,7 @@ export function DiagnosticPage() {
           <Intro
             baseTotal={baseTotal}
             alreadyDone={!!progress.diagnosticDoneAt}
+            history={progress.diagnosticHistory}
             onStartFull={() => {
               setStage("base");
               setIndex(0);
@@ -249,6 +271,7 @@ export function DiagnosticPage() {
         {phase === "summary" && (
           <Summary
             lane={lane}
+            history={progress.diagnosticHistory}
             onRetake={retake}
             onDone={() => navigate("/contents")}
           />
@@ -261,11 +284,13 @@ export function DiagnosticPage() {
 function Intro({
   baseTotal,
   alreadyDone,
+  history,
   onStartFull,
   onSelfReport,
 }: {
   baseTotal: number;
   alreadyDone: boolean;
+  history?: DiagnosticResult[];
   onStartFull: () => void;
   onSelfReport: () => void;
 }) {
@@ -276,7 +301,7 @@ function Intro({
           <span className="label text-accent">
             {alreadyDone ? "Recalibrate · Not a Test" : "Warm-Up · Not a Test"}
           </span>
-          <span className="chip border-subtle text-secondary">~8–11 min</span>
+          <span className="chip border-subtle text-secondary">~10–15 min</span>
         </div>
         <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
           {alreadyDone
@@ -309,9 +334,11 @@ function Intro({
         )}
       </article>
 
+      {alreadyDone ? <ImprovementGraph history={history} /> : null}
+
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={onStartFull} className="btn-primary flex-1">
-          Full warm-up · ~8–11 min ▸
+          Full warm-up · ~10–15 min ▸
         </button>
         <button onClick={onSelfReport} className="btn-secondary flex-1">
           20-second self-report ▸
@@ -548,10 +575,12 @@ function DiagnosticCard({
 
 function Summary({
   lane,
+  history,
   onRetake,
   onDone,
 }: {
   lane: Lane;
+  history?: DiagnosticResult[];
   onRetake: () => void;
   onDone: () => void;
 }) {
@@ -577,6 +606,113 @@ function Summary({
           </button>
         </div>
       </div>
+
+      {/* The full lane records a graded result during finalize(), so this
+          reflects the just-completed attempt. The self-report lane records
+          nothing, so the graph invites the learner to take the full warm-up. */}
+      <ImprovementGraph history={history} />
+    </div>
+  );
+}
+
+/**
+ * Themed improvement graph for the Recalibrate flow: plots the overall
+ * diagnostic score across attempts with a first-vs-latest read. Uses the sim
+ * tab's `LineChart` (token-themed, AA) and degrades gracefully with 0–1
+ * attempts by inviting another run instead of drawing a degenerate chart.
+ */
+function ImprovementGraph({ history }: { history?: DiagnosticResult[] }) {
+  const trend = diagnosticTrend(history);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+  if (trend.count < 2) {
+    return (
+      <div className="panel-ruled p-5">
+        <span className="label text-accent">Your progress over time</span>
+        <p className="mt-2 text-sm text-secondary">
+          {trend.count === 0
+            ? "Complete a warm-up to start tracking your score across retakes."
+            : "Take it again to see your trend — you've completed one warm-up so far."}
+        </p>
+        {trend.count === 1 && trend.latest ? (
+          <p className="mt-2 text-sm text-secondary">
+            This attempt:{" "}
+            <span className="num text-primary">
+              {pct(trend.latest.overallScore)}
+            </span>{" "}
+            <span className="text-muted">
+              ({trend.latest.itemsAnswered} items)
+            </span>
+          </p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const first = trend.first!;
+  const latest = trend.latest!;
+  const deltaPts = Math.round(latest.overallScore * 100) -
+    Math.round(first.overallScore * 100);
+  const points = trend.points.map((p) => ({ x: p.attempt, y: p.score }));
+
+  return (
+    <div className="panel-ruled space-y-3 p-5">
+      <div className="flex items-center justify-between">
+        <span className="label text-accent">Your progress over time</span>
+        <span
+          className={`num text-sm ${deltaPts >= 0 ? "text-bull" : "text-bear"}`}
+        >
+          {deltaPts >= 0 ? "▲" : "▼"} {Math.abs(deltaPts)} pts
+        </span>
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="flex flex-col">
+          <span className="label text-secondary">First</span>
+          <span className="num text-primary">{pct(first.overallScore)}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="label text-secondary">Latest</span>
+          <span className="num text-primary">{pct(latest.overallScore)}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="label text-secondary">Attempts</span>
+          <span className="num text-primary">{trend.count}</span>
+        </div>
+      </div>
+
+      <LineChart
+        series={[{ points, colorClass: "stroke-accent", label: "score" }]}
+        xLabel="attempt"
+        yLabel="score"
+        yDomain={[0, 1]}
+        xDomain={[1, trend.count]}
+        annotations={[
+          {
+            x: 1,
+            y: first.overallScore,
+            side: "up",
+            text: `first ${pct(first.overallScore)}`,
+          },
+          {
+            x: trend.count,
+            y: latest.overallScore,
+            side: "left",
+            text: `latest ${pct(latest.overallScore)}`,
+          },
+        ]}
+        formatX={(x) => String(Math.round(x))}
+        formatY={(y) => pct(y)}
+        ariaLabel="Your overall diagnostic score across attempts over time"
+      />
+
+      <p className="text-xs leading-relaxed text-muted">
+        {trend.improving
+          ? `You're improving — up ${deltaPts} points since your first warm-up.`
+          : deltaPts === 0
+            ? "Holding steady — same overall score as your first warm-up."
+            : "Down from your first attempt — keep practicing and retake to climb back."}
+      </p>
     </div>
   );
 }

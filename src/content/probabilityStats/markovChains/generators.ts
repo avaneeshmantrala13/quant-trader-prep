@@ -27,6 +27,7 @@ import {
   twoStateReturnExpected,
 } from "./markov";
 import { mixNumericGenerators, mixQuestionGenerators } from "../../mixFamilies";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 
 /**
  * Parametric generators + per-family misconception taxonomy for the
@@ -85,25 +86,46 @@ function assembleChoices(
   };
 }
 
-/** Deduping accumulator for `numeric` commonErrors (rounded to `dp`, ≠ answer). */
+/**
+ * Deduping accumulator for `numeric` commonErrors (rounded to `dp`, ≠ answer).
+ *
+ * `push` accepts an OPTIONAL machine-readable `misconception` tag (PHASE_1/2
+ * error-mode catalogs): when supplied it is carried onto the `commonErrors`
+ * entry so the mastery layer folds `misconceptionKey(topicKey, tag)` and the
+ * hint ladder can key rung-1 coaching / the confront strategy off it. Omitting
+ * it stays fully back-compatible (mastery falls back to `err:<value>`).
+ */
 function numericErrors(
   answer: number,
   dp: number,
 ): {
-  errors: { value: number; feedback: string }[];
-  push: (raw: FractionType | number, feedback: string) => void;
+  errors: { value: number; feedback: string; misconception?: string }[];
+  push: (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => void;
 } {
   const f = 10 ** dp;
   const seen = new Set<number>([Math.round(answer * f)]);
-  const errors: { value: number; feedback: string }[] = [];
-  const push = (raw: FractionType | number, feedback: string) => {
+  const errors: { value: number; feedback: string; misconception?: string }[] =
+    [];
+  const push = (
+    raw: FractionType | number,
+    feedback: string,
+    misconception?: string,
+  ) => {
     const v = typeof raw === "number" ? raw : raw.valueOf();
     if (!Number.isFinite(v)) return;
     const rounded = Math.round(v * f) / f;
     const k = Math.round(rounded * f);
     if (seen.has(k)) return;
     seen.add(k);
-    errors.push({ value: rounded, feedback });
+    errors.push({
+      value: rounded,
+      feedback,
+      ...(misconception ? { misconception } : {}),
+    });
   };
   return { errors, push };
 }
@@ -149,7 +171,9 @@ export function buildMigrationsInstance(
 ): { answer: number; numeric: NumericQuestion } {
   const w = rng.pick(WEATHER);
   const pS = rng.pick([6, 7, 8, 9]); // tenths
-  const pO = rng.pick([4, 5, 6].filter((x) => x < pS));
+  // pO drawn from {3,4,5} tenths so the source Animal-Migrations tuple
+  // (stay 0.9 / 0.6) is never reproduced; wording already differs (weather).
+  const pO = rng.pick([3, 4, 5].filter((x) => x < pS));
   const pStayS = F(pS, 10);
   const pStayO = F(pO, 10);
   const value = twoStateReturnExpected(pStayS, pStayO);
@@ -331,8 +355,8 @@ export function buildLineWalkInstance(
 /* ========================================================================== */
 
 const RUN_THEME = [
-  { actor: "a fair coin", event: "heads", verb: "flip" },
-  { actor: "a fair coin", event: "tails", verb: "toss" },
+  { actor: "a fair coin", event: "heads", verb: "flip", plural: "flips" },
+  { actor: "a fair coin", event: "tails", verb: "toss", plural: "tosses" },
 ];
 
 /**
@@ -365,7 +389,7 @@ export function buildRunHeadsInstance(
   );
 
   const prompt =
-    `You ${th.verb} ${th.actor} repeatedly. What is the expected number of ${th.verb}s until you first see ${n} ${th.event} in a row? (Whole number.)`;
+    `You ${th.verb} ${th.actor} repeatedly. What is the expected number of ${th.plural} until you first see ${n} ${th.event} in a row? (Whole number.)`;
   const explanation =
     `Let s_k be the expected additional flips with k of the ${n} in hand: s_k = 1 + ½·s_{k+1} + ½·s_0. Back-substituting gives the closed form 2^{n+1}−2 = 2^${n + 1}−2 = ${fracText(value)}.`;
 
@@ -392,8 +416,9 @@ const TILE_THEME = [
   { actor: "beads from a jar", hit: "a gold bead", other: "beads" },
 ];
 
+// p ≠ 3/8: the source Picking-Tiles tuple (P=3/8 → 88/9 ≈ 9.78) is excluded.
 const TWO_IN_ROW_P: [number, number][] = [
-  [3, 8],
+  [3, 7],
   [2, 5],
   [1, 4],
   [3, 5],
@@ -455,10 +480,11 @@ export function buildTwoInARowInstance(
   };
 }
 
+// Distinct scenarios (no parking-meter/coins) so we don't restate MC6's setup.
 const RESET_THEME = [
-  { need: "correct digits", device: "a keypad", reset: "a wrong tap clears everything" },
+  { need: "correct digits", device: "a keypad lock", reset: "a wrong tap clears the whole code" },
   { need: "good rounds", device: "a bonus game", reset: "a miss resets your progress" },
-  { need: "valid coins", device: "an old meter", reset: "it jams and spits everything back" },
+  { need: "clean checkpoints", device: "a speedrun", reset: "a single death sends you back to the start" },
 ];
 
 /**
@@ -585,6 +611,74 @@ export function buildPatternWaitInstance(
 }
 
 /**
+ * FREE-RESPONSE (numeric) form of the pattern-wait family — the PHASE_1/2
+ * MCQ→free conversion of `buildPatternWaitInstance`. Same exact Conway solver
+ * (E = 2·corr(A,A)); the three genuine error modes mined from the quiz
+ * distractors are now a parametric catalog carrying a machine-readable
+ * `misconception` tag + an answer-withholding rung-1 coaching sentence. The
+ * learner types the whole-number expected wait (graded by `gradeFreeResponse`).
+ */
+export function buildPatternWaitNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const L = rng.pick([3, 3, 4]);
+  let pat = randomPattern(rng, L);
+  // Avoid the all-same pattern so the overlap trap is a genuine (wrong) distractor.
+  let guard = 0;
+  while (guard < 40 && new Set(pat.split("")).size === 1) {
+    pat = randomPattern(rng, L);
+    guard++;
+  }
+  const value = patternWaitExpected(pat);
+  const dp = 0;
+  const answer = value.valueOf();
+
+  const noOverlap = 2 ** (L + 1) - 2;
+  const independent = 2 ** L;
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    noOverlap,
+    `You treated ${pat} as if it waited like a run of ${L} identical flips (2^{${L}+1}−2 = ${noOverlap}). But does ${pat} fully reset after a bad flip, or can a near-miss leave usable progress? Compare its first symbols to its last.`,
+    "pattern_overlap_as_run",
+  );
+  push(
+    independent,
+    `That's 1/2^${L} = ${independent} — the wait for a SPECIFIC fixed block of ${L} flips to equal ${pat}. But the pattern can start mid-stream and failures may not fully reset. Does that make the true wait longer or shorter than one fixed window?`,
+    "pattern_as_independent_block",
+  );
+  push(
+    2 * L,
+    `Adding ${L} single-flip waits (2 each → ${2 * L}) assumes the ${L} symbols can arrive scattered. But they must land CONSECUTIVELY — what happens to your progress the moment the run breaks?`,
+    "sum_independent_single_waits",
+  );
+
+  const prompt =
+    `You flip a fair coin repeatedly, writing H for heads and T for tails. ` +
+    `What is the expected number of flips until the pattern ${pat} first appears? (Whole number.)`;
+  const explanation =
+    `By Conway's leading-number rule, E[wait for A] = 2·corr(A,A), where corr sums 2^{k−1} over each k for which A's last k symbols equal its first k. For ${pat} this gives ${fracText(value)}. ` +
+    `The tempting ${noOverlap} assumes every length-${L} pattern behaves like ${"H".repeat(L)} (2^{L+1}−2), but a leading mismatch means ${pat} doesn't fully reset on failure, so it can be faster.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `mc-patwaitnum-${pat}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Expected pattern wait (Conway; overlap ≠ run)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Markov Chains · Pattern waits",
+    },
+  };
+}
+
+/**
  * P(pattern A appears before pattern B) on a fair coin, via Conway's odds
  * formula. The naive answer is ½ (patterns are "equally likely"); the truth
  * depends on overlap structure (HHH-before-THH = 1/8). Also traps: reversing
@@ -656,13 +750,91 @@ export function buildPatternRaceInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the pattern-race family — the PHASE_1/2
+ * MCQ→free conversion of `buildPatternRaceInstance`. Same exact Conway odds
+ * solver; the three genuine error modes (naive ½, the reversed race, and the
+ * expected-speed weighting) become a parametric catalog carrying a
+ * machine-readable `misconception` tag + answer-withholding rung-1 coaching.
+ * The learner types the probability as a fraction or decimal.
+ */
+export function buildPatternRaceNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  let a = randomPattern(rng, 3);
+  let b = randomPattern(rng, 3);
+  let value = F(1, 2);
+  let guard = 0;
+  // Require a non-degenerate, non-½ race with both Conway surpluses positive.
+  while (guard < 200) {
+    guard++;
+    a = randomPattern(rng, 3);
+    b = randomPattern(rng, 3);
+    if (a === b) continue;
+    try {
+      value = patternRaceProb(a, b);
+    } catch {
+      continue;
+    }
+    const v = value.valueOf();
+    if (v > 0 && v < 1 && !value.equals(F(1, 2))) break;
+  }
+  const dp = Math.max(2, exactDecimals(value, 4));
+  const answer = Number(decText(value, dp));
+
+  const reversed = F(1).sub(value);
+  const waitA = patternWaitExpected(a);
+  const waitB = patternWaitExpected(b);
+  const speedGuess = F(waitB.valueOf(), waitA.valueOf() + waitB.valueOf());
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(1, 2),
+    `The 50/50 guess assumes ${a} and ${b} are symmetric. Are they? Look at how each pattern overlaps itself and the other — does one get a structural head start?`,
+    "pattern_race_naive_half",
+  );
+  push(
+    reversed,
+    `That's the chance ${b} wins the race, not ${a}. Which pattern does the question ask about — and once you have one side's probability, how do you get the other?`,
+    MISCONCEPTION.complementConfusion,
+  );
+  push(
+    speedGuess,
+    `You weighted by each pattern's expected wait (E_${b}/(E_${a}+E_${b})), as if the faster pattern wins in proportion to its speed. But pattern races aren't decided by average speed — what overlap structure actually sets the odds?`,
+    "race_by_speed_ratio",
+  );
+
+  const prompt =
+    `You flip a fair coin repeatedly. What is the probability that the pattern ${a} appears strictly before the pattern ${b}? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Conway's leading numbers turn each pattern's self- and cross-overlaps into odds. Here P(${a} before ${b}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
+    `The naive ½ ignores overlap; e.g. the classic HHH-before-THH is 1/8, not ½, because HHH can only win if it hits in the very first three flips.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `mc-patracenum-${a}-${b}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Pattern race (Conway; naive-½ trap)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Markov Chains · Pattern races",
+    },
+  };
+}
+
 /* ========================================================================== */
 /* ================  LEVEL 4 — RANDOM WALKS ON GRAPHS (numeric)  ============ */
 /* ========================================================================== */
 
 const CUBE_THEME = [
-  { actor: "an ant", node: "corner", solid: "cube" },
-  { actor: "a bug", node: "vertex", solid: "cube" },
+  { actor: "a beetle", node: "vertex", solid: "wireframe cube" },
+  { actor: "a spider", node: "corner", solid: "cube-shaped frame" },
 ];
 
 /**
@@ -685,10 +857,10 @@ export function buildCubeWalkInstance(
   push(9, `9 is the expected time from an ADJACENT ${th.node} (distance 1). From the start (distance 0) it is one more: 10.`);
 
   const prompt =
-    `${th.actor.charAt(0).toUpperCase() + th.actor.slice(1)} sits at one ${th.node} of a ${th.solid} and each second walks along an edge to one of the three neighbouring ${th.node}s, chosen uniformly. ` +
-    `What is the expected number of seconds until it first reaches the ${th.node} diagonally opposite its start? (Whole number.)`;
+    `${th.actor.charAt(0).toUpperCase() + th.actor.slice(1)} begins at one ${th.node} of a ${th.solid} and, once per second, crawls along an edge to a uniformly random ${th.node} adjacent to where it is. ` +
+    `On average, how many seconds pass before it first lands on the ${th.node} farthest from its start — the one across the long diagonal? (Whole number.)`;
   const explanation =
-    `Group ${th.node}s by distance from the start (0,1,2,3). By symmetry E₁ = 1 + E₂, E₂ = 1 + ⅔E₃ + ⅓E₁, E₃ = 1 + ⅔E₂, with E at the opposite ${th.node} = 0. Solving gives E₀ = 10.`;
+    `Group the ${th.node}s by distance from the start (0,1,2,3). By symmetry E₁ = 1 + E₂, E₂ = 1 + ⅔E₃ + ⅓E₁, E₃ = 1 + ⅔E₂, with E at the far ${th.node} = 0. Solving gives E₀ = 10.`;
 
   return {
     answer,
@@ -767,8 +939,8 @@ export function buildPolygonWalkInstance(
 }
 
 const GRID_THEME = [
-  { actor: "a robot", place: "grid of tiles" },
-  { actor: "a random walker", place: "lattice of points" },
+  { actor: "a robot", place: "board", cell: "square" },
+  { actor: "a random walker", place: "lattice", cell: "node" },
 ];
 
 /**
@@ -797,10 +969,10 @@ export function buildGridWalkInstance(
   push(2 * m, `2m = ${2 * m} is the grid's width in steps, not an expected hitting time.`);
 
   const prompt =
-    `${th.actor.charAt(0).toUpperCase() + th.actor.slice(1)} starts at the center of a ${size}×${size} ${th.place}. Each step it moves north, south, east, or west with equal probability, stopping the moment it reaches any boundary point. ` +
-    `What is the expected number of steps? (Round to ${dp} decimals.)`;
+    `${th.actor.charAt(0).toUpperCase() + th.actor.slice(1)} begins on the middle ${th.cell} of a ${size}×${size} ${th.place}. Each move it hops to one of the four orthogonally adjacent ${th.cell}s, all equally likely, and it halts the instant it lands on a ${th.cell} along the outer rim. ` +
+    `On average, how many moves does that take? (Round to ${dp} decimals.)`;
   const explanation =
-    `For each interior point, E = 1 + ¼·(sum of the four neighbours' E), with E = 0 on the boundary. Solving this linear system for the ${size}×${size} grid gives the center value ${fracText(value)} ≈ ${decText(value, dp)}.`;
+    `For each interior ${th.cell}, E = 1 + ¼·(sum of the four neighbours' E), with E = 0 on the outer rim. Solving this linear system for the ${size}×${size} ${th.place} gives the middle value ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
     answer,
@@ -844,7 +1016,8 @@ export function buildRuinReachInstance(
   const [pn, pd] = rng.pick(RUIN_P);
   const p = F(pn, pd);
   const q = F(1).sub(p);
-  const N = rng.pick([3, 4, 5, 6]);
+  // N ≥ 4 so the source Bankrupt tuple (k=1, N=3, p=2/3) is never reproduced.
+  const N = rng.pick([4, 5, 6, 7]);
   const k = rng.int(1, N - 1);
   const value = gamblerRuinReach(k, N, p);
   const dp = ruinDp(value);
@@ -895,6 +1068,73 @@ export function buildRuinReachInstance(
 }
 
 /**
+ * FREE-RESPONSE (numeric) form of the biased-ruin reach family — the PHASE_1/2
+ * MCQ→free conversion of `buildRuinReachInstance`. Same exact solver
+ * (1−rᵏ)/(1−rᴺ), r = q/p; the three genuine error modes mined from the quiz
+ * distractors (the FAIR-game k/N, the inverted odds r = p/q, and the ruin
+ * complement) become a parametric catalog carrying a machine-readable
+ * `misconception` tag + an answer-withholding rung-1 coaching sentence. The
+ * learner types the probability as a fraction or decimal.
+ */
+export function buildRuinReachNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const [pn, pd] = rng.pick(RUIN_P);
+  const p = F(pn, pd);
+  const q = F(1).sub(p);
+  const N = rng.pick([4, 5, 6, 7]);
+  const k = rng.int(1, N - 1);
+  const value = gamblerRuinReach(k, N, p);
+  const dp = ruinDp(value);
+  const answer = Number(decText(value, dp));
+
+  const symmetric = F(k, N);
+  const inverted = gamblerRuinReach(k, N, q); // r ↔ 1/r (p/q instead of q/p)
+  const reversed = F(1).sub(value);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    symmetric,
+    `That's the FAIR-game answer k/N = ${fracText(symmetric)}. But you win each round w.p. ${fracText(p)} ≠ ½ — should a per-round edge push the reach probability above or below the even-odds shortcut, and which formula captures it?`,
+    "ruin_symmetric_fair",
+  );
+  push(
+    inverted,
+    `Looks like you built the odds ratio upside down (r = p/q instead of q/p). Which odds belong on top when you raise r to the kᵗʰ and Nᵗʰ powers — your losing odds or your winning odds?`,
+    "ruin_inverted_odds",
+  );
+  push(
+    reversed,
+    `That's the chance you go BROKE first, not that you reach ${N}. Once you have one side of the race, how do you get the other?`,
+    MISCONCEPTION.complementConfusion,
+  );
+
+  const prompt =
+    `You start with ${k} chip(s) and play rounds staking one chip; you win each round with probability ${fracText(p)} (otherwise you lose the chip). ` +
+    `You stop at ${N} chips (win) or 0 chips (broke). What is the probability you reach ${N} before going broke? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Gambler's ruin with r = q/p = ${fracText(q.div(p))}: P(reach ${N} from ${k}) = (1 − r^${k})/(1 − r^${N}) = ${decText(value, dp)}. ` +
+    `The tempting ${fracText(symmetric)} (= k/N) only holds for a FAIR game (p = ½).`;
+
+  return {
+    answer,
+    numeric: {
+      id: `mc-ruinnum-${k}-${N}-${pn}-${pd}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Gambler's ruin (biased vs symmetric k/N)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Markov Chains · Gambler's ruin",
+    },
+  };
+}
+
+/**
  * Bold play: start `start`, target `target`, stake min(w, target−w) each round,
  * win w.p. p (usually < ½). Correct = solved chain (e.g. 29/77). Traps: the
  * TIMID unit-stake ruin value (bold play beats it in an unfavourable game), the
@@ -904,14 +1144,22 @@ export function buildBoldPlayInstance(
   rng: Rng,
   difficulty: Difficulty,
 ): { answer: string; question: Question } {
-  const target = rng.pick([4, 5, 6]);
-  const start = rng.int(1, target - 1);
-  const [pn, pd] = rng.pick([
-    [1, 3],
-    [2, 5],
-    [1, 4],
-    [3, 8],
-  ]);
+  // Skip the exact source Bold-Betting tuple (start 3, target 5, p=1/3 → 29/77);
+  // every other combination stays in play.
+  let target: number;
+  let start: number;
+  let pn: number;
+  let pd: number;
+  do {
+    target = rng.pick([4, 5, 6]);
+    start = rng.int(1, target - 1);
+    [pn, pd] = rng.pick([
+      [1, 3],
+      [2, 5],
+      [1, 4],
+      [3, 8],
+    ] as [number, number][]);
+  } while (start === 3 && target === 5 && pn === 1 && pd === 3);
   const p = F(pn, pd);
   const value = boldPlayReachProb(start, target, p);
   const dp = ruinDp(value);
@@ -959,6 +1207,81 @@ export function buildBoldPlayInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the bold-play family — the PHASE_1/2 MCQ→free
+ * conversion of `buildBoldPlayInstance`. Same exact bold-play chain solver; the
+ * three genuine error modes (the TIMID unit-stake ruin value, the fair-game
+ * start/target, and the single-round win probability) become a parametric
+ * catalog carrying a machine-readable `misconception` tag + an answer-withholding
+ * rung-1 coaching sentence. The learner types the probability as a fraction or
+ * decimal.
+ */
+export function buildBoldPlayNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  let target: number;
+  let start: number;
+  let pn: number;
+  let pd: number;
+  do {
+    target = rng.pick([4, 5, 6]);
+    start = rng.int(1, target - 1);
+    [pn, pd] = rng.pick([
+      [1, 3],
+      [2, 5],
+      [1, 4],
+      [3, 8],
+    ] as [number, number][]);
+  } while (start === 3 && target === 5 && pn === 1 && pd === 3);
+  const p = F(pn, pd);
+  const value = boldPlayReachProb(start, target, p);
+  const dp = ruinDp(value);
+  const answer = Number(decText(value, dp));
+
+  const timid = gamblerRuinReach(start, target, p);
+  const symmetric = F(start, target);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    timid,
+    `That's the TIMID unit-stake ruin probability. In an UNFAVOURABLE game (p = ${fracText(p)} < ½), does betting big or betting small give the house fewer rounds to grind down your edge — and which strategy wins here?`,
+    "timid_not_bold",
+  );
+  push(
+    symmetric,
+    `start/target = ${fracText(symmetric)} is the FAIR-game guess. It ignores BOTH the per-round edge and the betting strategy — what changes the moment p ≠ ½?`,
+    "ruin_symmetric_fair",
+  );
+  push(
+    p,
+    `${fracText(p)} is just the single-round win probability, not the chance of reaching ${target} over the whole game. What has to happen across many rounds to get there?`,
+    "single_round_prob",
+  );
+
+  const prompt =
+    `You have ${start} token(s) and want to reach ${target}. Each round you boldly stake as much as you can without overshooting — min(current, ${target}−current) — and win the stake with probability ${fracText(p)}, else lose it. ` +
+    `What is the probability you reach ${target} before hitting 0? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Bold play: from state w the stake is min(w, ${target}−w). First-step analysis P_w = p·P_{w+stake} + (1−p)·P_{w−stake}, with P_0 = 0, P_${target} = 1. Solving gives P_${start} = ${decText(value, dp)}, which BEATS the timid unit-stake value ${decText(timid, dp)} in this unfavourable game.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `mc-boldnum-${start}-${target}-${pn}-${pd}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Gambler's ruin (bold play beats timid)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Markov Chains · Gambler's ruin",
+    },
+  };
+}
+
 /* ========================================================================== */
 /* =================  LEVEL 6 — MARKOV REASONING DESK (flashcard)  ========== */
 /* ========================================================================== */
@@ -972,11 +1295,11 @@ export const markovChainsFlashcards: Flashcard[] = [
   {
     id: "mc-fc-drunkard",
     prompt:
-      "A hiker stands one step from the edge of a cliff (the edge is position 0; the hiker is at position 1). Each step, they move one unit AWAY from the edge with probability p and one unit TOWARD it with probability 1−p; the walk is on the infinite line to the safe side. In terms of p, what is the probability the hiker eventually falls off? Evaluate it for p = 2/3, and say what happens when p ≤ 1/2.",
+      "A hiker stands one step from the edge of a cliff (the edge is position 0; the hiker is at position 1). Each step, they move one unit AWAY from the edge with probability p and one unit TOWARD it with probability 1−p; the walk is on the infinite line to the safe side. In terms of p, what is the probability the hiker eventually falls off? Evaluate it for p = 3/4, and say what happens when p ≤ 1/2.",
     answer:
-      "PIECEWISE: if p ≤ 1/2, falling is CERTAIN (probability 1); if p > 1/2, the fall probability is (1−p)/p. For p = 2/3 that is (1/3)/(2/3) = 1/2 — even favouring escape 2-to-1, the hiker still falls half the time.",
+      "PIECEWISE: if p ≤ 1/2, falling is CERTAIN (probability 1); if p > 1/2, the fall probability is (1−p)/p. For p = 3/4 that is (1/4)/(3/4) = 1/3 — even favouring escape 3-to-1, the hiker still falls one time in three.",
     explanation:
-      "Let X = P(fall from position 1). Stepping toward the edge (w.p. 1−p) falls immediately; stepping away (w.p. p) reaches position 2, from which falling requires returning to 1 and then falling again — two independent copies of the same problem, probability X². So X = (1−p) + p·X². Solving p·X² − X + (1−p) = 0 factors as (X−1)(pX−(1−p)) = 0, giving roots X = 1 and X = (1−p)/p. For p ≤ 1/2 the only valid probability ≤ 1 is X = 1 (certain fall — a fair or unfavourable walk on a half-line is recurrent toward the barrier). For p > 1/2 the relevant root is (1−p)/p < 1. At p = 2/3 this is 1/2. The trap is assuming a 2:1 push away from the cliff makes escape likely; it only makes the fall probability exactly 1/2.",
+      "Let X = P(fall from position 1). Stepping toward the edge (w.p. 1−p) falls immediately; stepping away (w.p. p) reaches position 2, from which falling requires returning to 1 and then falling again — two independent copies of the same problem, probability X². So X = (1−p) + p·X². Solving p·X² − X + (1−p) = 0 factors as (X−1)(pX−(1−p)) = 0, giving roots X = 1 and X = (1−p)/p. For p ≤ 1/2 the only valid probability ≤ 1 is X = 1 (certain fall — a fair or unfavourable walk on a half-line is recurrent toward the barrier). For p > 1/2 the relevant root is (1−p)/p < 1. At p = 3/4 this is 1/3. The trap is assuming a 3:1 push away from the cliff makes escape almost sure; it still leaves a one-in-three chance of falling.",
     difficulty: "hard",
     concept: "Semi-infinite gambler's ruin (piecewise fall probability)",
     source: "Markov Chains · Gambler's ruin (semi-infinite)",
@@ -984,11 +1307,11 @@ export const markovChainsFlashcards: Flashcard[] = [
   {
     id: "mc-fc-birthday-repeat",
     prompt:
-      "A streaming app has a library of 2000 tracks and its 'shuffle' plays each next track uniformly at random and independently (repeats allowed). A friend bets they can listen to 100 tracks in a row without ever hearing the same track twice. Is that a safe bet? Roughly how many tracks do you expect to hear before the first repeat?",
+      "A streaming app has a library of 1500 tracks and its 'shuffle' plays each next track uniformly at random and independently (repeats allowed). A friend bets they can listen to 90 tracks in a row without ever hearing the same track twice. Is that a safe bet? Roughly how many tracks do you expect to hear before the first repeat?",
     answer:
-      "NOT a safe bet. The expected number of tracks until the first repeat is only about 57 (≈ 56.72), far below 100 — a repeat within 100 tracks is very likely.",
+      "NOT a safe bet. The expected number of tracks until the first repeat is only about 49 (≈ 49.21), well below 90 — a repeat within 90 tracks is very likely.",
     explanation:
-      "This is a birthday-style absorbing chain. With k distinct tracks already heard, the next track is new with probability (2000−k)/2000, so the expected additional tracks satisfy E[k] = 1 + ((2000−k)/2000)·E[k+1], back-recursing from E[2000] = 0. Computing this (or using the birthday approximation, where the expected wait scales like √(πN/2) ≈ √(π·2000/2) ≈ 56) gives E[0] ≈ 56.72. Because the expected first repeat arrives around track 57, betting on 100 clean tracks is a losing proposition. The intuition trap is thinking 100 out of 2000 'feels small' — but the number of PAIRS grows quadratically, so collisions come fast.",
+      "This is a birthday-style absorbing chain. With k distinct tracks already heard, the next track is new with probability (1500−k)/1500, so the expected additional tracks satisfy E[k] = 1 + ((1500−k)/1500)·E[k+1], back-recursing from E[1500] = 0. Computing this (or using the birthday approximation, where the expected wait scales like √(πN/2) ≈ √(π·1500/2) ≈ 48.5) gives E[0] ≈ 49.21. Because the expected first repeat arrives around track 49, betting on 90 clean tracks is a losing proposition. The intuition trap is thinking 90 out of 1500 'feels small' — but the number of PAIRS grows quadratically, so collisions come fast.",
     difficulty: "medium",
     concept: "Birthday-repeat expected hitting time (back-recursion)",
     source: "Markov Chains · Expected hitting time (birthday)",
@@ -1020,11 +1343,11 @@ export const markovChainsFlashcards: Flashcard[] = [
   {
     id: "mc-fc-dominant-edge",
     prompt:
-      "You and an opponent each start with $10 and bet $1 per round; you win each round with probability 2/3. Play continues until someone is broke. Without grinding the full algebra, is the opponent's ruin close to certain or closer to a coin flip? Give the approximate probability.",
+      "You and an opponent each start with $12 and bet $1 per round; you win each round with probability 2/3. Play continues until someone is broke. Without grinding the full algebra, is the opponent's ruin close to certain or closer to a coin flip? Give the approximate probability.",
     answer:
-      "Close to certain — the opponent goes broke with probability ≈ 0.999. A steady 2/3 edge over an equal-length game is overwhelming.",
+      "Close to certain — the opponent goes broke with probability ≈ 0.9998. A steady 2/3 edge over an equal-length game is overwhelming.",
     explanation:
-      "Gambler's ruin with a bias: states 0..20 (your wealth), r = q/p = (1/3)/(2/3) = 1/2, and P(you reach 20 from 10) = (1 − r¹⁰)/(1 − r²⁰) = (1 − 2⁻¹⁰)/(1 − 2⁻²⁰) ≈ 0.999. The lesson is how NON-linear the edge is: a fair game (p = ½) would give exactly k/N = 1/2, but even a modest per-round edge compounds over many rounds into near-certainty. The trap is reaching for the symmetric k/N = 1/2 out of habit; that formula is only valid when p = ½.",
+      "Gambler's ruin with a bias: states 0..24 (your wealth), r = q/p = (1/3)/(2/3) = 1/2, and P(you reach 24 from 12) = (1 − r¹²)/(1 − r²⁴) = (1 − 2⁻¹²)/(1 − 2⁻²⁴) ≈ 0.9998. The lesson is how NON-linear the edge is: a fair game (p = ½) would give exactly k/N = 1/2, but even a modest per-round edge compounds over many rounds into near-certainty. The trap is reaching for the symmetric k/N = 1/2 out of habit; that formula is only valid when p = ½.",
     difficulty: "hard",
     concept: "Gambler's ruin (how an edge compounds)",
     source: "Markov Chains · Gambler's ruin",
@@ -1045,15 +1368,23 @@ export const genRunHeads = (rng: Rng): NumericQuestion => buildRunHeadsInstance(
 export const genTwoInARow = (rng: Rng): NumericQuestion => buildTwoInARowInstance(rng, "medium").numeric;
 export const genResetChain = (rng: Rng): NumericQuestion => buildResetChainInstance(rng, "easy").numeric;
 
-// Level 3 — Pattern races (quiz)
+// Level 3 — Pattern races & overlap (numeric; quiz builders kept for tests)
 export const genPatternWait = (rng: Rng): Question => buildPatternWaitInstance(rng, "medium").question;
 export const genPatternRace = (rng: Rng): Question => buildPatternRaceInstance(rng, "medium").question;
+export const genPatternWaitNumeric = (rng: Rng): NumericQuestion =>
+  buildPatternWaitNumericInstance(rng, "medium").numeric;
+export const genPatternRaceNumeric = (rng: Rng): NumericQuestion =>
+  buildPatternRaceNumericInstance(rng, "medium").numeric;
 
 // Level 4 — Random walks on graphs (numeric)
 export const genCubeWalk = (rng: Rng): NumericQuestion => buildCubeWalkInstance(rng, "medium").numeric;
 export const genPolygonWalk = (rng: Rng): NumericQuestion => buildPolygonWalkInstance(rng, "medium").numeric;
 export const genGridWalk = (rng: Rng): NumericQuestion => buildGridWalkInstance(rng, "hard").numeric;
 
-// Level 5 — Gambler's ruin (quiz)
+// Level 5 — Gambler's ruin (quiz builders kept for tests; numeric = playable)
 export const genRuinReach = (rng: Rng): Question => buildRuinReachInstance(rng, "hard").question;
 export const genBoldPlay = (rng: Rng): Question => buildBoldPlayInstance(rng, "hard").question;
+export const genRuinReachNumeric = (rng: Rng): NumericQuestion =>
+  buildRuinReachNumericInstance(rng, "hard").numeric;
+export const genBoldPlayNumeric = (rng: Rng): NumericQuestion =>
+  buildBoldPlayNumericInstance(rng, "hard").numeric;

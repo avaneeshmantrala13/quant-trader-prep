@@ -10,11 +10,11 @@ export const conditionalGeneralFlashcards: Flashcard[] = [
     // GN65 — All-Boys City — stopping-rule invariant.
     id: "gen-fc-stoppingrule",
     prompt:
-      "In a country, every couple keeps having children until they get their first son, then stops. Births are independent and 50/50. Over the whole population, what happens to the fraction of children who are boys? Argue it precisely.",
+      "Picture a very large country where every family follows one custom: they keep having children and stop the instant their first girl arrives. Treating each birth as an independent, evenly-matched coin flip between the sexes, what value does the nationwide proportion of girls settle at — and can you prove it cannot be tilted?",
     answer:
-      "It stays 50%. A stopping rule chosen by the parents cannot bias the sex of any individual birth — each birth is still an independent 50/50 coin, so the long-run fraction of boys is exactly ½.",
+      "Exactly one-half (50%). A stopping rule the parents choose cannot bias the sex of any individual birth — every birth is still an independent 50/50 event, so the long-run proportion of girls is precisely ½.",
     explanation:
-      "Each birth is an independent fair coin regardless of any rule the parents use to decide WHEN to stop. Linearity/exchangeability: the sequence of all births in the country is just an i.i.d. 50/50 stream; partitioning it into families by 'stop at first son' re-labels the stream but changes no individual outcome, so E[#boys]/E[#children] = ½. Concretely, each family produces exactly one boy and a Geometric(½)−1 number of girls, with E[girls] = 1 = E[boys] per family, again ½. The classic error is to think 'stopping at the first boy' should tilt the ratio toward girls; it feels asymmetric but nature is memoryless — no self-selected stopping time can change a coin's bias.",
+      "Every birth is an independent fair coin no matter what rule the parents use to decide WHEN to stop. By linearity/exchangeability, the whole nationwide sequence of births is a single i.i.d. 50/50 stream; slicing it into families by 'stop at the first girl' merely relabels the stream without altering any individual outcome, so E[#girls]/E[#children] = ½. Concretely, each family ends with exactly one girl preceded by a Geometric(½)−1 number of boys, giving E[boys] = 1 = E[girls] per family — again ½. The classic error is to expect 'stopping at the first girl' to skew the population toward boys; it feels lopsided, but nature is memoryless, and no self-chosen stopping time can shift a fair coin.",
     difficulty: "easy",
     concept: "Stopping rule doesn't change the parity ratio",
     source: "Conditional Probability · stopping-rule invariant",

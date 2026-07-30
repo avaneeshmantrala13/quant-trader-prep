@@ -114,11 +114,20 @@ export function betaQuantile(p: number, a: number, b: number): number {
 /**
  * Posterior after one observation with optional per-step decay ρ applied to the
  * prior counts (default ρ=1 ⇒ no decay). Then α += y, β += (1 − y).
+ *
+ * `y` is the observation ∈ [0,1]. Binary outcomes pass 0/1; the free-response
+ * hint-attempt flow passes FRACTIONAL partial credit (`creditSchedule.ts`) as a
+ * soft/continuous Bernoulli observation — the conjugate Beta-Binomial update
+ * accepts fractional pseudo-counts directly (credit → α, 1−credit → β), which is
+ * the principled continuous generalization of the α=successes/β=failures counts
+ * (Bayes Rules! posterior-mean blend, PHASE_1). A rung-5 recovery (credit 0.04)
+ * therefore adds ≈0.04 success + ≈0.96 failure, barely moving the posterior mean
+ * and correctly signalling "still essentially can't do this unaided".
  */
 export function betaUpdate(
   a: number,
   b: number,
-  y: 0 | 1,
+  y: number,
   rho = 1,
 ): { alpha: number; beta: number } {
   return { alpha: rho * a + y, beta: rho * b + (1 - y) };

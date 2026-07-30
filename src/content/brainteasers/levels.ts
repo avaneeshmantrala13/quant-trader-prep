@@ -56,11 +56,11 @@ const warmups: Flashcard[] = [
   {
     id: "bt-backup-dealer",
     prompt:
-      "You need to buy exactly one share and you ask two independent dealers for a price. Each dealer's quote is an independent random number drawn uniformly from the interval between $0 and $1 (every value in that range is equally likely). You naturally intend to trade at the cheaper of the two quotes. However, the cheaper dealer is only reachable half the time: when you try to hit the better quote, with probability exactly 1/2 that dealer's line is busy and you are forced to trade at the other (more expensive) quote instead; with probability 1/2 you get the cheaper quote as intended. What is the expected price you end up paying?",
+      "You want to buy a single share, so you ping two independent liquidity providers at once. Each one returns a quote that is an independent uniform draw somewhere between $2 and $6 (every price in that band equally likely). You plan to lift whichever quote is lower — but the fast line to the better price is unreliable: exactly half the time it drops and you get filled at the higher quote, and the other half you get the lower quote as planned. What price should you expect to pay for the share?",
     answer:
-      "$0.50 — exactly the same as if you had ignored both quotes and traded with a single dealer at random.",
+      "$4.00 — exactly the midpoint ($2 + $6)/2, the same as if you had ignored both quotes and traded with one provider chosen at random.",
     explanation:
-      "The 'expected value' of a quantity is the average of its possible values weighted by their probabilities. Call the two quotes X and Y; each is uniform on [0, 1], so on its own each has expected value 1/2. Write m = min(X, Y) for the cheaper quote and M = max(X, Y) for the dearer one. With probability 1/2 you pay m and with probability 1/2 you pay M, so your expected cost is ½·E[m] + ½·E[M] = ½·(E[m] + E[M]).\n\nHere is the key identity: for ANY two numbers, the smaller plus the larger equals the two originals added together — i.e. m + M = X + Y always. Taking expectations, E[m] + E[M] = E[X] + E[Y] = 1/2 + 1/2 = 1. So your expected cost is ½·1 = 1/2.\n\nThe 'aha' is that the 50/50 backup EXACTLY cancels the advantage of shopping for the minimum: averaging the min and the max with equal weight is the same as averaging the two original quotes. (You never even need the fact that E[min] = 1/3 and E[max] = 2/3 for two uniforms — though those are consistent: 1/3 + 2/3 = 1.) In general, if you got the cheaper quote with probability p, your expected cost would be p·(1/3) + (1−p)·(2/3) = 2/3 − p/3, which only beats 1/2 when p > 1/2.",
+      "The 'expected value' of a quantity is the average of its possible values weighted by their probabilities. Call the two quotes X and Y; each is uniform on [$2, $6], so on its own each averages the midpoint $4. Write m = min(X, Y) for the cheaper quote and M = max(X, Y) for the dearer one. With probability 1/2 you pay m and with probability 1/2 you pay M, so your expected cost is ½·E[m] + ½·E[M] = ½·(E[m] + E[M]).\n\nHere is the key identity: for ANY two numbers, the smaller plus the larger equals the two originals added together — i.e. m + M = X + Y always. Taking expectations, E[m] + E[M] = E[X] + E[Y] = $4 + $4 = $8. So your expected cost is ½·$8 = $4.\n\nThe 'aha' is that the 50/50 backup EXACTLY cancels the advantage of shopping for the minimum: averaging the min and the max with equal weight is the same as averaging the two original quotes. (You never even need the fact that E[min] = $10/3 ≈ $3.33 and E[max] = $14/3 ≈ $4.67 for two uniforms on this band — though those are consistent: their sum is $8 and their average is $4.) In general, if you got the cheaper quote with probability p, your expected cost would be $2 + $4·(2 − p)/3, which only beats the midpoint $4 when p > 1/2.",
     difficulty: "easy",
     concept: "Expected value / order statistics (min + max identity)",
     source: "Original house brainteaser",
@@ -95,11 +95,11 @@ const classics: Flashcard[] = [
   {
     id: "bt-adjacent-cross",
     prompt:
-      "A trading queue contains 8 buy orders and 8 sell orders — 16 orders in total — lined up in a single row in a completely random order (every possible ordering of the 16 tickets is equally likely). Scanning the row from left to right, you count a 'cross' every time a buy order is immediately followed by a sell order in adjacent positions. What is the expected number of such buy-then-sell crosses in the row?",
+      "You shuffle a deck of 20 order tickets — 10 marked BUY and 10 marked SELL — uniformly at random and deal them face-up into a single line. Walking the line from left to right, a 'cross' occurs at any spot where a BUY ticket is immediately trailed by a SELL ticket. On average, how many crosses will the line show?",
     answer:
-      "Exactly 4. (In general, for n buys and n sells, the expected count is n/2.)",
+      "Exactly 5. (In general, for n buys and n sells, the expected count is n/2.)",
     explanation:
-      "The powerful tool here is LINEARITY OF EXPECTATION: the expected value of a sum of random quantities equals the sum of their individual expected values — even when those quantities are not independent. There are 16 − 1 = 15 adjacent slots (positions 1–2, 2–3, …, 15–16). For slot i, define an indicator I_i that equals 1 if that pair is 'buy then sell' and 0 otherwise. The number of crosses is I_1 + … + I_15, so its expectation is the sum over slots of P(slot i is B then S).\n\nFor a single fixed adjacent slot, the chance the left card is a buy is 8/16; given that, the chance the right card is a sell is 8/15 (8 sells remain among the 15 other cards). So each slot is a cross with probability (8/16)·(8/15) = (1/2)·(8/15) = 8/30 = 4/15. Multiplying by the 15 slots: 15·(4/15) = 4.\n\nThe 'aha' is that even though neighboring slots overlap (they share a card) and are therefore DEPENDENT, linearity lets you ignore that entirely and just add per-slot probabilities. In general the per-slot probability is (n/2n)·(n/(2n−1)) = n/(2(2n−1)), and multiplying by the 2n−1 slots gives exactly n/2, independent of the messy dependence structure.",
+      "The powerful tool here is LINEARITY OF EXPECTATION: the expected value of a sum of random quantities equals the sum of their individual expected values — even when those quantities are not independent. There are 20 − 1 = 19 adjacent slots (positions 1–2, 2–3, …, 19–20). For slot i, define an indicator I_i that equals 1 if that pair is 'buy then sell' and 0 otherwise. The number of crosses is I_1 + … + I_19, so its expectation is the sum over slots of P(slot i is B then S).\n\nFor a single fixed adjacent slot, the chance the left card is a buy is 10/20; given that, the chance the right card is a sell is 10/19 (10 sells remain among the 19 other cards). So each slot is a cross with probability (10/20)·(10/19) = (1/2)·(10/19) = 10/38 = 5/19. Multiplying by the 19 slots: 19·(5/19) = 5.\n\nThe 'aha' is that even though neighboring slots overlap (they share a card) and are therefore DEPENDENT, linearity lets you ignore that entirely and just add per-slot probabilities. In general the per-slot probability is (n/2n)·(n/(2n−1)) = n/(2(2n−1)), and multiplying by the 2n−1 slots gives exactly n/2, independent of the messy dependence structure.",
     difficulty: "medium",
     concept: "Linearity of expectation",
     source: "Original house brainteaser",
@@ -107,11 +107,11 @@ const classics: Flashcard[] = [
   {
     id: "bt-walk-offer-down",
     prompt:
-      "You are selling one unit to a single buyer whose private maximum willingness to pay, V, is a random number uniform on [0, 1] (you do not observe it). You may quote a take-it-or-leave-it ask. If your ask is at most V, the buyer accepts and you earn your ask; if your ask exceeds V, the buyer declines and — crucially — you are then allowed to make exactly one more, strictly lower ask, which the buyer accepts if it is at most V (otherwise the buyer walks and you earn 0). The buyer is myopic: at each ask they simply accept whenever the price does not exceed their value V. Choosing both asks optimally in advance, (a) what two prices should you quote, and (b) what is your maximum expected revenue? For contrast, what would a single-ask seller earn?",
+      "A single client will take one block off you, but only at or below their hidden reservation price V, which is uniform on [0, 12] dollars (you never observe it). You announce one firm ask; a client whose V meets it buys and pays that ask, otherwise they balk — and only then may you announce a single strictly cheaper ask, which likewise clears if V meets it (else the client leaves and you earn 0). The client simply grabs any ask no higher than V. Fixing both asks ahead of time, (a) what pair of prices maximizes your expected take, and (b) what is that take — compared with the best you could do posting just one price?",
     answer:
-      "Quote $2/3 first, then $1/3; maximum expected revenue = $1/3. A single-ask seller's best is to quote $1/2 for expected revenue $1/4 — the second chance lifts revenue from 1/4 to 1/3, a 33% improvement.",
+      "Quote $8 first, then $4; maximum expected revenue = $4. A single-ask seller's best is to quote $6 for expected revenue $3 — the second chance lifts revenue from $3 to $4, a 33% improvement.",
     explanation:
-      "With a SINGLE ask p, the buyer accepts with probability P(V ≥ p) = 1 − p (since V is uniform on [0, 1], the chance it lands above p is the length 1 − p), so expected revenue is p·(1 − p). This parabola peaks at p = 1/2, giving (1/2)·(1/2) = 1/4.\n\nNow allow a fallback. Let the first ask be p₁ and the lower fallback be p₂ < p₁. There are two disjoint ways to earn money:\n • The buyer accepts the first ask: needs V ≥ p₁, probability 1 − p₁, earning p₁ → contribution p₁·(1 − p₁).\n • The buyer declines the first but accepts the fallback: needs p₂ ≤ V < p₁, probability p₁ − p₂, earning p₂ → contribution p₂·(p₁ − p₂).\n\nSo expected revenue is R = p₁·(1 − p₁) + p₂·(p₁ − p₂). Optimize the fallback first: for fixed p₁, the term p₂·(p₁ − p₂) is a parabola in p₂ maximized at p₂ = p₁/2, where it equals p₁²/4. Substitute: R = p₁·(1 − p₁) + p₁²/4 = p₁ − (3/4)·p₁². Setting the derivative to zero: 1 − (3/2)·p₁ = 0, so p₁ = 2/3, hence p₂ = 1/3. The revenue is 2/3 − (3/4)·(4/9) = 2/3 − 1/3 = 1/3.\n\nThe 'aha': a second, lower quote lets you price-discriminate OVER TIME — capture the high-value buyers at 2/3, then recover a sale from the medium-value buyers at 1/3 — which strictly beats any single price. Note the fallback 1/3 is NOT the single-ask optimum 1/2; the whole schedule shifts because the first ask has already 'creamed off' the top of the distribution.",
+      "With a SINGLE ask p, the buyer accepts with probability P(V ≥ p) = (12 − p)/12 (since V is uniform on [0, 12], the chance it lands above p is the fraction (12 − p)/12), so expected revenue is p·(12 − p)/12. This parabola peaks at p = 6, giving 6·6/12 = $3.\n\nNow allow a fallback. Let the first ask be p₁ and the lower fallback be p₂ < p₁. There are two disjoint ways to earn money:\n • The buyer accepts the first ask: needs V ≥ p₁, probability (12 − p₁)/12, earning p₁ → contribution p₁·(12 − p₁)/12.\n • The buyer declines the first but accepts the fallback: needs p₂ ≤ V < p₁, probability (p₁ − p₂)/12, earning p₂ → contribution p₂·(p₁ − p₂)/12.\n\nSo expected revenue is R = [p₁·(12 − p₁) + p₂·(p₁ − p₂)]/12. Optimize the fallback first: for fixed p₁, the term p₂·(p₁ − p₂) is a parabola in p₂ maximized at p₂ = p₁/2, where it equals p₁²/4. Substitute: R = [p₁·(12 − p₁) + p₁²/4]/12 = [12·p₁ − (3/4)·p₁²]/12. Setting the derivative to zero: 12 − (3/2)·p₁ = 0, so p₁ = 8, hence p₂ = 4. The revenue is [8·4 + 4·4]/12 = 48/12 = $4.\n\nThe 'aha': a second, lower quote lets you price-discriminate OVER TIME — capture the high-value buyers at $8, then recover a sale from the medium-value buyers at $4 — which strictly beats any single price. Note the fallback $4 is NOT the single-ask optimum $6; the whole schedule shifts because the first ask has already 'creamed off' the top of the distribution.",
     difficulty: "medium",
     concept: "Sequential pricing / price discrimination",
     source: "Original house brainteaser",
@@ -182,11 +182,11 @@ const hard: Flashcard[] = [
   {
     id: "bt-fading-buyer",
     prompt:
-      "You are trying to sell one block of stock. Interested buyers arrive one at a time, and each independently offers a price that is a uniform random number on [0, 1] (every value equally likely). When an offer arrives you must immediately either ACCEPT it (the sale is done at that price and the game ends) or REJECT it (that offer is gone forever, no recall). Here is the catch: each time you reject an offer, there is a probability of exactly 1/2 that the entire deal collapses — the block gets sold elsewhere and you walk away with 0 — and a probability 1/2 that another buyer arrives. There is no limit on the number of buyers as long as the deal has not collapsed. Playing optimally to maximize your expected sale price, (a) what acceptance rule should you use, and (b) what is your expected payoff?",
+      "You need to unload one block of stock to a stream of arriving bidders. Each bidder independently names a price that is uniform on [0, 100] dollars, and the instant you see it you must lock in the sale at that price or pass on it permanently (no recall). The twist: every time you pass, a coin flip decides your fate — with probability exactly 1/2 the block gets placed elsewhere and you are left with 0, and with probability 1/2 the next bidder shows up. Bidders keep coming until the block is placed or lost. To maximize your expected proceeds, (a) what rule tells you when to accept, and (b) what do you expect to collect?",
     answer:
-      "Accept the first offer that is at least the threshold t* = 2 − √3 ≈ 0.2679; reject anything below it. Expected payoff W = 4 − 2√3 ≈ 0.5359.",
+      "Accept the first offer that is at least the threshold t* = 100·(2 − √3) ≈ $26.79; reject anything below it. Expected payoff W = 100·(4 − 2√3) ≈ $53.59.",
     explanation:
-      "Because every future decision faces exactly the same situation (offers are i.i.d. and the collapse probability is memoryless), the optimal policy is a single fixed THRESHOLD: accept an offer if and only if it is at least some cutoff t, reject otherwise. Let W be your expected payoff at the start (before seeing an offer). When you reject, with probability 1/2 you get 0 and with probability 1/2 you face the same problem again worth W; so the value of rejecting is ½·0 + ½·W = W/2. A rational player accepts the current offer x exactly when it beats the reject value, i.e. when x ≥ W/2. Thus the optimal threshold is t = W/2.\n\nNow compute W self-consistently. Upon seeing an offer x uniform on [0, 1] you effectively receive max(x, t): you take x if it clears the bar, else you fall back to the continuation value t = W/2. Splitting the average at t:\n W = E[max(x, t)] = (integral of t from 0 to t) + (integral of x from t to 1) = t² + (1 − t²)/2 = 1/2 + t²/2.\n\nSubstitute t = W/2 (so W = 2t) into W = 1/2 + t²/2: 2t = 1/2 + t²/2 → 4t = 1 + t² → t² − 4t + 1 = 0. The root in [0, 1] is t = (4 − √12)/2 = 2 − √3 ≈ 0.2679, giving W = 2t = 4 − 2√3 ≈ 0.5359.\n\nThe 'aha': the RISK that the opportunity vanishes forces you to be far LESS picky than in the classic no-risk version. If offers never disappeared you could wait indefinitely for a near-1 offer, so no finite threshold would be optimal; the collapse probability is exactly what makes the problem well-posed and pins the cutoff at 2 − √3. The whole solution rests on setting the continuation value equal to the threshold — a fixed point (t = W/2).",
+      "Because every future decision faces exactly the same situation (offers are i.i.d. and the collapse probability is memoryless), the optimal policy is a single fixed THRESHOLD: accept an offer if and only if it is at least some cutoff t, reject otherwise. Let W be your expected payoff at the start (before seeing an offer). When you reject, with probability 1/2 you get 0 and with probability 1/2 you face the same problem again worth W; so the value of rejecting is ½·0 + ½·W = W/2. A rational player accepts the current offer x exactly when it beats the reject value, i.e. when x ≥ W/2. Thus the optimal threshold is t = W/2.\n\nNow compute W self-consistently. Upon seeing an offer x uniform on [0, 100] you effectively receive max(x, t): you take x if it clears the bar, else you fall back to the continuation value t = W/2. Splitting the average at t:\n W = E[max(x, t)] = (integral of t from 0 to t)/100 + (integral of x from t to 100)/100 = t²/100 + (100² − t²)/200 = 50 + t²/200.\n\nSubstitute t = W/2 (so W = 2t) into W = 50 + t²/200: 2t = 50 + t²/200 → 400t = 10000 + t² → t² − 400t + 10000 = 0. The root in [0, 100] is t = (400 − √(160000 − 40000))/2 = 200 − √30000 = 100·(2 − √3) ≈ 26.79, giving W = 2t = 100·(4 − 2√3) ≈ 53.59.\n\nThe 'aha': the RISK that the opportunity vanishes forces you to be far LESS picky than in the classic no-risk version. If offers never disappeared you could wait indefinitely for a near-100 offer, so no finite threshold would be optimal; the collapse probability is exactly what makes the problem well-posed and pins the cutoff at 100·(2 − √3). The whole solution rests on setting the continuation value equal to the threshold — a fixed point (t = W/2).",
     difficulty: "hard",
     concept: "Optimal stopping (threshold = continuation value)",
     source: "Original house brainteaser",
@@ -194,11 +194,11 @@ const hard: Flashcard[] = [
   {
     id: "bt-round-trip",
     prompt:
-      "A stock's closing price on each of the next three days is an independent uniform random number on [0, 1] (each day's price is revealed only at the end of that day, and past prices cannot be re-traded). You want to do exactly one round trip: buy one share on some day and sell it on a strictly later day, deciding in real time as prices are revealed (you cannot see future prices when you act). Concretely: on day 1 you may buy or wait; on day 2, if you already hold you may sell or keep holding, and if you are flat you may buy or wait; on day 3, if you hold you sell at that day's price (final chance), and if you are flat it is too late to complete a round trip (profit 0). Your profit is the selling price minus the buying price. Playing optimally, what is your maximum expected profit, and what is the optimal strategy?",
+      "Picture a stock whose close on each of the next three days is an independent uniform draw on [0, 100] dollars, each close revealed only at that day's end and never re-tradable afterward. You want to complete a single round trip — go long on one day and unwind on a strictly later day — choosing live, without seeing future closes. If you are still long going into day 3 you must sell into that close, and if you never went long by then you miss your chance (profit 0). Your profit equals the sell price minus the buy price. Under optimal play, what is the greatest expected profit, and what strategy attains it?",
     answer:
-      "Maximum expected profit = $1/4 = $0.25. Buy on day 1 iff its price ≤ 1/2; if you bought on day 1, sell on day 2 iff day-2 price ≥ 1/2, otherwise sell on day 3. If you did NOT buy on day 1, then buy on day 2 iff its price < 1/2 and sell on day 3; otherwise do not trade.",
+      "Maximum expected profit = $25. Buy on day 1 iff its price ≤ $50; if you bought on day 1, sell on day 2 iff day-2 price ≥ $50, otherwise sell on day 3. If you did NOT buy on day 1, then buy on day 2 iff its price < $50 and sell on day 3; otherwise do not trade.",
     explanation:
-      "Solve by BACKWARD INDUCTION — work out the value of each situation starting from the last day and moving earlier. Throughout, the expected value of a fresh uniform price is 1/2.\n\nSelling side. If you are holding with only day 3 left, you must sell at day 3, worth 1/2 on average. If you are holding entering day 2 (you bought on day 1), you compare selling now at x₂ versus holding for the day-3 average 1/2: sell iff x₂ ≥ 1/2. The expected sale price is E[max(x₂, 1/2)] = (integral of 1/2 from 0 to 1/2) + (integral of x from 1/2 to 1) = 1/4 + 3/8 = 5/8. So a share bought on day 1 fetches an expected 5/8; a share bought on day 2 fetches an expected 1/2.\n\nBuying side. If you are still flat entering day 2 with price x₂, buying yields expected profit 1/2 − x₂ (buy at x₂, sell day 3 at expected 1/2); you buy iff that is positive, i.e. x₂ < 1/2. The value of being flat entering day 2 is therefore E[max(1/2 − x₂, 0)] = (integral of (1/2 − x) from 0 to 1/2) = 1/8.\n\nDay 1. Seeing x₁, buying yields expected profit 5/8 − x₁ (you will realize the 5/8 selling value), while waiting is worth 1/8. Buy iff 5/8 − x₁ ≥ 1/8, i.e. x₁ ≤ 1/2. The overall value is E[max(5/8 − x₁, 1/8)] = (integral of (5/8 − x) from 0 to 1/2) + (integral of 1/8 from 1/2 to 1) = 3/16 + 1/16 = 1/4.\n\nSo the maximum expected profit is exactly 1/4. The 'aha' is that this is a TWO-SIDED optimal-stopping problem — you optimize both the entry and the exit, and the two thresholds happen to both sit at the symmetric value 1/2, yet the entry cutoff on day 1 is driven by the sell-side continuation value 5/8, not by 1/2 directly.",
+      "Solve by BACKWARD INDUCTION — work out the value of each situation starting from the last day and moving earlier. Throughout, the expected value of a fresh uniform price is $50.\n\nSelling side. If you are holding with only day 3 left, you must sell at day 3, worth $50 on average. If you are holding entering day 2 (you bought on day 1), you compare selling now at x₂ versus holding for the day-3 average $50: sell iff x₂ ≥ $50. The expected sale price is E[max(x₂, 50)] = (integral of 50 from 0 to 50)/100 + (integral of x from 50 to 100)/100 = 25 + 37.5 = $62.50. So a share bought on day 1 fetches an expected $62.50; a share bought on day 2 fetches an expected $50.\n\nBuying side. If you are still flat entering day 2 with price x₂, buying yields expected profit 50 − x₂ (buy at x₂, sell day 3 at expected $50); you buy iff that is positive, i.e. x₂ < $50. The value of being flat entering day 2 is therefore E[max(50 − x₂, 0)] = (integral of (50 − x) from 0 to 50)/100 = $12.50.\n\nDay 1. Seeing x₁, buying yields expected profit 62.5 − x₁ (you will realize the $62.50 selling value), while waiting is worth $12.50. Buy iff 62.5 − x₁ ≥ 12.5, i.e. x₁ ≤ $50. The overall value is E[max(62.5 − x₁, 12.5)] = (integral of (62.5 − x) from 0 to 50)/100 + (integral of 12.5 from 50 to 100)/100 = 18.75 + 6.25 = $25.\n\nSo the maximum expected profit is exactly $25. The 'aha' is that this is a TWO-SIDED optimal-stopping problem — you optimize both the entry and the exit, and the two thresholds happen to both sit at the symmetric value $50, yet the entry cutoff on day 1 is driven by the sell-side continuation value $62.50, not by $50 directly.",
     difficulty: "hard",
     concept: "Optimal stopping (two-sided) / backward induction",
     source: "Original house brainteaser",
@@ -206,11 +206,11 @@ const hard: Flashcard[] = [
   {
     id: "bt-inventory-cap",
     prompt:
-      "A market maker keeps an inventory that starts at 0 and must always stay within the range {−1, 0, +1} (a strict one-lot risk limit). Customers arrive one after another; each customer independently wants to trade one lot in a random direction — with probability 1/2 they buy from the maker (which would move inventory down by 1) and with probability 1/2 they sell to the maker (inventory up by 1). If the requested trade would push inventory outside [−1, +1] (e.g. a customer wants to sell to a maker who is already at +1), the maker REJECTS that customer and inventory stays where it is; the rejected customer simply leaves. In the long run (steady state), what fraction of arriving customers are rejected?",
+      "A dealer runs a book whose net position begins flat at 0 and is never allowed outside {−2, −1, 0, +1, +2} (a hard two-lot limit). One at a time, clients arrive wanting a single lot in a random direction: with probability 1/2 the client buys from the dealer (position falls by 1) and with probability 1/2 the client sells to the dealer (position rises by 1). Any request that would carry the position beyond ±2 is declined outright — the position holds and that client departs. After the book settles into its long-run behaviour, what fraction of arriving clients end up declined?",
     answer:
-      "Exactly 1/3 of arriving customers are rejected.",
+      "Exactly 1/5 of arriving customers are rejected.",
     explanation:
-      "Model the inventory as a MARKOV CHAIN — a system that hops between states where the next state depends only on the current one. The states are −1, 0, +1. From state 0, either trade is allowed, so the chain goes to +1 or −1, each with probability 1/2 (never a rejection at 0). From state +1: a customer buying from the maker (prob 1/2) moves inventory to 0 — accepted; a customer selling to the maker (prob 1/2) would go to +2 — REJECTED, so the chain stays at +1. State −1 is the mirror image.\n\nWe need the STATIONARY DISTRIBUTION (π₋₁, π₀, π₊₁): the long-run fraction of steps the chain spends in each state, characterized by the balance equations 'probability flowing into a state = probability of being there.' By the left–right symmetry, π₊₁ = π₋₁. Balance at +1: you arrive at +1 either from 0 (with prob ½·π₀) or by staying at +1 after a rejection (with prob ½·π₊₁):\n π₊₁ = ½·π₀ + ½·π₊₁  ⟹  ½·π₊₁ = ½·π₀  ⟹  π₊₁ = π₀.\nSo all three states are equally likely: π₋₁ = π₀ = π₊₁ = 1/3.\n\nFinally, a rejection happens only when the chain is at +1 and the customer wants to push it to +2 (prob 1/2), or at −1 and the customer wants −2 (prob 1/2); at 0 rejection is impossible. So the long-run rejection rate is π₊₁·(1/2) + π₋₁·(1/2) + π₀·0 = (1/3)·(1/2) + (1/3)·(1/2) = 1/3.\n\nThe 'aha': because the reflecting cap makes the maker LINGER at the boundary states (a rejection leaves inventory unchanged, so +1 and −1 are 'sticky'), all three inventory levels turn out equally likely, and exactly one-third of order flow is turned away.",
+      "Model the inventory as a MARKOV CHAIN — a system that hops between states where the next state depends only on the current one. The states are −2, −1, 0, +1, +2. From any interior state (−1, 0, +1) either trade is allowed, so the chain steps +1 or −1, each with probability 1/2 (never a rejection there). From the top state +2: a customer buying from the maker (prob 1/2) moves inventory to +1 — accepted; a customer selling to the maker (prob 1/2) would go to +3 — REJECTED, so the chain stays put at +2. State −2 is the mirror image.\n\nWe need the STATIONARY DISTRIBUTION (π₋₂, π₋₁, π₀, π₊₁, π₊₂): the long-run fraction of steps spent in each state, characterized by the balance condition 'flow up across a boundary = flow down across it.' For adjacent states this detailed balance reads π_i·(½) = π_{i+1}·(½), i.e. π_i = π_{i+1} — every neighbouring pair is equally likely. So all five states share the same probability, and since they sum to 1, π₋₂ = π₋₁ = π₀ = π₊₁ = π₊₂ = 1/5.\n\nFinally, a rejection happens only when the chain is at +2 and the customer wants to push it to +3 (prob 1/2), or at −2 and the customer wants −3 (prob 1/2); at every interior state rejection is impossible. So the long-run rejection rate is π₊₂·(1/2) + π₋₂·(1/2) = (1/5)·(1/2) + (1/5)·(1/2) = 1/5.\n\nThe 'aha': because the reflecting cap makes the maker LINGER at the boundary states (a rejection leaves inventory unchanged, so +2 and −2 are 'sticky'), all five inventory levels turn out equally likely — the symmetric book spreads probability uniformly — and exactly one-fifth of order flow is turned away. (In general a symmetric book with a k-lot cap rejects 1/(2k+1) of arrivals.)",
     difficulty: "hard",
     concept: "Markov chains / steady state (balance equations)",
     source: "Original house brainteaser",
@@ -539,6 +539,21 @@ const levels: Level[] = [
         "Find an extra observable state or invariant; then the puzzle usually collapses.",
       whyInterviewers:
         "Firms use these to see if you panic or decompose. Narrate your reasoning.",
+      deepDive: {
+        whyItWorks:
+          "Many warm-up puzzles crack open once you find a second 'channel' of information or reason about rates rather than absolute amounts. Reframing what you are allowed to observe or control usually collapses the problem.",
+        approach: [
+          "Restate exactly what you can observe, control, and measure.",
+          "Look for a hidden second signal (heat, order, parity) beyond the obvious one.",
+          "When timing matters, reason about rates rather than lengths or amounts.",
+          "Confirm your construction uses only the allowed operations.",
+        ],
+        pitfalls: [
+          "Assuming half a rope burns in half the time when the burn rate is uneven.",
+          "Sticking to the intuitive greedy plan when pairing the slower parties does better.",
+          "Restricting yourself to the obvious on/off states and missing an extra observable one.",
+        ],
+      },
     },
   },
   {
@@ -563,6 +578,21 @@ const levels: Level[] = [
       keyIdea: "Count the information each action yields (log base #outcomes).",
       whyInterviewers:
         "Tests whether you quantify information rather than guess.",
+      deepDive: {
+        whyItWorks:
+          "Many 'hard' puzzles are really about how much information each action yields: an action with k possible outcomes can distinguish at most kⁿ cases in n uses. Counting outcomes before acting tells you the minimum number of steps and how to split the possibilities.",
+        approach: [
+          "Count how many distinct cases you must tell apart.",
+          "Count how many outcomes each action (weighing, test, question) can produce.",
+          "Split the remaining possibilities as evenly as possible at every step.",
+          "For an informed reveal, update the conditional probabilities rather than assuming symmetry.",
+        ],
+        pitfalls: [
+          "Splitting a group in half and wasting the informative 'balanced' outcome of a three-way scale.",
+          "Treating an informed host's reveal as carrying no information, collapsing to a naive 50/50.",
+          "Confusing the number of outcomes with the number of actions when bounding the minimum steps.",
+        ],
+      },
     },
   },
   {
@@ -587,6 +617,21 @@ const levels: Level[] = [
       keyIdea: "Shrink to the base case; find the invariant; induct upward.",
       whyInterviewers:
         "These separate candidates who memorized answers from those who can derive them.",
+      deepDive: {
+        whyItWorks:
+          "The hardest teasers yield to two moves: solve the smallest version first and induct upward, or design a protocol that funnels information through a shared resource so one agent can decode it. Shrinking the problem exposes the invariant that scales.",
+        approach: [
+          "Shrink the problem to its smallest case and solve that directly.",
+          "Assume the pattern holds one size down, then extend it up by one.",
+          "For coordination puzzles, assign roles and define one reliable signal per agent.",
+          "Check the protocol never double-counts or loses information.",
+        ],
+        pitfalls: [
+          "Memorizing the answer instead of deriving it from the base case.",
+          "In common-knowledge puzzles, forgetting a public announcement adds shared knowledge even when everyone already sees the fact.",
+          "Designing a signal a single agent might send more than once, corrupting a count.",
+        ],
+      },
     },
   },
   {
@@ -619,6 +664,21 @@ const levels: Level[] = [
         "Count by structure: triangular sums, factor counts, and pigeonhole thresholds (boxes·(m−1)+1).",
       whyInterviewers:
         "Tests whether you set up an exact count instead of guessing or enumerating by hand.",
+      deepDive: {
+        whyItWorks:
+          "A surprising number of puzzles are secretly exact counting problems: recognize a structured sum (such as a triangular sum) or apply the pigeonhole principle — if items outnumber the boxes times the per-box cap, some box must overflow. Setting up the count beats enumerating by hand.",
+        approach: [
+          "Decide what you are counting and by which structural unit (position, factor, cell).",
+          "Recognize a standard sum — consecutive integers form a triangular sum.",
+          "For existence claims, define the boxes and count items against capacity.",
+          "Conclude an overflow whenever items exceed boxes times the per-box limit.",
+        ],
+        pitfalls: [
+          "Counting by scanning items one by one instead of by position or structure.",
+          "Skipping a divisibility check before claiming an equal split is possible.",
+          "Mis-stating the pigeonhole threshold, off by one on boxes times capacity.",
+        ],
+      },
     },
   },
   {
@@ -644,6 +704,21 @@ const levels: Level[] = [
         "Identify a conserved quantity or parity; the goal is forced (or forbidden) by it.",
       whyInterviewers:
         "Separates candidates who search blindly from those who find the structural invariant.",
+      deepDive: {
+        whyItWorks:
+          "The strongest single trick is to find an invariant — a quantity every legal move leaves unchanged, or a parity that never flips. If the goal state would violate the invariant it is impossible; if the invariant pins down the end state, the answer falls out for free.",
+        approach: [
+          "Scan the allowed moves for a quantity none of them changes.",
+          "Track its parity or exact value from the starting position.",
+          "Test whether the goal state is consistent with that invariant.",
+          "Use symmetry — mirroring or pairing — as an invariant you actively maintain.",
+        ],
+        pitfalls: [
+          "Fixating on the visible, changing quantity instead of the conserved one.",
+          "Assuming two mutually-exclusive extremes (like a maximum and a minimum count) can occur together.",
+          "Searching case by case when a single invariant settles possibility or impossibility at once.",
+        ],
+      },
     },
   },
   {
@@ -669,6 +744,21 @@ const levels: Level[] = [
         "Work backward from the end: label cold positions, then force the opponent onto them.",
       whyInterviewers:
         "These reveal whether you can build a strategy from first principles under pressure.",
+      deepDive: {
+        whyItWorks:
+          "Combinatorial games fall to backward induction: label the losing ('cold') positions by working back from the end, then always hand your opponent one. Bargaining puzzles use the same shrink-to-the-base-case logic, and lateral traps reward finding the one quantity that actually matters.",
+        approach: [
+          "Identify who wins from the terminal positions and reason backward.",
+          "Mark cold positions from which every move hands the opponent a winning one.",
+          "On your turn, always move onto a cold position.",
+          "For bargaining, solve the smallest subgame and buy the cheapest majority upward.",
+        ],
+        pitfalls: [
+          "Playing forward by intuition instead of labeling positions from the end.",
+          "In percentage 'traps', tracking the changing quantity rather than the fixed one.",
+          "Assuming voters accept any offer rather than comparing it to their fallback if the proposer is removed.",
+        ],
+      },
     },
   },
 ];

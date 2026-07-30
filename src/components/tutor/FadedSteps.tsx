@@ -1,13 +1,21 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { FadedStage } from "@/lib/tutor/faded";
 import type { SelfExplainMCQ } from "@/lib/tutor/selfExplain";
+import type { DeepDiveView } from "@/lib/tutor/deepDive";
+import { hasDeepDive } from "@/lib/tutor/deepDive";
 import { SelfExplainPrompt } from "./SelfExplainPrompt";
+import { DeepDivePanel } from "./DeepDivePanel";
 
 /**
  * Faded / completion view (Renkl & Atkinson 2003). The transition between
  * studying and solving: a same-family instance with the misconception-critical
  * step BLANKED as a self-explanation prompt. Thin — the stage + MCQ are computed
  * upstream (`buildFadedStages`, `buildSelfExplainMCQ`).
+ *
+ * The two footer buttons are now genuinely distinct: the PRIMARY button proceeds
+ * into the questions; the SECONDARY button reveals an inline "Explain in more
+ * detail" deep-dive of the underlying worked example — after which the learner
+ * can still proceed straight into the round.
  */
 export function FadedSteps({
   concept,
@@ -17,8 +25,8 @@ export function FadedSteps({
   illustration,
   onContinue,
   continueLabel = "Ready — start practice ▸",
-  skipLabel = "Skip — I know this",
-  onSkip,
+  deepDive,
+  detailLabel = "Explain in more detail ▾",
 }: {
   concept?: string;
   prompt: string;
@@ -27,9 +35,13 @@ export function FadedSteps({
   illustration?: ReactNode;
   onContinue: () => void;
   continueLabel?: string;
-  skipLabel?: string;
-  onSkip?: () => void;
+  /** Composed deeper walk-through; when absent the detail affordance is hidden. */
+  deepDive?: DeepDiveView;
+  detailLabel?: string;
 }) {
+  const [showDetail, setShowDetail] = useState(false);
+  const canExpand = !!deepDive && hasDeepDive(deepDive);
+
   return (
     <div className="animate-print-in space-y-5">
       <article className="panel-ruled p-6">
@@ -66,13 +78,28 @@ export function FadedSteps({
 
       {selfExplain && <SelfExplainPrompt mcq={selfExplain} />}
 
+      {showDetail && deepDive && (
+        <DeepDivePanel
+          view={deepDive}
+          onStart={onContinue}
+          headingId="faded-deep-dive"
+        />
+      )}
+
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={onContinue} className="btn-primary flex-1">
           {continueLabel}
         </button>
-        <button onClick={onSkip ?? onContinue} className="btn-secondary flex-1">
-          {skipLabel}
-        </button>
+        {canExpand && (
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            aria-expanded={showDetail}
+            aria-controls="faded-deep-dive"
+            className="btn-secondary flex-1"
+          >
+            {showDetail ? "Hide the detailed explanation ▴" : detailLabel}
+          </button>
+        )}
       </div>
     </div>
   );

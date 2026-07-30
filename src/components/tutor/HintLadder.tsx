@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import type { HintRung } from "@/lib/tutor/hintLadder";
 import type { NaturalFrequencyTree } from "@/lib/tutor/naturalFrequency";
 import type { MonteCarloSpec } from "@/lib/tutor/monteCarlo";
@@ -20,7 +21,7 @@ function isMcSpec(p: HintRung["payload"]): p is MonteCarloSpec {
 
 const RUNG_LABEL: Record<HintRung["kind"], string> = {
   "name-trap": "Name the trap",
-  representation: "See it differently",
+  representation: "Make a plan of attack",
   "worked-sibling": "Study a worked sibling",
   "elicit-confront": "Confront it",
   reveal: "Full solution",
@@ -45,6 +46,7 @@ export function HintLadder({
   rungs,
   siblingWorked,
   phrasedText,
+  controlledRevealed,
 }: {
   rungs: HintRung[];
   /** Optional regenerated same-family worked instance for rung 3. */
@@ -55,10 +57,21 @@ export function HintLadder({
    * AI-assisted" chip. Absent ⇒ the deterministic rung text (the default).
    */
   phrasedText?: Partial<Record<HintRung["rung"], string>>;
+  /**
+   * PHASE_1 re-attempt flow (ADDITIVE): when set, the number of rungs shown is
+   * CONTROLLED by the parent (disclosure is driven by re-attempts, not the
+   * internal "show another hint" button, which is hidden). Absent ⇒ the original
+   * learner-paced self-disclosure behaviour is unchanged.
+   */
+  controlledRevealed?: number;
 }) {
-  const [revealed, setRevealed] = useState(1);
+  const controlled = controlledRevealed != null;
+  const [selfRevealed, setSelfRevealed] = useState(1);
+  const revealed = controlled
+    ? Math.max(0, Math.min(controlledRevealed, rungs.length))
+    : selfRevealed;
   const shown = rungs.slice(0, revealed);
-  const hasMore = revealed < rungs.length;
+  const hasMore = !controlled && revealed < rungs.length;
   const nextRung = rungs[revealed];
 
   /** The wording to display for a rung: LLM phrasing (non-reveal) else original. */
@@ -127,6 +140,15 @@ export function HintLadder({
                 <ConfrontSim spec={rung.payload} />
               </div>
             )}
+
+            {rung.simLink && (
+              <Link
+                to={rung.simLink.href}
+                className="btn-secondary mt-2 inline-flex items-center gap-1 text-xs"
+              >
+                Open “{rung.simLink.title}” →
+              </Link>
+            )}
           </li>
           );
         })}
@@ -134,7 +156,7 @@ export function HintLadder({
 
       {hasMore && nextRung && (
         <button
-          onClick={() => setRevealed((r) => r + 1)}
+          onClick={() => setSelfRevealed((r) => r + 1)}
           className="btn-secondary w-full"
         >
           {nextRung.kind === "reveal"

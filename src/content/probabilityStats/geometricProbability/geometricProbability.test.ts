@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeNumeric, gradeFreeResponse } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import {
   F,
@@ -9,7 +9,13 @@ import {
   glanceCatchProb,
   meetingProb,
 } from "../coreSolvers";
-import { genGeoArea, genGlance, genMeeting, genTileFit } from "./generators";
+import {
+  genGeoArea,
+  genGeoAreaNumeric,
+  genGlance,
+  genMeeting,
+  genTileFit,
+} from "./generators";
 
 /**
  * Re-homed from the former `general/general.test.ts`: the geometric-probability
@@ -20,6 +26,7 @@ import { genGeoArea, genGlance, genMeeting, genTileFit } from "./generators";
 const r = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp;
 
 const NUMERIC_GENS: Record<string, (rng: Rng) => NumericQuestion> = {
+  genGeoAreaNumeric,
   genTileFit,
   genMeeting,
   genGlance,
@@ -111,6 +118,24 @@ describe("quiz generators: valid correct index + distinct, aligned choices", () 
       }
     });
   }
+});
+
+describe("geo-area free-response conversion: tagged error modes + fraction grading", () => {
+  it("carries misconception tags on every common error and accepts a fraction answer", () => {
+    for (const seed of SEEDS) {
+      const q = genGeoAreaNumeric(new Rng(seed));
+      const dp = q.decimals ?? 0;
+      // Every error mode is a NAMED misconception (rung-1 coaching driver).
+      for (const ce of q.commonErrors ?? []) {
+        expect(ce.misconception).toBeTruthy();
+        expect(ce.feedback.length).toBeGreaterThan(20);
+      }
+      const tags = new Set((q.commonErrors ?? []).map((e) => e.misconception));
+      expect(tags.has("linear_not_area")).toBe(true);
+      // The correct answer, typed as a fraction, still grades correct.
+      expect(gradeFreeResponse(q, q.answer.toFixed(dp)).correct).toBe(true);
+    }
+  });
 });
 
 const FINGERPRINTS = ["Clean Statue", "Poker Chip Drop", "Meeting Probability", "Caught Mid-Switch"];

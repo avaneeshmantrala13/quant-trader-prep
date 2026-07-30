@@ -54,7 +54,7 @@ function probText(f: FractionType): string {
 
 const BACKUP_FRAMINGS = [
   (a: string, b: string) =>
-    `You need to buy exactly one share and you ask two independent dealers for a quote. Each dealer's price is an independent uniform random number between ${a} and ${b} (every value in that range equally likely). You intend to trade at the cheaper of the two quotes, but the cheaper dealer is only reachable half the time: when you try to hit the better quote, with probability exactly 1/2 that dealer's line is busy and you are forced to trade at the other (more expensive) quote instead; with probability 1/2 you get the cheaper quote. What is the expected price you end up paying?`,
+    `Your desk needs one share, so two rival brokers each flash a firm price at the same instant; every price is an independent draw uniform on the band ${a}–${b}. You route the order to whichever broker is cheaper, but that routing link is flaky — it works only half the time, and on the other half your order rests with the pricier broker instead. Averaged over everything, what do you end up paying for the share?`,
   (a: string, b: string) =>
     `Two market-makers each stream you an independent quote drawn uniformly from ${a} to ${b}. You always try to lift the lower of the two, but your line to the best price fails half the time — with probability 1/2 you get filled at the cheaper quote, and with probability 1/2 you're bumped to the dearer one. On average, what price do you pay for the one share?`,
   (a: string, b: string) =>
@@ -63,7 +63,8 @@ const BACKUP_FRAMINGS = [
 
 export function genBackupDealer(rng: Rng): Flashcard {
   // Integer-dollar interval [a, b], a < b, kept small so the midpoint is clean.
-  const a = rng.int(0, 4);
+  // a ≥ 1 so the family never emits the source's [0, 1] interval.
+  const a = rng.int(1, 4);
   const width = rng.pick([1, 2, 3, 4, 6]);
   const b = a + width;
   const pFill = F(1, 2); // KEEP 50/50 so the midpoint-cancellation aha survives
@@ -97,7 +98,7 @@ export function genBackupDealer(rng: Rng): Flashcard {
 
 const CROSS_FRAMINGS = [
   (n: number, m: number, tot: number) =>
-    `A trading queue contains ${n} buy orders and ${m} sell orders — ${tot} orders in total — lined up in a single row in a completely random order (every ordering equally likely). Scanning left to right, you count a 'cross' every time a buy order is immediately followed by a sell order in adjacent positions. What is the expected number of buy-then-sell crosses?`,
+    `You drop ${n} buy tickets and ${m} sell tickets — ${tot} altogether — into a hopper, shuffle uniformly, and deal them out into one line. Wherever a buy ends up sitting directly ahead of a sell, mark it as a 'cross'. How many crosses should you expect the line to contain on average?`,
   (n: number, m: number, tot: number) =>
     `${n} buy tickets and ${m} sell tickets (${tot} total) are shuffled into a uniformly random line. A 'cross' is any adjacent pair that reads buy-then-sell. What is the expected number of such crosses across the row?`,
   (n: number, m: number, tot: number) =>
@@ -138,7 +139,7 @@ export function genAdjacentCross(rng: Rng): Flashcard {
 
 const WALK_FRAMINGS = [
   (M: string, k: number) =>
-    `You are selling one unit to a single buyer whose private maximum willingness to pay V is uniform on [0, ${M}] (you don't observe it). You may quote a sequence of up to ${k} take-it-or-leave-it asks: after each rejection you may make exactly one more, strictly lower ask. The buyer is myopic — at each ask they accept whenever the price does not exceed V. Choosing all ${k} asks optimally in advance, (a) what prices should you quote, and (b) what is your maximum expected revenue? For contrast, what would a single-ask seller earn?`,
+    `A lone buyer secretly values your one unit at V, an unobserved draw uniform on [0, ${M}]. You may post a descending ladder of at most ${k} firm asks — after each refusal you may drop to a strictly lower ask. The buyer is myopic and grabs the first ask that does not exceed V. Tuning the whole ${k}-ask ladder up front, (a) which prices do you post, and (b) what maximum expected revenue results — and how does that stack up against a single posted price?`,
   (M: string, k: number) =>
     `A buyer's value V is Uniform[0, ${M}]. You get to "walk the offer down": quote a price, and if it's rejected you may lower it — up to ${k} asks in total, each strictly below the last. The buyer takes any ask ≤ V. Optimizing the whole schedule, what asks do you post and what expected revenue do they earn, versus the best single ask?`,
   (M: string, k: number) =>
@@ -147,7 +148,7 @@ const WALK_FRAMINGS = [
 
 export function genWalkOfferDown(rng: Rng): Flashcard {
   const rounds = rng.pick([2, 2, 3, 4]); // ≥ 2 so "second ask beats single" holds
-  const M = rng.pick([1, 6, 12, 20, 60, 100]);
+  const M = rng.pick([6, 12, 20, 60, 100]); // no M = 1 → never the source [0, 1] scale
   const { prices, revenue, singleAskRevenue } = walkOfferDown(F(M), rounds);
   const MT = usd(F(M));
   const priceList = prices.map((p) => usd(p)).join(", then ");
@@ -182,7 +183,7 @@ export function genWalkOfferDown(rng: Rng): Flashcard {
 
 const FADING_FRAMINGS = [
   (M: string, q: string) =>
-    `You are selling one block of stock. Buyers arrive one at a time, each offering an independent price uniform on [0, ${M}]. On each offer you must immediately ACCEPT (sale done, game ends) or REJECT (offer gone forever). The catch: each time you reject, with probability ${q} the entire deal collapses — the block is sold elsewhere and you get 0 — and otherwise another buyer arrives. Playing optimally, (a) what acceptance rule should you use, and (b) what is your expected payoff?`,
+    `You must offload one block of stock. Bids land one at a time, each an independent draw uniform on [0, ${M}], and on each one you either take it on the spot or wave it off for good. The danger: after every wave-off, with probability ${q} the block is snapped up elsewhere and you walk away with 0 — otherwise a fresh bid appears. Under optimal play, (a) what acceptance rule should you use, and (b) what expected payoff does it earn?`,
   (M: string, q: string) =>
     `Offers for your one block arrive sequentially, each Uniform[0, ${M}]; you accept or reject on the spot with no recall. But every rejection carries a probability ${q} that the opportunity vanishes entirely (payoff 0). What threshold should you accept above, and what is your expected sale price under optimal play?`,
   (M: string, q: string) =>
@@ -190,7 +191,7 @@ const FADING_FRAMINGS = [
 ];
 
 export function genFadingBuyer(rng: Rng): Flashcard {
-  const M = rng.pick([1, 1, 10, 100]);
+  const M = rng.pick([10, 50, 100]); // no M = 1 → never the source [0, 1] scale
   const q = rng.pick([F(1, 2), F(1, 3), F(2, 3), F(1, 4), F(3, 5)]);
   const qNum = Number(q.n);
   const qDen = Number(q.d);
@@ -222,7 +223,7 @@ export function genFadingBuyer(rng: Rng): Flashcard {
 
 const ROUNDTRIP_FRAMINGS = [
   (M: string, d: number) =>
-    `A stock's closing price on each of the next ${d} days is an independent uniform random number on [0, ${M}] (revealed only at end of day; past prices can't be re-traded). You want exactly one round trip: buy one share on some day and sell it on a strictly later day, deciding in real time. On the last day you must sell if you hold (and if you're flat it's too late). Playing optimally, what is your maximum expected profit?`,
+    `Each of the next ${d} trading days closes at an independent price uniform on [0, ${M}], revealed only at that day's close (no re-trading past closes). You want a single round trip — one buy followed by a strictly later sell — deciding online with no lookahead. Hold past the final day and you're force-sold at that close; still flat after day ${d} and you make no trade. Under optimal play, what maximum expected profit can you lock in?`,
   (M: string, d: number) =>
     `Over ${d} days, each day's close is i.i.d. Uniform[0, ${M}]. You may buy once and sell once, buying strictly before selling, choosing online as prices reveal. If you still hold on day ${d} you sell at that close; if you're flat on day ${d} you make no trade. What is the maximum expected profit under optimal play?`,
   (M: string, d: number) =>
@@ -231,7 +232,7 @@ const ROUNDTRIP_FRAMINGS = [
 
 export function genRoundTrip(rng: Rng): Flashcard {
   const days = rng.pick([2, 3, 3, 4, 5]);
-  const M = rng.pick([1, 10, 100]);
+  const M = rng.pick([10, 100]); // no M = 1 → never the source [0, 1] scale
   const { profit, sellThresholds, buyThresholds } = roundTrip(F(M), days);
   const MT = usd(F(M));
   const half = usd(F(M).div(F(2)));
@@ -266,7 +267,7 @@ export function genRoundTrip(rng: Rng): Flashcard {
 
 const INVENTORY_FRAMINGS = [
   (k: number, up: string, down: string) =>
-    `A market maker's inventory starts at 0 and must stay within {−${k}, …, +${k}} (a strict ${k}-lot risk limit). Customers arrive one at a time; each independently sells to the maker (inventory +1) with probability ${up}, or buys from the maker (inventory −1) with probability ${down}. A trade that would push inventory outside [−${k}, +${k}] is REJECTED and inventory holds; the rejected customer leaves. In steady state, what fraction of arriving customers are rejected?`,
+    `A desk's inventory begins at 0 and is hard-capped to {−${k}, …, +${k}} (a strict ${k}-lot risk limit). Each arriving order nudges inventory +1 with probability ${up} or −1 with probability ${down}; any order that would breach the ±${k} cap is refused and inventory is left untouched, with that order simply walking. Over the long run, what share of arriving orders get refused?`,
   (k: number, up: string, down: string) =>
     `Inventory is capped to {−${k}, …, +${k}} and begins at 0. Each arriving customer moves it +1 with probability ${up} and −1 with probability ${down}; if the move would breach the ±${k} limit the customer is turned away and inventory is unchanged. Long-run, what proportion of customers get rejected?`,
   (k: number, up: string, down: string) =>

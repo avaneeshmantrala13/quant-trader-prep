@@ -49,12 +49,36 @@ export interface DiagnosticSlot {
 }
 
 /**
- * ~7 always-on core topics × 2 items ⇒ 14 items, plus a gated Markov probe
- * (2 items) ⇒ 16 nominal; the run injects the Markov probe only when Conditional
- * is passed and adds a tiebreak 3rd item on split topics, so an experienced run
- * lands around ~16–22 items (~8–11 min).
+ * COMPREHENSIVE MULTISTAGE BLUEPRINT (redesign, ≤ 30 items).
+ *
+ * Goal: probe EVERY MCQ-able topic family across the skill graph
+ * (`src/lib/roadmap/skillGraph.ts`) — 15 of the 17 mastery topics; the two
+ * Brainteasers topics are flashcard/integrity-only and cannot be surfaced as
+ * MCQ — while staying strictly under 31 items. Two stages keep it efficient:
+ *
+ *  1. BASE breadth pass (8 always-on slots, 14 items): the Tier-0/Tier-1 core
+ *     plus Expected Value and the Interview-Games decision genre. Core
+ *     Probability is the ROUTER whose first items set the global starting tier.
+ *  2. GATED depth pass (7 slots, 9 items): each advanced/derived topic is shown
+ *     ONLY when its PREREQUISITE passed — exactly the prerequisite edges of the
+ *     skill graph (Geometric←CoreProb; OrderStats/Variance/Betting←EV;
+ *     Markov←Conditional; GameTheory←InterviewGames; Geometry←Rates/Algebra).
+ *     A failed-prereq topic is honestly left un-seeded (roadmap shows it as
+ *     not-started) instead of spending items on it.
+ *
+ * `run.ts` also injects an adaptive TIEBREAK 3rd item on any 2-item BASE slot
+ * whose two items split. Worst case = 14 base + 9 gated-all-open + 6 tiebreaks
+ * (six 2-item base slots) = 29 items — under the 31 cap. Nominal (base + all
+ * gated, no tiebreaks) = 23. Fresh questions every attempt (unchanged).
+ *
+ * The base slots come first (indices 0–7) so `buildDiagnosticPlan` materializes
+ * them directly; gated slots follow (8–14) and are injected by the follow-up
+ * plan. Each slot re-uses an EXISTING quiz- or numeric-mode generator/pool (no
+ * new question content); numeric levels are surfaced as MCQ via their authored
+ * `commonErrors` (see `items.ts`).
  */
 export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
+  /* ---------------------------- BASE (always-on) --------------------------- */
   {
     // slot 0 — ROUTER: the first 1–2 items set the global starting tier.
     topicKey: topicKeyOf("probability", "Core Probability"),
@@ -66,6 +90,28 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     probes:
       "OR-rule applied without subtracting the overlap (inclusion–exclusion); multiplying for 'or'; combinations vs permutations when order (doesn't) matter.",
     misconceptionTag: "union_rule_no_overlap",
+  },
+  {
+    topicKey: topicKeyOf("mental-math"),
+    trackId: "mental-math",
+    levelId: "mm-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Mental Math / Speed",
+    probes:
+      "Place-value / decimal-shift slips (×10, ÷10); dropped carry or borrow across columns; multiply-by-the-wrong-factor off-by-one.",
+    misconceptionTag: "decimal_shift",
+  },
+  {
+    topicKey: topicKeyOf("probability", "Combinatorial Analysis"),
+    trackId: "probability",
+    levelId: "ca-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Combinatorial Analysis",
+    probes:
+      "Ordered (nᵏ, P(n,k)) vs unordered C(n,k) counts; with- vs without-replacement models; dropping a color/factor in favorable-over-total ratios.",
+    misconceptionTag: "ordered_vs_unordered",
   },
   {
     topicKey: topicKeyOf("probability", "Conditional Probability"),
@@ -90,40 +136,28 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     misconceptionTag: "unweighted_average",
   },
   {
-    // NEW: Combinatorial Analysis (numeric level → MCQ via commonErrors).
-    topicKey: topicKeyOf("probability", "Combinatorial Analysis"),
-    trackId: "probability",
-    levelId: "ca-1",
-    itemsPerTopic: 2,
+    // 1-item BREADTH probe (numeric → MCQ). Applied-math algebra foundation.
+    topicKey: topicKeyOf("math-questions", "Rates, Algebra & Word Problems"),
+    trackId: "math-questions",
+    levelId: "mq-1",
+    itemsPerTopic: 1,
     startTier: "medium",
-    label: "Combinatorial Analysis",
+    label: "Rates, Algebra & Word Problems",
     probes:
-      "Ordered (nᵏ, P(n,k)) vs unordered C(n,k) counts; with- vs without-replacement models; dropping a color/factor in favorable-over-total ratios.",
-    misconceptionTag: "ordered_vs_unordered",
+      "Averaging rates instead of combining them (net fill/drain); mishandling current/speed direction; dropping an equation when translating a word problem.",
+    misconceptionTag: "averaged_rates",
   },
   {
-    // Deduped from the two former MQ slots — both mq-2 and mq-4 now live under
-    // the single "Number Theory & Counting" section, so they map to one topic.
+    // 1-item BREADTH probe. Both former MQ slots (mq-2 & mq-4) share this section.
     topicKey: topicKeyOf("math-questions", "Number Theory & Counting"),
     trackId: "math-questions",
     levelId: "mq-4",
-    itemsPerTopic: 2,
+    itemsPerTopic: 1,
     startTier: "medium",
     label: "Number Theory & Counting",
     probes:
-      "Doubling 'half-in-time' trap (¼-covered on day D−2k, NOT D/4); summing a range vs reaching for n² outside 1,3,5,…; multiples-in-interval lower-boundary slip; floor-then-multiply packing over-count.",
+      "Doubling 'half-in-time' trap (¼-covered on day D−2k, NOT D/4); summing a range vs reaching for n² outside 1,3,5,…; multiples-in-interval lower-boundary slip.",
     misconceptionTag: "half_in_time",
-  },
-  {
-    topicKey: topicKeyOf("mental-math"),
-    trackId: "mental-math",
-    levelId: "mm-1",
-    itemsPerTopic: 2,
-    startTier: "medium",
-    label: "Mental Math / Speed",
-    probes:
-      "Place-value / decimal-shift slips (×10, ÷10); dropped carry or borrow across columns; multiply-by-the-wrong-factor off-by-one.",
-    misconceptionTag: "decimal_shift",
   },
   {
     topicKey: topicKeyOf("interview-games"),
@@ -136,9 +170,61 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
       "Mode-vs-mean confusion (most-likely value read as the average); netting payoffs without probability-weighting; ignoring option value.",
     misconceptionTag: "mode_vs_mean",
   },
+  /* ------------------------ GATED (prerequisite-driven) -------------------- */
   {
-    // GATED Markov probe (numeric level → MCQ). Shown ONLY when the Conditional
-    // item was answered correctly (first-step analysis rewards prior fluency).
+    // GATED on Core Probability — continuous favourable-measure ratio.
+    topicKey: topicKeyOf("probability", "Geometric Probability"),
+    trackId: "probability",
+    levelId: "geo-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Geometric Probability",
+    probes:
+      "Using r (distance) instead of r² (area); taking a length ratio where an area ratio is needed; mis-drawing the favourable region.",
+    misconceptionTag: "length_not_area",
+    gatedOnTopicKey: topicKeyOf("probability", "Core Probability"),
+  },
+  {
+    // GATED on Expected Value — expected extremes / min-max of draws.
+    topicKey: topicKeyOf("probability", "Order Statistics"),
+    trackId: "probability",
+    levelId: "os-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Order Statistics",
+    probes:
+      "Using a single draw's mean for the max/min; nth-power tail slips; confusing the median with the mean of an exponential.",
+    misconceptionTag: "single_draw_mean",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    // GATED on Expected Value — second moments, covariance, CLT tails.
+    topicKey: topicKeyOf("probability", "Variance, Covariance & the CLT"),
+    trackId: "probability",
+    levelId: "vc-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Variance, Covariance & the CLT",
+    probes:
+      "Var(aX) = a·Var(X) (missing the a²); adding SDs instead of variances; ignoring covariance in Var(X+Y); mis-scaling a CLT tail.",
+    misconceptionTag: "variance_scaling",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    // GATED on Expected Value — Kelly sizing (numeric → MCQ).
+    topicKey: topicKeyOf("probability", "Betting & Sizing"),
+    trackId: "probability",
+    levelId: "bs-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Betting & Sizing (Kelly)",
+    probes:
+      "Betting the win probability rather than the Kelly edge/odds fraction; forgetting to subtract q; wrong odds→b conversion.",
+    misconceptionTag: "kelly_bet_prob",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    // GATED on Conditional — first-step analysis rewards prior fluency.
     topicKey: topicKeyOf("probability", "Markov Chains"),
     trackId: "probability",
     levelId: "mc-1",
@@ -150,19 +236,57 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     misconceptionTag: "dropped_plus_one",
     gatedOnTopicKey: topicKeyOf("probability", "Conditional Probability"),
   },
+  {
+    // GATED on Interview Games — strategic reasoning on top of EV.
+    topicKey: topicKeyOf("probability", "Game Theory & Puzzles"),
+    trackId: "probability",
+    levelId: "gt-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Game Theory & Puzzles",
+    probes:
+      "Choosing a dominated strategy; assuming cooperation off the equilibrium path; mispricing a mixed-strategy value.",
+    misconceptionTag: "dominated_strategy",
+    gatedOnTopicKey: topicKeyOf("interview-games"),
+  },
+  {
+    // GATED on Rates/Algebra — clean-number geometry (numeric → MCQ).
+    topicKey: topicKeyOf("math-questions", "Geometry & Derivations"),
+    trackId: "math-questions",
+    levelId: "mq-5",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Geometry & Derivations",
+    probes:
+      "Clock-angle without the hour-hand creep (|30h − 5.5m|); floor instead of ceiling for whole-unit coverage; radius without completing the square.",
+    misconceptionTag: "clock_no_creep",
+    gatedOnTopicKey: topicKeyOf("math-questions", "Rates, Algebra & Word Problems"),
+  },
 ];
 
 /** The blueprint index of the ROUTER slot whose early items set the global tier. */
 export const ROUTER_SLOT_INDEX = 0;
 
 /**
- * Total NOMINAL diagnostic items across all slots (always-on × 2 + the gated
- * Markov × 2 = 16). The experienced count varies: the Markov probe is only
- * shown when Conditional is passed, and split topics add a tiebreak 3rd item,
- * so a typical strong run lands around ~16–22.
+ * Total NOMINAL diagnostic items across all slots (base + every gated slot, no
+ * tiebreaks) = 14 base + 9 gated = 23. The experienced count varies: gated
+ * probes appear only when their prerequisite passed, and split base slots add a
+ * tiebreak 3rd item, so a run lands between ~14 and a worst case of 29 (≤ 30).
  */
 export function diagnosticItemCount(): number {
   return DIAGNOSTIC_BLUEPRINT.reduce((n, s) => n + s.itemsPerTopic, 0);
+}
+
+/**
+ * The provable UPPER BOUND on items a single run can show: every gated slot
+ * opens AND every 2-item base slot splits (adding one tiebreak each). Kept as a
+ * pure helper so a test can assert it stays ≤ 30.
+ */
+export function diagnosticMaxItemCount(): number {
+  const baseTiebreaks = DIAGNOSTIC_BLUEPRINT.filter(
+    (s) => !s.gatedOnTopicKey && s.itemsPerTopic >= 2,
+  ).length;
+  return diagnosticItemCount() + baseTiebreaks;
 }
 
 /** The always-on (non-gated) base item count shown on every run. */

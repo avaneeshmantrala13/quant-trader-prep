@@ -39,6 +39,7 @@ export type TierDifficultyMap = Record<string, number>;
 export interface ItemAttempt {
   topicKey: string;
   tier: Difficulty;
+  /** Did the learner EVENTUALLY answer correctly (first try OR after hints)? */
   correct: boolean;
   mode: "quiz" | "numeric" | "flashcard";
   /** MCQ option count for guessing correction (4 for quiz). Omit/undefined ⇒ no-guess (numeric). */
@@ -49,5 +50,20 @@ export interface ItemAttempt {
   misconceptions?: string[];
   /** Response time in ms (Phase 6 / rushing detection; optional elsewhere). */
   responseMs?: number;
+  /**
+   * OPTIONAL, additive (PHASE_1 partial-credit). Fractional score S ∈ [0,1] from
+   * the free-response hint-attempt schedule (`src/lib/tutor/creditSchedule.ts`).
+   * When present the mastery fold uses it as the Elo actual score AND the Beta
+   * fractional pseudo-count instead of the binary 0/1 from `correct`. When
+   * ABSENT the fold falls back to `correct ? 1 : 0`, so every existing binary
+   * caller (quiz, remediation, diagnostic) is unchanged and back-compatible.
+   */
+  credit?: number;
+  /**
+   * OPTIONAL analytics: the highest hint rung reached before the correct answer
+   * (0 = no hint). Recorded per-item purely for later analytics; never affects
+   * the mastery math (that reads `credit`). Cheap to carry, so we do.
+   */
+  highestRung?: 0 | 1 | 2 | 3 | 4 | 5;
   at: string; // ISO timestamp
 }

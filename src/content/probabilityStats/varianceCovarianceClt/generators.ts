@@ -109,6 +109,77 @@ export function buildMaxCovInstance(
 }
 
 /**
+ * FREE-RESPONSE (numeric) form of the Cauchy–Schwarz covariance ceiling — the
+ * PHASE_1/2 MCQ→free conversion of `buildMaxCovInstance`. Same exact solver
+ * √(Var_A·Var_B); the three genuine error modes (dropping the square root, using
+ * the means, and the arithmetic-vs-geometric mean) become a parametric catalog
+ * carrying a machine-readable `misconception` tag + answer-withholding rung-1
+ * coaching. `COV_PAIRS` are chosen so the bound is a whole number.
+ */
+export function buildMaxCovNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const [varA, varB] = rng.pick(COV_PAIRS);
+  let meanA = 0;
+  let meanB = 0;
+  const value = maxCovariance(varA, varB); // integer (COV_PAIRS ⇒ perfect square)
+  const avgVar = (varA + varB) / 2;
+  const product = varA * varB;
+  do {
+    meanA = rng.int(2, 9);
+    meanB = rng.int(2, 9);
+  } while (
+    meanA * meanB === value ||
+    meanA * meanB === product ||
+    meanA * meanB === avgVar
+  );
+
+  const dp = 1;
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    product,
+    `You forgot the square root. Cauchy–Schwarz caps Cov² ≤ Var_A·Var_B = ${product}, so what do you do to that product to bound Cov itself?`,
+    "forgot_sqrt",
+  );
+  push(
+    meanA * meanB,
+    `That multiplied the MEANS (${meanA}·${meanB}). Covariance is built from deviations about the mean — do the mean LEVELS enter the covariance at all?`,
+    "used_means_not_deviations",
+  );
+  push(
+    avgVar,
+    `That's the ARITHMETIC mean of the variances, (Var_A + Var_B)/2. The Cauchy–Schwarz ceiling is a different average of the two variances — which kind?`,
+    "arithmetic_not_geometric_mean",
+  );
+
+  const prompt =
+    `Two returns have means ${meanA} and ${meanB}, variances Var_A = ${varA} and Var_B = ${varB}. ` +
+    `What is the LARGEST possible value of Cov(A, B)? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `By Cauchy–Schwarz, |Cov(A,B)| ≤ √(Var_A·Var_B) = √(${varA}·${varB}) = √${product} = ${decText(value, dp)}, achieved when A and B are perfectly correlated. ` +
+    `The means (${meanA}, ${meanB}) play no role — covariance is built from deviations, not levels.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-maxcovnum-${varA}-${varB}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Cauchy–Schwarz covariance bound (means irrelevant)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Variance & Covariance · Cauchy–Schwarz",
+    },
+  };
+}
+
+/**
  * Correlation under affine maps U = α+bX, V = γ+dY equals sign(b)·sign(d)·ρ; the
  * magnitudes |b|,|d| cancel. This generator forces exactly one negative slope so
  * the correct answer is −ρ. Traps: keeping ρ (ignoring the sign flip), scaling
@@ -178,6 +249,80 @@ export function buildAffineCorrInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the affine-correlation family — the PHASE_1/2
+ * MCQ→free conversion of `buildAffineCorrInstance`. Same exact solver
+ * sign(b)·sign(d)·ρ (one negative slope ⇒ answer −ρ); the three genuine error
+ * modes (keeping ρ / ignoring the sign flip, scaling by |b·d|, and doing both)
+ * become a parametric catalog carrying a machine-readable `misconception` tag +
+ * answer-withholding rung-1 coaching. The learner types the (possibly negative)
+ * correlation as a fraction or decimal.
+ */
+export function buildAffineCorrNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  let bm = 1;
+  let dm = 1;
+  do {
+    bm = rng.int(1, 6);
+    dm = rng.int(1, 6);
+  } while (bm * dm < 2); // ensure |b·d| ≠ 1 so the scaled error modes differ
+  const negIsB = rng.chance(0.5);
+  const b = negIsB ? -bm : bm;
+  const d = negIsB ? dm : -dm;
+
+  const rhoNum = rng.int(1, 9);
+  const rho = F(rhoNum, 10);
+  const value = affineCorrelation(b, d, rho); // = −ρ (one negative slope)
+  const dp = 2;
+  const answer = Number(decText(value, dp));
+  const mag = bm * dm;
+
+  const alpha = rng.int(1, 9);
+  const gamma = rng.int(1, 9);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    rho,
+    `Looks like you kept ρ = ${decText(rho, dp)}. One of the two slopes is negative — what does a negative slope do to the SIGN of a correlation?`,
+    "affine_ignored_sign",
+  );
+  push(
+    -rho.valueOf() * mag,
+    `You scaled by |b·d| = ${mag}. But correlation is scale-free — the slope magnitudes cancel between the covariance and the two SDs. Does |b·d| survive at all?`,
+    "correlation_not_scale_free",
+  );
+  push(
+    rho.valueOf() * mag,
+    `Two errors at once: you scaled by |b·d| = ${mag} AND dropped the sign flip. A correlation must stay in [−1, 1] and only the slope SIGNS survive — so what's left of ρ?`,
+    "scaled_and_ignored_sign",
+  );
+
+  const prompt =
+    `X and Y have correlation ρ(X,Y) = ${fracText(rho)}. Define U = ${alpha} + (${b})·X and V = ${gamma} + (${d})·Y. ` +
+    `What is the correlation ρ(U, V)? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Affine maps leave correlation invariant up to sign: ρ(U,V) = sign(b)·sign(d)·ρ(X,Y). Here sign(${b})·sign(${d}) = −1, so ρ(U,V) = −${fracText(rho)} = ${decText(value, dp)}. ` +
+    `The shifts ${alpha}, ${gamma} drop out and the magnitudes ${bm}, ${dm} cancel.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-affinecorrnum-${b}-${d}-${rhoNum}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Affine correlation (only the signs survive)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Variance & Covariance · affine correlation",
+    },
+  };
+}
+
 const VARCOMBO_THEME = [
   { actor: "two independent desks", vars: ["X", "Y"] },
   { actor: "two uncorrelated assets", vars: ["X", "Y"] },
@@ -194,10 +339,17 @@ export function buildVarComboInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(VARCOMBO_THEME);
-  const a = rng.int(1, 4);
-  const b = rng.int(1, 4);
-  const vx = rng.int(1, 6);
-  const vy = rng.int(1, 6);
+  let a = 1;
+  let b = 1;
+  let vx = 1;
+  let vy = 1;
+  do {
+    a = rng.int(1, 4);
+    b = rng.int(1, 4);
+    vx = rng.int(1, 6);
+    vy = rng.int(1, 6);
+    // Never emit the textbook tuple Z=2X+3Y with Var(X)=3, Var(Y)=2.
+  } while (a === 2 && b === 3 && vx === 3 && vy === 2);
   const varX = F(vx);
   const varY = F(vy);
 
@@ -220,8 +372,8 @@ export function buildVarComboInstance(
   );
 
   const prompt =
-    `For ${th.actor} the readings X and Y are independent with Var(X) = ${vx} and Var(Y) = ${vy}. ` +
-    `Let Z = ${a}X + ${b}Y. What is Var(Z)? (Whole number.)`;
+    `On ${th.actor}, two independent readings X and Y have variances Var(X) = ${vx} and Var(Y) = ${vy}. ` +
+    `Form the weighted total Z = ${a}·X + ${b}·Y. Compute Var(Z). (Whole number.)`;
   const explanation =
     `For independent variables, Var(${a}X + ${b}Y) = ${a}²·Var(X) + ${b}²·Var(Y) = ${a * a}·${vx} + ${b * b}·${vy} = ${fracText(value)}. No cross term appears because Cov(X,Y) = 0.`;
 
@@ -304,24 +456,86 @@ export function buildSumSDInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the independent-sum SD family — the PHASE_1/2
+ * MCQ→free conversion of `buildSumSDInstance`. Same exact solver
+ * √(2·(m²−1)/12); the three genuine error modes (adding SDs instead of
+ * variances, reporting the variance, and reporting one draw's SD) become a
+ * parametric catalog carrying a machine-readable `misconception` tag +
+ * answer-withholding rung-1 coaching. The learner types the SD as a fraction or
+ * decimal.
+ */
+export function buildSumSDNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(SUMSD_THEME);
+  const m = rng.pick([5, 7, 9, 11, 13]);
+  const { variance, sd } = twoDrumSumSD(m);
+  const dp = 2;
+  const value = sd;
+  const answer = Number(decText(value, dp));
+  const singleSd = Math.sqrt((m * m - 1) / 12);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    2 * singleSd,
+    `Looks like you ADDED the two standard deviations (σ_X + σ_Y). SDs don't add for an independent sum — what quantity DOES add, and how do you get back to an SD?`,
+    "added_sds_not_variances",
+  );
+  push(
+    variance,
+    `That's Var(S), the VARIANCE of the sum. The question asks for the standard deviation — what's the final step?`,
+    "reported_variance_not_sd",
+  );
+  push(
+    singleSd,
+    `That's ONE draw's SD. Summing two independent draws changes the variance — by what factor, and what does that do to the SD?`,
+    "single_not_sum_sd",
+  );
+
+  const prompt =
+    `You add the results of ${th.actor}, each showing a uniform integer from 1 to ${m}; let S be the total on both ${th.face}s. ` +
+    `What is the standard deviation of S? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Each draw has variance (m²−1)/12 = (${m}²−1)/12 = ${fracText(F(m * m - 1, 12))}. Independence makes VARIANCES add: Var(S) = 2·(m²−1)/12 = ${fracText(variance)}, ` +
+    `so σ_S = √${decText(variance, dp)} = ${decText(value, dp)}. Standard deviations themselves never add.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-sumsdnum-${m}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "SD of an independent sum (variances add, not SDs)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Variance & Covariance · SD addition trap",
+    },
+  };
+}
+
 /* ========================================================================== */
 /* ===============  CLT & CONCENTRATION (numeric + quiz)  =================== */
 /* ========================================================================== */
 
 const COIN_THEME = [
-  { subj: "a fair coin", act: "flipped", noun: "flips", win: "heads" },
+  { trial: "tosses of a fair coin", win: "heads" },
   {
-    subj: "a fair chip (with replacement) drawn from an equal red/blue bag",
-    act: "drawn",
-    noun: "draws",
-    win: "red chips",
+    trial: "draws with replacement from an equal red/blue bag",
+    win: "red draws",
   },
 ];
 
 /**
  * CLT normal-approximation UPPER tail P(X ≥ k) ≈ 1 − Φ(z) for a binomial count
  * of `n` fair trials (mean ½, variance ¼). Parameters are chosen so the z-score
- * is a clean integer 2 or 3.
+ * is a clean integer 2 or 3 (n a perfect square with even root ⇒ integer sd).
+ * The trial counts deliberately avoid n = 400 so no instance shadows a textbook
+ * "fair coin, 400 tosses" example.
  */
 export function buildCltTailInstance(
   rng: Rng,
@@ -329,10 +543,12 @@ export function buildCltTailInstance(
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(COIN_THEME);
   const [n, z] = rng.pick([
+    [64, 2],
     [100, 2],
     [100, 3],
-    [400, 2],
-    [900, 2],
+    [144, 3],
+    [196, 2],
+    [256, 3],
     [900, 3],
   ]);
   const mean = 0.5;
@@ -364,9 +580,9 @@ export function buildCltTailInstance(
   );
 
   const prompt =
-    `${cap(th.subj)} is ${th.act} ${n} times; let X be the number of ${th.win}. ` +
-    `Using the Central Limit Theorem normal approximation (no continuity correction), ` +
-    `estimate P(X ≥ ${k}). (Round to ${dp} decimals.)`;
+    `With ${n} independent ${th.trial}, X is the running count of ${th.win}. ` +
+    `Estimate the tail probability P(X ≥ ${k}) via the Central Limit Theorem's Gaussian approximation, ` +
+    `applying no continuity adjustment. Report ${dp} decimal places.`;
   const explanation =
     `Each trial has mean μ = ${mean} and variance σ² = p(1−p) = ${variance}, so over ${n} trials E[X] = ${n * mean} and sd = √(${n}·${variance}) = ${sd}. ` +
     `The z-score is z = (${k} − ${n * mean})/${sd} = ${z}, and the upper tail is P(X ≥ ${k}) ≈ 1 − Φ(${z}) = ${decText(value, dp)}. ` +
@@ -467,6 +683,84 @@ export function buildCltDiffZInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the CLT difference-z family — the PHASE_1/2
+ * MCQ→free conversion of `buildCltDiffZInstance`. Same exact solver
+ * a = −thresh/√(2nσ²); the three genuine error modes (forgetting the difference
+ * DOUBLES the variance, the sign error, and forgetting the square root) become a
+ * parametric catalog carrying a machine-readable `misconception` tag +
+ * answer-withholding rung-1 coaching. The learner types the (negative)
+ * z-argument as a fraction or decimal.
+ */
+export function buildCltDiffZNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(DESK_THEME);
+  const [varN, varD, n] = rng.pick([
+    [1, 20, 250],
+    [1, 4, 200],
+    [1, 12, 150],
+    [1, 1, 50],
+    [1, 12, 216],
+    [1, 8, 100],
+  ]);
+  const z = rng.pick([2, 3]);
+  const variance = varN / varD;
+  const sd = Math.sqrt(2 * n * variance); // integer by construction
+  const thresh = sd * z;
+
+  const dp = 2;
+  const value = cltDifferenceZ(thresh, n, variance); // −thresh/√(2nσ²) = −z
+  const answer = Number(decText(value, dp));
+
+  const sdOne = Math.sqrt(n * variance); // sd of ONE sum
+  const oneSumZ = -thresh / sdOne; // forgot the difference doubles variance
+  const signFlip = -value; // +thresh/sd
+  const noSqrt = -thresh / (2 * n * variance); // divided by the variance itself
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    oneSumZ,
+    `Looks like you used only ONE sum's variance (nσ²). But S − T combines two independent totals — what happens to the variance of a DIFFERENCE, and how does that change the √(…) in the denominator?`,
+    "difference_variance_not_doubled",
+  );
+  push(
+    signFlip,
+    `Right magnitude, wrong SIGN. Since P(S − T > ${thresh}) = Φ(−${thresh}/${sd}), is the z-argument a positive or a negative number here?`,
+    "sign_error",
+  );
+  push(
+    noSqrt,
+    `You divided by the variance 2nσ² = ${2 * n * variance} itself, forgetting the square root. What is the standard deviation of S − T?`,
+    "forgot_sqrt_variance",
+  );
+
+  const prompt =
+    `${th.a} and ${th.b} each independently record ${n} ${th.unit}, and every ${th.unit.replace(/s$/, "")}'s ${th.quantity} has mean 0 and variance ${fracText(F(varN, varD))}. ` +
+    `Let S and T be the two totals. For which value a does P(S − T > ${thresh}) = Φ(a), where Φ is the standard normal CDF? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `S − T has mean 0 and variance Var(S) + Var(T) = 2·${n}·${fracText(F(varN, varD))} = ${2 * n * variance}, so its sd is √${2 * n * variance} = ${sd}. ` +
+    `Then P(S − T > ${thresh}) = P(Z > ${thresh}/${sd}) = Φ(−${thresh}/${sd}) = Φ(${decText(value, dp)}), hence a = −${thresh}/${sd} = ${decText(value, dp)}. ` +
+    `The classic slip is forgetting that a DIFFERENCE doubles the variance.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-cltdiffznum-${varN}_${varD}-${n}-${z}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "CLT z-argument for a difference (variance doubling)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "CLT & concentration · variance doubling",
+    },
+  };
+}
+
 const MARKOV_THEME = [
   { actor: "an insurer", part: "claims", agg: "total payout" },
   { actor: "a warehouse", part: "orders", agg: "total volume" },
@@ -550,18 +844,26 @@ export function buildMarkovBoundInstance(
 /*  Named generators (adapters — mode noted per line)                         */
 /* ========================================================================== */
 
-// Covariance / variance
+// Covariance / variance (quiz builders kept for tests; numeric = playable in vc-1)
 export const genMaxCov = (rng: Rng): Question => buildMaxCovInstance(rng, "medium").question; // quiz
 export const genAffineCorr = (rng: Rng): Question =>
   buildAffineCorrInstance(rng, "medium").question; // quiz
 export const genVarCombo = (rng: Rng): NumericQuestion =>
   buildVarComboInstance(rng, "easy").numeric; // numeric
 export const genSumSD = (rng: Rng): Question => buildSumSDInstance(rng, "medium").question; // quiz
+export const genMaxCovNumeric = (rng: Rng): NumericQuestion =>
+  buildMaxCovNumericInstance(rng, "medium").numeric; // numeric
+export const genAffineCorrNumeric = (rng: Rng): NumericQuestion =>
+  buildAffineCorrNumericInstance(rng, "medium").numeric; // numeric
+export const genSumSDNumeric = (rng: Rng): NumericQuestion =>
+  buildSumSDNumericInstance(rng, "medium").numeric; // numeric
 
 // CLT & concentration
 export const genCltTail = (rng: Rng): NumericQuestion =>
   buildCltTailInstance(rng, "hard").numeric; // numeric
 export const genCltDiffZ = (rng: Rng): Question =>
   buildCltDiffZInstance(rng, "hard").question; // quiz
+export const genCltDiffZNumeric = (rng: Rng): NumericQuestion =>
+  buildCltDiffZNumericInstance(rng, "hard").numeric; // numeric
 export const genMarkovBound = (rng: Rng): NumericQuestion =>
   buildMarkovBoundInstance(rng, "medium").numeric; // numeric

@@ -54,6 +54,21 @@ describe("migrateProgress (v1 → v2)", () => {
     expect(out.diagnosticDoneAt).toBe("2026-01-01T00:00:00.000Z");
   });
 
+  it("preserves the additive `onboardingTourDoneAt` UI flag on load (regression: tour must not re-auto-open every reload)", () => {
+    const saved = {
+      ...emptyProgress(),
+      diagnosticDoneAt: "2026-01-01T00:00:00.000Z",
+      onboardingTourDoneAt: "2026-01-02T00:00:00.000Z",
+    };
+    const out = migrateProgress(saved);
+    expect(out.onboardingTourDoneAt).toBe("2026-01-02T00:00:00.000Z");
+  });
+
+  it("leaves `onboardingTourDoneAt` undefined when the saved blob never set it", () => {
+    const out = migrateProgress({ ...emptyProgress(), version: 1 });
+    expect(out.onboardingTourDoneAt).toBeUndefined();
+  });
+
   it("safely upgrades a blob missing `version` entirely", () => {
     const legacy = {
       levelProgress: { x: { bestScore: 1, mastered: true, attempts: 1 } },

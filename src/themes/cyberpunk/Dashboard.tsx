@@ -334,7 +334,7 @@ function TopicNode({ topic }: { topic: DashboardTopicEntry }) {
         className="btn-secondary mt-auto w-full text-center text-xs"
         style={{ boxShadow: "0 0 12px rgb(var(--color-accent) / 0.12)" }}
       >
-        Jack in ▸
+        Jump in ▸
       </Link>
     </article>
   );

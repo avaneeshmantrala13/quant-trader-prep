@@ -12,7 +12,7 @@ export const varianceCovarianceCltFlashcards: Flashcard[] = [
     // GN43 — Perfect Correlation — a procedure, not a number.
     id: "gen-fc-perfectcorr",
     prompt:
-      "Two random variables X and Y are known to be PERFECTLY correlated (|ρ| = 1). Someone tells you the value of Y and asks you to deduce X exactly. What information do you need, and why is no probability being asked for here?",
+      "Suppose two signals are PERFECTLY correlated (|ρ| = 1), so plotting one against the other traces an exact straight line. I read off the current value of the second signal; what must you already know to recover the first signal's value exactly, and why is this a deterministic question with no probability to compute?",
     answer:
       "Perfect correlation means an exact linear relation X = aY + b. To pin down a and b you need TWO distinct observed (X, Y) pairs; then X is determined exactly for any given Y. There is no probability to compute — the relationship is deterministic once |ρ| = 1.",
     explanation:

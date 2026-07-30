@@ -10,6 +10,7 @@ import {
   restartGameProbs,
 } from "../coreSolvers";
 import { type Choice, assembleChoices, numericErrors } from "../coreScaffold";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 
 /**
  * Parametric generators for the Probability & Statistics → **Markov Chains**
@@ -49,7 +50,9 @@ export function buildRuinInstance(
   const [pn, pd] = rng.pick(RUIN_P);
   const p = F(pn, pd);
   const q = F(1).sub(p);
-  const N = rng.pick([10, 20, 50, 100]);
+  // N ≠ 20 so the re-homed Gambler's-Ruin #3 tuple (i=10, N=20, p=2/5 → 0.017)
+  // is never reproduced; the fair cases (#1/#2) are already excluded via RUIN_P.
+  const N = rng.pick([10, 25, 50, 100]);
   const k = rng.int(1, N - 1);
 
   const value = gamblerRuinReach(k, N, p);
@@ -100,8 +103,76 @@ export function buildRuinInstance(
   };
 }
 
+/**
+ * FREE-RESPONSE (numeric) form of the biased-ruin family — the PHASE_1/2
+ * MCQ→free conversion of `buildRuinInstance`. Same exact solver (1−rᵏ)/(1−rᴺ),
+ * r = q/p; the three genuine error modes from the quiz distractors (the FAIR
+ * k/N, the inverted odds r = p/q, and the ruin complement) become a parametric
+ * catalog carrying a machine-readable `misconception` tag + an answer-withholding
+ * rung-1 coaching sentence. The learner types the probability as a fraction or
+ * decimal.
+ */
+export function buildRuinNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const [pn, pd] = rng.pick(RUIN_P);
+  const p = F(pn, pd);
+  const q = F(1).sub(p);
+  const N = rng.pick([10, 25, 50, 100]);
+  const k = rng.int(1, N - 1);
+
+  const value = gamblerRuinReach(k, N, p);
+  const dp = 3;
+  const answer = Number(decText(value, dp));
+
+  const symmetric = F(k, N);
+  const inverted = gamblerRuinReach(k, N, q); // r = p/q instead of q/p
+  const reversed = F(1).sub(value);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    symmetric,
+    `k/N = ${k}/${N} is the FAIR-game value. With a per-round edge (win w.p. ${fracText(p)} ≠ ½) that shortcut breaks — which formula uses the odds ratio r = q/p?`,
+    "ruin_symmetric_fair",
+  );
+  push(
+    inverted,
+    `You inverted the odds ratio (r = p/q instead of q/p). When you raise r to the kᵗʰ and Nᵗʰ powers, which odds belong on top — losing or winning?`,
+    "ruin_inverted_odds",
+  );
+  push(
+    reversed,
+    `That's P(go broke first), the opposite event. Once you have one side of the race, how do you get the other?`,
+    MISCONCEPTION.complementConfusion,
+  );
+
+  const prompt =
+    `You start with ${k} chips and stake one chip per round, winning each round with probability ${fracText(p)} (else you lose the chip). ` +
+    `You stop at ${N} chips (win) or 0 chips (broke). What is the probability you reach ${N} before going broke? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Biased gambler's ruin: r = q/p = ${fracText(q.div(p))}, so P(reach ${N} from ${k}) = (1 − r^${k})/(1 − r^${N}) = ${decText(value, dp)}. ` +
+    `The tempting ${decText(symmetric, dp)} (= k/N) is the FAIR-game value and is wrong whenever p ≠ ½.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-ruinnum-${k}-${N}-${pn}-${pd}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Gambler's ruin (biased-vs-fair trap)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Markov Chains · Gambler's ruin",
+    },
+  };
+}
+
 const FORWARD_THEME = [
-  { actor: "a courier", step: "block", dest: "the depot" },
+  { actor: "a courier", step: "stretch", dest: "the depot" },
   { actor: "a rover", step: "leg", dest: "base camp" },
   { actor: "a messenger", step: "hop", dest: "the tower" },
 ];
@@ -117,7 +188,9 @@ export function buildAllForwardInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(FORWARD_THEME);
-  const blocks = rng.pick([3, 4, 5]);
+  // No 4-step walk, so the re-homed Walking-Home tuple (4 blocks → 1/8 / 7/8)
+  // is never reproduced; the "block" unit is also dropped from the theme.
+  const blocks = rng.pick([3, 5, 6]);
   const steps = blocks - 1;
   const askFast = rng.chance(0.5);
 
@@ -177,10 +250,10 @@ const DEUCE_THEME = [
   { actor: "a table-tennis deuce", point: "rally" },
 ];
 
-/** Per-point win probabilities for the win-by-two recursion. */
+/** Per-point win probabilities for the win-by-two recursion.
+ *  p ≠ 2/5: the re-homed Tennis-Game tuple (underdog 0.4 → 0.307) is excluded. */
 const DEUCE_P: [number, number][] = [
   [6, 10],
-  [4, 10],
   [55, 100],
   [45, 100],
   [7, 10],
@@ -319,7 +392,9 @@ export function buildRestartInstance(
 /*  Named generators (adapters — mode noted per line)                         */
 /* ========================================================================== */
 
-export const genRuin = (rng: Rng): Question => buildRuinInstance(rng, "medium").question; // quiz
+export const genRuin = (rng: Rng): Question => buildRuinInstance(rng, "medium").question; // quiz (kept for tests)
+export const genRuinNumeric = (rng: Rng): NumericQuestion =>
+  buildRuinNumericInstance(rng, "medium").numeric; // numeric (playable in mc-5)
 export const genAllForward = (rng: Rng): NumericQuestion =>
   buildAllForwardInstance(rng, "easy").numeric; // numeric
 export const genDeuce = (rng: Rng): NumericQuestion =>

@@ -1,15 +1,18 @@
 import type { Rng } from "@/lib/rng";
-import type { Question } from "@/types/content";
+import type { Difficulty, NumericQuestion, Question } from "@/types/content";
 import {
   F,
   choose,
   chooseBig,
+  decText,
   factorialBig,
   fracBig,
   fracText,
   powBig,
 } from "./combinatorics";
 import { type Choice, assembleChoices } from "./_shared";
+import { numDp, numericErrors } from "../coreScaffold";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import {
   diceSumEqualsProb,
   nonDecreasingThreeDrawProb,
@@ -339,9 +342,9 @@ export function genStarsBarsCap(rng: Rng): Question {
   }
 
   const prompt =
-    `You roll ${dice} fair ${faces}-sided dice and read them as an ordered sequence. ` +
-    `Out of the ${total} = ${faces}^${dice} equally-likely ordered outcomes, ` +
-    `in how many does the total of the pips equal exactly ${target}?`;
+    `You roll ${dice} fair ${faces}-sided dice in a row, keeping track of the order. ` +
+    `Among all ${total} = ${faces}^${dice} equally likely ordered rolls, ` +
+    `how many have pips adding up to exactly ${target}?`;
 
   const correct: Choice = {
     text: String(count),
@@ -386,3 +389,342 @@ export function genStarsBarsCap(rng: Rng): Question {
     ...assembleChoices(rng, correct, distractors),
   };
 }
+
+/* ========================================================================== */
+/*  FREE-RESPONSE (numeric) conversions                                        */
+/*                                                                            */
+/*  Each mirrors its quiz sibling above (SAME exact solver / combinatorics),  */
+/*  now graded as a typed count or probability. Every genuine error mode is a */
+/*  parametric wrong-value + a machine-readable `misconception` tag + an       */
+/*  answer-withholding rung-1 coaching sentence (names the slip + a leading    */
+/*  question). The quiz generators are kept exported so existing tests pass.   */
+/* ========================================================================== */
+
+/**
+ * FREE-RESPONSE form of {@link genPermVsComb}: "how many unordered groups of `k`
+ * from `n`?" = C(n,k) (a whole-number COUNT). Error modes: the ordered
+ * permutation P(n,k), the with-replacement ordered count nᵏ, and the naive
+ * product n·k.
+ */
+export function buildPermVsCombNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.int(6, 10);
+  const k = rng.int(2, 4);
+
+  const comb = choose(n, k); // C(n,k) — the unordered count (correct)
+  const answer = comb;
+
+  const perm = Number(chooseBig(n, k) * factorialBig(k)); // P(n,k)
+  const withRepl = Number(powBig(n, k)); // nᵏ
+  const naive = n * k; // n·k
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    perm,
+    `You lined the ${k} choices up in a definite order, but the problem says only WHICH ${k} are funded matters. If order is irrelevant, aren't you counting each group several times — by what factor?`,
+    MISCONCEPTION.orderedVsUnordered,
+  );
+  push(
+    withRepl,
+    `It looks like each of the ${k} slots could be any of the ${n}, reusing an experiment. But can the same experiment be funded twice here — and does the order of the slots even matter?`,
+    "counts_with_replacement",
+  );
+  push(
+    naive,
+    `Multiplying the two numbers, ${n}·${k}, is tempting — but choosing a GROUP isn't a single product of ${n} and ${k}. Which counting rule counts unordered selections of ${k} from ${n}?`,
+    "naive_product",
+  );
+
+  const prompt =
+    `A research lab has ${n} distinct candidate experiments and will fund exactly ${k} of them. ` +
+    `Only WHICH ${k} experiments make the cut matters — the funding order is irrelevant. ` +
+    `How many different groups of ${k} experiments can be funded? (Enter a whole number.)`;
+  const explanation =
+    `Choosing an UNORDERED group of ${k} from ${n} is the combination C(${n},${k}) = ${comb}. ` +
+    `Ordering those same ${k} (permutations P(${n},${k}) = ${perm}) overcounts each group ${k}! times; ` +
+    `${n}^${k} = ${withRepl} counts ordered picks WITH replacement; and ${n}·${k} = ${naive} is just a product.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `perm-vs-comb-num-n${n}-k${k}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "Permutations vs combinations (order should not matter)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: SOURCE,
+    },
+  };
+}
+
+/**
+ * FREE-RESPONSE form of {@link genReplacementTrap}: ordered picks WITH
+ * replacement → nᵏ (a whole-number COUNT). Error modes are the three
+ * neighbouring rules: unordered no-replacement C(n,k), ordered no-replacement
+ * P(n,k), and unordered with-replacement C(n+k−1,k).
+ */
+export function buildReplacementTrapNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const n = rng.int(4, 8);
+  const k = rng.pick([2, 3]);
+
+  const answer = Number(powBig(n, k)); // nᵏ — ordered, with replacement (correct)
+  const unordered = Number(chooseBig(n, k)); // C(n,k)
+  const orderedNoRepl = Number(chooseBig(n, k) * factorialBig(k)); // P(n,k)
+  const unorderedWithRepl = Number(chooseBig(n + k - 1, k)); // C(n+k−1,k)
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    unordered,
+    `C(${n},${k}) counts UNORDERED picks with no reuse. But here each of the ${k} positions is ordered AND a symbol may repeat — does that make the count larger or smaller than C(${n},${k})?`,
+    MISCONCEPTION.orderedVsUnordered,
+  );
+  push(
+    orderedNoRepl,
+    `You have order right, but P(${n},${k}) forbids reusing a symbol (each next choice drops one). Here symbols MAY repeat — so should later positions really lose a choice?`,
+    "forgot_replacement",
+  );
+  push(
+    unorderedWithRepl,
+    `You allowed repeats — good — but C(${n}+${k}−1,${k}) treats the ${k} positions as an unordered multiset. Here the ORDER of the positions matters. Does that push the count up?`,
+    "unordered_with_replacement",
+  );
+
+  const prompt =
+    `A ${k}-symbol access code is built from a palette of ${n} distinct symbols. ` +
+    `Each of the ${k} positions is chosen independently — a symbol MAY be reused — and the ORDER of ` +
+    `the positions matters. How many distinct codes are possible? (Enter a whole number.)`;
+  const explanation =
+    `With replacement and order mattering, each of the ${k} positions independently picks one of ${n} ` +
+    `symbols, giving ${n}^${k} = ${answer}. Contrast the traps: C(${n},${k}) = ${unordered} (unordered, no reuse), ` +
+    `P(${n},${k}) = ${orderedNoRepl} (ordered, no reuse), and C(${n}+${k}−1,${k}) = ${unorderedWithRepl} (unordered WITH reuse).`;
+
+  return {
+    answer,
+    numeric: {
+      id: `replacement-trap-num-n${n}-k${k}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "With vs without replacement (and ordered vs not)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: SOURCE,
+    },
+  };
+}
+
+/**
+ * FREE-RESPONSE form of {@link genTiesOrder}: the strict-vs-non-decreasing TIE
+ * trap as a typed PROBABILITY, in the same two framings (ordered dice rolls /
+ * without-replacement jar draw). Error modes: allowing ties (non-decreasing vs
+ * strict, or vice versa), the naive 1/3! = 1/6 (assume all distinct), and a
+ * wrong denominator / distinct-not-order slip.
+ */
+export function buildTiesOrderNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const diceMode = rng.chance(0.5);
+
+  if (diceMode) {
+    const faces = rng.pick([6, 8, 10]);
+    const denom = powBig(faces, 3); // faces³ ordered sequences
+    const value = strictlyIncreasingProb(3, faces); // C(faces,3)/faces³ (correct)
+    const dp = numDp(value);
+    const answer = Number(decText(value, dp));
+
+    const nonDecreasing = fracBig(chooseBig(faces + 2, 3), denom); // ties allowed
+    const wrongDenom = fracBig(chooseBig(faces, 3), chooseBig(faces + 2, 3)); // /multiset count
+
+    const { errors, push } = numericErrors(answer, dp);
+    push(
+      nonDecreasing,
+      `Mind the ties: "strictly increasing" forbids equal values, but this count also sweeps in rolls like 2,2,5. Should repeated values really qualify here?`,
+      "strict_vs_nondecreasing",
+    );
+    push(
+      F(1, 6),
+      `The 1/3! = 1/6 guess assumes the three rolls are always different, then picks the one sorted order. But two rolls CAN tie — is every triple guaranteed distinct?`,
+      "assume_all_distinct",
+    );
+    push(
+      wrongDenom,
+      `Check the denominator: the equally-likely outcomes are the ORDERED rolls. How many ordered sequences of three rolls of a ${faces}-sided die are there in total?`,
+      "wrong_denominator",
+    );
+
+    const prompt =
+      `You roll a fair ${faces}-sided die three times in a row and write the results down in order. ` +
+      `What is the probability the three numbers come out STRICTLY increasing ` +
+      `(each strictly larger than the one before)? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+    const explanation =
+      `Three ordered rolls give ${faces}³ = ${denom} equally-likely sequences; a strictly increasing one picks ` +
+      `3 distinct faces C(${faces},3), each realizable in exactly ONE increasing order, so ` +
+      `P = C(${faces},3)/${faces}³ = ${fracText(value)} ≈ ${decText(value, dp)}. Allowing ties (non-decreasing) counts ` +
+      `C(${faces}+2,3) sequences instead — the classic strict-vs-non-decreasing trap.`;
+
+    return {
+      answer,
+      numeric: {
+        id: `ties-order-num-dice-f${faces}`,
+        prompt,
+        answer,
+        decimals: dp,
+        difficulty,
+        concept: "Strictly increasing vs non-decreasing (ties)",
+        explanation,
+        unit: "",
+        commonErrors: errors,
+        source: SOURCE,
+      },
+    };
+  }
+
+  // Jar / draw-without-replacement framing.
+  const v = rng.pick([4, 5, 6]);
+  const c = rng.pick([2, 3]);
+  const total = chooseBig(v * c, 3); // unordered handfuls
+  const value = nonDecreasingThreeDrawProb(v, c); // correct (non-decreasing draw order)
+  const dp = numDp(value);
+  const answer = Number(decText(value, dp));
+
+  const strictInc = fracBig(chooseBig(v, 3) * powBig(c, 3), 6n * total); // all-distinct & increasing
+  const allDistinct = fracBig(chooseBig(v, 3) * powBig(c, 3), total); // P(3 distinct ranks)
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    strictInc,
+    `That's the strictly-increasing (all-distinct) share. But NON-decreasing also allows equal ranks in a row — did you drop the tied handfuls that still count?`,
+    "strict_vs_nondecreasing",
+  );
+  push(
+    F(1, 6),
+    `The 1/3! = 1/6 guess assumes all three ranks differ and picks the one sorted order. With repeated ranks possible, is the chance really that low?`,
+    "assume_all_distinct",
+  );
+  push(
+    allDistinct,
+    `That's just the chance the three ranks are all DIFFERENT. But the question is about the draw ORDER (ties allowed), not whether the ranks are distinct — aren't those different events?`,
+    "distinct_not_order",
+  );
+
+  const prompt =
+    `A tray holds ${v} distinct token ranks with ${c} identical copies of each (${v * c} tokens in all). ` +
+    `You scoop the tokens out one at a time, without replacement, until you hold 3. ` +
+    `What is the probability their ranks come out in NON-DECREASING order (never dropping from one to the next)? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+  const explanation =
+    `Draw 3 of ${v * c} tokens (C(${v * c},3) = ${total} equally-likely handfuls). A NON-decreasing draw counts ` +
+    `all-different handfuls at 1/6, one-repeated-rank at 1/3, and all-equal at 1, giving ${fracText(value)} ≈ ${decText(value, dp)}. ` +
+    `Reporting only the strictly increasing (all-distinct) share is the strict-vs-ties trap; the naive 1/6 ignores ties entirely.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `ties-order-num-jar-v${v}-c${c}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Strictly increasing vs non-decreasing (ties)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: SOURCE,
+    },
+  };
+}
+
+/**
+ * FREE-RESPONSE form of {@link genStarsBarsCap}: the number of ordered dice
+ * rolls summing to a target (a whole-number COUNT) = capped stars & bars via
+ * inclusion–exclusion. Error modes: uncapped stars & bars C(target−1,dice−1)
+ * (forgot the ≤6 face cap), the each-die-≥0 shift C(target+dice−1,dice−1)
+ * (forgot each die ≥ 1), and the capped count for a neighbouring target
+ * (off-by-one on the sum).
+ */
+export function buildStarsBarsCapNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const dice = rng.pick([3, 4]);
+  const faces = 6;
+  const target = dice === 3 ? rng.pick([12, 13, 14, 15]) : rng.pick([15, 16, 18, 19]);
+
+  const total = Number(powBig(faces, dice)); // faces^dice equally-likely ordered rolls
+  const count = Math.round(diceSumEqualsProb(dice, faces, target).valueOf() * total);
+  const answer = count;
+
+  const uncapped = Number(chooseBig(target - 1, dice - 1)); // parts ≥1, NO face cap
+  const noMinimum = Number(chooseBig(target + dice - 1, dice - 1)); // parts ≥0
+
+  // Off-by-one on the sum: the capped count for a neighbouring target.
+  let nbrTarget = target + 1;
+  let nbrCount = Math.round(diceSumEqualsProb(dice, faces, nbrTarget).valueOf() * total);
+  if (nbrCount === count) {
+    nbrTarget = target - 1;
+    nbrCount = Math.round(diceSumEqualsProb(dice, faces, nbrTarget).valueOf() * total);
+  }
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    uncapped,
+    `Plain stars & bars, C(${target}−1,${dice}−1), lets a die climb as high as it likes. But a real d${faces} stops at ${faces} — shouldn't you remove the rolls that would need a die above ${faces}?`,
+    "forgot_face_cap",
+  );
+  push(
+    noMinimum,
+    `C(${target}+${dice}−1,${dice}−1) lets a die show 0. A die shows at least 1 — did you subtract the minimum of 1 from each die before counting compositions?`,
+    "forgot_die_minimum",
+  );
+  push(
+    nbrCount,
+    `That's the count for a neighbouring total (${nbrTarget}). The dice-sum distribution isn't flat, so are you sure you counted for exactly ${target}?`,
+    "off_by_one_target",
+  );
+
+  const prompt =
+    `You roll ${dice} fair ${faces}-sided dice in a row, keeping track of the order. ` +
+    `Among all ${total} = ${faces}^${dice} equally likely ordered rolls, ` +
+    `how many have pips adding up to exactly ${target}? (Enter a whole number.)`;
+  const explanation =
+    `Only ${count} of the ${total} = ${faces}^${dice} ordered rolls total ${target}, once inclusion–exclusion trims the ` +
+    `outcomes that would need a die above ${faces}. Ignoring that cap, plain stars & bars gives ` +
+    `C(${target}−1,${dice}−1) = ${uncapped} compositions — an OVERCOUNT. The correct, capped count is ${count}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `stars-bars-cap-num-d${dice}-f${faces}-t${target}`,
+      prompt,
+      answer,
+      difficulty,
+      concept: "Stars & bars with a face cap (inclusion–exclusion)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: SOURCE,
+    },
+  };
+}
+
+/* ========================================================================== */
+/*  Named numeric generators (adapters)                                        */
+/* ========================================================================== */
+
+export const genPermVsCombNumeric = (rng: Rng): NumericQuestion =>
+  buildPermVsCombNumericInstance(rng, DIFFICULTY).numeric;
+export const genReplacementTrapNumeric = (rng: Rng): NumericQuestion =>
+  buildReplacementTrapNumericInstance(rng, DIFFICULTY).numeric;
+export const genTiesOrderNumeric = (rng: Rng): NumericQuestion =>
+  buildTiesOrderNumericInstance(rng, DIFFICULTY).numeric;
+export const genStarsBarsCapNumeric = (rng: Rng): NumericQuestion =>
+  buildStarsBarsCapNumericInstance(rng, DIFFICULTY).numeric;

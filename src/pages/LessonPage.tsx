@@ -7,6 +7,7 @@ import {
   DIFFICULTY_META,
   isFlashcardLevel,
   isNumericLevel,
+  type Difficulty,
   type Flashcard,
   type Level,
   type NumericQuestion,
@@ -16,7 +17,12 @@ import {
 import type { ResumeState } from "@/types/progress";
 import { isFlashcardLevelComplete } from "@/lib/progressOps";
 import { isLevelUnlockedBySection } from "@/lib/locking";
-import { gradeNumeric, numericMatches, formatNumericAnswer } from "@/lib/numeric";
+import {
+  gradeNumeric,
+  gradeFreeResponse,
+  numericMatches,
+  formatNumericAnswer,
+} from "@/lib/numeric";
 import {
   canRegenerateQuiz,
   canRegenerateNumeric,
@@ -38,7 +44,17 @@ import { predictSuccess, seedTierDifficulty } from "@/lib/mastery/elo";
 import { recordCalibrationPair } from "@/lib/calibration/sessionLog";
 import { planRoundReview } from "@/lib/adaptivity/review";
 import { buildHintLadder } from "@/lib/tutor/hintLadder";
+import { selectTutorPhase } from "@/lib/tutor/phase";
+import {
+  startEpisode,
+  submitAttempt,
+  isResolved,
+  type HintEpisode,
+} from "@/lib/tutor/hintEpisode";
+import { creditForEpisode, type HintRungReached } from "@/lib/tutor/creditSchedule";
 import { deriveWorkedSteps } from "@/lib/tutor/faded";
+import { buildDeepDive, hasDeepDive } from "@/lib/tutor/deepDive";
+import { DeepDivePanel } from "@/components/tutor/DeepDivePanel";
 import {
   resolveQuizTag,
   resolveNumericTag,
@@ -49,6 +65,7 @@ import { TutorController } from "@/components/tutor/TutorController";
 import { HintLadder, type SiblingWorked } from "@/components/tutor/HintLadder";
 import { REMEDIATION_MODE } from "@/lib/remediation/config";
 import {
+  probeTierFor,
   remediationStep,
   type RemediationAction,
   type RemediationInput,
@@ -58,6 +75,8 @@ import {
   startRemediation,
   type RemediationSession,
 } from "@/lib/remediation/session";
+import { isNodeCleared } from "@/lib/remediation/climbBack";
+import { planFinishRemediation } from "@/lib/remediation/finish";
 import { buildProbeItem, type ProbeItem } from "@/lib/remediation/probe";
 import {
   misconceptionTagOf,
@@ -69,7 +88,28 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon } from "@/components/icons";
 import type { ReactNode } from "react";
 
-type Phase = "lesson" | "quiz" | "summary";
+type Phase = "lesson" | "quiz" | "remediation" | "summary";
+
+/**
+ * The phase a fresh (no-resume) attempt should START in.
+ *
+ * `TutorController` (the "lesson" prologue) auto-skips itself for `independent`
+ * learners by calling `onStart()` from an effect — but that fires DURING the
+ * same commit as the player's own mount effect, which unconditionally set
+ * `"lesson"`. Because child effects run before parent effects, the parent's
+ * `"lesson"` write CLOBBERED the tutor's `"quiz"` write, and the tutor's
+ * one-shot `started` guard prevented a retry — leaving an `independent` learner
+ * stranded on a lesson phase where `TutorController` renders `null`, i.e. a
+ * COMPLETELY BLANK working area (header only). We instead resolve the phase up
+ * front here, so an `independent` learner starts directly in the questions and
+ * the race can never strand them (a `worked`/`faded` learner still gets the
+ * prologue). Mirrors `selectTutorPhase` — the single source of truth.
+ */
+function initialPhase(theta: number, n: number): Phase {
+  return selectTutorPhase({ theta, n, recentFailures: 0 }) === "independent"
+    ? "quiz"
+    : "lesson";
+}
 
 /**
  * Route entry for playing a level. It dispatches on the level's `mode`:
@@ -151,7 +191,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
       setQuestions(qs);
       setAnswers(new Array(qs.length).fill(null));
       setStartedAt(new Date().toISOString());
-      setPhase("lesson");
+      setPhase(initialPhase(theta, topicN));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level?.id]);
@@ -177,12 +217,23 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
   }, [index, phase]);
 
   // Phase 4: per-topic consecutive-miss counter (session-local, never persisted)
-  // + the active remediation trigger. Both reset each new round (seed change).
+  // + the active mid-lesson remediation trigger. Both reset each new round.
   const missStreakRef = useRef<Record<string, number>>({});
   const [remediation, setRemediation] = useState<RemediationInput | null>(null);
+  // Finish-time remediation: the origin input armed when a WEAK finish should
+  // auto-launch remediation before the summary. Plus the round-local bookkeeping
+  // that keeps it honest: which topics were ALREADY remediated this round (no
+  // double-trigger) and the misconception behind the latest miss (descent edge).
+  const [finishRemediation, setFinishRemediation] =
+    useState<RemediationInput | null>(null);
+  const remediatedTopicsRef = useRef<Set<string>>(new Set());
+  const lastMissTagRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     missStreakRef.current = {};
+    remediatedTopicsRef.current = new Set();
+    lastMissTagRef.current = undefined;
     setRemediation(null);
+    setFinishRemediation(null);
   }, [seed]);
 
   if (!unlocked) return <Navigate to={`/track/${track.id}`} replace />;
@@ -261,7 +312,11 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     if (REMEDIATION_MODE !== "dag") return;
     const streak = correct ? 0 : (missStreakRef.current[topicKey] ?? 0) + 1;
     missStreakRef.current[topicKey] = streak;
-    if (correct || remediation) return;
+    if (correct) return;
+    // Remember the misconception behind THIS miss so a finish-time descent can
+    // pick the implicated prerequisite edge even without an armed mid-lesson run.
+    lastMissTagRef.current = tagOf();
+    if (remediation) return;
     const m = getTopicMastery(topicKey);
     const input: RemediationInput = {
       topicKey,
@@ -283,6 +338,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
       action.kind === "teach-link" ||
       action.kind === "floor-teach"
     ) {
+      remediatedTopicsRef.current.add(topicKey);
       setRemediation(input);
     }
   };
@@ -313,6 +369,26 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
       isNewMastery: r.isNewMastery,
       xpGained: r.xpGained,
     });
+    // Phase 4 finish-time trigger: a WEAK/FAILED finish auto-launches a
+    // remediation session (descend → probe → climb back) BEFORE the summary,
+    // unless it was already remediated this round or the policy declines (slip /
+    // non-DAG topic / within-node retry ⇒ degrade to the normal summary+retry).
+    const finPlan = planFinishRemediation({
+      topicKey,
+      scoreFraction: score,
+      masteryThreshold: level.masteryThreshold,
+      mastery: getTopicMastery(topicKey),
+      levelDifficulty: level.difficulty,
+      missedCount: questions.length - correctCount,
+      misconceptionTag: lastMissTagRef.current,
+      alreadyRemediated: remediatedTopicsRef.current.has(topicKey),
+      mode: REMEDIATION_MODE,
+    });
+    if (finPlan.kind === "remediate") {
+      setFinishRemediation(finPlan.origin);
+      setPhase("remediation");
+      return;
+    }
     setPhase("summary");
     if (r.mastered) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
@@ -326,7 +402,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     setIndex(0);
     setResult(null);
     setStartedAt(new Date().toISOString());
-    setPhase("lesson");
+    setPhase(initialPhase(theta, topicN));
   };
 
   const levelIndex = track.levels.findIndex((l) => l.id === level.id);
@@ -427,6 +503,18 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
               />
             </div>
           )}
+
+        {/* Phase 4 finish-time remediation: descend → probe → climb back before
+            the learner sees the summary / can navigate away on a weak finish. */}
+        {phase === "remediation" && finishRemediation && (
+          <FinishRemediation
+            origin={finishRemediation}
+            onDone={() => {
+              setFinishRemediation(null);
+              setPhase("summary");
+            }}
+          />
+        )}
 
         {phase === "summary" && result && (
           <Summary
@@ -654,7 +742,6 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
             onStart={() => setPhase("cards")}
             illustration={Illustration ? <Illustration /> : null}
             startLabel="Start Flashcards ▸"
-            skipLabel="Skip briefing ▸"
           />
         )}
 
@@ -869,14 +956,35 @@ function LessonIntro({
   onStart,
   illustration,
   startLabel = "Start Practice ▸",
-  skipLabel = "Skip — I know this",
+  detailLabel = "Explain in more detail ▾",
 }: {
   level: Level;
   onStart: () => void;
   illustration?: ReactNode;
   startLabel?: string;
-  skipLabel?: string;
+  detailLabel?: string;
 }) {
+  const [showDetail, setShowDetail] = useState(false);
+  // Flashcard/briefing levels have no scored worked-example instance, so the
+  // deep dive is composed from the level's own conceptual content: the thesis,
+  // the authored `deepDive`, and (as a fallback) the briefing prose + the first
+  // pool card's exact solver explanation. Numbers still come from solver output.
+  const sampleCard = level.flashcards?.[0];
+  const deepDive = useMemo(
+    () =>
+      buildDeepDive({
+        concept: sampleCard?.concept,
+        keyIdea: level.lesson.keyIdea,
+        authored: level.lesson.deepDive,
+        workedExplanation: level.lesson.deepDive?.whyItWorks
+          ? undefined
+          : sampleCard?.explanation,
+        fallbackParagraphs: level.lesson.paragraphs,
+      }),
+    [level, sampleCard],
+  );
+  const canExpand = hasDeepDive(deepDive) && deepDive.sections.length > 1;
+
   return (
     <div className="animate-print-in space-y-5">
       <article className="panel-ruled p-6">
@@ -916,15 +1024,32 @@ function LessonIntro({
             Why firms ask · {level.lesson.whyInterviewers}
           </p>
         )}
+        {showDetail && (
+          <div className="mt-5">
+            <DeepDivePanel
+              view={deepDive}
+              onStart={onStart}
+              startLabel="Start ▸"
+              headingId="briefing-deep-dive"
+            />
+          </div>
+        )}
       </article>
 
       <div className="flex flex-col gap-2 sm:flex-row">
         <button onClick={onStart} className="btn-primary flex-1">
           {startLabel}
         </button>
-        <button onClick={onStart} className="btn-secondary flex-1">
-          {skipLabel}
-        </button>
+        {canExpand && (
+          <button
+            onClick={() => setShowDetail((v) => !v)}
+            aria-expanded={showDetail}
+            aria-controls="briefing-deep-dive"
+            className="btn-secondary flex-1"
+          >
+            {showDetail ? "Hide the detailed explanation ▴" : detailLabel}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -973,6 +1098,7 @@ function QuizCard({
             question,
             chosenIndex: selected,
             misconceptionTag: resolveQuizTag(question, selected),
+            section: hintLevel.section,
           })
         : null,
     [answered, isCorrect, selected, hintLevel, question],
@@ -1296,7 +1422,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       setQuestions(qs);
       setAnswers(new Array(qs.length).fill(null));
       setStartedAt(new Date().toISOString());
-      setPhase("lesson");
+      setPhase(initialPhase(theta, topicN));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [level?.id]);
@@ -1321,9 +1447,17 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
   // Phase 4: per-topic consecutive-miss counter (session-local) + active trigger.
   const missStreakRef = useRef<Record<string, number>>({});
   const [remediation, setRemediation] = useState<RemediationInput | null>(null);
+  // Finish-time remediation bookkeeping (mirrors QuizLevel — see there).
+  const [finishRemediation, setFinishRemediation] =
+    useState<RemediationInput | null>(null);
+  const remediatedTopicsRef = useRef<Set<string>>(new Set());
+  const lastMissTagRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     missStreakRef.current = {};
+    remediatedTopicsRef.current = new Set();
+    lastMissTagRef.current = undefined;
     setRemediation(null);
+    setFinishRemediation(null);
   }, [seed]);
 
   if (!unlocked) return <Navigate to={`/track/${track.id}`} replace />;
@@ -1347,37 +1481,57 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
   // bonus practice lives in a separate component and can never affect it.
   const correctCount = countNumericCorrect(questions, answers);
 
-  const submit = (value: number) => {
+  // PHASE_1 free-response re-attempt flow: the FreeResponseCard runs the 5-rung
+  // hint→re-attempt episode locally and calls this ONCE, when the episode
+  // resolves (correct at some rung, or exhausted). We fold ONE PRIMARY item into
+  // topic mastery with the FRACTIONAL partial credit from the rung schedule.
+  const resolveItem = (r: {
+    finalValue: number;
+    correct: boolean;
+    highestRung: HintRungReached;
+    firstWrongValue?: number;
+  }) => {
     if (answered) return;
     const next = answers.slice();
-    next[index] = value;
+    next[index] = r.finalValue;
     setAnswers(next);
     persist(index, next);
-    // Phase 2: fold this ONE PRIMARY answer into topic mastery (Phase-1 hook).
-    // Exactly once per primary question; NEVER called from `NumericPractice`.
+    // Fold this ONE PRIMARY item into topic mastery (Phase-1 hook). Exactly once
+    // per primary question; NEVER called from `NumericPractice`.
     if (q) {
-      const correct = numericMatches(q, value);
       const responseMs = Date.now() - questionShownAtRef.current;
-      // Phase 5 calibration: log (predictedProbability, outcome). Numeric items
-      // are no-guess, so predictSuccess is called WITHOUT kOptions. PRIMARY
-      // answers only — never bonus practice (COORDINATION §2 / PHASE_5 §5).
+      // Phase 5 calibration: the honest, UNAIDED signal is whether they got it
+      // right FIRST try (no hint). A hinted recovery counts as an outcome of 0
+      // for the reliability diagram even though it earns partial mastery credit.
+      const unaidedCorrect = r.correct && r.highestRung === 0;
       const tierD =
         progress.tierDifficulty?.[tierDifficultyKey(topicKey, level.difficulty)] ??
         seedTierDifficulty(level.difficulty);
       const predicted = predictSuccess(theta, tierD);
-      recordCalibrationPair(topicKey, predicted, correct ? 1 : 0);
+      recordCalibrationPair(topicKey, predicted, unaidedCorrect ? 1 : 0);
+      // Bump the misconception the learner tripped on their FIRST wrong attempt
+      // (help was used ⇒ credit < 1 ⇒ the mastery fold records it); a clean
+      // first-try solve has no firstWrongValue and decays stale flags.
+      const misconceptions =
+        r.firstWrongValue != null
+          ? resolveNumericMisconceptionKeys(topicKey, q, r.firstWrongValue)
+          : [];
       recordItemAttempt({
         topicKey,
         tier: level.difficulty,
-        correct,
+        correct: r.correct,
         mode: "numeric",
-        chosenValue: value,
-        misconceptions: resolveNumericMisconceptionKeys(topicKey, q, value),
+        chosenValue: r.finalValue,
+        credit: creditForEpisode(r.correct, r.highestRung),
+        highestRung: r.highestRung,
+        misconceptions,
         responseMs,
         at: new Date().toISOString(),
       });
-      maybeTriggerRemediation(correct, responseMs, () =>
-        misconceptionTagOf(resolveNumericTag(q, value)),
+      maybeTriggerRemediation(r.correct, responseMs, () =>
+        misconceptionTagOf(
+          resolveNumericTag(q, r.firstWrongValue ?? r.finalValue),
+        ),
       );
     }
   };
@@ -1391,7 +1545,9 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     if (REMEDIATION_MODE !== "dag") return;
     const streak = correct ? 0 : (missStreakRef.current[topicKey] ?? 0) + 1;
     missStreakRef.current[topicKey] = streak;
-    if (correct || remediation) return;
+    if (correct) return;
+    lastMissTagRef.current = tagOf();
+    if (remediation) return;
     const m = getTopicMastery(topicKey);
     const input: RemediationInput = {
       topicKey,
@@ -1411,6 +1567,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       action.kind === "teach-link" ||
       action.kind === "floor-teach"
     ) {
+      remediatedTopicsRef.current.add(topicKey);
       setRemediation(input);
     }
   };
@@ -1438,6 +1595,23 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       isNewMastery: r.isNewMastery,
       xpGained: r.xpGained,
     });
+    // Phase 4 finish-time trigger (see QuizLevel.finish for the rationale).
+    const finPlan = planFinishRemediation({
+      topicKey,
+      scoreFraction: score,
+      masteryThreshold: level.masteryThreshold,
+      mastery: getTopicMastery(topicKey),
+      levelDifficulty: level.difficulty,
+      missedCount: questions.length - correctCount,
+      misconceptionTag: lastMissTagRef.current,
+      alreadyRemediated: remediatedTopicsRef.current.has(topicKey),
+      mode: REMEDIATION_MODE,
+    });
+    if (finPlan.kind === "remediate") {
+      setFinishRemediation(finPlan.origin);
+      setPhase("remediation");
+      return;
+    }
     setPhase("summary");
     if (r.mastered) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
@@ -1451,7 +1625,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     setIndex(0);
     setResult(null);
     setStartedAt(new Date().toISOString());
-    setPhase("lesson");
+    setPhase(initialPhase(theta, topicN));
   };
 
   const levelIndex = track.levels.findIndex((l) => l.id === level.id);
@@ -1511,15 +1685,13 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
         )}
 
         {phase === "quiz" && q && (
-          <NumericCard
+          <FreeResponseCard
             key={q.id}
             question={q}
             number={index + 1}
             total={questions.length}
-            answered={answered}
-            entered={answers[index]}
             isLast={index === questions.length - 1}
-            onSubmit={submit}
+            onResolve={resolveItem}
             onNext={goNext}
             hintLevel={level}
           />
@@ -1552,6 +1724,17 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
               />
             </div>
           )}
+
+        {/* Phase 4 finish-time remediation (see QuizLevel). */}
+        {phase === "remediation" && finishRemediation && (
+          <FinishRemediation
+            origin={finishRemediation}
+            onDone={() => {
+              setFinishRemediation(null);
+              setPhase("summary");
+            }}
+          />
+        )}
 
         {phase === "summary" && result && (
           <NumericSummary
@@ -1627,6 +1810,7 @@ function NumericCard({
             question,
             chosenValue: entered,
             misconceptionTag: resolveNumericTag(question, entered),
+            section: hintLevel.section,
           })
         : null,
     [answered, isCorrect, entered, hintLevel, question],
@@ -1787,6 +1971,255 @@ function NumericCard({
             )}
             <button onClick={onNext} className="btn-primary mt-2 w-full">
               {nextLabel ?? (isLast ? "Settle & See Results ▸" : "Next Question ▸")}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * FREE-RESPONSE player card with the PHASE_1 re-attempt hint flow.
+ *
+ * On a WRONG answer it does NOT reveal — it discloses the 5-rung ladder ONE rung
+ * at a time (rung 1 = the detected-misconception coaching sentence from the
+ * item's parametric error modes) and lets the learner RE-ATTEMPT the SAME
+ * instance. It tracks the highest rung reached and, when the episode resolves
+ * (correct at some rung, or still wrong after all 5), calls `onResolve` ONCE with
+ * the partial-credit inputs. Answer normalization accepts numbers, fractions,
+ * decimals, percentages, and simple expressions (`gradeFreeResponse`).
+ *
+ * This is the primary-round player; the bonus/remediation paths keep the simpler
+ * `NumericCard` (single submit, post-hoc ladder) so their behaviour is unchanged.
+ */
+function FreeResponseCard({
+  question,
+  number,
+  total,
+  isLast,
+  hintLevel,
+  onResolve,
+  onNext,
+}: {
+  question: NumericQuestion;
+  number: number;
+  total: number;
+  isLast: boolean;
+  hintLevel: Level;
+  onResolve: (r: {
+    finalValue: number;
+    correct: boolean;
+    highestRung: HintRungReached;
+    firstWrongValue?: number;
+  }) => void;
+  onNext: () => void;
+}) {
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [episode, setEpisode] = useState<HintEpisode>(() => startEpisode());
+  const [lastWrong, setLastWrong] = useState<number | null>(null);
+  const firstWrongRef = useRef<number | undefined>(undefined);
+  const resolvedRef = useRef(false);
+
+  const unit = question.unit ?? "$";
+  const isMoney = unit === "$";
+  const inputLabel = isMoney ? "Your stake" : "Your answer";
+  const placeholder = isMoney
+    ? "e.g. 300"
+    : question.decimals != null
+      ? `e.g. ${(0).toFixed(question.decimals)}`
+      : "e.g. 5";
+
+  const resolved = isResolved(episode);
+  const isCorrect = episode.status === "correct";
+
+  // Ladder rebuilt from the MOST RECENT wrong entry so rung-1 coaching reflects
+  // what the learner actually did; rungs 2–5 are family/generic and stable.
+  const ladder = useMemo(
+    () =>
+      lastWrong !== null
+        ? buildHintLadder({
+            question,
+            chosenValue: lastWrong,
+            misconceptionTag: resolveNumericTag(question, lastWrong),
+            section: hintLevel.section,
+          })
+        : null,
+    [question, lastWrong, hintLevel],
+  );
+  const hasLadder = ladder !== null;
+  const sibling = useMemo<SiblingWorked | null>(() => {
+    if (!hasLadder) return null;
+    const sib = generateFreshNumericQuestion(
+      hintLevel,
+      freshPracticeSeed(),
+      question.family,
+      question,
+      true,
+      question,
+    );
+    if (!sib) return null;
+    return {
+      prompt: sib.prompt,
+      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLadder, hintLevel, question]);
+
+  const handleSubmit = () => {
+    if (resolved) return;
+    const g = gradeFreeResponse(question, raw);
+    if (g.parsed === null) {
+      setError(
+        isMoney
+          ? "Enter a whole-dollar number (digits only, e.g. 300)."
+          : "Enter a number, fraction, or expression (e.g. 2.8 or 1/3).",
+      );
+      return;
+    }
+    setError(null);
+    const nextEp = submitAttempt(episode, g.correct);
+    setEpisode(nextEp);
+    if (!g.correct) {
+      if (firstWrongRef.current === undefined) firstWrongRef.current = g.parsed;
+      setLastWrong(g.parsed);
+      setRaw("");
+    }
+    if (isResolved(nextEp) && !resolvedRef.current) {
+      resolvedRef.current = true;
+      onResolve({
+        finalValue: g.parsed,
+        correct: nextEp.status === "correct",
+        highestRung: nextEp.highestRung,
+        firstWrongValue: firstWrongRef.current,
+      });
+    }
+  };
+
+  const shownValue = resolved
+    ? isCorrect
+      ? raw || (lastWrong !== null ? String(lastWrong) : "")
+      : lastWrong !== null
+        ? String(lastWrong)
+        : raw
+    : raw;
+
+  return (
+    <div className="animate-print-in space-y-4">
+      <div className="panel p-5">
+        <div className="flex items-center justify-between border-b border-subtle pb-2">
+          <span className="label">
+            {`Question ${String(number).padStart(2, "0")} / ${total}`}
+          </span>
+          {question.concept && (
+            <span className="chip border-subtle text-secondary">
+              {question.concept}
+            </span>
+          )}
+        </div>
+        <p className="mt-3 font-display text-xl font-semibold leading-relaxed text-primary">
+          {question.prompt}
+        </p>
+      </div>
+
+      {/* Free-response input (stays enabled for re-attempts until resolved). */}
+      <div className="panel p-5">
+        <label htmlFor={`fr-${question.id}`} className="label text-accent">
+          {inputLabel}
+        </label>
+        <div className="mt-2 flex items-stretch gap-2">
+          <div className="flex flex-1 items-center border-2 border-border-strong bg-surface focus-within:border-accent">
+            <span className="px-3 font-mono text-lg font-semibold text-secondary">
+              {unit}
+            </span>
+            <input
+              id={`fr-${question.id}`}
+              type="text"
+              inputMode={question.decimals != null ? "decimal" : "numeric"}
+              autoComplete="off"
+              disabled={resolved}
+              value={shownValue}
+              onChange={(e) => {
+                setRaw(e.target.value);
+                if (error) setError(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSubmit();
+              }}
+              placeholder={placeholder}
+              aria-label={isMoney ? "Stake in dollars" : "Your numeric answer"}
+              aria-invalid={error ? true : undefined}
+              className="num min-h-[44px] w-full bg-transparent py-2 pr-3 text-lg font-semibold text-primary outline-none disabled:opacity-70"
+            />
+          </div>
+          {!resolved && (
+            <button onClick={handleSubmit} className="btn-primary px-5">
+              {episode.revealed > 0 ? "Re-attempt ▸" : "Submit ▸"}
+            </button>
+          )}
+        </div>
+        {error && (
+          <p className="mt-2 text-sm text-bear" role="alert">
+            {error}
+          </p>
+        )}
+        {!resolved && episode.revealed > 0 && (
+          <p className="mt-2 text-xs text-muted">
+            Not quite — read the coaching below, then re-enter your answer above.
+          </p>
+        )}
+      </div>
+
+      {/* Progressive hint ladder — disclosed one rung per wrong attempt. */}
+      {ladder && episode.revealed > 0 && (
+        <HintLadder
+          rungs={ladder}
+          siblingWorked={sibling}
+          controlledRevealed={episode.revealed}
+        />
+      )}
+
+      {resolved && (
+        <div className="animate-print-in border border-subtle">
+          <div
+            className={`flex items-center justify-between px-4 py-2 ${
+              isCorrect ? "bg-bull text-bg" : "bg-bear text-bg"
+            }`}
+          >
+            <span className="font-mono text-xs font-semibold uppercase tracking-label">
+              {isCorrect
+                ? episode.highestRung === 0
+                  ? "● Filled — Correct"
+                  : `● Filled — Correct after ${episode.highestRung} hint${episode.highestRung > 1 ? "s" : ""}`
+                : "● Rejected — Incorrect"}
+            </span>
+            <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
+              Trade Ticket
+            </span>
+          </div>
+          <div className="space-y-2 bg-surface p-4">
+            {!isCorrect && (
+              <p className="text-sm text-primary">
+                <span className="label text-bear">
+                  {isMoney ? "Correct stake · " : "Correct answer · "}
+                </span>
+                <span className="num font-semibold">
+                  {unit}
+                  {formatNumericAnswer(question)}
+                </span>
+              </p>
+            )}
+            <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
+              {question.explanation}
+            </p>
+            {question.needsVerification && (
+              <p className="font-mono text-[10px] uppercase tracking-wider text-muted">
+                Hand-authored · flagged for expert verification
+              </p>
+            )}
+            <button onClick={onNext} className="btn-primary mt-2 w-full">
+              {isLast ? "Settle & See Results ▸" : "Next Question ▸"}
             </button>
           </div>
         </div>
@@ -1988,7 +2421,13 @@ function RemediationFlow({
   // here so it stays in lockstep with the descent.
   useEffect(() => {
     if (action.kind === "descend") {
-      const p = buildProbeItem(action.toTopicKey, freshPracticeSeed());
+      // Honor the policy's ~0.85-target probe tier (probe.ts degrades to the
+      // node's easy levelRef when it has no such tier variant).
+      const p = buildProbeItem(
+        action.toTopicKey,
+        freshPracticeSeed(),
+        action.probeTier,
+      );
       setProbe(p);
       setSelected(null);
       setEntered(null);
@@ -2209,6 +2648,349 @@ function RemediationFlow({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Finish-time remediation (Phase 4) — the WHOLE descent → probe → climb-back */
+/*  journey, auto-launched when a level is FINISHED below its mastery bar.      */
+/*                                                                             */
+/*  Unlike the mid-lesson `RemediationFlow` (a single descend/probe/teach step */
+/*  interleaved into an in-progress round), this runs the full loop before the  */
+/*  learner reaches the summary: it descends the prereq DAG from the failed     */
+/*  topic (probing each prerequisite at its ~0.85 tier), teaches at the frontier*/
+/*  / floor, then CLIMBS BACK up the visited path to the origin — re-serving one */
+/*  probe per ancestor and reading the ~0.80 CI-low "node cleared" gate         */
+/*  (`isNodeCleared`) as a progress cue. Every probe updates ONLY the PREREQ     */
+/*  topic's mastery (isolated from the round score, exactly like bonus practice) */
+/*  and the learner can ALWAYS bail to their results — never an inescapable loop.*/
+/*  All decisions come from the same pure `remediation/**` modules.             */
+/* -------------------------------------------------------------------------- */
+
+export function FinishRemediation({
+  origin,
+  onDone,
+}: {
+  /** The origin-node decision input built by the lesson player at finish time. */
+  origin: RemediationInput;
+  /** Called when remediation is finished / skipped — the caller shows the summary. */
+  onDone: () => void;
+}) {
+  const { progress, recordItemAttempt, getTopicMastery } = useProgress();
+
+  const [session, setSession] = useState<RemediationSession>(() =>
+    startRemediation(origin.topicKey),
+  );
+  const [action, setAction] = useState<RemediationAction>(() =>
+    remediationStep({ ...origin, depthThisSession: 0 }),
+  );
+  const [probe, setProbe] = useState<ProbeItem | null>(null);
+  const [teachItem, setTeachItem] = useState<ProbeItem | null>(null);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [entered, setEntered] = useState<number | null>(null);
+  const [pending, setPending] = useState<RemediationAction | null>(null);
+  const [cleared, setCleared] = useState<boolean | null>(null);
+  // Climb-back queue: ancestor topicKeys from the taught node UP to the origin.
+  const [climb, setClimb] = useState<{ queue: string[]; i: number } | null>(
+    null,
+  );
+  const shownAtRef = useRef<number>(Date.now());
+
+  // Serve the probe/climb tier at the learner's ~0.85 band for that node.
+  const tierFor = (topicKey: string): Difficulty =>
+    probeTierFor(
+      getTopicMastery(topicKey)?.theta ?? origin.theta,
+      topicKey,
+      progress.tierDifficulty ?? {},
+    );
+
+  // Materialize content for the current DESCENT decision (the climb has its own
+  // probe loader). Advancing the depth counter happens here in lockstep.
+  useEffect(() => {
+    if (climb) return;
+    if (action.kind === "descend") {
+      const p = buildProbeItem(
+        action.toTopicKey,
+        freshPracticeSeed(),
+        action.probeTier,
+      );
+      setProbe(p);
+      setSelected(null);
+      setEntered(null);
+      setPending(null);
+      setCleared(null);
+      shownAtRef.current = Date.now();
+      setSession((s) => descendTo(s, action.toTopicKey));
+      // No materializable item at the prereq ⇒ teach the foundation directly.
+      if (!p) setAction({ kind: "floor-teach", atTopicKey: action.toTopicKey });
+    } else if (action.kind === "teach-link" || action.kind === "floor-teach") {
+      setTeachItem(buildProbeItem(action.atTopicKey, freshPracticeSeed()));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [action]);
+
+  const answered = selected !== null || entered !== null;
+
+  // Fold ONE probe answer into the current node's mastery, note the ~0.80 clear
+  // gate, and (on a DESCENT probe) stage the next descend/teach decision.
+  const afterAnswer = (
+    topicKey: string,
+    correct: boolean,
+    tag: string | undefined,
+  ) => {
+    const m = getTopicMastery(topicKey);
+    setCleared(isNodeCleared(m?.alpha ?? 1, m?.beta ?? 1, correct ? 1 : 0));
+    if (climb) return; // the climb advances via its own "Continue" button
+    setPending(
+      remediationStep({
+        topicKey,
+        theta: m?.theta ?? 0,
+        alpha: m?.alpha ?? 1,
+        beta: m?.beta ?? 1,
+        n: m?.n ?? 0,
+        consecutiveMisses: correct ? 0 : 1,
+        atFloorTier: true,
+        misconceptionTag: tag,
+        responseFast: false,
+        depthThisSession: session.depth,
+      }),
+    );
+  };
+
+  const answerQuiz = (choice: number) => {
+    if (!probe?.question || answered) return;
+    const correct = choice === probe.question.correctIndex;
+    setSelected(choice);
+    recordItemAttempt({
+      topicKey: probe.topicKey,
+      tier: probe.level.difficulty,
+      correct,
+      mode: "quiz",
+      kOptions: probe.question.choices.length,
+      chosenIndex: choice,
+      misconceptions: resolveQuizMisconceptionKeys(
+        probe.topicKey,
+        probe.question,
+        choice,
+      ),
+      responseMs: Date.now() - shownAtRef.current,
+      at: new Date().toISOString(),
+    });
+    afterAnswer(
+      probe.topicKey,
+      correct,
+      correct
+        ? undefined
+        : misconceptionTagOf(resolveQuizTag(probe.question, choice)),
+    );
+  };
+
+  const answerNumeric = (value: number) => {
+    if (!probe?.numericQuestion || answered) return;
+    const correct = numericMatches(probe.numericQuestion, value);
+    setEntered(value);
+    recordItemAttempt({
+      topicKey: probe.topicKey,
+      tier: probe.level.difficulty,
+      correct,
+      mode: "numeric",
+      chosenValue: value,
+      misconceptions: resolveNumericMisconceptionKeys(
+        probe.topicKey,
+        probe.numericQuestion,
+        value,
+      ),
+      responseMs: Date.now() - shownAtRef.current,
+      at: new Date().toISOString(),
+    });
+    afterAnswer(
+      probe.topicKey,
+      correct,
+      correct
+        ? undefined
+        : misconceptionTagOf(resolveNumericTag(probe.numericQuestion, value)),
+    );
+  };
+
+  const advanceDescend = () => {
+    if (pending) setAction(pending);
+  };
+
+  // Load the next climb-back probe (or finish if that ancestor can't be probed —
+  // bounded, never trapping the learner).
+  const loadClimbProbe = (topicKey: string) => {
+    const p = buildProbeItem(topicKey, freshPracticeSeed(), tierFor(topicKey));
+    setProbe(p);
+    setSelected(null);
+    setEntered(null);
+    setCleared(null);
+    shownAtRef.current = Date.now();
+    return p;
+  };
+
+  // Begin the climb back: re-serve each ancestor from just above the taught node
+  // up to (and including) the origin. Nothing to climb ⇒ straight to results.
+  const startClimb = () => {
+    const queue: string[] = [];
+    for (let d = session.depth - 1; d >= 0; d--) queue.push(session.path[d]);
+    let start = 0;
+    while (start < queue.length && !loadClimbProbe(queue[start])) start++;
+    if (start >= queue.length) {
+      onDone();
+      return;
+    }
+    setClimb({ queue, i: start });
+  };
+
+  const advanceClimb = () => {
+    if (!climb) return;
+    let next = climb.i + 1;
+    while (next < climb.queue.length && !loadClimbProbe(climb.queue[next]))
+      next++;
+    if (next >= climb.queue.length) {
+      onDone();
+      return;
+    }
+    setClimb({ queue: climb.queue, i: next });
+  };
+
+  const teachNode =
+    !climb && (action.kind === "teach-link" || action.kind === "floor-teach")
+      ? prereqNode(action.atTopicKey)
+      : undefined;
+
+  const showProbe =
+    !!probe && (climb !== null || action.kind === "descend");
+  const onProbeNext = climb ? advanceClimb : advanceDescend;
+
+  return (
+    <div className="animate-print-in space-y-4 border-t-2 border-dashed border-accent pt-5">
+      <div className="flex items-center justify-between">
+        <span className="label text-accent">
+          Foundation Check Before You Move On
+        </span>
+        <span className="chip border-subtle text-secondary">
+          Not scored · builds mastery
+        </span>
+      </div>
+      <p className="text-sm text-secondary">
+        That attempt finished below the mastery bar. Instead of moving on with a
+        gap, let&rsquo;s quickly check the foundation underneath this topic and
+        shore it up — then climb straight back and review your results.
+      </p>
+
+      {showProbe && probe && (
+        <>
+          <p className="text-xs text-muted">
+            {climb ? "Climbing back · " : "Prerequisite check · "}
+            <span className="text-secondary">{probe.level.title}</span>
+          </p>
+          {probe.mode === "quiz" && probe.question ? (
+            <QuizCard
+              key={probe.question.id}
+              question={probe.question}
+              number={0}
+              total={0}
+              answered={answered}
+              selected={selected}
+              isLast={false}
+              onSelect={answerQuiz}
+              onNext={onProbeNext}
+              headerLabel={climb ? "Climb-Back Check" : "Foundation Probe"}
+              nextLabel="Continue ▸"
+              hintLevel={probe.level}
+            />
+          ) : probe.numericQuestion ? (
+            <NumericCard
+              key={probe.numericQuestion.id}
+              question={probe.numericQuestion}
+              number={0}
+              total={0}
+              answered={answered}
+              entered={entered}
+              isLast={false}
+              onSubmit={answerNumeric}
+              onNext={onProbeNext}
+              headerLabel={climb ? "Climb-Back Check" : "Foundation Probe"}
+              nextLabel="Continue ▸"
+              hintLevel={probe.level}
+            />
+          ) : null}
+          {answered && cleared !== null && (
+            <p className="text-xs text-muted">
+              {cleared
+                ? "Looking solid here — climbing back toward the topic."
+                : "Let’s keep shoring this up as we climb back."}
+            </p>
+          )}
+        </>
+      )}
+
+      {teachNode && (
+        <div className="panel p-5">
+          <span className="label text-accent">
+            {action.kind === "floor-teach"
+              ? "Foundation · Start Here"
+              : "Bridge Up · How It Composes"}
+          </span>
+          <h3 className="mt-2 font-display text-lg font-semibold text-primary">
+            {teachNode.label}
+          </h3>
+          {teachNode.topicKey && teachItem?.level.lesson.keyIdea && (
+            <div className="mt-3 border-l-2 border-accent bg-surface-muted px-4 py-3">
+              <div className="label text-accent">Key idea</div>
+              <div className="mt-1 font-display text-base font-semibold text-primary">
+                {teachItem.level.lesson.keyIdea}
+              </div>
+            </div>
+          )}
+          {teachItem && (
+            <div className="mt-3 space-y-2">
+              <p className="text-sm font-medium text-primary">
+                {teachItem.question?.prompt ?? teachItem.numericQuestion?.prompt}
+              </p>
+              <p className="whitespace-pre-line text-sm leading-relaxed text-secondary">
+                {teachItem.question?.explanation ??
+                  teachItem.numericQuestion?.explanation}
+              </p>
+            </div>
+          )}
+          <button onClick={startClimb} className="btn-primary mt-4 w-full">
+            {session.depth > 0
+              ? "Got it — climb back up ▸"
+              : "Got the foundation — see results ▸"}
+          </button>
+        </div>
+      )}
+
+      {!climb && action.kind === "exit" && (
+        <div className="panel p-5">
+          <p className="text-sm text-secondary">
+            That looked more like a slip than a gap — no detour needed.
+          </p>
+          <button onClick={onDone} className="btn-primary mt-3 w-full">
+            See my results ▸
+          </button>
+        </div>
+      )}
+
+      {!climb && action.kind === "retry-in-place" && (
+        <div className="panel p-5">
+          <p className="text-sm text-secondary">
+            Let&rsquo;s ease the difficulty and size a fresh set when you&rsquo;re
+            ready.
+          </p>
+          <button onClick={onDone} className="btn-primary mt-3 w-full">
+            See my results ▸
+          </button>
+        </div>
+      )}
+
+      {/* Always-available escape: never trap the learner in a remediation loop. */}
+      <button onClick={onDone} className="btn-ghost w-full text-sm">
+        Skip remediation — see my results ▸
+      </button>
     </div>
   );
 }

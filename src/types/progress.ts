@@ -30,6 +30,23 @@ export interface ResumeState {
   startedAt: string;
 }
 
+/**
+ * One completed diagnostic (Recalibrate) attempt, recorded so the summary can
+ * chart improvement over time. `overallScore` is a 0..1 fraction (higher is
+ * better); `perTopic` is an optional per-topic fraction-correct map. Additive
+ * and back-compatible — nothing reads it except the improvement graph.
+ */
+export interface DiagnosticResult {
+  /** ISO timestamp of the attempt (matches the seed stamp where practical). */
+  at: string;
+  /** Overall score in 0..1 (fraction correct, optionally tier-weighted). */
+  overallScore: number;
+  /** Number of graded items answered in this attempt. */
+  itemsAnswered: number;
+  /** Optional per-topic fraction correct (0..1), keyed by topicKey. */
+  perTopic?: Record<string, number>;
+}
+
 export interface UserProgress {
   version: number; // was 1; Phase 1 writes 2 (see src/lib/mastery/migrate.ts)
   levelProgress: Record<string, LevelProgress>;
@@ -46,6 +63,21 @@ export interface UserProgress {
   tierDifficulty?: TierDifficultyMap;
   /** Set once, after the diagnostic is completed or skipped (Phase 3). */
   diagnosticDoneAt?: string;
+  /**
+   * Set once the new-user ONBOARDING TOUR has been shown/dismissed. Purely a
+   * UI "shown once" flag — additive and migration-safe (mirrors
+   * `diagnosticDoneAt`). It NEVER gates content and is untouched by
+   * `recordAttempt`, `recordItemAttempt`, mastery/locking, or the v1→v2
+   * migration. Re-triggerable on demand via the "Show tutorial" affordance.
+   */
+  onboardingTourDoneAt?: string;
+  /**
+   * Append-only history of completed diagnostic attempts, oldest → newest.
+   * Powers the Recalibrate "you're improving" graph. Additive & optional
+   * (mirrors `diagnosticDoneAt`): older saves without it load unchanged, and it
+   * NEVER gates content or affects scoring / mastery / the v1→v2 migration.
+   */
+  diagnosticHistory?: DiagnosticResult[];
 }
 
 export function emptyProgress(): UserProgress {

@@ -100,15 +100,19 @@ describe("integration with real tracks", () => {
       "Geometric Probability",
       "Conditional Probability",
       "Expected Value",
+      "Poisson Distribution & Process",
       "Betting & Sizing",
       "Order Statistics",
+      "Continuous Distributions",
       "Variance, Covariance & the CLT",
       "Markov Chains",
+      "Brownian Motion",
       "Game Theory & Puzzles",
+      "Extra Relevant Knowledge",
     ]);
-    // Ranks are 1..10 in data order.
+    // Ranks are 1..N in data order.
     expect(topics.map((t) => t.rank)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
     ]);
     // Topics partition the track with no gaps/overlaps.
     expect(topics[0].startIndex).toBe(0);

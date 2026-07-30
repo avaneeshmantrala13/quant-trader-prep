@@ -10,6 +10,12 @@ import { seedTierDifficulty, updateElo } from "./elo";
 import { betaUpdate } from "./beta";
 import { bumpMisconceptions, decayMisconceptions } from "./misconceptions";
 
+/** Clamp a score into the valid [0,1] range (defensive against bad callers). */
+function clamp01(x: number): number {
+  if (!Number.isFinite(x)) return 0;
+  return x < 0 ? 0 : x > 1 ? 1 : x;
+}
+
 /**
  * The pure fold: apply ONE ItemAttempt to (mastery, tierD). Returns fresh copies
  * — the inputs are never mutated (PHASE_1 §4/§8). This is the single place Elo,
@@ -25,7 +31,10 @@ export function applyItemAttempt(
   a: ItemAttempt,
   dExposures: number,
 ): { mastery: TopicMastery; tierD: number } {
-  const y: 0 | 1 = a.correct ? 1 : 0;
+  // Actual score S ∈ [0,1]. When the caller supplies fractional `credit` (the
+  // free-response hint-attempt flow), use it directly; otherwise fall back to the
+  // binary 0/1 outcome so every existing binary caller is unchanged (PHASE_1).
+  const s = clamp01(a.credit ?? (a.correct ? 1 : 0));
 
   const base: TopicMastery = prev ?? {
     theta: 0,
@@ -46,7 +55,7 @@ export function applyItemAttempt(
     const stepped = updateElo({
       theta: base.theta,
       d,
-      y,
+      y: s,
       kOptions: a.kOptions,
       n: base.n,
       dExposures,
@@ -55,12 +64,15 @@ export function applyItemAttempt(
     d = stepped.d;
   }
 
-  const { alpha, beta } = betaUpdate(base.alpha, base.beta, y, BETA_DECAY_RHO);
+  const { alpha, beta } = betaUpdate(base.alpha, base.beta, s, BETA_DECAY_RHO);
 
-  // Misconceptions: bump the tripped keys on a wrong answer; fade all on a right
-  // answer (PHASE_1 §5). Caller resolves `a.misconceptions` via topicKey helpers.
+  // Misconceptions: fade all flags on a CLEAN full-credit solve (S ≥ 1); bump the
+  // tripped keys otherwise, i.e. whenever ANY help was needed or the item was
+  // missed (PHASE_1 §5). A partial-credit recovery still demonstrated the
+  // misconception on its first wrong attempt, so it must bump — keyed on `s`, not
+  // `a.correct`. Caller resolves `a.misconceptions` via topicKey helpers.
   const misconceptions =
-    y === 1
+    s >= 1
       ? decayMisconceptions(base.misconceptions, MISCONCEPTION_DECAY)
       : bumpMisconceptions(base.misconceptions, a.misconceptions ?? []);
 

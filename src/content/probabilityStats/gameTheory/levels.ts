@@ -12,7 +12,7 @@ import {
   mixQuiz,
 } from "./generators";
 // Re-homed from the former "General" subcategory (optimizing-agents / market-making).
-import { genOptimalSpread, genOptimizeAgents } from "./genGeneralAgents";
+import { genOptimalSpread, genOptimizeAgentsNumeric } from "./genGeneralAgents";
 import { gameTheoryGeneralFlashcards } from "./generalFlashcards";
 
 /**
@@ -62,6 +62,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Dominant strategy ⇒ unique NE at (Defect, Defect) = P; not R.",
       whyInterviewers:
         "Recognising individually-rational choices that produce a jointly-bad outcome is core desk intuition (latency/spread arms races).",
+      deepDive: {
+        whyItWorks:
+          "In a simultaneous game the stable outcome is one where no player can gain by deviating alone; the quickest route there is to find a dominant action that is a best response no matter what the opponent does. When both players have one, that mutual best response is the unique equilibrium even if it leaves both worse off than cooperating.",
+        approach: [
+          "Fix the opponent on each of their possible choices in turn.",
+          "For each, identify your own best-responding action.",
+          "Check whether one action is best regardless of what the opponent does.",
+          "Pair the players' dominant choices to read off the equilibrium outcome.",
+        ],
+        pitfalls: [
+          "Reporting the mutually-cooperative payoff as the equilibrium when it isn't stable.",
+          "Assuming individually rational choices must yield the jointly-best outcome.",
+          "Overlooking that dominance must hold against every opponent action, not just the likely one.",
+        ],
+      },
     },
   },
   {
@@ -84,6 +99,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Reason last-move-first; drop threats that aren't self-interested.",
       whyInterviewers:
         "Backward induction and credibility underpin negotiation, entry, and commitment problems on any desk.",
+      deepDive: {
+        whyItWorks:
+          "A sequential game is a tree, so you solve it from the end backwards: fix what each last mover would actually do, then choose earlier moves anticipating those replies. This yields the subgame-perfect equilibrium and automatically discards threats a rational player would never carry out.",
+        approach: [
+          "Picture the game as a tree of moves taken in order.",
+          "Start at the final decisions and pick each last mover's payoff-maximising choice.",
+          "Replace each settled subtree with its resulting payoffs and roll back one stage.",
+          "Continue to the opening move, keeping only self-interested actions at every node.",
+        ],
+        pitfalls: [
+          "Believing a threat that would hurt the threatener to actually execute.",
+          "Reasoning forward from the first move instead of backward from the last.",
+          "Assuming an opponent makes the move you want rather than their own best move.",
+        ],
+      },
     },
   },
   {
@@ -106,6 +136,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Median ⇒ split 50/50; iterated dominance ⇒ equilibrium 0.",
       whyInterviewers:
         "Both test whether you can iterate others' reasoning — exactly the skill in reading a crowded trade.",
+      deepDive: {
+        whyItWorks:
+          "Both puzzles are about iterating other players' reasoning. Spatial competition drives rivals toward the median because either can capture more share by moving toward the centre; a guessing game collapses toward the logical equilibrium under repeated elimination of choices that can never win, yet real money is won by going just one reasoning step beyond the crowd.",
+        approach: [
+          "Ask where a player can gain by moving relative to the others, and follow that incentive to its resting point.",
+          "For guessing games, remove choices that are dominated no matter what others pick.",
+          "Iterate that elimination to find the logical equilibrium.",
+          "To win in practice, estimate the crowd's reasoning depth and go one level deeper.",
+        ],
+        pitfalls: [
+          "Thinking off-centre positions are stable when a rival can crowd in for more share.",
+          "Playing the full-rationality equilibrium against opponents who don't reason that far.",
+          "Going too few — or too many — levels deep relative to the actual field.",
+        ],
+      },
     },
   },
   {
@@ -128,6 +173,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "No saddle ⇒ mix by indifference; delete dominated rows first.",
       whyInterviewers:
         "Randomising so a counterparty can't read you — and pricing the exact edge of doing so — is a real trading skill.",
+      deepDive: {
+        whyItWorks:
+          "In a zero-sum game with no saddle point, best responses cycle, so any pure choice can be exploited; you defend the game's value by randomising precisely so the opponent is indifferent between their replies. A strictly dominated strategy is never worth playing, so you can prune it before mixing.",
+        approach: [
+          "Check for a saddle point where the row's guaranteed minimum meets the column's minimum of maxima.",
+          "If there's no saddle, delete any strategy beaten in every column.",
+          "On the surviving 2×2, set your mixing probabilities so the opponent is indifferent between columns.",
+          "Compute the game's value from that equilibrium mix.",
+        ],
+        pitfalls: [
+          "Settling for the safe pure (maximin) payoff, which sits strictly below the true value.",
+          "Trying to mix before eliminating dominated strategies.",
+          "Choosing your mix to maximise your own payoff directly instead of making the opponent indifferent.",
+        ],
+      },
     },
   },
   {
@@ -150,6 +210,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Indifference ⇒ (1−p)^(N−1)=c/b; P(nobody)=(1−p)^N.",
       whyInterviewers:
         "It formalises free-riding and the bystander effect — key to thinking about liquidity provision and shared risk.",
+      deepDive: {
+        whyItWorks:
+          "When any single volunteer benefits everyone but bears a private cost, there's no pure equilibrium — each person randomises, tuned so they're exactly indifferent between acting and free-riding. Because that indifference condition makes each person less willing to act as the group grows, collective failure becomes more likely with more potential volunteers.",
+        approach: [
+          "Recognise the structure: one volunteer suffices, but volunteering is costly.",
+          "Impose symmetric indifference — the cost of acting equals the expected benefit of waiting for someone else.",
+          "Solve that condition for each player's volunteer probability.",
+          "Combine the independent non-volunteering events to get the chance nobody acts.",
+        ],
+        pitfalls: [
+          "Expecting a pure equilibrium where one designated person always volunteers.",
+          "Assuming more potential helpers makes success more likely.",
+          "Confusing one person's volunteer probability with the chance that someone volunteers.",
+        ],
+      },
     },
   },
   {
@@ -172,6 +247,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Spread X* = (U+I)/(2U+I) (2/3 for an equal split); market = bid (1−X)/2, ask 1 − bid.",
       whyInterviewers:
         "Pricing a spread against adverse selection is the core desk-quant market-making computation.",
+      deepDive: {
+        whyItWorks:
+          "Quoting a spread trades revenue from uninformed flow against adverse-selection losses to informed traders; expected PnL is a downward parabola in the spread, so calculus pins a unique interior optimum. Quote too tight and you bleed to the informed; quote too wide and you lose uninformed volume.",
+        approach: [
+          "Model expected profit as uninformed revenue minus informed adverse-selection cost.",
+          "Express both terms as functions of the chosen spread.",
+          "Maximise the resulting concave objective by taking its derivative and setting it to zero.",
+          "Translate the optimal spread into symmetric bid and ask quotes.",
+        ],
+        pitfalls: [
+          "Ignoring informed flow and defaulting to a naive symmetric spread.",
+          "Quoting so tight that informed traders pick you off.",
+          "Quoting so wide that uninformed volume dries up.",
+        ],
+      },
     },
   },
   {
@@ -182,10 +272,10 @@ export const gameTheoryLevels: Level[] = [
       "Optimize a symmetric agent's participation probability: P(success) = s₂p² + 2s₁p(1−p) is maximized at p* = s₁/(2s₁−s₂), not at the naive p = ½ or p = 1.",
     section: "Game Theory & Puzzles",
     difficulty: "hard",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.7,
     questionCount: 5,
-    generator: genOptimizeAgents,
+    numericGenerator: mixNumeric([genOptimizeAgentsNumeric]),
     lesson: {
       paragraphs: [
         "When two symmetric agents each choose a participation probability p, the success probability is a quadratic in p: P(success) = s₂·p² + 2s₁·p(1−p), where s₂ is the both-participate success rate and s₁ the one-participate rate. This is a downward parabola whenever s₁ > s₂/2, so it has an interior optimum — you cannot just push p to 0 or 1.",
@@ -194,6 +284,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Maximize s₂p² + 2s₁p(1−p): p* = s₁/(2s₁−s₂) (2/3 in the canonical case), not ½ or 1.",
       whyInterviewers:
         "Optimizing-agent games test whether you set up and maximize an objective rather than guessing a corner.",
+      deepDive: {
+        whyItWorks:
+          "When symmetric agents each choose a participation probability, the joint success probability is a quadratic in that probability, and when the one-participant case is valuable enough it's a downward parabola with an interior maximum. So the best choice is generally neither 'never' nor 'always' — it's found by optimising, not by picking a corner.",
+        approach: [
+          "Write the success probability by conditioning on how many agents participate.",
+          "Recognise it as a quadratic in the participation probability.",
+          "Confirm the parabola opens downward, guaranteeing an interior optimum.",
+          "Differentiate, set to zero, and solve for the optimal probability.",
+        ],
+        pitfalls: [
+          "Jumping to a corner choice of always or never participating.",
+          "Guessing the midpoint by default.",
+          "Over-weighting the both-participate case when the single-participant case is what matters.",
+        ],
+      },
     },
   },
   {
@@ -215,6 +320,21 @@ export const gameTheoryLevels: Level[] = [
       keyIdea: "Some games have no scalar answer — the reasoning is the answer.",
       whyInterviewers:
         "Open-ended 'what would you do and why' game questions test structured reasoning, not arithmetic.",
+      deepDive: {
+        whyItWorks:
+          "Several important games have no single numeric answer — the deliverable is the reasoning: naming the equilibria, distinguishing payoff- from risk-dominance, judging whether a threat is credible, and stating when repetition can sustain cooperation. The tools are equilibrium analysis, backward induction, and the discounted-future logic of repeated play.",
+        approach: [
+          "Identify the game's family: coordination, commitment, or repeated play.",
+          "Enumerate the equilibria and distinguish the payoff-dominant from the risk-dominant one.",
+          "Test whether any threat or promise is self-interested to carry out.",
+          "For repeated play, ask whether patient players can sustain cooperation via a credible punishment.",
+        ],
+        pitfalls: [
+          "Assuming a coordination game has one obvious solution without appealing to a focal point.",
+          "Treating a non-credible threat as if it were binding.",
+          "Believing cooperation is the only possible equilibrium of a repeated game.",
+        ],
+      },
     },
   },
 ];

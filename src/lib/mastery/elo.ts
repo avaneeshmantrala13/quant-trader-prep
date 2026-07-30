@@ -43,11 +43,16 @@ export function learningRateK(n: number): number {
  * times this (topic,tier) has been seen (drives the freeze).
  *   θ += K_s(n)·(y − P)
  *   d += K_d·(P − y)   [frozen once dExposures ≥ TIER_FREEZE_N]
+ *
+ * `y` is the actual SCORE S ∈ [0,1] (Pelánek 2016 uses S directly). Binary
+ * outcomes pass 0/1 as before; the free-response hint-attempt flow passes the
+ * FRACTIONAL partial credit from `creditSchedule.ts` — the Elo update is the
+ * same expression either way, so partial credit "just works" (PHASE_1).
  */
 export function updateElo(args: {
   theta: number;
   d: number;
-  y: 0 | 1;
+  y: number;
   kOptions?: number;
   n: number;
   dExposures: number;

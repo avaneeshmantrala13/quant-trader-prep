@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeFreeResponse, gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import {
   F,
@@ -15,11 +15,15 @@ import {
 } from "../coreSolvers";
 import {
   genAffineCorr,
+  genAffineCorrNumeric,
   genCltDiffZ,
+  genCltDiffZNumeric,
   genCltTail,
   genMarkovBound,
   genMaxCov,
+  genMaxCovNumeric,
   genSumSD,
+  genSumSDNumeric,
   genVarCombo,
 } from "./generators";
 import { varianceCovarianceCltFlashcards } from "./flashcards";
@@ -165,6 +169,39 @@ describe("no source-dataset title/wording leaks into generated prompts", () => {
       }
     }
   });
+});
+
+describe("vc-1 numeric conversions: free-response grading + tagged error modes (signed answers allowed)", () => {
+  const VC1_NUMERIC: [string, (rng: Rng) => NumericQuestion][] = [
+    ["genMaxCovNumeric", genMaxCovNumeric],
+    ["genAffineCorrNumeric", genAffineCorrNumeric],
+    ["genSumSDNumeric", genSumSDNumeric],
+    ["genCltDiffZNumeric", genCltDiffZNumeric],
+  ];
+  for (const [name, gen] of VC1_NUMERIC) {
+    it(`${name} — answer grades via free-response; every commonError tagged (answers may be negative)`, () => {
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        const dp = q.decimals ?? 0;
+        const f = 10 ** dp;
+        // Signed answers are legitimate here (correlation −0.6, CLT z-argument −2).
+        expect(Number.isFinite(q.answer)).toBe(true);
+        const typed = dp === 0 ? String(q.answer) : q.answer.toFixed(dp);
+        expect(gradeFreeResponse(q, typed).correct).toBe(true);
+        expect(gen(new Rng(seed)).answer).toBe(q.answer); // deterministic
+        for (const ce of q.commonErrors ?? []) {
+          expect(Number.isFinite(ce.value)).toBe(true);
+          expect(Math.round(ce.value * f)).not.toBe(Math.round(q.answer * f));
+          expect(ce.misconception, `untagged error on ${name}`).toBeTruthy();
+          const typedErr = dp === 0 ? String(ce.value) : ce.value.toFixed(dp);
+          expect(gradeFreeResponse(q, typedErr).correct).toBe(false);
+        }
+        const keys = (q.commonErrors ?? []).map((e) => Math.round(e.value * f));
+        expect(new Set(keys).size).toBe(keys.length);
+        expect(q.explanation.trim().length).toBeGreaterThan(40);
+      }
+    });
+  }
 });
 
 describe("re-homed reasoning flashcards (procedure + conditional)", () => {

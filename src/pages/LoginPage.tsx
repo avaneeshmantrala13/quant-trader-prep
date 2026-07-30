@@ -5,7 +5,6 @@ import type { AuthResult } from "@/lib/storage";
 import { isAwsBackend, type EnvLike } from "@/lib/awsConfig";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
-import { TickerTape } from "@/components/visuals/TickerTape";
 import { MoonIcon, SunIcon } from "@/components/icons";
 
 /**
@@ -309,10 +308,6 @@ export function LoginPage() {
             </div>
           </aside>
         </div>
-      </div>
-
-      <div className="relative z-10 mt-2">
-        <TickerTape />
       </div>
     </div>
   );

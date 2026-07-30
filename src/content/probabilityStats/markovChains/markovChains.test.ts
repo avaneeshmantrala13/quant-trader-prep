@@ -20,9 +20,10 @@ import {
   twoStateReturnExpected,
 } from "./markov";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeFreeResponse, gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import * as G from "./generators";
+import { genRuinNumeric } from "./genGeneralWalks";
 
 const r = (x: number, dp: number) => Math.round(x * 10 ** dp) / 10 ** dp;
 
@@ -196,6 +197,14 @@ function reDeriveNumeric(q: NumericQuestion): ReturnType<typeof F> {
       const [m] = p.map(Number);
       return grid2DCenterExpected(m);
     }
+    case "patwaitnum": {
+      const [pat] = p;
+      return F(2 * patternCorr(pat, pat)); // independent Conway
+    }
+    case "patracenum": {
+      const [a, b] = p;
+      return patternRaceProb(a, b);
+    }
     default:
       throw new Error(`no re-derivation for numeric family ${key}`);
   }
@@ -245,6 +254,9 @@ const NUMERIC_GENS: [string, (rng: Rng) => NumericQuestion][] = [
   ["genCubeWalk", G.genCubeWalk],
   ["genPolygonWalk", G.genPolygonWalk],
   ["genGridWalk", G.genGridWalk],
+  // mc-3 free-response conversions (formerly quiz families).
+  ["genPatternWaitNumeric", G.genPatternWaitNumeric],
+  ["genPatternRaceNumeric", G.genPatternRaceNumeric],
 ];
 
 const QUIZ_GENS: [string, (rng: Rng) => Question][] = [
@@ -281,6 +293,104 @@ describe("numeric generators: independent re-derivation + grading + distractors"
         // Expected hitting times are non-negative and finite.
         expect(q.answer).toBeGreaterThanOrEqual(0);
         expect(Number.isFinite(q.answer)).toBe(true);
+      }
+    });
+  }
+});
+
+/* ========================================================================== */
+/*  3b. mc-3 free-response conversion — error-mode catalogs carry a semantic   */
+/*      `misconception` tag on EVERY commonError (rung-1 coaching keying).      */
+/* ========================================================================== */
+
+describe("mc-3 numeric conversions carry misconception tags on every error", () => {
+  const CATALOG: [string, (rng: Rng) => NumericQuestion, Set<string>][] = [
+    [
+      "genPatternWaitNumeric",
+      G.genPatternWaitNumeric,
+      new Set([
+        "pattern_overlap_as_run",
+        "pattern_as_independent_block",
+        "sum_independent_single_waits",
+      ]),
+    ],
+    [
+      "genPatternRaceNumeric",
+      G.genPatternRaceNumeric,
+      new Set([
+        "pattern_race_naive_half",
+        "complement_confusion",
+        "race_by_speed_ratio",
+      ]),
+    ],
+  ];
+
+  for (const [name, gen, expected] of CATALOG) {
+    it(`${name} — every commonError has a tag from the family's catalog, all modes observed`, () => {
+      const seen = new Set<string>();
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        expect((q.commonErrors ?? []).length).toBeGreaterThanOrEqual(1);
+        for (const ce of q.commonErrors ?? []) {
+          expect(ce.misconception, `untagged error on ${name}`).toBeTruthy();
+          expect(expected.has(ce.misconception as string)).toBe(true);
+          seen.add(ce.misconception as string);
+        }
+      }
+      // Across the seed sweep every catalogued mode surfaces at least once.
+      expect(seen).toEqual(expected);
+    });
+  }
+});
+
+/* ========================================================================== */
+/*  3c. mc-5 free-response conversion — the gambler's-ruin / bold-play / biased  */
+/*      ruin families are now numeric (tri-mode relaxed centrally). Every        */
+/*      commonError carries a semantic misconception tag from the family catalog */
+/*      and grades via the free-response (fraction/decimal) path.                */
+/* ========================================================================== */
+
+describe("mc-5 numeric conversions: free-response grading + tagged error modes", () => {
+  const CATALOG: [string, (rng: Rng) => NumericQuestion, Set<string>][] = [
+    [
+      "genRuinReachNumeric",
+      G.genRuinReachNumeric,
+      new Set(["ruin_symmetric_fair", "ruin_inverted_odds", "complement_confusion"]),
+    ],
+    [
+      "genBoldPlayNumeric",
+      G.genBoldPlayNumeric,
+      new Set(["timid_not_bold", "ruin_symmetric_fair", "single_round_prob"]),
+    ],
+    [
+      "genRuinNumeric",
+      genRuinNumeric,
+      new Set(["ruin_symmetric_fair", "ruin_inverted_odds", "complement_confusion"]),
+    ],
+  ];
+
+  for (const [name, gen, allowed] of CATALOG) {
+    it(`${name} — answer grades as a fraction/decimal, every commonError is tagged`, () => {
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        const dp = q.decimals ?? 0;
+        const f = 10 ** dp;
+        // The correct answer, typed at its precision, grades correct.
+        const typed = dp === 0 ? String(q.answer) : q.answer.toFixed(dp);
+        expect(gradeFreeResponse(q, typed).correct).toBe(true);
+        expect((q.commonErrors ?? []).length).toBeGreaterThanOrEqual(1);
+        for (const ce of q.commonErrors ?? []) {
+          expect(Number.isFinite(ce.value)).toBe(true);
+          expect(Math.round(ce.value * f)).not.toBe(Math.round(q.answer * f));
+          expect(ce.misconception, `untagged error on ${name}`).toBeTruthy();
+          expect(allowed.has(ce.misconception as string)).toBe(true);
+          const g = gradeFreeResponse(q, dp === 0 ? String(ce.value) : ce.value.toFixed(dp));
+          expect(g.correct).toBe(false);
+          expect(g.matchedError?.feedback).toBeTruthy();
+        }
+        // commonErrors mutually distinct at grading precision.
+        const keys = (q.commonErrors ?? []).map((e) => Math.round(e.value * f));
+        expect(new Set(keys).size).toBe(keys.length);
       }
     });
   }

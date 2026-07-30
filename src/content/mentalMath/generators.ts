@@ -1,5 +1,10 @@
 import type { Rng } from "@/lib/rng";
-import type { Question, QuestionGenerator } from "@/types/content";
+import type {
+  Difficulty,
+  NumericQuestion,
+  Question,
+  QuestionGenerator,
+} from "@/types/content";
 import { assemble, assembleDistinct, fmt, fracStr, pct, round } from "../shared";
 import { mixQuestionGenerators } from "../mixFamilies";
 
@@ -239,4 +244,480 @@ export const ALL_MM_GENERATORS = {
   genPercent,
   genFractionToDecimal,
   genOddsToProb,
+};
+
+/* ========================================================================== */
+/* ===================  FREE-RESPONSE (numeric) CONVERSION  ================= */
+/* ========================================================================== */
+
+/**
+ * MCQ → free-response conversion of the arithmetic drills (mirrors the geo-1
+ * pattern). Each `build<Family>NumericInstance` computes the SAME answer as its
+ * quiz sibling with the SAME exact arithmetic, and re-derives 2–5 GENUINE,
+ * parametrically-computable slip values as a tagged error-mode catalog:
+ *   • rung-1 coaching NAMES the arithmetic slip + asks a leading question,
+ *     never revealing the answer;
+ *   • rung-5 `explanation` is the worked computation;
+ *   • the learner types a number, graded by `gradeFreeResponse`.
+ *
+ * These numeric generators are deliberately NOT added to `ALL_MM_GENERATORS`
+ * (which stays quiz-only for the shared registry test); the levels reference the
+ * adapters directly via `mixNumericGenerators`.
+ */
+
+/** Local decimals→answer helper: fewest places to represent `value`, ≤ `cap`. */
+function decimalsNeeded(value: number, cap = 4): number {
+  for (let dp = 0; dp < cap; dp++) {
+    const f = 10 ** dp;
+    if (Math.round(value * f) / f === value) return dp;
+  }
+  return cap;
+}
+
+/**
+ * Local replicate of the probabilityStats `numericErrors` accumulator (numbers
+ * only): dedupes wrong values against the answer (at `dp`) and carries an
+ * optional machine-readable `misconception` tag onto each entry.
+ */
+function numericErrors(
+  answer: number,
+  dp: number,
+): {
+  errors: { value: number; feedback: string; misconception?: string }[];
+  push: (raw: number, feedback: string, misconception?: string) => void;
+} {
+  const f = 10 ** dp;
+  const seen = new Set<number>([Math.round(answer * f)]);
+  const errors: { value: number; feedback: string; misconception?: string }[] =
+    [];
+  const push = (raw: number, feedback: string, misconception?: string) => {
+    if (!Number.isFinite(raw)) return;
+    const rounded = Math.round(raw * f) / f;
+    const k = Math.round(rounded * f);
+    if (seen.has(k)) return;
+    seen.add(k);
+    errors.push({
+      value: rounded,
+      feedback,
+      ...(misconception ? { misconception } : {}),
+    });
+  };
+  return { errors, push };
+}
+
+/* -----------------------------  Addition  -------------------------------- */
+
+export function buildAdditionNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const a = rng.int(120, 989);
+  const b = rng.int(120, 989);
+  const answer = a + b;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    answer - 10,
+    `Close — that's 10 short. Did a carry out of the ones column get dropped? Re-add the tens.`,
+    "off_by_carry",
+  );
+  push(
+    answer + 100,
+    `That's 100 too big — a carry leaked into the hundreds column. Which column actually overflowed?`,
+    "place_value_slip",
+  );
+  push(
+    answer - 1,
+    `Off by one in the ones column. Add the ones digits again carefully.`,
+    "off_by_one",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-add-num-${a}-${b}`,
+      prompt: `${a} + ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Addition",
+      explanation: `${a} + ${b} = ${fmt(answer)}. Add hundreds, then tens, then ones and combine.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Zetamac-style addition",
+    },
+  };
+}
+
+/* ----------------------------  Subtraction  ------------------------------ */
+
+export function buildSubtractionNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const a = rng.int(400, 990);
+  const b = rng.int(110, a - 50);
+  const answer = a - b;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    answer + 10,
+    `That's 10 too high — a borrow in the tens column went the wrong way. Recheck the tens.`,
+    "off_by_carry",
+  );
+  push(
+    answer - 100,
+    `That's 100 short — a borrow out of the hundreds column got mishandled. Which column did you borrow from?`,
+    "place_value_slip",
+  );
+  push(
+    b - a,
+    `Looks like you subtracted the larger number from the smaller — which number is on top?`,
+    "swapped_operands",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-sub-num-${a}-${b}`,
+      prompt: `${a} − ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Subtraction",
+      explanation: `${a} − ${b} = ${fmt(answer)}. Subtract ones, then tens, then hundreds, borrowing where a column would go negative.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Zetamac-style subtraction",
+    },
+  };
+}
+
+/* ---------------------------  Multiply 2×1  ------------------------------ */
+
+export function buildMultiply2x1NumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const a = rng.int(12, 99);
+  const b = rng.int(3, 9);
+  const answer = a * b;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    a + b,
+    `Did you ADD instead of multiply? ${a} × ${b} asks how many you get from ${b} groups of ${a}.`,
+    "operation_confused",
+  );
+  push(
+    answer + a,
+    `That's one extra group of ${a} — are you multiplying by exactly ${b}, not ${b + 1}?`,
+    "off_by_one",
+  );
+  push(
+    answer - a,
+    `That's one group of ${a} short — did you multiply by ${b - 1} instead of ${b}?`,
+    "off_by_one",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-mul21-num-${a}-${b}`,
+      prompt: `${a} × ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Multiplication",
+      explanation: `${a} × ${b} = ${fmt(answer)}. Split ${a} into tens and ones: (${Math.floor(a / 10) * 10}×${b}) + (${a % 10}×${b}).`,
+      unit: "",
+      commonErrors: errors,
+      source: "Optiver-style speed multiplication",
+    },
+  };
+}
+
+/* ---------------------------  Multiply 2×2  ------------------------------ */
+
+export function buildMultiply2x2NumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const a = rng.int(13, 49);
+  const b = rng.int(13, 49);
+  const answer = a * b;
+  const missCross = Math.floor(a / 10) * 10 * b + (a % 10) * (b % 10);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    missCross,
+    `You lost one of the four cross-products in (tens+ones)(tens+ones) — did you include BOTH tens×ones and ones×tens?`,
+    "dropped_cross_term",
+  );
+  push(
+    answer + a,
+    `That's one extra group of ${a} — recount the partial products, don't add a spare row.`,
+    "off_by_one",
+  );
+  push(
+    answer + 100,
+    `That's 100 too big — a partial product landed one place-value column too high.`,
+    "place_value_slip",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-mul22-num-${a}-${b}`,
+      prompt: `${a} × ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Multiplication",
+      explanation: `${a} × ${b} = ${fmt(answer)}. Expand (${Math.floor(a / 10) * 10}+${a % 10})(${b}) = ${Math.floor(a / 10) * 10 * b} + ${(a % 10) * b}.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Jane Street-style 2×2 multiplication",
+    },
+  };
+}
+
+/* ------------------------------  Division  ------------------------------- */
+
+export function buildDivisionNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const b = rng.int(3, 19);
+  const q = rng.int(11, 89);
+  const a = b * q;
+  const answer = q;
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    q + 1,
+    `Overshot by one — does ${b} × your answer land back on ${fmt(a)}?`,
+    "off_by_one",
+  );
+  push(
+    q + 10,
+    `That's ten too many — check the tens digit of the quotient.`,
+    "place_value_slip",
+  );
+  push(
+    Math.round(a / (b + 1)),
+    `Looks like you divided by ${b + 1} — the divisor is ${b}.`,
+    "wrong_denominator",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-div-num-${a}-${b}`,
+      prompt: `${fmt(a)} ÷ ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Division",
+      explanation: `${fmt(a)} ÷ ${b} = ${fmt(q)} because ${b} × ${fmt(q)} = ${fmt(a)}. Divide from the most significant digit, then verify by multiplying the quotient back.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Zetamac-style division",
+    },
+  };
+}
+
+/* -----------------------------  Percentage  ------------------------------ */
+
+export function buildPercentNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const p = rng.pick([5, 10, 12, 15, 20, 25, 30, 40, 75]);
+  const base = rng.int(4, 40) * 10;
+  const value = (p / 100) * base;
+  const dp = decimalsNeeded(value, 2);
+  const answer = Number(value.toFixed(dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    base * p,
+    `You used ${p} as a whole number, but a percent is ${p}/100 — what do you divide by?`,
+    "percent_as_whole",
+  );
+  push(
+    value * 10,
+    `That's ten times too big — recheck where the decimal sits when you take 10% first.`,
+    "place_value_slip",
+  );
+  push(
+    round(base / p, 2),
+    `You divided ${fmt(base)} by ${p} — but "percent OF" means multiply, not divide.`,
+    "operation_confused",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-pct-num-${p}-${base}`,
+      prompt: `What is ${p}% of ${fmt(base)}? (Enter the number.)`,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Percentages",
+      explanation: `${p}% of ${fmt(base)} = ${p}/100 × ${fmt(base)} = ${fmt(value)}. Convert the percent to a decimal (shift two places left), then multiply by the base.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Trading-interview percentage drill",
+    },
+  };
+}
+
+/* -------------------------  Fraction → decimal  -------------------------- */
+
+export function buildFractionToDecimalNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const den = rng.pick([4, 5, 8, 10, 16, 20, 25]);
+  const num = rng.int(1, den - 1);
+  const value = num / den;
+  const dp = Math.max(2, decimalsNeeded(value, 4));
+  const answer = Number(value.toFixed(dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    den / num,
+    `You divided ${den} by ${num} — which number is the numerator and which the denominator?`,
+    "inverted_fraction",
+  );
+  push(
+    num / (den + 1),
+    `You used ${den + 1} on the bottom — the denominator is ${den}.`,
+    "wrong_denominator",
+  );
+  push(
+    value * 10,
+    `The decimal point is one place off — that answer is ten times too big.`,
+    "place_value_slip",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-frac-num-${num}-${den}`,
+      prompt: `Express ${fracStr(num, den)} as a decimal. (Enter a decimal.)`,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Fraction↔decimal",
+      explanation: `${fracStr(num, den)} = ${num} ÷ ${den} = ${answer.toFixed(dp)}. Divide the numerator by the denominator to convert the fraction to a decimal.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Odds/decimal conversion drill",
+    },
+  };
+}
+
+/* ------------------------  Odds → probability  --------------------------- */
+
+export function buildOddsToProbNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const a = rng.int(1, 7);
+  const b = rng.int(1, 7);
+  const value = b / (a + b); // odds a:b AGAINST → P(event) = b/(a+b)
+  const dp = Math.max(2, decimalsNeeded(value, 4));
+  const answer = Number(value.toFixed(dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    a / (a + b),
+    `That's the chance the event does NOT happen. Odds ${a}:${b} AGAINST put the ${b} favourable outcomes on top — which count is favourable?`,
+    "odds_direction_flipped",
+  );
+  push(
+    a < b ? a / b : b / a,
+    `That's the odds ratio itself, not a probability. A probability is favourable ÷ TOTAL — what is the total?`,
+    "odds_ratio_as_prob",
+  );
+  push(
+    b / (a + b + 1),
+    `You added one too many to the total — the denominator is ${a} + ${b}.`,
+    "wrong_denominator",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-odds-num-${a}-${b}`,
+      prompt: `If the odds against an event are ${a} : ${b}, what is the probability the event happens? (Enter a decimal.)`,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Odds↔probability",
+      explanation: `Odds ${a}:${b} against means ${b} favourable to ${a} unfavourable, so P = ${b}/(${a}+${b}) = ${answer.toFixed(dp)}.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Odds↔probability conversion (market-making prerequisite)",
+    },
+  };
+}
+
+/* --------------------  Named numeric generators (adapters)  -------------- */
+
+export const genAdditionNumeric = (rng: Rng): NumericQuestion =>
+  buildAdditionNumericInstance(rng, "easy").numeric;
+export const genSubtractionNumeric = (rng: Rng): NumericQuestion =>
+  buildSubtractionNumericInstance(rng, "easy").numeric;
+export const genMultiply2x1Numeric = (rng: Rng): NumericQuestion =>
+  buildMultiply2x1NumericInstance(rng, "easy").numeric;
+export const genMultiply2x2Numeric = (rng: Rng): NumericQuestion =>
+  buildMultiply2x2NumericInstance(rng, "medium").numeric;
+export const genDivisionNumeric = (rng: Rng): NumericQuestion =>
+  buildDivisionNumericInstance(rng, "medium").numeric;
+export const genPercentNumeric = (rng: Rng): NumericQuestion =>
+  buildPercentNumericInstance(rng, "easy").numeric;
+export const genFractionToDecimalNumeric = (rng: Rng): NumericQuestion =>
+  buildFractionToDecimalNumericInstance(rng, "medium").numeric;
+export const genOddsToProbNumeric = (rng: Rng): NumericQuestion =>
+  buildOddsToProbNumericInstance(rng, "hard").numeric;
+
+type NumericQuestionAdapter = (rng: Rng) => NumericQuestion;
+
+/** Numeric analog of the MM_* pools (free-response, family-tagged in levels). */
+export const MM_EASY_NUMERIC: NumericQuestionAdapter[] = [
+  genAdditionNumeric,
+  genSubtractionNumeric,
+  genMultiply2x1Numeric,
+  genPercentNumeric,
+];
+
+export const MM_MEDIUM_NUMERIC: NumericQuestionAdapter[] = [
+  genMultiply2x1Numeric,
+  genMultiply2x2Numeric,
+  genDivisionNumeric,
+  genPercentNumeric,
+  genFractionToDecimalNumeric,
+];
+
+export const MM_HARD_NUMERIC: NumericQuestionAdapter[] = [
+  genMultiply2x2Numeric,
+  genDivisionNumeric,
+  genFractionToDecimalNumeric,
+  genOddsToProbNumeric,
+];
+
+export const MM_CONVERSIONS_NUMERIC: NumericQuestionAdapter[] = [
+  genPercentNumeric,
+  genFractionToDecimalNumeric,
+  genOddsToProbNumeric,
+];
+
+/** All numeric generators, keyed by name (for the round-trip coverage test). */
+export const ALL_MM_NUMERIC_GENERATORS = {
+  genAdditionNumeric,
+  genSubtractionNumeric,
+  genMultiply2x1Numeric,
+  genMultiply2x2Numeric,
+  genDivisionNumeric,
+  genPercentNumeric,
+  genFractionToDecimalNumeric,
+  genOddsToProbNumeric,
 };

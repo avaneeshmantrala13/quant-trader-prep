@@ -126,6 +126,11 @@ export function TableOfContentsPage() {
 
   const ThemeToc = themeDef.TableOfContents ?? BaseTableOfContents;
 
+  // The standing "New · Interactive Simulations & Visualizations" cross-link
+  // banner was removed: it duplicated what the onboarding tour already covers
+  // (it has a dedicated "simulations" coach-mark) and the Simulations tab in the
+  // main nav, so it read as redundant/overwhelming. The tab remains one click
+  // away in the navigation menu.
   return (
     <ThemeToc
       intro={TOC_INTRO}

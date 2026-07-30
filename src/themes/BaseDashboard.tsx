@@ -75,6 +75,19 @@ export function BaseDashboard({
             </p>
           )}
 
+          {/* Link to the ordered readiness pathway (Roadmap). */}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border border-subtle bg-surface-muted px-3 py-2">
+            <span className="text-sm text-secondary">
+              See the full skill pathway and how ready you are for interviews.
+            </span>
+            <Link
+              to="/roadmap"
+              className="btn-secondary !min-h-0 shrink-0 !px-3 !py-1.5 text-sm"
+            >
+              Open the Roadmap ▸
+            </Link>
+          </div>
+
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <div className="panel p-4">
               <div className="label text-secondary">Recommended next focus</div>

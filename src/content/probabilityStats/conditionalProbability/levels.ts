@@ -1,26 +1,26 @@
 import type { Level } from "@/types/content";
 import {
   conditionalProbabilityFlashcards,
-  genAllOn,
-  genBayesTest,
-  genBertrand,
-  genBoth,
-  genCheerLoser,
+  genAllOnNumeric,
+  genBayesTestNumeric,
+  genBertrandNumeric,
+  genBothNumeric,
+  genCheerLoserNumeric,
   genFirstStep,
   genFirstToss,
-  genGivenSum,
-  genInversion,
+  genGivenSumNumeric,
+  genInversionNumeric,
   genLotpLine,
   genRRFixed,
   genRRRespun,
   genRRTwoConsecutive,
   genRRTwoRandom,
   genSumRace,
-  genTable,
+  genTableNumeric,
   genTie,
   genTransfer,
   genUniform,
-  genWhichDie,
+  genWhichDieNumeric,
   mixNumeric,
   mixQuiz,
 } from "./generators";
@@ -39,7 +39,7 @@ import { conditionalGeneralFlashcards } from "./generalFlashcards";
  * teaches them:
  *
  *   • `quiz`      — where NAMING the misconception is the lesson: reduced sample
- *                   space (the Pine reversed-conditional & ordered-vs-unordered
+ *                   space (the reversed-conditional & ordered-vs-unordered
  *                   traps), Bayes (base-rate neglect, likelihood-as-posterior),
  *                   and the Russian-Roulette spin/no-spin decisions.
  *   • `numeric`   — where a clean probability is the point: law of total
@@ -62,21 +62,43 @@ export const conditionalProbabilityLevels: Level[] = [
     title: "Reduced Sample Space",
     subtitle: "Discard, then re-count the survivors",
     blurb:
-      "Master P(A|B) = #(A∩B)/#B: the Pine reversed-conditional trap, ordered-vs-unordered dice, faces-not-objects, and at-least-one conditioning.",
+      "Master P(A|B) = #(A∩B)/#B: the reversed-conditional trap, ordered-vs-unordered dice, faces-not-objects, and at-least-one conditioning.",
     section: SECTION,
     difficulty: "easy",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.8,
     questionCount: 6,
-    generator: mixQuiz([genTable, genBoth, genGivenSum, genBertrand, genAllOn]),
+    numericGenerator: mixNumeric([
+      genTableNumeric,
+      genBothNumeric,
+      genGivenSumNumeric,
+      genBertrandNumeric,
+      genAllOnNumeric,
+    ]),
     lesson: {
       paragraphs: [
-        "When outcomes are equally likely and you're told a conditioning fact, throw away every outcome inconsistent with it and take the target's share of what remains: P(A|B) = #(A∩B)/#B. The single most common slip is answering the REVERSED conditional — the 'Pine Property' trap — computing P(B|A) instead of the P(A|B) that was asked.",
+        "When outcomes are equally likely and you're told a conditioning fact, throw away every outcome inconsistent with it and take the target's share of what remains: P(A|B) = #(A∩B)/#B. The single most common slip is answering the REVERSED conditional — computing P(B|A) instead of the P(A|B) that was asked.",
         "Two counting habits keep you honest. Count ORDERED outcomes for distinct dice ((2,5) and (5,2) are different rolls), and count FACES not OBJECTS for the disc/box problems — an all-green disc shows green twice as often, so seeing green is evidence for it. 'At least one' conditioning (both sixes given a six; all bulbs on given one on) pools overlapping cases, giving 1/(2N−1) and 1/(2ⁿ−1), never the naive 1/N.",
       ],
       keyIdea: "P(A|B) = #(A∩B)/#B — count ordered outcomes and faces, and never flip the conditional.",
       whyInterviewers:
         "Reversing the conditional and miscounting the sample space are the two fastest ways to blow an 'easy' conditional-probability question on a desk.",
+      deepDive: {
+        whyItWorks:
+          "When every outcome is equally likely, conditioning simply restricts the universe to the outcomes consistent with what you were told; the probability is then the target's share of that smaller, restricted set.",
+        approach: [
+          "Enumerate every equally-likely outcome of the full experiment.",
+          "Discard the outcomes that contradict the given condition, keeping only the survivors.",
+          "Among the survivors, count those that also satisfy the target event.",
+          "Divide favourable survivors by total survivors.",
+          "Count the same units in numerator and denominator (ordered outcomes, or faces rather than objects).",
+        ],
+        pitfalls: [
+          "Answering the reversed conditional — computing P(B|A) when P(A|B) was asked.",
+          "Counting unordered outcomes when the outcomes are actually distinguishable, or vice versa.",
+          "Treating 'at least one' as if it pinned down a specific item, which double-counts the overlapping cases.",
+        ],
+      },
     },
   },
   {
@@ -87,10 +109,15 @@ export const conditionalProbabilityLevels: Level[] = [
       "Flip conditionals with Bayes: dodge base-rate neglect, don't report the likelihood as the posterior, and handle cheer-for-a-loser evidence.",
     section: SECTION,
     difficulty: "medium",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.75,
     questionCount: 6,
-    generator: mixQuiz([genBayesTest, genWhichDie, genCheerLoser, genInversion]),
+    numericGenerator: mixNumeric([
+      genBayesTestNumeric,
+      genWhichDieNumeric,
+      genCheerLoserNumeric,
+      genInversionNumeric,
+    ]),
     lesson: {
       paragraphs: [
         "Bayes' theorem flips a conditional: P(H|E) = P(E|H)P(H) / Σ P(E|Hⱼ)P(Hⱼ) — prior times likelihood, then normalize. The famous failure is BASE-RATE NEGLECT: with a rare condition, a 99%-sensitive test can still make most positives false, so P(disease | positive) ≪ the sensitivity. Reporting the likelihood P(E|H) as if it were the posterior P(H|E) is the same reversed-conditional mistake in disguise.",
@@ -99,6 +126,21 @@ export const conditionalProbabilityLevels: Level[] = [
       keyIdea: "Posterior ∝ prior × likelihood; normalize, and never mistake P(E|H) for P(H|E).",
       whyInterviewers:
         "Bayesian updating under a base rate is the canonical 'do you actually understand conditioning?' interview filter.",
+      deepDive: {
+        whyItWorks:
+          "Bayes' theorem reweights each hypothesis' prior by how likely it made the observed evidence, then renormalizes so the updated beliefs sum to one. It is the disciplined way to flip a conditional you know into the one you want.",
+        approach: [
+          "List the competing hypotheses and their prior probabilities.",
+          "For each hypothesis, find the likelihood of the observed evidence given that hypothesis.",
+          "Multiply prior × likelihood to get each hypothesis' joint weight.",
+          "Sum the joint weights, then divide the target's joint by that total to normalize.",
+        ],
+        pitfalls: [
+          "Base-rate neglect — trusting the test or likelihood while ignoring how rare the hypothesis is.",
+          "Reporting the likelihood P(E|H) as if it were the posterior P(H|E).",
+          "Forgetting that evidence which argues against the favourite raises the weaker hypotheses' posteriors.",
+        ],
+      },
     },
   },
   {
@@ -121,6 +163,22 @@ export const conditionalProbabilityLevels: Level[] = [
       keyIdea: "P(A) = Σ P(A|Bᵢ)P(Bᵢ); a conditioned uniform rescales to its survivor interval (not memoryless).",
       whyInterviewers:
         "Case-splitting and correct continuous conditioning show you can set up a problem before touching arithmetic.",
+      deepDive: {
+        whyItWorks:
+          "Partition the sample space into exhaustive, mutually exclusive scenarios; the overall probability is the average of the per-scenario conditional probabilities, each weighted by that scenario's own probability. Conditioning a continuous variable instead restricts and rescales it to the range that survives.",
+        approach: [
+          "Split the problem into mutually exclusive, exhaustive scenarios.",
+          "Find the probability (weight) of each scenario.",
+          "Find the conditional probability of the target within each scenario.",
+          "Combine them as a weighted sum of the conditionals.",
+          "For a conditioned continuous variable, restrict to the surviving interval and rescale to that new range.",
+        ],
+        pitfalls: [
+          "Weighting scenarios equally instead of by their true probabilities.",
+          "Skipping an intermediate conditioning step (such as which item moved) before the final draw.",
+          "Assuming a uniform is memoryless — using the original range instead of the shrunken surviving range.",
+        ],
+      },
     },
   },
   {
@@ -143,6 +201,21 @@ export const conditionalProbabilityLevels: Level[] = [
       keyIdea: "Race winner = a/(a+b) over ordered deciding trials; recurse with a first-step equation.",
       whyInterviewers:
         "Race and recursion set-ups (first-to-fill, first-to-fault) are staple 'who wins?' desk brainteasers.",
+      deepDive: {
+        whyItWorks:
+          "In a race between two events, trials where neither happens carry no information, so the winner's chance is its share of the deciding trials. When a game returns to the same state, express the answer in terms of itself after one step and solve the resulting equation.",
+        approach: [
+          "Identify the deciding outcomes that actually end the race and ignore the rest.",
+          "Take the target event's share of those deciding outcomes.",
+          "Count at the right granularity — ordered outcomes when order matters.",
+          "For a recursive game, write the probability in terms of itself after one step and solve.",
+        ],
+        pitfalls: [
+          "Including the no-decision trials in the ratio instead of restricting to deciding ones.",
+          "Using unordered counts where the real sample space is ordered.",
+          "Forgetting that conditioning on a win shortens the expected wait and shifts the probabilities.",
+        ],
+      },
     },
   },
   {
@@ -165,6 +238,21 @@ export const conditionalProbabilityLevels: Level[] = [
       keyIdea: "Fixed cylinder ⇒ dependent pulls; re-spun ⇒ memoryless; two-bullet spin decisions compare conditional risks.",
       whyInterviewers:
         "The Russian-Roulette series tests dependent-vs-independent reasoning and conditioning on survival — a favourite escalating interview arc.",
+      deepDive: {
+        whyItWorks:
+          "Whether the cylinder is re-spun decides whether successive pulls are dependent (a fixed layout the survivor has partly ruled out) or independent and memoryless. Spin-or-not questions are decisions: compare the conditional risk of each choice given you have survived so far.",
+        approach: [
+          "Decide whether the pulls are dependent (fixed) or independent (re-spun before each pull).",
+          "For a fixed layout, reason over the positions the survivor's outcomes have already ruled out.",
+          "For re-spun pulls, use a first-step recursion since every pull resets the state.",
+          "For a spin-or-not decision, compute the conditional risk both ways and choose the smaller.",
+        ],
+        pitfalls: [
+          "Treating a fixed cylinder as memoryless, or a re-spun one as dependent.",
+          "Forgetting to condition on having survived so far when updating the risk.",
+          "Assuming spinning is always safer without comparing the two conditional probabilities.",
+        ],
+      },
     },
   },
   {
@@ -186,6 +274,21 @@ export const conditionalProbabilityLevels: Level[] = [
       keyIdea: "How information ARISES decides the answer; some 'answers' are a contrast (1/3 vs 1/2) or a decision (switch, 2/3).",
       whyInterviewers:
         "The classics probe whether you truly track the conditioning event rather than pattern-matching to a memorized number.",
+      deepDive: {
+        whyItWorks:
+          "The answer depends on HOW the information arose, not just the bare fact — the exact conditioning event determines which outcomes you restrict to. Different generating processes for the 'same' fact can restrict to different sample spaces and yield different probabilities.",
+        approach: [
+          "Pin down exactly what event you are conditioning on, including how the information was generated.",
+          "Enumerate the equally-likely outcomes consistent with that generating process.",
+          "Account for any constraint on an informant's action (such as a host who must reveal a loser).",
+          "Take the target's share of the restricted outcomes — and notice when the answer is a contrast or a decision, not a single number.",
+        ],
+        pitfalls: [
+          "Assuming 'at least one is a boy' and 'I saw a specific boy' give the same probability.",
+          "Ignoring that a constrained reveal leaks information (the naive 'two left, so one-half').",
+          "Conditioning on objects when you should condition on faces or ways.",
+        ],
+      },
     },
   },
 ];

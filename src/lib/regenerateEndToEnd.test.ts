@@ -2,8 +2,32 @@ import { describe, expect, it } from "vitest";
 import type { Level, Question } from "@/types/content";
 import { materializeLevel } from "@/content/materialize";
 import { generateFreshQuestion } from "@/lib/regenerate";
-import { probabilityTrack } from "@/content/probability/levels";
+import { PROB_GENERATORS } from "@/content/probability/generators";
+import { mixQuestionGenerators } from "@/content/mixFamilies";
 import { conditionalProbabilityLevels } from "@/content/probabilityStats/conditionalProbability/levels";
+
+/**
+ * A synthetic multi-family QUIZ mix level built from the (still quiz-only)
+ * PROB_GENERATORS. Core-probability levels pr-1..3 are now free-response numeric
+ * (Phase-2), so this decouples the button-#1 family-lock guard from content mode
+ * while exercising the exact same quiz generators (genUnion / genIntersectionIndep
+ * / genCombinations) the leak regression was about.
+ */
+const probMixQuizLevel: Level = {
+  id: "prob-mix-quiz",
+  title: "Probability mix (quiz)",
+  subtitle: "",
+  blurb: "probability mix quiz fixture",
+  difficulty: "easy",
+  masteryThreshold: 0.8,
+  questionCount: 5,
+  lesson: { paragraphs: [] },
+  generator: mixQuestionGenerators([
+    PROB_GENERATORS.genUnion,
+    PROB_GENERATORS.genIntersectionIndep,
+    PROB_GENERATORS.genCombinations,
+  ]),
+};
 
 /**
  * END-TO-END regression guard for the button #1 family leak.
@@ -51,7 +75,7 @@ function pressButton2(level: Level, current: Question, seed: number): Question {
 }
 
 describe("END-TO-END: button #1 is strictly family-locked (probability mix level)", () => {
-  const level = probabilityTrack.levels[0]; // mix([genUnion, genIntersectionIndep, genCombinations])
+  const level = probMixQuizLevel; // mix([genUnion, genIntersectionIndep, genCombinations])
 
   it("a rendered Combinations item regenerates ONLY to Combinations (never a sibling)", () => {
     const combos = renderedItem(level, (q) => q.family === "genCombinations");

@@ -316,7 +316,7 @@ export function CasinoTableOfContents({
         <Gleam />
         <CornerFiligree />
         <div className="relative">
-          <span className="label text-accent">The Card Room · Full Program</span>
+          <span className="label text-accent">The Card Room</span>
           <h1 className="mt-1 font-display text-3xl font-black tracking-wide text-primary sm:text-4xl">
             Table of Contents
           </h1>

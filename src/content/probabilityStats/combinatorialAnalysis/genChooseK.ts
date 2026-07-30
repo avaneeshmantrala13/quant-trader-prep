@@ -300,7 +300,8 @@ const AVOID_SPECIAL_THEME = [
  */
 export function genAvoidSpecialSum(rng: Rng): NumericQuestion {
   const th = rng.pick(AVOID_SPECIAL_THEME);
-  const n = rng.pick([12, 14, 16, 18, 20]);
+  // n ≠ 16: choosing 4 of 16 with one even is the source's 3/4 tuple (Sum of Primes).
+  const n = rng.pick([12, 14, 18, 20]);
 
   const value = avoidOneSpecialProb(n, 4);
   const dp = numDp(value);
@@ -372,7 +373,9 @@ export function genPairSumThreshold(rng: Rng): NumericQuestion {
     threshold = rng.int(m, 2 * m - 3);
     value = pairSumAtLeastProb(m, threshold);
     const v = value.valueOf();
-    if (v > 0 && v <= 0.5) break;
+    // Avoid the source tuple (tickets 1–10, sum ≥ 12 → 4/9).
+    const isSourceTuple = m === 10 && threshold === 12;
+    if (v > 0 && v <= 0.5 && !isSourceTuple) break;
   }
   const totalPairs = choose(m, 2);
   const favCount = Math.round(value.mul(totalPairs).valueOf());
@@ -438,7 +441,8 @@ const ASSIGNMENT_THEME = [
  */
 export function genOneAssignment(rng: Rng): NumericQuestion {
   const th = rng.pick(ASSIGNMENT_THEME);
-  const n = rng.int(5, 9);
+  // n ≠ 7: 1/C(7,3) = 1/C(7,4) = 1/35 is the source tuple (Airplane Food).
+  const n = rng.pick([5, 6, 8, 9]);
   const k = rng.int(2, n - 1);
 
   const value = oneCorrectAssignmentProb(n, k);
@@ -504,7 +508,8 @@ const EACH_SPECIAL_THEME = [
 export function genEachPlayerSpecial(rng: Rng): NumericQuestion {
   const th = rng.pick(EACH_SPECIAL_THEME);
   const players = rng.pick([3, 4]);
-  const handSize = rng.int(5, 13);
+  // handSize ≤ 12: (4 players, 13 cards) is the source's 52-card "Aces for All" tuple.
+  const handSize = rng.int(5, 12);
   const deck = players * handSize;
 
   const value = eachPlayerOneSpecialProb(players, handSize);

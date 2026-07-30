@@ -66,8 +66,13 @@ const DRAW_PATTERNS: number[][] = [
  */
 export function genOrderedDraw(rng: Rng): NumericQuestion {
   const th = rng.pick(URN_THEMES);
-  const a = rng.int(5, 10);
-  const b = rng.int(5, 10);
+  let a = rng.int(5, 10);
+  let b = rng.int(5, 10);
+  // {6,9} with a 2-2 pattern reproduces the source's 0.0659 (Button Tin #1).
+  if ((a === 6 && b === 9) || (a === 9 && b === 6)) {
+    a = rng.int(5, 10);
+    b = rng.pick([5, 7, 8, 10]);
+  }
   const sequence = rng.pick(DRAW_PATTERNS);
   const N0 = a + b;
   const L = sequence.length;
@@ -142,8 +147,9 @@ const DEAL_THEMES = [
   { deck: "a shuffled relay deck", target: "relay", stop: "halt" },
 ];
 
+// [4,4,4] omitted: with stop 4 or 1 it reproduces the source's Specific Card #2/#3.
 const DEAL_GROUPS: number[][] = [
-  [4, 4, 4],
+  [5, 5, 5],
   [4, 4],
   [3, 3, 3],
 ];
@@ -232,7 +238,8 @@ const RING_THEMES = [
  */
 export function genCircularAscending(rng: Rng): NumericQuestion {
   const th = rng.pick(RING_THEMES);
-  const n = rng.pick([4, 5, 6, 7]);
+  // n ≠ 5: 5 seats ascending both ways is the source's 1/12 tuple (Table of Ages).
+  const n = rng.pick([4, 6, 7]);
 
   const value = circularAscendingProb(n);
   const dp = numDp(value);
@@ -297,7 +304,9 @@ const GAP_THEMES = [
 export function genGapMethod(rng: Rng): NumericQuestion {
   const th = rng.pick(GAP_THEMES);
   const anchors = rng.int(10, 16);
-  const fillers = rng.int(3, anchors - 3);
+  let fillers = rng.int(3, anchors - 3);
+  // Avoid the source tuple (15 gaps, 9 fillers → 1/7, Round Table Jesters).
+  if (anchors === 15 && fillers === 9) fillers = rng.pick([7, 8, 10]);
 
   const value = keepBothNeighborsProb(anchors, fillers);
   const dp = numDp(value);
@@ -364,9 +373,13 @@ const CHOICE_THEMES = [
 export function genIndependentChoices(rng: Rng): NumericQuestion {
   const th = rng.pick(CHOICE_THEMES);
   const options = rng.pick([2, 3, 4]);
-  // avoid n === options and the (2,4)/(4,2) coincidence where n^options == options^n
+  // avoid n === options and the (2,4)/(4,2) coincidence where n^options == options^n,
+  // and the source tuple (3 states, 5 items → 3^5 = 243, Starred Watchlist).
   const nChoices = [4, 5, 6, 7].filter(
-    (x) => x !== options && Math.pow(x, options) !== Math.pow(options, x),
+    (x) =>
+      x !== options &&
+      Math.pow(x, options) !== Math.pow(options, x) &&
+      !(options === 3 && x === 5),
   );
   const n = rng.pick(nChoices);
 
@@ -428,9 +441,11 @@ const BIT_THEMES = [
  */
 export function genUnionFixedBits(rng: Rng): NumericQuestion {
   const th = rng.pick(BIT_THEMES);
-  const L = rng.int(8, 12);
+  let L = rng.int(8, 12);
   const p = rng.pick([2, 3]);
   const s = rng.pick([2, 3]);
+  // Avoid the source tuple (10 bits, 2-prefix OR 2-suffix → 448, Binary Bookends).
+  if (L === 10 && p === 2 && s === 2) L = rng.pick([9, 11, 12]);
 
   const value = unionFixedBitsCount(L, p, s);
   const answer = Number(value);

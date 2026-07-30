@@ -2,23 +2,36 @@ import { describe, expect, it } from "vitest";
 import {
   DIAGNOSTIC_BLUEPRINT,
   diagnosticItemCount,
+  diagnosticMaxItemCount,
 } from "./blueprint";
 import { drawSlotItems } from "./items";
 import { getLevel } from "@/content";
 import { topicKeyForLevel, topicKeyOf } from "@/lib/mastery/topicKey";
 
 describe("DIAGNOSTIC_BLUEPRINT", () => {
-  it("covers the core topics (6–10 slots)", () => {
-    expect(DIAGNOSTIC_BLUEPRINT.length).toBeGreaterThanOrEqual(6);
-    expect(DIAGNOSTIC_BLUEPRINT.length).toBeLessThanOrEqual(10);
+  it("comprehensively covers every MCQ-able skill family (15 slots)", () => {
+    expect(DIAGNOSTIC_BLUEPRINT.length).toBe(15);
   });
 
-  it("totals ~16–24 nominal items (~2 per topic incl. the gated Markov probe)", () => {
-    const total = diagnosticItemCount();
-    expect(total).toBeGreaterThanOrEqual(16);
-    expect(total).toBeLessThanOrEqual(24);
+  it("stays comprehensive but under the 31-item cap", () => {
+    // Nominal (base + every gated slot, no tiebreaks).
+    expect(diagnosticItemCount()).toBe(23);
+    // Provable worst case (all gates open + every 2-item base slot splits).
+    expect(diagnosticMaxItemCount()).toBeLessThanOrEqual(30);
     for (const slot of DIAGNOSTIC_BLUEPRINT) {
-      expect(slot.itemsPerTopic).toBe(2);
+      expect([1, 2]).toContain(slot.itemsPerTopic);
+    }
+  });
+
+  it("splits into an always-on base pass and a prereq-gated depth pass", () => {
+    const base = DIAGNOSTIC_BLUEPRINT.filter((s) => !s.gatedOnTopicKey);
+    const gated = DIAGNOSTIC_BLUEPRINT.filter((s) => s.gatedOnTopicKey);
+    expect(base.length).toBe(8);
+    expect(gated.length).toBe(7);
+    // Every gate points at a topic that is itself a slot (a real prerequisite).
+    const topics = new Set(DIAGNOSTIC_BLUEPRINT.map((s) => s.topicKey));
+    for (const g of gated) {
+      expect(topics.has(g.gatedOnTopicKey!)).toBe(true);
     }
   });
 
@@ -55,15 +68,27 @@ describe("DIAGNOSTIC_BLUEPRINT", () => {
     expect(caSlot!.gatedOnTopicKey).toBeUndefined();
   });
 
-  it("maps the (deduped) Math-Questions slot to 'Number Theory & Counting'", () => {
+  it("probes all three Applied-Math sections (rates, number theory, geometry)", () => {
     const mq = DIAGNOSTIC_BLUEPRINT.filter((s) => s.trackId === "math-questions");
-    // The two former MQ slots (Counting + Number Theory) collapse into ONE.
-    expect(mq).toHaveLength(1);
-    expect(mq[0].topicKey).toBe(
-      topicKeyOf("math-questions", "Number Theory & Counting"),
+    expect(mq).toHaveLength(3);
+    const keys = new Set(mq.map((s) => s.topicKey));
+    expect(keys.has(topicKeyOf("math-questions", "Rates, Algebra & Word Problems"))).toBe(true);
+    expect(keys.has(topicKeyOf("math-questions", "Number Theory & Counting"))).toBe(true);
+    expect(keys.has(topicKeyOf("math-questions", "Geometry & Derivations"))).toBe(true);
+  });
+
+  it("aligns each gated probe with a real skill-graph prerequisite edge", () => {
+    const gate = (level: string) =>
+      DIAGNOSTIC_BLUEPRINT.find((s) => s.levelId === level)?.gatedOnTopicKey;
+    expect(gate("geo-1")).toBe(topicKeyOf("probability", "Core Probability"));
+    expect(gate("os-1")).toBe(topicKeyOf("probability", "Expected Value"));
+    expect(gate("vc-1")).toBe(topicKeyOf("probability", "Expected Value"));
+    expect(gate("bs-1")).toBe(topicKeyOf("probability", "Expected Value"));
+    expect(gate("mc-1")).toBe(topicKeyOf("probability", "Conditional Probability"));
+    expect(gate("gt-1")).toBe(topicKeyOf("interview-games"));
+    expect(gate("mq-5")).toBe(
+      topicKeyOf("math-questions", "Rates, Algebra & Word Problems"),
     );
-    const found = getLevel(mq[0].trackId, mq[0].levelId);
-    expect(found!.level.section).toBe("Number Theory & Counting");
   });
 
   it("every source level is quiz-mode OR numeric-mode (both surfaced as MCQ)", () => {

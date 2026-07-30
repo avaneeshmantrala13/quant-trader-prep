@@ -10,7 +10,7 @@ import {
   genPairSumThreshold,
 } from "./genChooseK";
 import { genHyperAtLeast, genHyperExactly, genHyperNone } from "./genHyper";
-import { genPokerHand } from "./genPoker";
+import { genPokerHandNumeric } from "./genPoker";
 import {
   genBinomAtMost,
   genLatticeMeeting,
@@ -20,10 +20,10 @@ import {
   genStepCount,
 } from "./genBinomial";
 import {
-  genPermVsComb,
-  genReplacementTrap,
-  genStarsBarsCap,
-  genTiesOrder,
+  genPermVsCombNumeric,
+  genReplacementTrapNumeric,
+  genStarsBarsCapNumeric,
+  genTiesOrderNumeric,
 } from "./genTraps";
 import {
   genAlternatingSteps,
@@ -134,6 +134,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "P = favorable C(n,k) ÷ total C(N,k); never mix ordered (nᵏ, P(n,k)) with unordered counts.",
       whyInterviewers:
         "Choose-k ratios are the first screen: desks check you set up the right sample space and don't confuse permutations with combinations.",
+      deepDive: {
+        whyItWorks:
+          "When every unordered selection of k items is equally likely, a probability is just the count of favorable selections divided by the total C(N,k). Keeping numerator and denominator in the same world — unordered and without replacement — is what makes the ratio valid.",
+        approach: [
+          "Fix the total as the number of unordered selections C(N,k).",
+          "Count the favorable selections using the multiplication and addition principles.",
+          "Multiply independent color/group choices; add over mutually exclusive cases.",
+          "Divide the favorable count by the total, keeping both unordered.",
+        ],
+        pitfalls: [
+          "Mixing an ordered numerator (nᵏ or P(n,k)) with an unordered denominator.",
+          "Treating a without-replacement draw as independent with-replacement picks.",
+          "Adding overlapping cases without subtracting the double-counted selections.",
+          "Forgetting a required factor, such as one item from each color.",
+        ],
+      },
     },
   },
   {
@@ -156,6 +172,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "P(exactly j) = C(m,j)·C(N−m,k−j)/C(N,k); don't approximate with the binomial m/N.",
       whyInterviewers:
         "Hypergeometric-vs-binomial is a favorite discriminator: it checks whether you notice sampling is without replacement.",
+      deepDive: {
+        whyItWorks:
+          "Drawing without replacement changes the population's composition with every pick, so the number of special items you draw is hypergeometric: choose which specials and which ordinary items you get, over all equally likely draws — not a fixed-probability binomial.",
+        approach: [
+          "Fix the total as the number of equally likely draws C(N,k).",
+          "Choose j of the m special items: C(m,j).",
+          "Fill the remaining k−j picks from the N−m ordinary items: C(N−m,k−j).",
+          "Divide the product by C(N,k); for 'at least j', sum over the upper tail.",
+        ],
+        pitfalls: [
+          "Approximating with the binomial probability m/N as if the draws were independent.",
+          "Dropping the C(N−m,k−j) factor for the ordinary items.",
+          "Confusing 'exactly j' with 'at least j'.",
+          "Being off by one in the value of j.",
+        ],
+      },
     },
   },
   {
@@ -166,10 +198,10 @@ export const combinatorialAnalysisLevels: Level[] = [
       "Probabilities of five-card-draw hands (four of a kind, full house, two pair, …) by counting rank choices × suit combinations C(4,2)/C(4,3), as a percentage.",
     section: SECTION,
     difficulty: "easy",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.75,
     questionCount: 5,
-    generator: mixQuiz([genPokerHand]),
+    numericGenerator: mixNumeric([genPokerHandNumeric]),
     lesson: {
       paragraphs: [
         "Every poker-hand probability is a count over C(52,5) = 2,598,960. The art is counting the favorable hands as (rank choices) × (suit combinations). Four of a kind: pick the quad rank (13) and any 5th card (48) → 624. Full house: pick the triple rank (13) with C(4,3) = 4 suit combos, then the pair rank (12) with C(4,2) = 6 → 3744. Two pair: C(13,2) pair-ranks, each C(4,2) suits, plus a 44-card kicker.",
@@ -178,6 +210,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Favorable = (rank choices) × (suit combos C(4,r)); full-house ranks are ORDERED (13·12), not C(13,2).",
       whyInterviewers:
         "Poker-hand counting is the canonical test of clean multiplication-principle counting with suit combinations.",
+      deepDive: {
+        whyItWorks:
+          "Every five-card hand is one of the equally likely C(52,5) selections, so a hand-type probability is its count over that total. You build the count with the multiplication principle: choose the ranks that define the hand, then choose which suits fill them.",
+        approach: [
+          "Fix the total as the number of equally likely five-card hands, C(52,5).",
+          "Choose the rank or ranks that define the hand type.",
+          "For each rank, choose which suits appear with C(4,r).",
+          "Include any kicker cards, then divide the count by the total.",
+        ],
+        pitfalls: [
+          "Forgetting the C(4,2)/C(4,3) suit-combination factors.",
+          "Treating distinguishable ranks (triple vs pair) as an unordered pair, halving the count.",
+          "Omitting the kicker card or cards.",
+          "Confusing a suit with a color.",
+        ],
+      },
     },
   },
   {
@@ -206,6 +254,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "P(at least one) = 1 − P(none); for a threshold, n = ⌈ln(1−t)/ln(1−p)⌉ (round UP).",
       whyInterviewers:
         "The complement turns a scary 'at least one' into one clean multiplication — desks check you reach for it reflexively.",
+      deepDive: {
+        whyItWorks:
+          "'At least one' is the complement of 'none', and 'none' is usually a single clean product of avoid-the-event probabilities. Subtracting from 1 sidesteps the messy inclusion–exclusion over all the ways one-or-more could happen.",
+        approach: [
+          "Rephrase 'at least one' as one minus 'the event never happens'.",
+          "Compute the probability the event is avoided every time (a product).",
+          "Subtract that from 1.",
+          "For a threshold on n, solve 1 − (1−p)ⁿ ≥ t for n and round up.",
+        ],
+        pitfalls: [
+          "Reporting the 'none' probability instead of its complement.",
+          "Adding per-trial probabilities, which double-counts overlapping successes.",
+          "Subtracting only one of several symmetric 'all one kind' cases.",
+          "Rounding n down or to nearest instead of up for a guaranteed threshold.",
+        ],
+      },
     },
   },
   {
@@ -228,6 +292,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "P(X≥k) = 1 − P(X≤k−1); count digits by length case with the correct denominator.",
       whyInterviewers:
         "Tail and counting questions separate people who track the complement and sample space from those who mis-set p or the boundary.",
+      deepDive: {
+        whyItWorks:
+          "A binomial tail is a sum of exact terms, most cheaply found as one minus the opposite (smaller) tail. Digit-counting is exact case analysis over the true sample space, so getting the denominator and the per-position choices right is the whole game.",
+        approach: [
+          "For a tail, sum the smaller side and take the complement if needed.",
+          "Confirm the success probability p and whether the boundary k is included.",
+          "For digit problems, split into cases by length or by position.",
+          "Count the favorable strings over the correct denominator.",
+        ],
+        pitfalls: [
+          "Reporting the opposite tail by forgetting the complement.",
+          "Using the wrong success probability p (e.g. '5 or higher' is 2/6, not 1/6).",
+          "Being off by one on whether the boundary value is included.",
+          "Using the wrong sample-space size (e.g. 100 instead of the 90 two-digit numbers).",
+        ],
+      },
     },
   },
   {
@@ -250,6 +330,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Dice sums count ORDERED outcomes; parity = ½ by symmetry; ties break </> symmetry ((1−P(tie))/2).",
       whyInterviewers:
         "These are 'do you simplify or over-complicate' checks — the tempting messy sum is exactly the wrong path.",
+      deepDive: {
+        whyItWorks:
+          "Two dice give equally likely ORDERED outcomes, so counting must use the full sample space. Some answers are forced to ½ by a pairing symmetry — flipping the last die or coin toggles the parity with probability ½ regardless of the rest — and a comparison of two same-range dice sets aside the tie mass before splitting the rest by less-than/greater-than symmetry, while unequal ranges break that symmetry and must be handled by conditioning on the larger die.",
+        approach: [
+          "Count over the equally likely ordered outcomes (n² for two dice).",
+          "For parity, note the last die or coin flips the parity with probability ½.",
+          "For a same-range comparison, remove the tie probability and split the rest equally between the two strict orders.",
+          "For unequal ranges, condition on the larger die instead of assuming symmetry.",
+        ],
+        pitfalls: [
+          "Dividing by unordered pairs instead of the full ordered sample space.",
+          "Summing binomial terms for a parity question that is exactly ½ by symmetry.",
+          "Assuming P(second < first) is ½, ignoring the positive tie probability.",
+          "Assuming symmetry between two digits or dice that actually span different ranges.",
+        ],
+      },
     },
   },
   {
@@ -279,6 +375,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Binomial tails sum C(n,·)/2ⁿ; return-to-origin = C(2n,n)/4ⁿ; step-count = C(steps,(steps+d)/2).",
       whyInterviewers:
         "These separate people who count sequences with binomial coefficients from those who guess ratios or drop the tie boundary.",
+      deepDive: {
+        whyItWorks:
+          "Fair-coin and symmetric ±1-walk problems live on 2ⁿ equally likely sequences, so probabilities are binomial-coefficient counts over 2ⁿ. The same central-coefficient count reappears in return-to-origin and grid-meeting problems.",
+        approach: [
+          "Model the outcome as a Binomial(n, ½) count or a ±1 step sequence.",
+          "Count the favorable sequences with binomial coefficients over 2ⁿ.",
+          "Translate an endpoint or displacement into the required number of one-direction steps.",
+          "Handle the tie boundary explicitly; condition on settled steps when a step is already fixed.",
+        ],
+        pitfalls: [
+          "Including (or excluding) the exact tie when the wording says 'strictly more'.",
+          "Using the wrong denominator, e.g. 2^{n−1} instead of 2ⁿ.",
+          "Reporting a single term when a whole tail was asked.",
+          "Treating the meeting or return event as uniform instead of binomially weighted.",
+        ],
+      },
     },
   },
   {
@@ -289,10 +401,15 @@ export const combinatorialAnalysisLevels: Level[] = [
       "Name the miscount: permutations vs combinations, with vs without replacement (nᵏ vs C), non-decreasing vs strictly-increasing ties, and the stars-&-bars cap.",
     section: SECTION,
     difficulty: "medium",
-    mode: "quiz",
+    mode: "numeric",
     masteryThreshold: 0.75,
     questionCount: 5,
-    generator: mixQuiz([genPermVsComb, genReplacementTrap, genTiesOrder, genStarsBarsCap]),
+    numericGenerator: mixNumeric([
+      genPermVsCombNumeric,
+      genReplacementTrapNumeric,
+      genTiesOrderNumeric,
+      genStarsBarsCapNumeric,
+    ]),
     lesson: {
       paragraphs: [
         "Most counting errors are one of four named traps. Order: choosing an unordered committee is C(n,k), but arranging them in a row is P(n,k) = k!·C(n,k) — off by a factor of k!. Replacement: picking k of n with replacement and order is nᵏ; without replacement ordered is P(n,k); unordered without replacement is C(n,k); unordered WITH replacement is C(n+k−1,k). Pick the right one of the four.",
@@ -301,6 +418,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "C(n,k) vs P(n,k) vs nᵏ vs C(n+k−1,k); strictly-increasing ≠ non-decreasing; cap stars & bars by inclusion–exclusion.",
       whyInterviewers:
         "These four traps are exactly what interviewers probe to see if you count the right sample space.",
+      deepDive: {
+        whyItWorks:
+          "Almost every counting error comes from mislabeling the sample space along two axes — does order matter, and is replacement allowed — plus the tie question of whether repeats are possible. Naming the right rule fixes the count.",
+        approach: [
+          "Ask whether order matters and whether items may repeat.",
+          "Pick the matching rule: C(n,k), P(n,k), nᵏ, or C(n+k−1,k).",
+          "For 'increasing', decide whether ties (repeated values) are allowed.",
+          "For capped sums, start with stars & bars, then subtract over-the-cap cases by inclusion–exclusion.",
+        ],
+        pitfalls: [
+          "Counting an unordered selection as ordered (an extra factor of k!).",
+          "Choosing the wrong one of the four ordered/unordered × replacement rules.",
+          "Confusing strictly increasing with non-decreasing (ignoring ties).",
+          "Using uncapped stars & bars when each part has an upper bound.",
+        ],
+      },
     },
   },
   {
@@ -328,6 +461,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "n×n has 2n+2 lines; 3-D routes = multinomial (a+b+c)!/(a!b!c!); mod-2^t depends only on the last t digits.",
       whyInterviewers:
         "Lattice-path and line-counting problems test whether you pick the right structure (multinomial vs binomial) and exploit modular shortcuts.",
+      deepDive: {
+        whyItWorks:
+          "Grid and path counts come from arranging labeled moves and counting structure directly: a monotone 3-D route is a multiset permutation (the multinomial), a grid has a fixed number of full lines, and divisibility by a power of two depends only on the last few digits.",
+        approach: [
+          "Identify the moves or structures and how many of each there are.",
+          "For monotone routes, use the multinomial (a+b+c)!/(a!·b!·c!).",
+          "Count lines or placements with the multiplication principle, then divide by the total.",
+          "For modular questions, restrict attention to the digits that actually matter.",
+        ],
+        pitfalls: [
+          "Collapsing a 3-D route to a 2-D binomial, dropping the third axis.",
+          "Counting distinct-move orderings without dividing by the same-axis factorials.",
+          "Forgetting the two diagonals when counting a grid's full lines.",
+          "Considering all digits for divisibility instead of only the last t.",
+        ],
+      },
     },
   },
   {
@@ -358,6 +507,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Chain rule for sequences; 2/(n−1)! for circular order; kⁿ for independent choices; |A∪B| by inclusion–exclusion.",
       whyInterviewers:
         "This is the everyday counting toolkit; desks expect fluent chain-rule, circular, gap, and multiplication-principle counting.",
+      deepDive: {
+        whyItWorks:
+          "The multiplication principle chains independent choices into a product; the chain rule multiplies shrinking without-replacement fractions; circular arrangements divide out the rotations that coincide; and inclusion–exclusion corrects a union for double-counting.",
+        approach: [
+          "For an ordered draw, multiply fractions, decrementing counts after each pick.",
+          "For independent choices, raise the number of states to the number of items.",
+          "For circular order, divide by the rotations, leaving (n−1)! arrangements.",
+          "For a union of constraints, add the pieces and subtract the overlap.",
+        ],
+        pitfalls: [
+          "Holding draw probabilities fixed instead of decrementing (with vs without replacement).",
+          "Swapping base and exponent (nᵏ vs kⁿ) for independent choices.",
+          "Using n! for a circular arrangement instead of (n−1)!.",
+          "Forgetting to subtract the overlap in an inclusion–exclusion union.",
+        ],
+      },
     },
   },
   {
@@ -385,6 +550,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Count slots conditionally for brackets; anchor for the semicircle (n·½^{n−1}); ring no-collision = 2/2ⁿ.",
       whyInterviewers:
         "Bracket and circle problems test clean conditional counting and the anchoring trick.",
+      deepDive: {
+        whyItWorks:
+          "Placement problems fall to conditional slot counting — fix one competitor, then place the next among the slots that remain — and to anchoring: for a spatial event, condition on which point or agent is the reference and require the rest to fall a certain way.",
+        approach: [
+          "Fix one item, then count the favorable slots for the next among those remaining.",
+          "Multiply conditional slot fractions for a multi-condition bracket event.",
+          "For a common semicircle, anchor on each point and require the others in its half.",
+          "For a ring's no-collision, count the few globally consistent (all-same-direction) outcomes.",
+        ],
+        pitfalls: [
+          "Dividing by all slots instead of the slots left after fixing one competitor.",
+          "Keeping only one conditional factor (e.g. forgetting the #2 seed's placement).",
+          "Dropping the ×n anchor factor in the common-semicircle count.",
+          "Counting only one all-same-direction outcome instead of both.",
+        ],
+      },
     },
   },
   {
@@ -414,6 +595,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Linearity always holds; coupon = n·Hₙ; runs by DP (not a union bound); De Morgan + inclusion–exclusion for unions.",
       whyInterviewers:
         "This is the everyday EV/counting toolkit; desks expect fluent linearity, run-counting, and inclusion–exclusion.",
+      deepDive: {
+        whyItWorks:
+          "Linearity of expectation lets you add per-item indicator probabilities even when those items are dependent. Run and pattern events are counted by enumerating qualifying patterns or a DP over the trailing run length, and De Morgan plus inclusion–exclusion turn awkward unions into manageable pieces.",
+        approach: [
+          "Break an expected count into per-item indicators and sum their probabilities.",
+          "For 'collect all types', sum the geometric waits to get n·Hₙ.",
+          "For run or pattern events, enumerate qualifying patterns or DP over the trailing run.",
+          "For unions, apply De Morgan and inclusion–exclusion to handle the overlaps.",
+        ],
+        pitfalls: [
+          "Assuming linearity of expectation requires independence — it never does.",
+          "Using a union bound that double-counts overlapping run windows.",
+          "Confusing 'at least one' with 'consecutive' for pattern events.",
+          "Forgetting to subtract the overlap when computing a union.",
+        ],
+      },
     },
   },
   {
@@ -443,6 +640,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Capped dice sums = stars & bars − inclusion–exclusion; 'at least k' by complement; expectations by linearity of indicators.",
       whyInterviewers:
         "These multi-step setups reward candidates who compose stars & bars, inclusion–exclusion, complements, and linearity rather than plug in a formula.",
+      deepDive: {
+        whyItWorks:
+          "The hardest counting composes several tools over the equally likely ordered dice outcomes: capped sums start from stars & bars and subtract the over-the-cap cases by inclusion–exclusion, 'at least k' is cleanest through the complement, and expected counts fall out of linearity of indicators.",
+        approach: [
+          "Fix the total as the ordered dice outcomes (faces^dice).",
+          "For a capped sum, count compositions with stars & bars, then remove over-the-cap cases by inclusion–exclusion.",
+          "For 'at least k of a kind', count the complement (each value appears few times) and subtract.",
+          "For expected counts, sum the per-item indicator probabilities (linearity).",
+        ],
+        pitfalls: [
+          "Using uncapped stars & bars, counting impossible faces above the cap.",
+          "Reporting 'exactly k' and dropping the 'more than k' upper tail.",
+          "Treating every attainable total as equally likely.",
+          "Forgetting to multiply a per-item indicator probability by the number of items.",
+        ],
+      },
     },
   },
   {
@@ -464,6 +677,22 @@ export const combinatorialAnalysisLevels: Level[] = [
       keyIdea: "Report the full answer: both secret-sharing numbers, the complement count, the log-space tail, straights minus straight-flushes, and linearity of indicators.",
       whyInterviewers:
         "The specials reward candidates who recognise a two-part or multi-technique answer and lay out the full reasoning rather than forcing one number.",
+      deepDive: {
+        whyItWorks:
+          "These reason-first problems reward recognising the STRUCTURE of the answer: a threshold scheme needs a whole construction (two numbers), a value threshold is easiest by the complement, a huge binomial tail must be summed in log-space, and expected counts again yield to linearity of indicators.",
+        approach: [
+          "Identify whether the deliverable is a single number or a whole scheme.",
+          "For a value threshold, count the complement (what cannot reach it) and subtract.",
+          "For a large-n binomial tail, sum the terms in log-space to avoid overflow.",
+          "For a compound count like a straight, count broadly then subtract the special sub-cases.",
+        ],
+        pitfalls: [
+          "Answering with a single number when the problem needs two (locks and keys).",
+          "Computing astronomically large binomial coefficients directly instead of in log-space.",
+          "Forgetting to subtract the straight-flushes from the straight count.",
+          "Building a joint distribution instead of summing indicator expectations.",
+        ],
+      },
     },
   },
 ];

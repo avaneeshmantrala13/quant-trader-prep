@@ -59,8 +59,7 @@ function PageMasthead({ intro }: { intro: string }) {
         <span className="label hidden text-[9px] sm:inline">Price: Free</span>
       </div>
       <div className="px-4 py-6 text-center">
-        <span className="label text-accent">The Complete Curriculum</span>
-        <h1 className="mt-1 font-display text-4xl font-black leading-none tracking-tight text-primary sm:text-5xl">
+        <h1 className="font-display text-4xl font-black leading-none tracking-tight text-primary sm:text-5xl">
           Table of Contents
         </h1>
         <RuleWithFleuron />

@@ -32,8 +32,7 @@ export function BaseTableOfContents({
     <div className="space-y-6">
       {/* Page header */}
       <header className="panel-ruled p-5">
-        <span className="label text-accent">The Curriculum · Full Index</span>
-        <h1 className="mt-0.5 font-display text-2xl font-black text-primary sm:text-3xl">
+        <h1 className="font-display text-2xl font-black text-primary sm:text-3xl">
           Table of Contents
         </h1>
         <p className="mt-1 max-w-2xl text-sm text-secondary">{intro}</p>

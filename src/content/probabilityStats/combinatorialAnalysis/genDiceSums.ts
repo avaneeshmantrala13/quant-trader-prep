@@ -352,7 +352,7 @@ export function genSubsetSum(rng: Rng): NumericQuestion {
 
   const prompt =
     `${th.actor} rolls ${dice} fair ${faces}-sided ${th.die}. ` +
-    `What is the probability that some non-empty subset of the ${dice} dice has values summing to exactly ${target}? (Round to ${dp} decimals.)`;
+    `What is the probability that you can pick one or more of the ${dice} rolled dice whose values add up to exactly ${target}? (Round to ${dp} decimals.)`;
   const explanation =
     `Enumerate all ${faces}^${dice} = ${totalBig.toString()} ordered rolls and mark a roll favorable when ANY non-empty subset of its dice sums to ${target}. ` +
     `The exact favorable fraction is P = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
@@ -469,9 +469,9 @@ const PAIRS_THEME = [
 export function genExpectedPairs(rng: Rng): NumericQuestion {
   const th = rng.pick(PAIRS_THEME);
   const copies = 2;
-  const ranks = rng.pick([4, 5, 6]);
+  const ranks = rng.pick([5, 6, 7]); // ≥5 ranks: never the source's 4-rank / deal-4 tuple
   const total = ranks * copies;
-  const deal = rng.pick([4, 5, 6]); // ≤ total since total ≥ 8
+  const deal = rng.pick([4, 5, 6]); // ≤ total since total ≥ 10
 
   const value = expectedPairsDealt(ranks, copies, deal);
   const dp = numDp(value);

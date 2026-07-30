@@ -14,6 +14,7 @@ import { selectTutorPhase, type TutorPhase } from "@/lib/tutor/phase";
 import { deriveWorkedSteps, buildFadedStages } from "@/lib/tutor/faded";
 import { buildSelfExplainMCQ } from "@/lib/tutor/selfExplain";
 import { numericAnswerText } from "@/lib/tutor/hintLadder";
+import { buildDeepDive } from "@/lib/tutor/deepDive";
 import { WorkedExample } from "./WorkedExample";
 import { FadedSteps } from "./FadedSteps";
 
@@ -84,13 +85,55 @@ export function TutorController({
     );
   }, [level, seed, numeric, roundQuestions]);
 
-  if (phase === "independent" || !sample) return null;
+  // Independent learners skip the prologue entirely (auto-started by the effect
+  // above), so render nothing while that fires.
+  if (phase === "independent") return null;
+
+  // A STATIC-pool level (hand-authored `questions` / `numericQuestions`, no
+  // parametric generator) can't synthesize a fresh worked-example sibling, so
+  // `sample` is null here. Previously this returned `null`, which rendered a
+  // COMPLETELY BLANK lesson screen for a non-independent learner — no worked
+  // example AND no way to start, i.e. the level served no questions and the
+  // learner was stranded (a hard-fail progression bug). Never strand them:
+  // fall back to the level's own briefing + an explicit Start action so the
+  // round is always reachable (mirrors the pre-tutor prologue).
+  if (!sample) {
+    return (
+      <StaticLevelIntro
+        level={level}
+        illustration={illustration}
+        onStart={onStart}
+      />
+    );
+  }
 
   const steps = deriveWorkedSteps(sample.explanation).map((s) => s.text);
   const answer =
     "choices" in sample
       ? sample.choices[sample.correctIndex]
       : numericAnswerText(sample);
+
+  // Solver-grounded pitfalls: WRONG-option rationale (quiz) or common-error
+  // feedback (numeric). These are the item's own misconception taxonomy, so the
+  // deep-dive can never drift from what the questions test.
+  const solverPitfalls =
+    "choices" in sample
+      ? (sample.distractorRationale ?? []).filter(
+          (_, i) => i !== sample.correctIndex,
+        )
+      : (sample.commonErrors ?? []).map((e) => e.feedback);
+
+  const deepDive = buildDeepDive({
+    concept: sample.concept,
+    keyIdea: level.lesson.keyIdea,
+    authored: level.lesson.deepDive,
+    workedSteps: steps,
+    workedExplanation: sample.explanation,
+    solverPitfalls,
+    answer,
+    answerLabel: "Answer",
+    fallbackParagraphs: level.lesson.paragraphs,
+  });
 
   if (phase === "worked") {
     return (
@@ -101,6 +144,7 @@ export function TutorController({
         answer={answer}
         illustration={illustration}
         onContinue={onStart}
+        deepDive={deepDive}
       />
     );
   }
@@ -121,6 +165,66 @@ export function TutorController({
       selfExplain={selfExplain}
       illustration={illustration}
       onContinue={onStart}
+      deepDive={deepDive}
     />
+  );
+}
+
+/**
+ * Briefing + Start fallback for levels the adaptive tutor cannot scaffold —
+ * i.e. STATIC-pool levels with no parametric generator (e.g. the hand-authored
+ * "Hard Interview Problems" / "Lattice Paths" levels). These have no fresh
+ * same-family sibling to build a worked example from, so the worked/faded
+ * phases have nothing to render; without this the lesson screen was blank and
+ * the round was unreachable. It shows the level's own briefing and an explicit
+ * Start action so questions are ALWAYS reachable. Token-themed like the rest of
+ * the lesson intro.
+ */
+function StaticLevelIntro({
+  level,
+  illustration,
+  onStart,
+}: {
+  level: Level;
+  illustration?: ReactNode;
+  onStart: () => void;
+}) {
+  return (
+    <div className="animate-print-in space-y-5">
+      <article className="panel-ruled p-6">
+        <div className="flex items-center justify-between">
+          <span className="label text-accent">Briefing</span>
+          <span className="chip border-subtle text-secondary">
+            {level.difficulty}
+          </span>
+        </div>
+        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
+          {level.subtitle}
+        </h2>
+        {illustration && <div className="mt-4">{illustration}</div>}
+        <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-secondary">
+          {level.lesson.paragraphs.map((p, i) => (
+            <p key={i}>{p}</p>
+          ))}
+        </div>
+        {level.lesson.keyIdea && (
+          <div className="mt-5 border-l-2 border-accent bg-surface-muted px-4 py-3">
+            <div className="label text-accent">Thesis</div>
+            <div className="mt-1 font-display text-base font-semibold text-primary">
+              {level.lesson.keyIdea}
+            </div>
+          </div>
+        )}
+        {level.lesson.whyInterviewers && (
+          <p className="mt-4 border-t border-subtle pt-3 font-mono text-xs uppercase tracking-wider text-muted">
+            Why firms ask · {level.lesson.whyInterviewers}
+          </p>
+        )}
+      </article>
+
+      <button onClick={onStart} className="btn-primary w-full">
+        Start Practice ▸
+      </button>
+    </div>
   );
 }

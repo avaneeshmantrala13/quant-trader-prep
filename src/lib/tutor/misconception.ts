@@ -38,6 +38,15 @@ export const MISCONCEPTION = {
   outcomeApproach: "outcome_approach",
   memorylessUniform: "memoryless_uniform",
   equalWeightMixture: "equal_weight_mixture",
+  // Free-response arithmetic error modes (PHASE_1/2 — parametric error-mode
+  // catalogs). Additive; these default to the generic "none" confront unless
+  // added to CONFRONT_BY_TAG below.
+  andMeansAdd: "and_means_add", // multiplied→added for independent "A AND B"
+  orMeansAddNoOverlap: "or_means_add_no_overlap", // forgot inclusion–exclusion overlap
+  complementConfusion: "complement_confusion", // reported p instead of 1−p (or vice versa)
+  atLeastOneNaive: "at_least_one_naive", // used n·p instead of 1−(1−p)^n
+  nVsNMinusOne: "n_vs_n_minus_one", // used n instead of n−1 (sample variance)
+  forgotDivideByTwo: "forgot_divide_by_two", // e.g. ordered vs unordered pair
 } as const;
 
 /** tag → confront strategy (PHASE_2 §5 "Misconception → confront mapping"). */

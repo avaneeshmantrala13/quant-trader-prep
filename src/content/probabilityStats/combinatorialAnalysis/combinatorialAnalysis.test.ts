@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Rng } from "@/lib/rng";
-import { gradeNumeric } from "@/lib/numeric";
+import { gradeFreeResponse, gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion, Question } from "@/types/content";
 import { F, choose } from "./combinatorics";
 import {
@@ -13,7 +13,7 @@ import {
   genPairSumThreshold,
 } from "./genChooseK";
 import { genHyperAtLeast, genHyperExactly, genHyperNone } from "./genHyper";
-import { genPokerHand } from "./genPoker";
+import { genPokerHand, genPokerHandNumeric } from "./genPoker";
 import {
   genBinomAtMost,
   genLatticeMeeting,
@@ -24,9 +24,13 @@ import {
 } from "./genBinomial";
 import {
   genPermVsComb,
+  genPermVsCombNumeric,
   genReplacementTrap,
+  genReplacementTrapNumeric,
   genStarsBarsCap,
+  genStarsBarsCapNumeric,
   genTiesOrder,
+  genTiesOrderNumeric,
 } from "./genTraps";
 import {
   genAlternatingSteps,
@@ -460,6 +464,12 @@ const NUMERIC_GENS: Record<string, (rng: Rng) => NumericQuestion> = {
   genSubsetSum,
   genStrictlyIncreasing,
   genExpectedPairs,
+  // PHASE_2 MCQ→free-response conversions (ca-3 poker, ca-5 counting traps).
+  genPokerHandNumeric,
+  genPermVsCombNumeric,
+  genReplacementTrapNumeric,
+  genTiesOrderNumeric,
+  genStarsBarsCapNumeric,
 };
 
 const QUIZ_GENS: Record<string, (rng: Rng) => Question> = {
@@ -506,6 +516,56 @@ describe("numeric generators: grading round-trips + clean distractors", () => {
         const keys = (q.commonErrors ?? []).map((e) => Math.round(e.value * f));
         expect(new Set(keys).size).toBe(keys.length);
         expect(q.explanation.trim().length).toBeGreaterThan(40);
+      }
+    });
+  }
+});
+
+/* ========================================================================== */
+/*  2b. Free-response conversions (ca-3 poker, ca-5 traps) — every common      */
+/*      error is a NAMED, parametric misconception (rung-1 coaching driver),    */
+/*      and the correct value still grades typed as a fraction/expression.      */
+/* ========================================================================== */
+
+describe("free-response conversions carry tagged error modes + grade fractions", () => {
+  const CONVERTED: Record<string, { gen: (rng: Rng) => NumericQuestion; needs: string[] }> = {
+    genPokerHandNumeric: { gen: genPokerHandNumeric, needs: ["forgot_suit_combo"] },
+    genPermVsCombNumeric: {
+      gen: genPermVsCombNumeric,
+      needs: ["ordered_vs_unordered", "counts_with_replacement", "naive_product"],
+    },
+    genReplacementTrapNumeric: {
+      gen: genReplacementTrapNumeric,
+      needs: ["ordered_vs_unordered", "forgot_replacement", "unordered_with_replacement"],
+    },
+    genTiesOrderNumeric: {
+      gen: genTiesOrderNumeric,
+      needs: ["strict_vs_nondecreasing", "assume_all_distinct"],
+    },
+    genStarsBarsCapNumeric: {
+      gen: genStarsBarsCapNumeric,
+      needs: ["forgot_face_cap", "forgot_die_minimum", "off_by_one_target"],
+    },
+  };
+
+  for (const [name, { gen, needs }] of Object.entries(CONVERTED)) {
+    it(`${name} — every common error is tagged; answer grades as a fraction`, () => {
+      const tagsAcrossSeeds = new Set<string>();
+      for (const seed of SEEDS) {
+        const q = gen(new Rng(seed));
+        expect((q.commonErrors ?? []).length).toBeGreaterThan(0);
+        for (const ce of q.commonErrors ?? []) {
+          expect(ce.misconception, `${name} untagged error @${seed}`).toBeTruthy();
+          expect(ce.feedback.length).toBeGreaterThan(20);
+          if (ce.misconception) tagsAcrossSeeds.add(ce.misconception);
+        }
+        // the correct answer still grades via the free-response parser.
+        const dp = q.decimals ?? 0;
+        const typed = dp === 0 ? String(q.answer) : q.answer.toFixed(dp);
+        expect(gradeFreeResponse(q, typed).correct).toBe(true);
+      }
+      for (const tag of needs) {
+        expect(tagsAcrossSeeds.has(tag), `${name} never emitted "${tag}"`).toBe(true);
       }
     });
   }

@@ -33,7 +33,7 @@ export const combinatorialAnalysisFlashcards: Flashcard[] = [
     // Two-part threshold secret-sharing (locks AND keys/person) — never one scalar.
     id: "ca-fc-secretsharing",
     prompt:
-      "Seven co-signers guard a vault so that ANY four of them together can open it, but no three can. Using a combinatorial lock scheme (each lock opened by a distinct subset who all hold its key), what is the MINIMUM number of locks, and how many keys must each person carry?",
+      "Seven co-signers guard a vault so that ANY four of them together can open it, but no three can. Using a combinatorial lock scheme (each lock opened by a distinct subset who all hold its key), what is the SMALLEST number of locks the scheme needs, and how many keys does each signer end up carrying?",
     answer:
       `Two numbers: ${share.locks.toString()} locks, and ${share.keysPerPerson.toString()} keys per person. ` +
       `Every group of 3 must be blocked by some lock none of them holds — one lock per 3-person "blocking" coalition, C(7,3) = ${share.locks.toString()}; each such lock's key goes to the complementary ${share.keysPerLock.toString()} people, and 7·keys = ${share.locks.toString()}·${share.keysPerLock.toString()}, so each person carries ${share.keysPerPerson.toString()}.`,
@@ -73,7 +73,7 @@ export const combinatorialAnalysisFlashcards: Flashcard[] = [
     // Multi-deck straight: straights minus straight flushes.
     id: "ca-fc-multideckstraight",
     prompt:
-      "Four standard 52-card decks are shuffled together (208 cards) and you draw 3 cards. What is the probability they form three consecutive ranks (Ace low or high) that are NOT all the same suit? 4 dp.",
+      "A dealing shoe is loaded with four full 52-card decks (208 cards) and you pull 3 cards at once. What is the chance their values make a run of three in a row (an Ace may sit at either end) while the three do NOT all share one suit? Give 4 decimals.",
     answer:
       `${decText(straight, 4)}. There are 12 rank-runs (A-2-3 … Q-K-A); each rank now has 4·4 = 16 copies, so 16³ = 4096 hands per run, minus the 4·4³ = 256 straight-flushes ⇒ 3840 per run; ×12 = 46080 favourable, over C(208,3). = ${fracText(straight)} ≈ ${decText(straight, 4)}.`,
     explanation:

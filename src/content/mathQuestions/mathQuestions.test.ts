@@ -4,6 +4,7 @@ import { gradeNumeric } from "@/lib/numeric";
 import { groupLevelsIntoTopics } from "@/lib/topics";
 import type { NumericQuestion, Question } from "@/types/content";
 import {
+  CONVERTED_NUMERIC_GENERATORS,
   NUMERIC_GENERATORS,
   QUIZ_GENERATORS,
 } from "./generators";
@@ -257,6 +258,37 @@ describe("numeric generators: grade, clean commonErrors, determinism", () => {
         expect(new Set(keys).size).toBe(keys.length); // mutually distinct
         expect(q.explanation.trim().length).toBeGreaterThan(40);
       }
+    });
+  }
+});
+
+describe("converted (mq-2/mq-4) free-response families carry tagged error modes", () => {
+  for (const [name, gen] of Object.entries(CONVERTED_NUMERIC_GENERATORS)) {
+    it(`${name} — every commonError has a snake_case misconception tag; answer whole`, () => {
+      const tagsSeen = new Set<string>();
+      for (const seed of SEEDS) {
+        const q: NumericQuestion = gen(new Rng(seed));
+        // The conversion is only eligible for clean whole-number answers.
+        expect(q.decimals ?? 0).toBe(0);
+        expect(Number.isInteger(q.answer)).toBe(true);
+        expect(q.answer).toBeGreaterThan(0);
+        // Free-response prompt + at least one authored error mode.
+        expect(q.prompt).toContain("Enter a whole number");
+        expect((q.commonErrors ?? []).length).toBeGreaterThanOrEqual(1);
+        for (const ce of q.commonErrors ?? []) {
+          expect(ce.misconception, `${name} error mode ${ce.value} untagged`).toBeTruthy();
+          expect(ce.misconception).toMatch(/^[a-z][a-z0-9_]*$/);
+          expect(ce.feedback.trim().length).toBeGreaterThan(20);
+          // Rung-1 coaching must NEVER hand over the answer outright (i.e. no
+          // "= <answer>" style reveal — incidental digit overlaps are fine).
+          expect(ce.feedback).not.toContain(`= ${q.answer}`);
+          expect(ce.feedback).not.toContain(`is ${q.answer}`);
+          // Ends with a leading question rather than a stated result.
+          expect(ce.feedback.trim().endsWith("?")).toBe(true);
+          tagsSeen.add(ce.misconception!);
+        }
+      }
+      expect(tagsSeen.size).toBeGreaterThanOrEqual(1);
     });
   }
 });
