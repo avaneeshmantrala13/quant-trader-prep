@@ -16,6 +16,14 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { RoadmapPage } from "./pages/RoadmapPage";
 import { SimulationsPage } from "./pages/SimulationsPage";
 import { FermiPage } from "./pages/FermiPage";
+import { GamesHubPage } from "./pages/GamesHubPage";
+import { MakeMarketPage } from "./pages/MakeMarketPage";
+import { ProbabilityBettingPage } from "./pages/ProbabilityBettingPage";
+import { CardsMarketMakingPage } from "./pages/CardsMarketMakingPage";
+import { MarketOfCardsPage } from "./pages/MarketOfCardsPage";
+import { FruitMarketPage } from "./pages/FruitMarketPage";
+import { DiceAndCardsPage } from "./pages/DiceAndCardsPage";
+import { NextCardBettingPage } from "./pages/NextCardBettingPage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -88,6 +96,7 @@ export default function App() {
               <Route path="/track/:trackId" element={<TrackPage />} />
               <Route path="/contents" element={<TableOfContentsPage />} />
               <Route path="/simulations" element={<SimulationsPage />} />
+              <Route path="/games" element={<GamesHubPage />} />
               <Route path="/themes" element={<ThemesPage />} />
             </Route>
 
@@ -111,6 +120,97 @@ export default function App() {
                 <ProtectedRoute>
                   <RequireDiagnostic>
                     <FermiPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Make Me a Market — market-making game (own full-screen layout,
+                self-contained — see MakeMarketPage). Game 1 of QuantGames. */}
+            <Route
+              path="/make-market"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <MakeMarketPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Probability Betting — odds/edge/Kelly game (own full-screen
+                layout, self-contained). Game 2 of QuantGames. */}
+            <Route
+              path="/probability-betting"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <ProbabilityBettingPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Cards Market Making — taker game (own full-screen layout,
+                self-contained). Game 3 of QuantGames. */}
+            <Route
+              path="/cards-market-making"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <CardsMarketMakingPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Market of Cards — group/super-day maker game (own full-screen
+                layout, self-contained). Game 4 of QuantGames. */}
+            <Route
+              path="/market-of-cards"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <MarketOfCardsPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Fruit Market — speed mental-math taker game (own full-screen
+                layout, self-contained). Game 5 of QuantGames. */}
+            <Route
+              path="/fruit-market"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <FruitMarketPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Dice & Cards — multiplicative taker game with an SD pre-question
+                (own full-screen layout, self-contained). Game 6 of QuantGames. */}
+            <Route
+              path="/dice-and-cards"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <DiceAndCardsPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Next Card Betting — card-counting + Kelly bettor game (own
+                full-screen layout, self-contained). Game 9 of QuantGames. */}
+            <Route
+              path="/next-card-betting"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <NextCardBettingPage />
                   </RequireDiagnostic>
                 </ProtectedRoute>
               }

@@ -96,6 +96,28 @@ export default {
           "70%": { transform: "scale(1.12)", opacity: "1" },
           "100%": { transform: "scale(1)", opacity: "1" },
         },
+        // Card deal: slide + tilt in from the deck, settling flat. Subtle.
+        "deal-in": {
+          "0%": { transform: "translateY(-10px) rotate(-4deg)", opacity: "0" },
+          "100%": { transform: "translateY(0) rotate(0)", opacity: "1" },
+        },
+        // Reveal flip: quick half-turn as a card/tile turns face-up.
+        "card-flip": {
+          "0%": { transform: "rotateY(-90deg)", opacity: "0" },
+          "55%": { transform: "rotateY(8deg)", opacity: "1" },
+          "100%": { transform: "rotateY(0)", opacity: "1" },
+        },
+        // Value change pulse: a brief scale bump on a live number.
+        "count-pulse": {
+          "0%": { transform: "scale(1)" },
+          "40%": { transform: "scale(1.14)" },
+          "100%": { transform: "scale(1)" },
+        },
+        // Probability bar fill grows from the left on reveal.
+        "bar-grow": {
+          "0%": { transform: "scaleX(0)" },
+          "100%": { transform: "scaleX(1)" },
+        },
       },
       animation: {
         "ticker-scroll": "ticker-scroll 40s linear infinite",
@@ -107,6 +129,10 @@ export default {
         "print-in": "print-in 0.4s ease-out both",
         "flash-row": "flash-row 0.8s ease-out",
         "node-pop": "node-pop 0.4s cubic-bezier(0.2,0.9,0.3,1.4) both",
+        "deal-in": "deal-in 0.28s ease-out both",
+        "card-flip": "card-flip 0.34s ease-out both",
+        "count-pulse": "count-pulse 0.32s ease-out",
+        "bar-grow": "bar-grow 0.4s ease-out both",
       },
     },
   },

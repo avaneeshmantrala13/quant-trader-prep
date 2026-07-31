@@ -149,7 +149,7 @@ export function AppShell() {
     { to: "/dashboard", label: "Dashboard", end: false, tour: "dashboard" },
     { to: "/contents", label: "Table of Contents", end: false, tour: "contents" },
     { to: "/simulations", label: "Simulations", end: false, tour: "simulations" },
-    { to: "/fermi", label: "Fermi Drill", end: false },
+    { to: "/games", label: "Interview Games", end: false, tour: "games" },
     ...TRACKS.map((t) => ({
       to: `/track/${t.id}`,
       label: t.title,
