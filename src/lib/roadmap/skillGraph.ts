@@ -22,7 +22,9 @@ import { topicKeyOf } from "@/lib/mastery/topicKey";
  * The prerequisite edges are a strict SUPERSET of the remediation DAG
  * (`src/content/remediation/prereqDAG.ts`): L0 arithmetic → L1 meaning →
  * counting → {conditional, expectation}. We keep those edges and extend them to
- * all 17 topics.
+ * every topic — including the seven first-class course-completeness topics (MGF,
+ * Gamma, Joint Distributions, Limit Theorems, Branching, CTMC, Markov Chain
+ * Structure) that were formerly folded into one "Extra Relevant Knowledge" node.
  */
 
 /** Pathway tiers, coarse → advanced. `order` is the render/sort order. */
@@ -98,6 +100,10 @@ const NUMBER_THEORY = topicKeyOf("math-questions", "Number Theory & Counting");
 const CORE_PROB = topicKeyOf("probability", "Core Probability");
 const CONDITIONAL = topicKeyOf("probability", "Conditional Probability");
 const EXPECTED_VALUE = topicKeyOf("probability", "Expected Value");
+const CONDITIONAL_EXPECTATION = topicKeyOf(
+  "probability",
+  "Conditional Expectation",
+);
 const GEOMETRIC = topicKeyOf("probability", "Geometric Probability");
 const GEOMETRY = topicKeyOf("math-questions", "Geometry & Derivations");
 const ORDER_STATS = topicKeyOf("probability", "Order Statistics");
@@ -108,7 +114,15 @@ const MARKOV = topicKeyOf("probability", "Markov Chains");
 const POISSON = topicKeyOf("probability", "Poisson Distribution & Process");
 const CONTINUOUS = topicKeyOf("probability", "Continuous Distributions");
 const BROWNIAN = topicKeyOf("probability", "Brownian Motion");
-const EXTRA_KNOWLEDGE = topicKeyOf("probability", "Extra Relevant Knowledge");
+// The seven first-class course-completeness topics (formerly one "Extra
+// Relevant Knowledge" super-node).
+const MGF = topicKeyOf("probability", "Moment Generating Functions");
+const GAMMA = topicKeyOf("probability", "Gamma Distribution");
+const JOINT = topicKeyOf("probability", "Joint Distributions");
+const LIMIT_THEOREMS = topicKeyOf("probability", "Limit Theorems");
+const BRANCHING = topicKeyOf("probability", "Branching Processes");
+const CTMC = topicKeyOf("probability", "Continuous-Time Markov Chains");
+const MARKOV_STRUCTURE = topicKeyOf("probability", "Markov Chain Structure");
 const INTERVIEW_GAMES = topicKeyOf("interview-games");
 const GAME_THEORY = topicKeyOf("probability", "Game Theory & Puzzles");
 const BT_CORE = topicKeyOf("brainteasers", "Core Puzzles");
@@ -199,15 +213,39 @@ export const SKILL_GRAPH: SkillNode[] = [
       "M362K chs. 4.4–4.5, 7 (expectation of discrete RVs; the probability-weighted sum). The desk's language for pricing every bet.",
   },
   {
+    topicKey: CONDITIONAL_EXPECTATION,
+    label: "Conditional Expectation & the Tower Rule",
+    trackId: "probability",
+    firstLevelId: "ce-1",
+    tier: "expectation",
+    prereqs: [EXPECTED_VALUE, CONDITIONAL],
+    weight: 2,
+    source:
+      "M362M ch. 1 (conditional expectation E[X|Y], the tower rule / law of total expectation, random sums via Wald, and the law of total variance). Builds on expectation + conditioning; shared with the M362K expectation chapter.",
+  },
+  {
+    topicKey: CONTINUOUS,
+    label: "Continuous Distributions",
+    trackId: "probability",
+    firstLevelId: "cd-1",
+    tier: "expectation",
+    prereqs: [EXPECTED_VALUE],
+    weight: 2,
+    source:
+      "M362K ch. 5 (continuous RVs via PDFs/CDFs & integration; Uniform/Exponential/Normal). The taught density unit behind the CLT's Φ(z) and the exponential interarrivals of the Poisson process.",
+  },
+  {
     topicKey: POISSON,
     label: "Poisson Distribution & Process",
     trackId: "probability",
     firstLevelId: "po-1",
     tier: "expectation",
-    prereqs: [EXPECTED_VALUE],
+    // Poisson-PROCESS depth (po-2/po-3: exponential interarrivals, waiting
+    // times) leans on the exponential density taught in Continuous Distributions.
+    prereqs: [EXPECTED_VALUE, CONTINUOUS],
     weight: 2,
     source:
-      "M362K ch. 4.7 + M362M Poisson-process core (arrivals, splitting/superposition). Interview-relevant rare-event modelling; builds on E[X]=λ.",
+      "M362K ch. 4.7 + M362M Poisson-process core (arrivals, splitting/superposition). Interview-relevant rare-event modelling; builds on E[X]=λ and exponential interarrivals.",
   },
   {
     topicKey: GEOMETRIC,
@@ -243,17 +281,6 @@ export const SKILL_GRAPH: SkillNode[] = [
       "M362K ch. 6 (jointly distributed RVs) — min/max/median of several draws; expected extremes.",
   },
   {
-    topicKey: CONTINUOUS,
-    label: "Continuous Distributions",
-    trackId: "probability",
-    firstLevelId: "cd-1",
-    tier: "expectation",
-    prereqs: [EXPECTED_VALUE],
-    weight: 2,
-    source:
-      "M362K ch. 5 (continuous RVs via PDFs/CDFs & integration; Uniform/Exponential/Normal). The taught density unit behind the CLT's Φ(z).",
-  },
-  {
     topicKey: VARIANCE_CLT,
     label: "Variance, Covariance & the CLT",
     trackId: "probability",
@@ -282,10 +309,12 @@ export const SKILL_GRAPH: SkillNode[] = [
     trackId: "probability",
     firstLevelId: "mc-1",
     tier: "processes",
-    prereqs: [CONDITIONAL, EXPECTED_VALUE],
+    // First-step analysis / hitting times are tower-rule (E[·|·]) arguments, so
+    // Conditional Expectation is a genuine prerequisite alongside conditioning + EV.
+    prereqs: [CONDITIONAL, EXPECTED_VALUE, CONDITIONAL_EXPECTATION],
     weight: 2,
     source:
-      "M362M core: random walks, gambler's ruin, hitting times, first-step analysis, and stationary/limiting distributions (πP=π) — downstream of conditional probability + expectation.",
+      "M362M core: random walks, gambler's ruin, hitting times, first-step analysis, and stationary/limiting distributions (πP=π) — downstream of conditional probability + expectation + conditional expectation (tower rule).",
   },
   {
     topicKey: BROWNIAN,
@@ -315,10 +344,12 @@ export const SKILL_GRAPH: SkillNode[] = [
     trackId: "probability",
     firstLevelId: "gt-1",
     tier: "processes",
-    prereqs: [INTERVIEW_GAMES],
+    // Its Kelly/EV-heavy puzzles (gp-1, gt-spread) rest directly on Expected
+    // Value, so a direct EV edge is added alongside the Interview-Games edge.
+    prereqs: [INTERVIEW_GAMES, EXPECTED_VALUE],
     weight: 1,
     source:
-      "Equilibria, mixed strategies, and optimal market-making spread — strategic reasoning on top of EV.",
+      "Equilibria, mixed strategies, and optimal market-making spread — strategic reasoning on top of EV decision games and Expected Value.",
   },
   // --- Tier 4: Synthesis ---
   {
@@ -343,16 +374,92 @@ export const SKILL_GRAPH: SkillNode[] = [
     source:
       "Invariants, parity, pigeonhole, and backward induction — the reusable moves behind hard brainteasers.",
   },
+  // --- Course-completeness topics (formerly the single "Extra Relevant
+  // Knowledge" super-node; now seven first-class topics, each with its own
+  // prerequisites). Untested at surveyed firms; included for M362K/M362M
+  // completeness. Placed last so they never clutter the interview spine. ---
   {
-    topicKey: EXTRA_KNOWLEDGE,
-    label: "Extra Relevant Knowledge",
+    topicKey: MGF,
+    label: "Moment Generating Functions",
     trackId: "probability",
     firstLevelId: "ek-mgf",
-    tier: "synthesis",
-    prereqs: [VARIANCE_CLT, MARKOV],
+    tier: "expectation",
+    prereqs: [EXPECTED_VALUE, VARIANCE_CLT],
     weight: 1,
     source:
-      "UT M362K/M362M course-completeness topics untested at surveyed firms (MGFs, Gamma, joint densities/transforms, branching, CTMC/queues, formal LLN/CLT/Chebyshev, Pⁿ/state classification).",
+      "M362K: moments from M'(0)/M''(0), the uniqueness theorem, and the MGF method for independent sums. Builds on expectation and second moments (variance).",
+  },
+  {
+    topicKey: GAMMA,
+    label: "Gamma Distribution",
+    trackId: "probability",
+    firstLevelId: "ek-gamma",
+    tier: "expectation",
+    prereqs: [CONTINUOUS],
+    weight: 1,
+    source:
+      "M362K: Gamma(k,λ) as the sum of k iid Exp(λ) — a continuous density (mean k/λ, variance k/λ²) built directly on Continuous Distributions.",
+  },
+  {
+    topicKey: JOINT,
+    label: "Joint Distributions",
+    trackId: "probability",
+    firstLevelId: "ek-joint",
+    tier: "expectation",
+    // Double integrals over joint densities build on Continuous Distributions;
+    // the discrete pmf conditionals/independence draw on conditioning.
+    prereqs: [CONTINUOUS, CONDITIONAL],
+    weight: 1,
+    source:
+      "M362K chs. 6–7: joint densities/pmfs, marginals, conditionals, independence, covariance, and CDF-method transforms. Rests on continuous integration + conditioning.",
+  },
+  {
+    topicKey: LIMIT_THEOREMS,
+    label: "Limit Theorems",
+    trackId: "probability",
+    firstLevelId: "ek-limit",
+    tier: "expectation",
+    prereqs: [VARIANCE_CLT],
+    weight: 1,
+    source:
+      "M362K ch. 8: Chebyshev's inequality, the (weak) Law of Large Numbers, and the formal Central Limit Theorem — a precise treatment on top of variance/covariance & the CLT.",
+  },
+  {
+    topicKey: BRANCHING,
+    label: "Branching Processes",
+    trackId: "probability",
+    firstLevelId: "ek-branching",
+    tier: "processes",
+    // Extinction via first-step conditioning on the offspring PGF is a
+    // conditional-expectation (random-sums) argument.
+    prereqs: [EXPECTED_VALUE, CONDITIONAL_EXPECTATION],
+    weight: 1,
+    source:
+      "M362M: Galton–Watson processes — geometric mean growth μⁿ and extinction as the smallest fixed point of q=G(q). Rests on expectation + conditional-expectation (first-step) reasoning.",
+  },
+  {
+    topicKey: CTMC,
+    label: "Continuous-Time Markov Chains",
+    trackId: "probability",
+    firstLevelId: "ek-ctmc",
+    tier: "processes",
+    // Exponential holding times / birth–death queues need the Poisson process;
+    // the jump chain + balance equations extend discrete Markov chains.
+    prereqs: [MARKOV, POISSON],
+    weight: 1,
+    source:
+      "M362M / Ross IPM: exponential holding times, flow balance, and the M/M/1 queue — continuous-time extension of Markov chains built on the Poisson process.",
+  },
+  {
+    topicKey: MARKOV_STRUCTURE,
+    label: "Markov Chain Structure",
+    trackId: "probability",
+    firstLevelId: "ek-markov-pn",
+    tier: "processes",
+    prereqs: [MARKOV],
+    weight: 1,
+    source:
+      "M362M: the n-step Pⁿ / Chapman–Kolmogorov formalism and state classification (recurrence, transience, periodicity, communication) — the structural theory of Markov chains.",
   },
 ];
 

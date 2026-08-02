@@ -3,10 +3,12 @@ import { mixNumeric } from "../coreScaffold";
 import { genCtmcHolding, genCtmcStationary, genMM1 } from "./generators";
 
 /**
- * **Continuous-time Markov chains (+ queues)** — Bucket 2 "Extra Relevant
- * Knowledge" (M362M / Ross IPM; academic for interviews). One `numeric` level.
+ * **Continuous-time Markov chains (+ queues)** — a first-class course-
+ * completeness topic (M362M / Ross IPM; academic for interviews). One `numeric`
+ * level. Its own `section` (`probability::Continuous-Time Markov Chains`) = its
+ * own mastery bucket.
  */
-const SECTION = "Extra Relevant Knowledge";
+const SECTION = "Continuous-Time Markov Chains";
 
 export const ctmcLevels: Level[] = [
   {

@@ -8,6 +8,8 @@ import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import { INK, BullBear, StockChart } from "./pageArt";
 
 /**
@@ -365,38 +367,60 @@ const rx = (p: number) => PAD + p * (SIZE - 2 * PAD);
 const ry = (p: number) => SIZE - PAD - p * (SIZE - 2 * PAD);
 
 function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
-      <div className="grid min-h-[200px] place-items-center border border-dashed border-border-strong bg-surface-muted p-6 text-center">
+      <div className="border border-dashed border-border-strong bg-surface-muted p-6">
         <div className="max-w-sm">
-          <span className="label text-muted">Insufficient Returns</span>
+          <span className="label text-accent">Awaiting Returns</span>
           <p className="mt-2 text-sm italic leading-relaxed text-secondary">
-            No confidence data has crossed the wire yet. As you answer graded
-            items this session, this column will report how often your
-            ~80%-confidence calls actually pay out — no curve is printed until
-            the figures are real.
+            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches your accuracy.
           </p>
+          <p className="num mt-3 text-sm not-italic text-primary">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div
+            role="img"
+            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} confidence-rated questions`}
+            className="mt-2 h-3 w-full border border-border-strong bg-surface"
+          >
+            <div
+              aria-hidden="true"
+              className="h-full bg-accent"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? "well-calibrated"
-      : signed > 0
-        ? "over-confident"
-        : "under-confident";
-  const leanCls =
-    lean === "over-confident"
-      ? "border-bear text-bear"
-      : lean === "under-confident"
-        ? "border-accent text-accent"
-        : "border-bull text-bull";
+  // ONE plain-language read from the shared calibration signal → chip + caption
+  // can never contradict. Over-confident ⇒ points BELOW the diagonal.
+  const lean = data.calibration
+    ? data.calibration.lean === "over"
+      ? {
+          text: "over-confident",
+          cls: "border-bear text-bear",
+          caption:
+            "The curve prints below the dashed diagonal — conviction runs ahead of the returns.",
+        }
+      : data.calibration.lean === "under"
+        ? {
+            text: "under-confident",
+            cls: "border-accent text-accent",
+            caption:
+              "The curve prints above the dashed diagonal — the returns run ahead of the conviction.",
+          }
+        : {
+            text: "well-calibrated",
+            cls: "border-bull text-bull",
+            caption:
+              "The curve tracks the dashed diagonal — conviction and returns agree.",
+          }
+    : null;
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
@@ -485,7 +509,7 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
       </svg>
 
       <div className="min-w-0 flex-1 space-y-3">
-        {data.headline ? (
+        {data.headline && (
           <p className="border-l-2 border-border-strong pl-3 font-display text-base italic leading-snug text-primary">
             "When you call it <span className="num not-italic">~80%</span>,
             you're right{" "}
@@ -497,35 +521,47 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
               — the tape, n={data.headline.count}
             </span>
           </p>
-        ) : (
-          <p className="text-sm italic text-secondary">
-            No calls have landed in the ~80% band yet.
-          </p>
         )}
-        <dl className="grid grid-cols-2 gap-px border border-subtle bg-subtle text-center">
-          <div className="bg-surface px-2 py-2">
-            <dt className="label text-[9px] text-muted">Brier gap</dt>
-            <dd className="num mt-0.5 text-lg font-semibold text-primary">
-              {data.relGap.toFixed(3)}
-            </dd>
+
+        {data.calibration && (
+          <div className="border-l-2 border-accent pl-3">
+            <p className="font-display text-base font-bold leading-snug text-primary">
+              {data.calibration.label}
+            </p>
+            {lean && (
+              <span className={`chip mt-1.5 ${lean.cls}`}>{lean.text}</span>
+            )}
           </div>
-          <div className="bg-surface px-2 py-2">
-            <dt className="label text-[9px] text-muted">Brier score</dt>
-            <dd className="num mt-0.5 text-lg font-semibold text-primary">
-              {data.brier.toFixed(3)}
-            </dd>
-          </div>
-        </dl>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`chip ${leanCls}`}>{lean}</span>
-          <span className="num text-[11px] text-muted">
-            {data.count} calls logged
-          </span>
-        </div>
+        )}
+
         <p className="text-[11px] leading-relaxed text-muted">
-          Points below the dashed diagonal read as over-confident; points above,
-          under-confident.
+          {lean
+            ? lean.caption
+            : "Points below the dashed diagonal read as over-confident; points above, under-confident."}
         </p>
+
+        <details className="border-t border-subtle pt-2">
+          <summary className="label cursor-pointer text-secondary transition-colors hover:text-primary">
+            Advanced details
+          </summary>
+          <dl className="mt-3 grid grid-cols-2 gap-px border border-subtle bg-subtle text-center">
+            <div className="bg-surface px-2 py-2">
+              <dt className="label text-[9px] text-muted">Brier gap</dt>
+              <dd className="num mt-0.5 text-lg font-semibold text-primary">
+                {data.relGap.toFixed(3)}
+              </dd>
+            </div>
+            <div className="bg-surface px-2 py-2">
+              <dt className="label text-[9px] text-muted">Brier score</dt>
+              <dd className="num mt-0.5 text-lg font-semibold text-primary">
+                {data.brier.toFixed(3)}
+              </dd>
+            </div>
+          </dl>
+          <p className="num mt-2 text-[11px] text-muted">
+            {data.count} calls logged
+          </p>
+        </details>
       </div>
     </div>
   );
@@ -534,6 +570,8 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
 /* ----------------------------------- root --------------------------------- */
 
 export function BroadsheetDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -543,6 +581,7 @@ export function BroadsheetDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   const today = new Date().toLocaleDateString("en-US", {
     weekday: "long",
     year: "numeric",
@@ -568,6 +607,7 @@ export function BroadsheetDashboard({
               Markets &amp; Analyst's Report
             </span>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -709,24 +749,42 @@ export function BroadsheetDashboard({
         )}
 
         {/* ===================== WATCHLIST + CALIBRATION ===================== */}
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="panel p-5">
-            <SectionHead
-              kicker="The Watchlist"
-              title="Weakest First"
-              aside={`${weaknesses.length} with evidence`}
-            />
-            <p className="mb-3 text-[11px] italic text-muted">
-              Ranked ascending by CI_low — the confidently-weak surface first.
-            </p>
-            <WatchlistLedger topics={weaknesses} />
-          </section>
+        {courseMode ? (
+          <>
+            <section className="panel p-5">
+              <SectionHead
+                kicker="The Prospectus"
+                title="Course Readiness"
+                aside={`${courses.length} courses`}
+              />
+              <CourseReadinessCards courses={courses} />
+            </section>
 
-          <section className="panel p-5">
-            <SectionHead kicker="The Tape" title="Calibration Report" />
-            <CalibrationReport data={reliability} />
-          </section>
-        </div>
+            <section className="panel p-5">
+              <SectionHead kicker="The Tape" title="Calibration Report" />
+              <CalibrationReport data={reliability} />
+            </section>
+          </>
+        ) : (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="panel p-5">
+              <SectionHead
+                kicker="The Watchlist"
+                title="Weakest First"
+                aside={`${weaknesses.length} with evidence`}
+              />
+              <p className="mb-3 text-[11px] italic text-muted">
+                Ranked ascending by CI_low — the confidently-weak surface first.
+              </p>
+              <WatchlistLedger topics={weaknesses} />
+            </section>
+
+            <section className="panel p-5">
+              <SectionHead kicker="The Tape" title="Calibration Report" />
+              <CalibrationReport data={reliability} />
+            </section>
+          </div>
+        )}
 
         {/* ===================== FULL LEDGER ===================== */}
         <section className="panel p-5">

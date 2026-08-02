@@ -142,7 +142,7 @@ export function TrackPage() {
             <p className="mt-1 text-sm text-secondary">{track.description}</p>
           </div>
           <div className="hidden flex-col items-end sm:flex">
-            <span className="label text-[9px]">Nodes Filled</span>
+            <span className="label text-[9px]">Subtopics Passed</span>
             <span className="num text-2xl font-semibold text-primary">
               {masteredCount}/{track.levels.length}
             </span>
@@ -163,11 +163,6 @@ export function TrackPage() {
 
       {/* Charted route on plotting paper */}
       <div className="panel overflow-hidden">
-        <div className="flex items-center justify-between border-b-[3px] border-border-strong px-3 py-2">
-          <span className="label">Y · Mastery</span>
-          <span className="label">X · Progression →</span>
-        </div>
-
         <div
           className={`relative ${MapBg ? "" : "tex-grid"}`}
           style={{ height: totalHeight }}
@@ -315,7 +310,7 @@ export function TrackPage() {
                     )}
                     {state === "mastered" && (
                       <span className="label absolute -bottom-2 bg-bull px-1 text-[8px] text-bg">
-                        Filled
+                        Mastered
                       </span>
                     )}
                   </button>

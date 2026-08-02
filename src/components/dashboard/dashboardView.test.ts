@@ -10,6 +10,7 @@ const LINKS: DashboardLinks = {
   practiceHref: (trackId, levelId) => `/track/${trackId}/level/${levelId}`,
   diagnosticHref: "/diagnostic",
   contentsHref: "/contents",
+  courseHref: (id) => `/course/${id}`,
 };
 
 const RELIABILITY: ReliabilityDiagramData = {
@@ -17,6 +18,8 @@ const RELIABILITY: ReliabilityDiagramData = {
   relGap: 0,
   brier: 0,
   count: 0,
+  sufficient: false,
+  minPairs: 25,
 };
 
 function verdict(partial: Partial<TopicVerdict>): TopicVerdict {
@@ -57,6 +60,8 @@ function model(partial: Partial<DashboardModel>): DashboardModel {
     due: [],
     reliability: RELIABILITY,
     diagnosticDone: false,
+    goalMode: "interview",
+    hasTimingData: false,
     ...partial,
   };
 }
@@ -155,5 +160,30 @@ describe("buildDashboardViewProps", () => {
     const props = buildDashboardViewProps(model({ due: [due] }), LINKS);
     expect(props.due).toHaveLength(1);
     expect(props.due[0].reviewDue).toBe(true);
+  });
+
+  it("Case B (interview): no course cards, weakness ranking preserved", () => {
+    const props = buildDashboardViewProps(
+      model({ goalMode: "interview" }),
+      LINKS,
+    );
+    expect(props.goalMode).toBe("interview");
+    expect(props.courses).toEqual([]);
+    // Weakness ranking is unchanged — mode reads no mastery.
+    expect(props.weaknesses).toHaveLength(1);
+  });
+
+  it("Case A (course): builds per-course readiness cards keyed by course topics", () => {
+    const props = buildDashboardViewProps(model({ goalMode: "course" }), LINKS);
+    expect(props.goalMode).toBe("course");
+    expect(props.courses).toHaveLength(2);
+    const m362k = props.courses.find((c) => c.id === "m362k")!;
+    expect(m362k.label).toBe("Intro to Probability");
+    expect(m362k.href).toBe("/course/m362k");
+    // Conditional Probability is a course topic ⇒ it appears in a course card.
+    const names = m362k.topics.map((t) => t.name);
+    expect(names).toContain("Conditional Probability & Bayes");
+    // The weakness ranking is STILL produced (mode reads none of it).
+    expect(props.weaknesses).toHaveLength(1);
   });
 });

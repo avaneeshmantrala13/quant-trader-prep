@@ -3,10 +3,11 @@ import { mixNumeric } from "../coreScaffold";
 import { genGammaMean, genGammaSumExp, genGammaVar } from "./generators";
 
 /**
- * **Gamma distribution** — Bucket 2 "Extra Relevant Knowledge" (M362K
- * completeness; academic for interviews). One `numeric` level.
+ * **Gamma distribution** — a first-class course-completeness topic (M362K
+ * completeness; academic for interviews). One `numeric` level. Its own
+ * `section` (`probability::Gamma Distribution`) = its own mastery bucket.
  */
-const SECTION = "Extra Relevant Knowledge";
+const SECTION = "Gamma Distribution";
 
 export const gammaLevels: Level[] = [
   {

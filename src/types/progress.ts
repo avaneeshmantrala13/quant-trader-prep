@@ -1,5 +1,6 @@
 import type { NumericQuestion, Question } from "./content";
 import type { TierDifficultyMap, TopicMasteryMap } from "./mastery";
+import type { OaTimedStore } from "@/lib/oa/types";
 
 export interface LevelProgress {
   bestScore: number; // 0..1, best fraction correct achieved
@@ -26,6 +27,14 @@ export interface ResumeState {
   questions: (Question | NumericQuestion)[];
   index: number;
   answers: (number | null)[];
+  /**
+   * Numeric levels only: the per-item hint-credit earned so far, parallel to
+   * `answers` (∈ [0,1] from the rung schedule; 0 for unanswered items). Needed
+   * so the credit-weighted VISIBLE score survives a mid-round reload — the
+   * `highestRung` reached is unrecoverable from the final entered value alone.
+   * OPTIONAL so older saved blobs (and quiz levels) still load unchanged.
+   */
+  credits?: number[];
   lessonSkipped: boolean;
   startedAt: string;
 }
@@ -45,6 +54,31 @@ export interface DiagnosticResult {
   itemsAnswered: number;
   /** Optional per-topic fraction correct (0..1), keyed by topicKey. */
   perTopic?: Record<string, number>;
+}
+
+/**
+ * User-selectable Goal Mode. Case A "course" (UT course mastery) | Case B
+ * "interview" (quant interview / OA prep, the safe default). It is a pure VIEW
+ * selector — it NEVER stores progress, gates content, or affects
+ * scoring/mastery/the v1→v2 migration. See `src/lib/mode/`.
+ */
+export type GoalMode = "course" | "interview";
+
+/**
+ * One persisted (predicted, outcome) calibration pair, keyed by topic. Additive
+ * & optional (mirrors `diagnosticHistory`): older saves without it load
+ * unchanged, and it NEVER gates content or affects scoring / mastery / the
+ * v1→v2 migration. Persisting a capped log lets the dashboard's calibration
+ * panel accumulate across sessions instead of resetting every reload.
+ */
+export interface PersistedCalibrationPair {
+  topicKey: string;
+  /** Predicted success probability at serve time, in [0,1]. */
+  pred: number;
+  /** Observed outcome (0 miss, 1 hit). */
+  outcome: 0 | 1;
+  /** ISO timestamp of the graded item (optional). */
+  at?: string;
 }
 
 export interface UserProgress {
@@ -78,6 +112,33 @@ export interface UserProgress {
    * NEVER gates content or affects scoring / mastery / the v1→v2 migration.
    */
   diagnosticHistory?: DiagnosticResult[];
+  /**
+   * User-selected Goal Mode (Case A "course" | Case B "interview"). Additive &
+   * optional (mirrors `diagnosticDoneAt`): older saves load unchanged and are
+   * treated as "interview" (Case B = today's app). A pure VIEW selector — it
+   * NEVER stores progress, gates content, or affects scoring/mastery/the v1→v2
+   * migration. Overlapping-topic progress is therefore shared automatically when
+   * toggling A↔B (mastery stays topicKey-keyed; mode reads none of it).
+   */
+  goalMode?: GoalMode;
+  /**
+   * Append-only, capped cross-session calibration log (WS-CAL). Additive &
+   * optional (mirrors `diagnosticHistory`): older saves without it load
+   * unchanged, and it NEVER gates content or affects scoring / mastery / the
+   * v1→v2 migration. Lets the reliability panel accrue across sessions so it can
+   * reach the sufficiency threshold instead of resetting on reload.
+   */
+  calibrationLog?: PersistedCalibrationPair[];
+  /**
+   * Durable Timed OA store: the single resumable in-progress session plus the
+   * capped completed-results history (src/lib/oa/types.ts). Additive & optional
+   * (mirrors `diagnosticHistory` / `calibrationLog`): older saves without it
+   * load unchanged, and it NEVER gates content or affects scoring / mastery /
+   * the v1→v2 migration. Persisting it here makes an active session reload-proof
+   * (survives leave/resume/re-login) and keeps completed results for the
+   * dashboard trend graph.
+   */
+  oaTimed?: OaTimedStore;
 }
 
 export function emptyProgress(): UserProgress {

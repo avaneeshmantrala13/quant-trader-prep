@@ -3,9 +3,16 @@ import type { Difficulty, NumericQuestion } from "@/types/content";
 import { F, decText, fracText } from "../coreSolvers";
 import { numDp, numericErrors } from "../coreScaffold";
 import {
+  condProbXgivenY,
+  covarianceFromTable,
+  independentJointProb,
   jointMeanX,
   jointNormConst,
+  marginalX,
+  marginalY,
   sumBelowUnitSquare,
+  sumDensityRectProb,
+  tableTotal,
   transformSqrtCDF,
 } from "./joint";
 
@@ -242,3 +249,317 @@ export const genJointSum = (rng: Rng): NumericQuestion =>
   buildJointSumInstance(rng, "medium").numeric;
 export const genTransform = (rng: Rng): NumericQuestion =>
   buildTransformInstance(rng, "hard").numeric;
+
+/* ========================================================================== */
+/*  DISCRETE joint pmf tables (marginals, conditionals, independence, covariance) */
+/* ========================================================================== */
+
+/** Curated NON-independent 2×2 joint tables (rows X, cols Y) with value vectors. */
+const DISCRETE_TABLES: { w: number[][]; xVals: number[]; yVals: number[] }[] = [
+  { w: [[2, 1], [1, 3]], xVals: [1, 2], yVals: [1, 2] },
+  { w: [[3, 1], [2, 4]], xVals: [0, 2], yVals: [1, 3] },
+  { w: [[1, 3], [4, 2]], xVals: [1, 3], yVals: [0, 2] },
+  { w: [[4, 2], [1, 3]], xVals: [2, 4], yVals: [1, 2] },
+  { w: [[2, 4], [3, 1]], xVals: [0, 1], yVals: [2, 4] },
+];
+
+/** Render a 2×2 joint table as equally-likely counts out of N. */
+function renderDiscrete(
+  w: number[][],
+  xVals: number[],
+  yVals: number[],
+): { text: string; total: number } {
+  const total = tableTotal(w);
+  const cells: string[] = [];
+  for (let i = 0; i < 2; i++)
+    for (let j = 0; j < 2; j++)
+      cells.push(`(X=${xVals[i]}, Y=${yVals[j]}) → ${w[i][j]}`);
+  return { text: cells.join("; "), total };
+}
+
+/** Marginal P(X = xᵢ) from a joint table. */
+export function buildJointMarginalInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const { w, xVals, yVals } = rng.pick(DISCRETE_TABLES);
+  const row = rng.int(0, 1);
+  const value = marginalX(w, row);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+  const { text, total } = renderDiscrete(w, xVals, yVals);
+  const rowSum = w[row].reduce((a, c) => a + c, 0);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(w[row][0], total),
+    `${fracText(F(w[row][0], total))} is only the single cell P(X=${xVals[row]}, Y=${yVals[0]}). The marginal SUMS across all Y: (${rowSum})/${total}.`,
+  );
+  push(
+    marginalY(w, row),
+    `${fracText(marginalY(w, row))} is P(Y=${yVals[row]}) — the wrong variable's marginal. Sum along the X=${xVals[row]} ROW, not the column.`,
+  );
+  push(
+    condProbXgivenY(w, row, 0),
+    `${fracText(condProbXgivenY(w, row, 0))} is the CONDITIONAL P(X=${xVals[row]}|Y=${yVals[0]}); the marginal doesn't condition on Y.`,
+  );
+
+  const prompt =
+    `A pair (X, Y) is drawn. Out of N = ${total} equally-likely outcomes, the counts are: ${text}. ` +
+    `What is the marginal probability P(X = ${xVals[row]})? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Sum the joint pmf across all Y: P(X=${xVals[row]}) = Σ_y P(X=${xVals[row]}, Y=y) = ${rowSum}/${total} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-joint-marg-${w.flat().join("")}-${row}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Marginal = sum the joint pmf over the other variable",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Joint · marginal pmf",
+    },
+  };
+}
+
+/** Conditional P(X = xᵢ | Y = yⱼ) from a joint table. */
+export function buildJointConditionalInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const { w, xVals, yVals } = rng.pick(DISCRETE_TABLES);
+  const row = rng.int(0, 1);
+  const col = rng.int(0, 1);
+  const value = condProbXgivenY(w, row, col);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+  const { text, total } = renderDiscrete(w, xVals, yVals);
+  const colSum = w[0][col] + w[1][col];
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(w[row][col], total),
+    `${fracText(F(w[row][col], total))} is the JOINT P(X=${xVals[row]}, Y=${yVals[col]}) = ${w[row][col]}/${total}. Conditioning renormalises by P(Y=${yVals[col]}), dividing by the column total ${colSum}.`,
+  );
+  push(
+    marginalX(w, row),
+    `${fracText(marginalX(w, row))} is the unconditional marginal P(X=${xVals[row]}); the condition Y=${yVals[col]} changes the denominator.`,
+  );
+  push(
+    condProbXgivenY(w, 1 - row, col),
+    `${fracText(condProbXgivenY(w, 1 - row, col))} is P(X=${xVals[1 - row]}|Y=${yVals[col]}) — the other X value in the same column.`,
+  );
+
+  const prompt =
+    `A pair (X, Y) is drawn. Out of N = ${total} equally-likely outcomes, the counts are: ${text}. ` +
+    `What is the conditional probability P(X = ${xVals[row]} | Y = ${yVals[col]})? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Restrict to Y=${yVals[col]} (column total ${colSum}) and renormalise: P(X=${xVals[row]}|Y=${yVals[col]}) = ${w[row][col]}/${colSum} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-joint-cond-${w.flat().join("")}-${row}-${col}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Conditional pmf renormalises to the conditioning column",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Joint · conditional pmf",
+    },
+  };
+}
+
+/** If X, Y were independent, P(X=x, Y=y) = P(X=x)·P(Y=y). */
+export function buildJointIndependenceInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const { w, xVals, yVals } = rng.pick(DISCRETE_TABLES);
+  const row = rng.int(0, 1);
+  const col = rng.int(0, 1);
+  const value = independentJointProb(w, row, col);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+  const { text, total } = renderDiscrete(w, xVals, yVals);
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(w[row][col], total),
+    `${fracText(F(w[row][col], total))} is the ACTUAL joint P(X=${xVals[row]}, Y=${yVals[col]}); the question asks what it WOULD be under independence — the product of the marginals.`,
+  );
+  push(
+    marginalX(w, row),
+    `${fracText(marginalX(w, row))} is only P(X=${xVals[row]}); independence MULTIPLIES it by P(Y=${yVals[col]}).`,
+  );
+  push(
+    marginalX(w, row).add(marginalY(w, col)),
+    `${fracText(marginalX(w, row).add(marginalY(w, col)))} ADDS the marginals; independence multiplies them.`,
+  );
+
+  const prompt =
+    `A pair (X, Y) is drawn. Out of N = ${total} equally-likely outcomes, the counts are: ${text}. ` +
+    `If X and Y were INDEPENDENT, what would P(X = ${xVals[row]}, Y = ${yVals[col]}) equal? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Under independence the joint factorises: P(X=${xVals[row]}, Y=${yVals[col]}) = P(X=${xVals[row]})·P(Y=${yVals[col]}) = ${fracText(marginalX(w, row))}·${fracText(marginalY(w, col))} = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
+    `(The real joint differs, so these X, Y are NOT independent.)`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-joint-indep-${w.flat().join("")}-${row}-${col}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Independence ⇒ joint = product of marginals",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Joint · independence",
+    },
+  };
+}
+
+/** Covariance Cov(X,Y) = E[XY] − E[X]E[Y] from a joint table. */
+export function buildJointCovarianceInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const { w, xVals, yVals } = rng.pick(DISCRETE_TABLES);
+  const value = covarianceFromTable(w, xVals, yVals);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+  const { text, total } = renderDiscrete(w, xVals, yVals);
+
+  // E[XY], E[X], E[Y] for the distractors.
+  let EXY = F(0);
+  let EX = F(0);
+  let EY = F(0);
+  for (let i = 0; i < 2; i++)
+    for (let j = 0; j < 2; j++) {
+      const p = F(w[i][j], total);
+      EXY = EXY.add(p.mul(xVals[i] * yVals[j]));
+      EX = EX.add(p.mul(xVals[i]));
+      EY = EY.add(p.mul(yVals[j]));
+    }
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    EXY,
+    `${decText(EXY, dp)} is E[XY] alone. Covariance SUBTRACTS the product of the means: Cov = E[XY] − E[X]E[Y].`,
+  );
+  push(
+    EX.mul(EY),
+    `${decText(EX.mul(EY), dp)} is E[X]E[Y]; that is what you subtract FROM E[XY], not the answer.`,
+  );
+  push(
+    EXY.add(EX.mul(EY)),
+    `${decText(EXY.add(EX.mul(EY)), dp)} ADDS E[X]E[Y] instead of subtracting it.`,
+  );
+
+  const prompt =
+    `A pair (X, Y) is drawn. Out of N = ${total} equally-likely outcomes, the counts are: ${text}. ` +
+    `What is Cov(X, Y)? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Cov(X,Y) = E[XY] − E[X]E[Y] = ${fracText(EXY)} − (${fracText(EX)})(${fracText(EY)}) = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-joint-cov-${w.flat().join("")}-${xVals.join("")}-${yVals.join("")}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Covariance Cov(X,Y)=E[XY]−E[X]E[Y]",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Joint · covariance from pmf",
+    },
+  };
+}
+
+// (a,b) each in (0,1) with a+b ≠ 2 (guaranteed since <2) so the uniform-area
+// distractor a·b never collides with the answer a·b·(a+b)/2.
+const RECT_POOL: [number, number][] = [
+  [1, 2],
+  [1, 3],
+  [2, 3],
+  [1, 4],
+  [3, 4],
+  [2, 5],
+];
+
+/** P(X ≤ a, Y ≤ b) for the non-uniform density f(x,y)=x+y on the unit square. */
+export function buildSumDensityRectInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const [an, ad] = rng.pick(RECT_POOL);
+  let [bn, bd] = rng.pick(RECT_POOL);
+  // Keep a and b distinct fractions for variety (not required for correctness).
+  let guard = 0;
+  while (an * bd === bn * ad && guard++ < 8) [bn, bd] = rng.pick(RECT_POOL);
+  const a = F(an, ad);
+  const b = F(bn, bd);
+  const value = sumDensityRectProb(an, ad, bn, bd);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    a.mul(b),
+    `${fracText(a.mul(b))} = a·b is the probability for a UNIFORM density. Here f=x+y grows across the square, so integrate: P = a·b·(a+b)/2.`,
+  );
+  push(
+    a.mul(b).mul(a.add(b)),
+    `${fracText(a.mul(b).mul(a.add(b)))} = a·b·(a+b) forgets the ½ from integrating x+y.`,
+  );
+  push(
+    a.add(b).div(2),
+    `${fracText(a.add(b).div(2))} = (a+b)/2 treats a two-dimensional integral as a one-dimensional average.`,
+  );
+
+  const prompt =
+    `Jointly continuous (X, Y) have density f(x,y) = x + y on the unit square [0,1]×[0,1] (and 0 elsewhere). ` +
+    `What is P(X ≤ ${fracText(a)}, Y ≤ ${fracText(b)})? (Round to ${dp} decimals.)`;
+  const explanation =
+    `P(X≤a, Y≤b) = ∫₀^a∫₀^b (x+y) dy dx = a·b·(a+b)/2 = ${fracText(a)}·${fracText(b)}·(${fracText(a.add(b))})/2 = ${fracText(value)} ≈ ${decText(value, dp)}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-joint-rect-${an}_${ad}-${bn}_${bd}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Region probability for f=x+y: P(X≤a,Y≤b)=ab(a+b)/2",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Joint · non-uniform region",
+    },
+  };
+}
+
+export const genJointMarginal = (rng: Rng): NumericQuestion =>
+  buildJointMarginalInstance(rng, "medium").numeric;
+export const genJointConditional = (rng: Rng): NumericQuestion =>
+  buildJointConditionalInstance(rng, "medium").numeric;
+export const genJointIndependence = (rng: Rng): NumericQuestion =>
+  buildJointIndependenceInstance(rng, "medium").numeric;
+export const genJointCovariance = (rng: Rng): NumericQuestion =>
+  buildJointCovarianceInstance(rng, "hard").numeric;
+export const genSumDensityRect = (rng: Rng): NumericQuestion =>
+  buildSumDensityRectInstance(rng, "hard").numeric;

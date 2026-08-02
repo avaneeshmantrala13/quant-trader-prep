@@ -37,11 +37,16 @@ import {
 } from "@/lib/regenerate";
 import { isAiLayerEnabled, requestFlavoredVariant } from "@/lib/aiFlavor";
 import { resolveFlavoredItem } from "@/lib/flavorPractice";
-import { countQuizCorrect, countNumericCorrect, roundScore } from "@/lib/score";
+import {
+  countQuizCorrect,
+  countNumericCorrect,
+  roundScore,
+  creditRoundScore,
+} from "@/lib/score";
 import { celebrate } from "@/lib/celebrate";
 import { topicKeyForLevel, tierDifficultyKey } from "@/lib/mastery/topicKey";
 import { predictSuccess, seedTierDifficulty } from "@/lib/mastery/elo";
-import { recordCalibrationPair } from "@/lib/calibration/sessionLog";
+import { isLowConfidenceUnlock, isTopicUnlocked } from "@/lib/mastery/unlock";
 import { planRoundReview } from "@/lib/adaptivity/review";
 import { buildHintLadder } from "@/lib/tutor/hintLadder";
 import { selectTutorPhase } from "@/lib/tutor/phase";
@@ -140,6 +145,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     recordItemAttempt,
     getTopicMastery,
     setReviewSchedule,
+    recordCalibrationPair,
   } = useProgress();
   const { themeDef } = useTheme();
 
@@ -228,10 +234,15 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     useState<RemediationInput | null>(null);
   const remediatedTopicsRef = useRef<Set<string>>(new Set());
   const lastMissTagRef = useRef<string | undefined>(undefined);
+  // Part B: snapshot at round start whether this topic is held only at a
+  // diagnostic-seeded LOW-CONFIDENCE unlock, so a failing finish can detect a
+  // swing-and-relock and route to the ~0.85 prerequisite remediation.
+  const preRoundLowConfUnlockRef = useRef(false);
   useEffect(() => {
     missStreakRef.current = {};
     remediatedTopicsRef.current = new Set();
     lastMissTagRef.current = undefined;
+    preRoundLowConfUnlockRef.current = isLowConfidenceUnlock(getTopicMastery(topicKey));
     setRemediation(null);
     setFinishRemediation(null);
   }, [seed]);
@@ -355,8 +366,17 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
   };
 
   const finish = () => {
-    const score = roundScore(correctCount, questions.length);
-    const r = recordAttempt(level.id, score, level.masteryThreshold);
+    // MCQ has no hint re-attempt, so partial credit does not exist: the visible
+    // (display) score equals the binary gate. Pass gate == display so behavior
+    // is unchanged while adopting the new split `recordAttempt` signature.
+    const gateScore = roundScore(correctCount, questions.length);
+    const score = gateScore;
+    const r = recordAttempt(
+      level.id,
+      gateScore,
+      level.masteryThreshold,
+      gateScore,
+    );
     clearResume(level.id);
     // Seam 1: persist the SM-2 spaced-review schedule for this topic. The pure
     // `planRoundReview` uses the canonical (Phase-4) `scheduleReview`: a cleared
@@ -376,6 +396,11 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     const finPlan = planFinishRemediation({
       topicKey,
       scoreFraction: score,
+      // Part B: a failed round that swings a low-confidence unlock back under the
+      // unlock bar (now no longer unlocked) routes to the ~0.85 prereq probe.
+      wasLowConfidenceUnlock:
+        preRoundLowConfUnlockRef.current &&
+        !isTopicUnlocked(getTopicMastery(topicKey)),
       masteryThreshold: level.masteryThreshold,
       mastery: getTopicMastery(topicKey),
       levelDifficulty: level.difficulty,
@@ -1371,6 +1396,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     recordItemAttempt,
     getTopicMastery,
     setReviewSchedule,
+    recordCalibrationPair,
   } = useProgress();
   const { themeDef } = useTheme();
 
@@ -1398,11 +1424,17 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
   const [index, setIndex] = useState(0);
   // Entered numeric values per question; null = not yet answered.
   const [answers, setAnswers] = useState<(number | null)[]>([]);
+  // Per-item hint-credit ∈ [0,1], parallel to `answers` (0 = unanswered). This is
+  // the credit-weighted VISIBLE score's raw material; `highestRung` cannot be
+  // recovered from the final value, so it must be tracked (and persisted) here.
+  const [credits, setCredits] = useState<number[]>([]);
   const [startedAt, setStartedAt] = useState("");
   const [result, setResult] = useState<{
     mastered: boolean;
     isNewMastery: boolean;
     xpGained: number;
+    /** Credit-weighted VISIBLE score in [0,1] shown as the summary "Mastery %". */
+    displayScore: number;
   } | null>(null);
 
   useEffect(() => {
@@ -1413,6 +1445,8 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       setQuestions(existing.questions as NumericQuestion[]);
       setIndex(existing.index);
       setAnswers(existing.answers);
+      // Restore per-item credit; older blobs without it fall back to all-zero.
+      setCredits(existing.credits ?? new Array(existing.answers.length).fill(0));
       setStartedAt(existing.startedAt);
       setPhase("quiz");
     } else {
@@ -1421,6 +1455,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       const qs = materializeNumericLevel(level, s);
       setQuestions(qs);
       setAnswers(new Array(qs.length).fill(null));
+      setCredits(new Array(qs.length).fill(0));
       setStartedAt(new Date().toISOString());
       setPhase(initialPhase(theta, topicN));
     }
@@ -1452,23 +1487,32 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     useState<RemediationInput | null>(null);
   const remediatedTopicsRef = useRef<Set<string>>(new Set());
   const lastMissTagRef = useRef<string | undefined>(undefined);
+  // Part B: snapshot at round start whether this topic is held only at a
+  // diagnostic-seeded LOW-CONFIDENCE unlock (see QuizLevel).
+  const preRoundLowConfUnlockRef = useRef(false);
   useEffect(() => {
     missStreakRef.current = {};
     remediatedTopicsRef.current = new Set();
     lastMissTagRef.current = undefined;
+    preRoundLowConfUnlockRef.current = isLowConfidenceUnlock(getTopicMastery(topicKey));
     setRemediation(null);
     setFinishRemediation(null);
   }, [seed]);
 
   if (!unlocked) return <Navigate to={`/track/${track.id}`} replace />;
 
-  const persist = (nextIndex: number, nextAnswers: (number | null)[]) => {
+  const persist = (
+    nextIndex: number,
+    nextAnswers: (number | null)[],
+    nextCredits: number[] = credits,
+  ) => {
     const state: ResumeState = {
       levelId: level.id,
       seed,
       questions,
       index: nextIndex,
       answers: nextAnswers,
+      credits: nextCredits,
       lessonSkipped: true,
       startedAt,
     };
@@ -1495,7 +1539,13 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     const next = answers.slice();
     next[index] = r.finalValue;
     setAnswers(next);
-    persist(index, next);
+    // Record the credit-weighted partial credit for this item (parallel to
+    // `answers`) so the VISIBLE score reflects how many hints were needed.
+    const itemCredit = creditForEpisode(r.correct, r.highestRung);
+    const nextCredits = credits.slice();
+    nextCredits[index] = itemCredit;
+    setCredits(nextCredits);
+    persist(index, next, nextCredits);
     // Fold this ONE PRIMARY item into topic mastery (Phase-1 hook). Exactly once
     // per primary question; NEVER called from `NumericPractice`.
     if (q) {
@@ -1522,7 +1572,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
         correct: r.correct,
         mode: "numeric",
         chosenValue: r.finalValue,
-        credit: creditForEpisode(r.correct, r.highestRung),
+        credit: itemCredit,
         highestRung: r.highestRung,
         misconceptions,
         responseMs,
@@ -1584,8 +1634,20 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
   };
 
   const finish = () => {
-    const score = roundScore(correctCount, questions.length);
-    const r = recordAttempt(level.id, score, level.masteryThreshold);
+    // Two scores from one round:
+    //  • gateScore  — binary fraction ULTIMATELY correct (ignores hints); drives
+    //    the lenient advance/unlock gate + remediation, so hint use can never
+    //    bounce a learner below the pass bar. UNCHANGED behavior.
+    //  • displayScore — credit-weighted mean of per-item hint-credit; the VISIBLE
+    //    mastery % (map "Best X%" + summary), so answering after hints shows < 100%.
+    const gateScore = roundScore(correctCount, questions.length);
+    const displayScore = creditRoundScore(credits, questions.length);
+    const r = recordAttempt(
+      level.id,
+      displayScore,
+      level.masteryThreshold,
+      gateScore,
+    );
     clearResume(level.id);
     // Seam 1: persist the SM-2 spaced-review schedule (see QuizLevel.finish).
     const plan = planRoundReview(getTopicMastery(topicKey), new Date().toISOString());
@@ -1594,11 +1656,18 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
       mastered: r.mastered,
       isNewMastery: r.isNewMastery,
       xpGained: r.xpGained,
+      displayScore,
     });
-    // Phase 4 finish-time trigger (see QuizLevel.finish for the rationale).
+    // Phase 4 finish-time trigger (see QuizLevel.finish for the rationale). The
+    // gate + remediation stay lenient: driven by the BINARY `gateScore`, never
+    // the credit-weighted display score.
     const finPlan = planFinishRemediation({
       topicKey,
-      scoreFraction: score,
+      scoreFraction: gateScore,
+      // Part B: swing-and-relock ⇒ route to the ~0.85 prereq probe (see QuizLevel).
+      wasLowConfidenceUnlock:
+        preRoundLowConfUnlockRef.current &&
+        !isTopicUnlocked(getTopicMastery(topicKey)),
       masteryThreshold: level.masteryThreshold,
       mastery: getTopicMastery(topicKey),
       levelDifficulty: level.difficulty,
@@ -1622,6 +1691,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     const qs = materializeNumericLevel(level, s);
     setQuestions(qs);
     setAnswers(new Array(qs.length).fill(null));
+    setCredits(new Array(qs.length).fill(0));
     setIndex(0);
     setResult(null);
     setStartedAt(new Date().toISOString());
@@ -1740,6 +1810,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
           <NumericSummary
             correct={correctCount}
             total={questions.length}
+            displayScore={result.displayScore}
             threshold={level.masteryThreshold}
             mastered={result.mastered}
             xpGained={result.xpGained}
@@ -2231,6 +2302,7 @@ function FreeResponseCard({
 function NumericSummary({
   correct,
   total,
+  displayScore,
   threshold,
   mastered,
   xpGained,
@@ -2241,6 +2313,8 @@ function NumericSummary({
 }: {
   correct: number;
   total: number;
+  /** Credit-weighted VISIBLE score in [0,1] — the shown "Mastery %". */
+  displayScore: number;
   threshold: number;
   mastered: boolean;
   xpGained: number;
@@ -2249,7 +2323,10 @@ function NumericSummary({
   onRetry: () => void;
   onDone: () => void;
 }) {
-  const pct = Math.round((correct / total) * 100);
+  // The visible percentage is the credit-weighted mastery (partial credit for
+  // hint use), NOT the raw fraction correct. The "Score correct/total" column
+  // below still shows the honest raw tally.
+  const pct = Math.round(displayScore * 100);
   return (
     <div className="animate-print-in space-y-5">
       <div className="panel-ruled p-6 text-center">
@@ -2276,7 +2353,7 @@ function NumericSummary({
             </div>
           </div>
           <div className="px-2 py-3">
-            <div className="label text-[9px]">Accuracy</div>
+            <div className="label text-[9px]">Mastery</div>
             <div
               className={`num mt-1 text-xl font-semibold ${mastered ? "text-bull" : "text-primary"}`}
             >

@@ -11,7 +11,6 @@ import {
   CurriculumVisual,
   FreshVisual,
   MentalMathVisual,
-  ReliabilityVisual,
   RoadmapVisual,
   TutorVisual,
 } from "@/components/marketing/visuals";
@@ -226,12 +225,11 @@ function Hero() {
         </div>
       </div>
 
-      <div className="mt-8 grid grid-cols-2 divide-x divide-subtle border-y border-subtle sm:grid-cols-4">
+      <div className="mx-auto mt-8 grid max-w-2xl grid-cols-3 divide-x divide-subtle border-y border-subtle">
         {[
           ["4", "Core Tracks"],
           ["17", "Mastery Levels"],
           ["∞", "Fresh Problems"],
-          ["$0", "No API Keys"],
         ].map(([v, l], i) => (
           <div key={i} className="px-3 py-4 text-center">
             <div className="num text-3xl font-semibold text-primary">{v}</div>
@@ -376,7 +374,7 @@ function ClosingCTA() {
 function Footer() {
   const cols = [
     ["Sections", ["Probability & Statistics", "Mental Math", "Brainteasers", "Interview Games"]],
-    ["The Product", ["The Roadmap", "Calibration Gym", "Socratic Tutor", "Fresh Questions"]],
+    ["The Product", ["The Roadmap", "Socratic Tutor", "Fresh Questions"]],
     ["The Funnel", ["Online Assessment", "Technical Interview", "Superday Games"]],
   ] as const;
   return (
@@ -449,21 +447,6 @@ export function LandingPage() {
 
           <Feature
             no="No. 02"
-            kicker="The Calibration Gym"
-            flag="Flagship · Coming soon"
-            title="Price uncertainty. Beat the model."
-            body="Calibration — stating probabilities you can actually trust — is the skill firms hire for. Submit a probability under a timer, then a grand reveal scores you against an AI model on the same fresh problem. When you're wrong, you get the correct reasoning on the spot, not just a red X."
-            bullets={[
-              "Scored on calibration, not just whether the answer was right",
-              "Go head-to-head with a model on the identical problem",
-              "A personal reliability curve that pinpoints where you're overconfident",
-            ]}
-            visual={<ReliabilityVisual />}
-            reverse
-          />
-
-          <Feature
-            no="No. 03"
             kicker="Socratic Tutor"
             title="Hints that make you think — never the answer."
             body="Stuck? The tutor asks one leading question at a time, escalating only as much as you need, and never hands you the final number while the problem is still open. You build the reasoning interviewers actually probe for — instead of memorizing solutions you can't reproduce under pressure."
@@ -473,10 +456,11 @@ export function LandingPage() {
               "Full worked solution unlocked after you commit",
             ]}
             visual={<TutorVisual />}
+            reverse
           />
 
           <Feature
-            no="No. 04"
+            no="No. 03"
             kicker="Fresh Forever"
             title="Problems that can't be memorized or leaked."
             body="You'll never run out of practice, and you can't shortcut it by memorizing a leaked bank. Every problem is generated fresh and checked by an exact verifier, so the answer is provably correct and you get a brand-new instance each time — while static banks get memorized and go stale the moment a firm changes its test."
@@ -486,12 +470,11 @@ export function LandingPage() {
               "Unlimited fresh reps on every concept",
             ]}
             visual={<FreshVisual />}
-            reverse
           />
 
           <Feature
             id="coverage"
-            no="No. 05"
+            no="No. 04"
             kicker="Full Coverage"
             title="From your first sample space to a two-sided market."
             body="Probability from the ground up, speed mental math, the classic brainteasers, and the expected-value and market-making games from real superdays — one product for the whole funnel, from online assessment to technical interview to superday."
@@ -501,10 +484,11 @@ export function LandingPage() {
               "Grounded in a 24-firm trader-track requirements sweep",
             ]}
             visual={<CurriculumVisual linked={isAuthed} />}
+            reverse
           />
 
           <Feature
-            no="No. 06"
+            no="No. 05"
             kicker="Speed Gate"
             title="Beat the clock where it counts."
             body="Timed mental-math gates like the 80-in-8 and 60-in-8 sprints screen candidates out before anything else. Drill the fast, exact arithmetic and the odds↔probability conversions traders live on — fresh sets every time, against the clock — so speed is never the thing that ends your interview."
@@ -514,7 +498,6 @@ export function LandingPage() {
               "Track your best and push it higher",
             ]}
             visual={<MentalMathVisual />}
-            reverse
           />
         </div>
 

@@ -15,6 +15,9 @@ import {
   skillByKey,
   type SkillNode,
 } from "@/lib/roadmap/skillGraph";
+import { resolveGoalMode } from "@/lib/mode/goalMode";
+import { COURSES, type CourseId } from "@/lib/mode/courseMap";
+import type { GoalMode } from "@/types/progress";
 
 /**
  * Read-only roadmap model (mirrors `useDashboardData`): a THIN consumer that
@@ -45,6 +48,31 @@ export interface RoadmapTierGroup {
   totalCount: number;
 }
 
+/**
+ * A single Case-A course "path": the ordered topic sequence for one UT course
+ * (Intro to Probability or Intro to Stochastic Processes) with each topic's
+ * mastery / lock / complete state and an overall per-path progress indicator.
+ * Reuses the SAME `RoadmapSkillRow`s + `computeRoadmap` state as the Case-B
+ * tiers (prereqs are resolved across the whole graph, so a course topic can
+ * still show "locked" behind an upstream foundation) — it is purely a REGROUPING
+ * of the same rows by course, never a second computation.
+ */
+export interface RoadmapCoursePath {
+  id: CourseId;
+  /** Course label — the ONLY name shown (never the M362 code). */
+  label: string;
+  blurb: string;
+  /** This course's PRIMARY owned topics, in curriculum order. */
+  rows: RoadmapSkillRow[];
+  /** How many of this path's topics are mastered. */
+  masteredCount: number;
+  totalCount: number;
+  /** 0..100 weighted readiness across this path's topics. */
+  readiness: number;
+  /** First not-mastered, prereqs-met topic in this path (its "current" step). */
+  currentKey?: string;
+}
+
 export interface RoadmapModel {
   state: RoadmapState;
   tiers: RoadmapTierGroup[];
@@ -52,6 +80,10 @@ export interface RoadmapModel {
   rows: RoadmapSkillRow[];
   currentRow?: RoadmapSkillRow;
   diagnosticDone: boolean;
+  /** Active Goal Mode — Case A ("course") regroups the pathway into courses. */
+  goalMode: GoalMode;
+  /** Case-A two-course paths (empty in Case B, where the tiers are used). */
+  coursePaths: RoadmapCoursePath[];
 }
 
 /** Level-completion counts (mastered / total) per topicKey across all tracks. */
@@ -142,6 +174,35 @@ export function useRoadmapData(): RoadmapModel {
       .sort((a, b) => a.order - b.order)
       .map(({ order: _order, ...g }) => g);
 
+    // Case-A course paths: regroup the SAME rows by course (primary topics, in
+    // curriculum order). Foundations / quant-only topics are excluded — a path
+    // shows only its course's owned topics.
+    const coursePaths: RoadmapCoursePath[] = COURSES.map((course) => {
+      const pathRows = course.topicKeys
+        .map((k) => rowByKey.get(k))
+        .filter((r): r is RoadmapSkillRow => !!r);
+      const masteredCount = pathRows.filter((r) => r.progress.mastered).length;
+      let weightSum = 0;
+      let accum = 0;
+      for (const r of pathRows) {
+        weightSum += r.node.weight;
+        accum += r.node.weight * (r.progress.masteryPct / 100);
+      }
+      const current = pathRows.find(
+        (r) => !r.progress.mastered && r.progress.prereqsMet,
+      );
+      return {
+        id: course.id,
+        label: course.label,
+        blurb: course.blurb,
+        rows: pathRows,
+        masteredCount,
+        totalCount: pathRows.length,
+        readiness: weightSum > 0 ? Math.round(100 * (accum / weightSum)) : 0,
+        currentKey: current?.node.topicKey,
+      };
+    });
+
     return {
       state,
       tiers,
@@ -150,6 +211,8 @@ export function useRoadmapData(): RoadmapModel {
         ? rowByKey.get(state.currentSkillKey)
         : undefined,
       diagnosticDone: !!progress.diagnosticDoneAt,
+      goalMode: resolveGoalMode(progress),
+      coursePaths,
     };
     // getTopicVerdict is derived from `progress`; recompute when progress changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

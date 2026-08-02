@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { TopicMastery } from "@/types/mastery";
 import { MISCONCEPTION } from "@/lib/tutor/misconception";
+import { topicKeyOf } from "@/lib/mastery/topicKey";
 import {
+  BETTING,
   CONDITIONAL,
   COUNTING,
+  EXPECTED_VALUE,
+  GEOMETRIC,
   L1_MEANING,
 } from "@/content/remediation/prereqDAG";
 import { planFinishRemediation, type FinishRemediationContext } from "./finish";
@@ -80,9 +84,29 @@ describe("planFinishRemediation — finish-time trigger", () => {
     if (plan.kind === "none") expect(plan.reason).toBe("not-dag");
   });
 
-  it("graceful degrade: a failed topic NOT in the DAG offers no descent (retry via summary)", () => {
+  it("a newly-covered scored topic (Betting & Sizing) now launches a descent (was previously no-gap)", () => {
+    // Before the DAG expansion, Betting & Sizing had no node ⇒ finishing it
+    // weak returned reason "no-gap". It now descends to its EV prerequisite.
+    const plan = planFinishRemediation(failedEasy({ topicKey: BETTING }));
+    expect(plan.kind).toBe("remediate");
+    if (plan.kind === "remediate" && plan.action.kind === "descend") {
+      expect(plan.action.toTopicKey).toBe(EXPECTED_VALUE);
+    }
+  });
+
+  it("a newly-covered scored topic (Geometric Probability) descends to Core Probability", () => {
+    const plan = planFinishRemediation(failedEasy({ topicKey: GEOMETRIC }));
+    expect(plan.kind).toBe("remediate");
+    if (plan.kind === "remediate" && plan.action.kind === "descend") {
+      expect(plan.action.toTopicKey).toBe(L1_MEANING);
+    }
+  });
+
+  it("graceful degrade: a flashcard-only Brainteaser topic offers no descent (intentionally out of scope)", () => {
+    // The self-assessed Brainteaser tracks have no scored attempt to remediate,
+    // so they are deliberately absent from the DAG ⇒ reason "no-gap".
     const plan = planFinishRemediation(
-      failedEasy({ topicKey: "betting-sizing::_core" }),
+      failedEasy({ topicKey: topicKeyOf("brainteasers", "Core Puzzles") }),
     );
     expect(plan.kind).toBe("none");
     if (plan.kind === "none") expect(plan.reason).toBe("no-gap");

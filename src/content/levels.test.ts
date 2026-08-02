@@ -14,6 +14,8 @@ import { geometricProbabilityLevels } from "./probabilityStats/geometricProbabil
 import { orderStatisticsLevels } from "./probabilityStats/orderStatistics/levels";
 import { varianceCovarianceCltLevels } from "./probabilityStats/varianceCovarianceClt/levels";
 import { poissonLevels } from "./probabilityStats/poisson/levels";
+import { conditionalExpectationLevels } from "./probabilityStats/conditionalExpectation/levels";
+import { jointDistributionsLevels } from "./probabilityStats/jointDistributions/levels";
 import { continuousDistributionsLevels } from "./probabilityStats/continuousDistributions/levels";
 import { brownianMotionLevels } from "./probabilityStats/brownianMotion/levels";
 
@@ -454,14 +456,19 @@ const probTrack = () =>
   PLAYABLE_TRACKS.find((t) => t.levels.some((l) => l.section === "Core Probability"))!;
 
 describe("Poisson Distribution & Process (Bucket 1)", () => {
-  it("exposes 2 numeric levels tagged 'Poisson Distribution & Process'", () => {
-    expect(poissonLevels.length).toBe(2);
+  it("exposes 3 numeric levels tagged 'Poisson Distribution & Process'", () => {
+    expect(poissonLevels.length).toBe(3);
     for (const lvl of poissonLevels) {
       expect(lvl.section).toBe("Poisson Distribution & Process");
       expect(lvl.mode).toBe("numeric");
       expect(lvl.blurb.length).toBeGreaterThan(10);
       expect(lvl.blurb.length).toBeLessThanOrEqual(160);
     }
+  });
+  it("adds a po-3 process-depth level (interarrivals, conditional uniformity, compound)", () => {
+    const depth = poissonLevels.find((l) => l.id === "po-3");
+    expect(depth).toBeDefined();
+    expect(depth!.difficulty).toBe("hard");
   });
   it("is wired after Expected Value and before Betting & Sizing", () => {
     const sections = probTrack().levels.map((l) => l.section);
@@ -470,6 +477,37 @@ describe("Poisson Distribution & Process (Bucket 1)", () => {
     );
     expect(sections.lastIndexOf("Poisson Distribution & Process")).toBeLessThan(
       sections.indexOf("Betting & Sizing"),
+    );
+  });
+});
+
+describe("Conditional Expectation subcategory (ADD — M362M)", () => {
+  it("exposes 2 numeric levels tagged 'Conditional Expectation', ramping medium→hard", () => {
+    expect(conditionalExpectationLevels.length).toBe(2);
+    for (const lvl of conditionalExpectationLevels) {
+      expect(lvl.section).toBe("Conditional Expectation");
+      expect(lvl.mode).toBe("numeric");
+      expect(lvl.blurb.trim().length).toBeGreaterThan(10);
+      expect(lvl.blurb.length).toBeLessThanOrEqual(160);
+      expect(lvl.lesson.paragraphs.length).toBeGreaterThan(0);
+      expect(lvl.lesson.keyIdea?.length).toBeGreaterThan(0);
+    }
+    expect(conditionalExpectationLevels[0].difficulty).toBe("medium");
+    expect(conditionalExpectationLevels[1].difficulty).toBe("hard");
+  });
+  it("is wired into the aggregator exactly once, after Expected Value and before Poisson", () => {
+    const track = probTrack();
+    const ceIds = track.levels
+      .filter((l) => l.section === "Conditional Expectation")
+      .map((l) => l.id);
+    expect(ceIds).toEqual(conditionalExpectationLevels.map((l) => l.id));
+    expect(new Set(ceIds).size).toBe(ceIds.length);
+    const sections = track.levels.map((l) => l.section);
+    expect(sections.lastIndexOf("Expected Value")).toBeLessThan(
+      sections.indexOf("Conditional Expectation"),
+    );
+    expect(sections.lastIndexOf("Conditional Expectation")).toBeLessThan(
+      sections.indexOf("Poisson Distribution & Process"),
     );
   });
 });
@@ -517,22 +555,74 @@ describe("Markov stationary distribution level (Bucket 1)", () => {
   });
 });
 
-describe("Extra Relevant Knowledge (Bucket 2)", () => {
-  it("bundles the untested-at-firms topics into ONE contiguous section at the END", () => {
+describe("Joint Distributions (Bucket 2 — first-class topic)", () => {
+  it("exposes 3 numeric joint levels (continuous, discrete pmf, covariance/region)", () => {
+    expect(jointDistributionsLevels.length).toBe(3);
+    const ids = jointDistributionsLevels.map((l) => l.id);
+    expect(ids).toEqual(["ek-joint", "ek-joint-2", "ek-joint-3"]);
+    for (const lvl of jointDistributionsLevels) {
+      expect(lvl.section).toBe("Joint Distributions");
+      expect(lvl.mode).toBe("numeric");
+      expect(lvl.blurb.trim().length).toBeGreaterThan(10);
+      expect(lvl.blurb.length).toBeLessThanOrEqual(160);
+    }
+  });
+  it("the joint levels are a contiguous run (its own section divider)", () => {
+    const track = probTrack();
+    const jointIdx = track.levels
+      .map((l, i) => ({ id: l.id, i }))
+      .filter((x) => x.id.startsWith("ek-joint"))
+      .map((x) => x.i);
+    for (let k = 1; k < jointIdx.length; k++) {
+      expect(jointIdx[k]).toBe(jointIdx[k - 1] + 1);
+    }
+  });
+});
+
+describe("Course-completeness topics (Bucket 2 — the former ERK split)", () => {
+  // The single "Extra Relevant Knowledge" bucket is now SEVEN first-class
+  // topics, each its OWN section (mastery bucket / skill-graph node / DAG node),
+  // in a contiguous run at the END of the track, in content order.
+  const SPLIT_SECTIONS = [
+    "Moment Generating Functions",
+    "Gamma Distribution",
+    "Joint Distributions",
+    "Branching Processes",
+    "Continuous-Time Markov Chains",
+    "Limit Theorems",
+    "Markov Chain Structure",
+  ] as const;
+
+  it("no level is still tagged the old 'Extra Relevant Knowledge' section", () => {
+    const track = probTrack();
+    expect(
+      track.levels.some((l) => l.section === "Extra Relevant Knowledge"),
+    ).toBe(false);
+  });
+
+  it("each of the seven sections is a single contiguous run, in order, at the end", () => {
     const track = probTrack();
     const sections = track.levels.map((l) => l.section);
-    const extra = track.levels.filter(
-      (l) => l.section === "Extra Relevant Knowledge",
-    );
-    // present, and the last section in the track
-    expect(extra.length).toBeGreaterThanOrEqual(7);
-    expect(sections[sections.length - 1]).toBe("Extra Relevant Knowledge");
-    // contiguous (a single run)
-    const first = sections.indexOf("Extra Relevant Knowledge");
-    const last = sections.lastIndexOf("Extra Relevant Knowledge");
-    expect(last - first + 1).toBe(extra.length);
-    // covers the required Bucket-2 families
-    const ids = new Set(extra.map((l) => l.id));
+    // The last seven distinct sections, in first-appearance order, are the split.
+    const runs: string[] = [];
+    for (const s of sections) {
+      if (s && runs[runs.length - 1] !== s) runs.push(s);
+    }
+    expect(runs.slice(-SPLIT_SECTIONS.length)).toEqual([...SPLIT_SECTIONS]);
+    // Each section appears as exactly one maximal contiguous run.
+    for (const s of SPLIT_SECTIONS) {
+      const first = sections.indexOf(s);
+      const last = sections.lastIndexOf(s);
+      const count = sections.filter((x) => x === s).length;
+      expect(last - first + 1).toBe(count);
+    }
+    // The very last section is Markov Chain Structure.
+    expect(sections[sections.length - 1]).toBe("Markov Chain Structure");
+  });
+
+  it("covers the required Bucket-2 level families", () => {
+    const track = probTrack();
+    const ids = new Set(track.levels.map((l) => l.id));
     for (const id of [
       "ek-mgf",
       "ek-gamma",

@@ -3,8 +3,13 @@ import { Rng } from "@/lib/rng";
 import { gradeNumeric } from "@/lib/numeric";
 import type { NumericQuestion } from "@/types/content";
 import {
+  compoundPoissonMean,
   poissonAtLeastOne,
+  poissonCondUniformKthTime,
   poissonFirstStreamProb,
+  poissonInterarrivalMean,
+  poissonKthArrivalMean,
+  poissonNoEventProb,
   poissonPMF,
   poissonProcessMean,
   poissonSuperposedMean,
@@ -13,8 +18,13 @@ import {
 } from "./poisson";
 import {
   genPoissonAtLeastOne,
+  genPoissonCompound,
+  genPoissonCondUniform,
   genPoissonFirstStream,
+  genPoissonInterarrival,
   genPoissonInterval,
+  genPoissonKthArrival,
+  genPoissonNoEvent,
   genPoissonPmf,
   genPoissonSplit,
   genPoissonSuper,
@@ -47,6 +57,17 @@ describe("Poisson solvers reproduce standard textbook values", () => {
     expect(s.value).toBe(0.75);
     expect([s.num, s.den]).toEqual([3, 4]);
   });
+  it("process depth: interarrival 1/λ, waiting-tail e^{-λt}, Erlang k/λ", () => {
+    expect(poissonInterarrivalMean(4)).toEqual({ num: 1, den: 4 });
+    expect(r(poissonNoEventProb(1, 2), 4)).toBe(r(Math.exp(-2), 4)); // e^{-2}
+    expect(poissonKthArrivalMean(3, 6)).toEqual({ num: 3, den: 6 }); // 1/2
+  });
+  it("conditional uniformity jT/(n+1) and compound mean λtμ", () => {
+    // n=3 arrivals in [0,12], 2nd expected at 2·12/4 = 6
+    expect(poissonCondUniformKthTime(2, 3, 12)).toEqual({ num: 24, den: 4 });
+    // λ=2, t=3, μ=5/2 ⇒ 2·3·5/2 = 15
+    expect(compoundPoissonMean(2, 3, 5, 2)).toEqual({ num: 30, den: 2 });
+  });
 });
 
 const NUMERIC_GENS: Record<string, (rng: Rng) => NumericQuestion> = {
@@ -57,6 +78,11 @@ const NUMERIC_GENS: Record<string, (rng: Rng) => NumericQuestion> = {
   genPoissonSplit,
   genPoissonSuper,
   genPoissonFirstStream,
+  genPoissonInterarrival,
+  genPoissonNoEvent,
+  genPoissonKthArrival,
+  genPoissonCondUniform,
+  genPoissonCompound,
 };
 
 const SEEDS = Array.from({ length: 60 }, (_, i) => i * 97 + 3);

@@ -5,15 +5,15 @@ import { groupLevelsIntoTopics } from "@/lib/topics";
 import { isLevelUnlockedBySection } from "@/lib/locking";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 import type { TopicVerdict } from "@/lib/mastery/verdict";
+import { resolveGoalMode } from "@/lib/mode/goalMode";
+import { isCourseTopic } from "@/lib/mode/courseMap";
+import type { GoalMode } from "@/types/progress";
 import { rankWeaknesses, reviewsDue } from "@/lib/calibration/ranking";
 import {
   reliabilityDiagram,
   type ReliabilityDiagramData,
 } from "@/lib/calibration/reliability";
-import {
-  pooledPairs,
-  sessionCalibrationLog,
-} from "@/lib/calibration/sessionLog";
+import { toCalibrationPairs } from "@/lib/calibration/persistedLog";
 
 /**
  * Read-only dashboard model (PHASE_5 §6). This hook is a THIN consumer: it
@@ -49,12 +49,50 @@ export interface DashboardModel {
   /** Pooled reliability diagram (insufficient-data when the session log is empty). */
   reliability: ReliabilityDiagramData;
   diagnosticDone: boolean;
+  /** Active Goal Mode (drives dashboard focus). */
+  goalMode: GoalMode;
+  /** True when any Speed Arena attempt exists (Case-B timing-panel gate). */
+  hasTimingData: boolean;
+}
+
+/**
+ * The candidate pool for the dashboard's FOCUS surfaces — the weakness ranking,
+ * the "recommended next focus", and reviews-due — scoped to the active mode.
+ *
+ * In course mode (Case A) ONLY the two courses' topics are eligible, so
+ * Foundations (Mental Arithmetic, Rates/Algebra, Number Theory, Geometry) and
+ * quant-only topics (Kelly, Game Theory, Interview Games / market-making,
+ * Brainteasers, Speed Arena, Fermi) NEVER surface as a recommendation, weak
+ * spot, or review — the learner is only ever pointed at Intro to Probability /
+ * Intro to Stochastic Processes topics. In interview mode (Case B) the pool is
+ * unchanged (every topic is eligible), so today's behavior is byte-for-byte
+ * preserved. Pure + deterministic — a plain filter over the enumerated topics.
+ */
+export function scopeTopicsToMode(
+  topics: DashboardTopic[],
+  mode: GoalMode,
+): DashboardTopic[] {
+  return mode === "course"
+    ? topics.filter((t) => isCourseTopic(t.topicKey))
+    : topics;
+}
+
+/** True when the learner has recorded any Speed Arena run (local PB store). */
+function hasArenaAttempts(): boolean {
+  if (typeof window === "undefined" || !window.localStorage) return false;
+  const ls = window.localStorage;
+  for (let i = 0; i < ls.length; i++) {
+    const k = ls.key(i);
+    if (k && k.startsWith("qtp.arena.pb.")) return true;
+  }
+  return false;
 }
 
 export function useDashboardData(now: string): DashboardModel {
   const { getTopicVerdict, progress } = useProgress();
 
   return useMemo(() => {
+    const goalMode = resolveGoalMode(progress);
     const topics: DashboardTopic[] = [];
     const seen = new Set<string>();
 
@@ -85,7 +123,13 @@ export function useDashboardData(now: string): DashboardModel {
     const byKey = new Map(topics.map((t) => [t.topicKey, t]));
     const evidenced = topics.filter((t) => t.verdict.n > 0);
 
-    const weaknesses = rankWeaknesses(evidenced.map((t) => t.verdict))
+    // FOCUS surfaces (weakness ranking → recommended focus, reviews-due) draw
+    // from the mode-scoped pool: in Case A ONLY course topics are eligible, so
+    // Foundations / quant-only topics never surface as something to practice.
+    // In Case B the pool is every topic (unchanged).
+    const weaknesses = rankWeaknesses(
+      scopeTopicsToMode(evidenced, goalMode).map((t) => t.verdict),
+    )
       .map((v) => byKey.get(v.topicKey))
       .filter((t): t is DashboardTopic => !!t);
 
@@ -94,14 +138,16 @@ export function useDashboardData(now: string): DashboardModel {
     );
 
     const due = reviewsDue(
-      topics.map((t) => t.verdict),
+      scopeTopicsToMode(topics, goalMode).map((t) => t.verdict),
       now,
     )
       .map((v) => byKey.get(v.topicKey))
       .filter((t): t is DashboardTopic => !!t);
 
+    // Pool from the PERSISTED cross-session calibration log (WS-CAL) so the
+    // reliability panel accrues across reloads instead of resetting each session.
     const reliability = reliabilityDiagram(
-      pooledPairs(sessionCalibrationLog.current),
+      toCalibrationPairs(progress.calibrationLog),
     );
 
     return {
@@ -112,6 +158,8 @@ export function useDashboardData(now: string): DashboardModel {
       due,
       reliability,
       diagnosticDone: !!progress.diagnosticDoneAt,
+      goalMode,
+      hasTimingData: hasArenaAttempts(),
     };
     // getTopicVerdict is derived from `progress`; recompute when progress changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps

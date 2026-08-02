@@ -2,8 +2,13 @@ import type { Level } from "@/types/content";
 import { mixNumeric } from "../coreScaffold";
 import {
   genPoissonAtLeastOne,
+  genPoissonCompound,
+  genPoissonCondUniform,
   genPoissonFirstStream,
+  genPoissonInterarrival,
   genPoissonInterval,
+  genPoissonKthArrival,
+  genPoissonNoEvent,
   genPoissonPmf,
   genPoissonSplit,
   genPoissonSuper,
@@ -99,6 +104,51 @@ export const poissonLevels: Level[] = [
           "Using λ instead of λt — forgetting the window length scales the mean.",
           "Multiplying or averaging rates when superposing, instead of adding them.",
           "Reporting the odds λ₁/λ₂ instead of the probability λ₁/(λ₁+λ₂) for which stream is first.",
+        ],
+      },
+    },
+  },
+  {
+    id: "po-3",
+    title: "Interarrivals, Waiting Times & Conditional Uniformity",
+    subtitle: "Exp gaps, Erlang waits, order-stat arrivals, compounding",
+    blurb:
+      "Poisson-process depth: interarrival mean 1/λ, waiting-tail e^{−λt}, the Erlang k/λ, conditional-uniformity jT/(n+1), and compound mean λtμ.",
+    section: SECTION,
+    difficulty: "hard",
+    mode: "numeric",
+    masteryThreshold: 0.7,
+    questionCount: 5,
+    numericGenerator: mixNumeric([
+      genPoissonInterarrival,
+      genPoissonNoEvent,
+      genPoissonKthArrival,
+      genPoissonCondUniform,
+      genPoissonCompound,
+    ]),
+    lesson: {
+      paragraphs: [
+        "The times BETWEEN Poisson events are independent Exponential(λ) gaps, so the mean interarrival is 1/λ and the chance of NO event before time t is P(T>t) = e^{−λt} (the first arrival lands after t). The waiting time to the k-th arrival stacks k of those gaps into an Erlang(k, λ), with mean k/λ. Watch the reciprocal: λ is events-per-time, 1/λ is time-per-event.",
+        "Two deeper facts finish the process toolkit. CONDITIONAL UNIFORMITY: given exactly n events in [0, T], the arrival times look like the order statistics of n Uniform(0, T) points, so they split the window into n+1 equal expected gaps and the j-th arrival has expected time j·T/(n+1). COMPOUND POISSON: if each of the λt expected events carries an independent mark of mean μ, the expected total is λ·t·μ (Wald over a Poisson count) — miss any of the three factors and the total is wrong.",
+      ],
+      keyIdea:
+        "Interarrival mean 1/λ, P(T>t)=e^{−λt}; k-th arrival mean k/λ; E[S₍ⱼ₎|N=n]=jT/(n+1); compound mean λtμ.",
+      whyInterviewers:
+        "Interarrival/exponential timing, waiting-time tails, and the order-statistic (conditional-uniformity) property are the deeper Poisson-process facts quant screens probe once the basics are in.",
+      deepDive: {
+        whyItWorks:
+          "A Poisson process is built from memoryless exponential gaps, so waiting times add those gaps (giving Erlang means) and the no-event probability is just one exponential tail. Because the process is uniform in time given the count, the arrivals behave like sorted uniform points, and summing independent marks over a random Poisson count multiplies the three rates together.",
+        approach: [
+          "For gaps and waits, work in time-per-event (1/λ) and stack k gaps for the k-th arrival (k/λ).",
+          "For 'no event yet', use the exponential tail e^{−λt} of the first interarrival.",
+          "Given a fixed count in a window, treat the arrivals as sorted uniform points and use j·T/(n+1).",
+          "For a compound total, multiply the arrival rate, the window length, and the mean mark.",
+        ],
+        pitfalls: [
+          "Reporting λ (rate) instead of 1/λ (mean gap), or using the wrong power of λ.",
+          "Using the complement 1−e^{−λt}, or dropping t, for the no-event probability.",
+          "Dividing the window by n instead of n+1 for the conditional-uniformity arrival time.",
+          "Forgetting one of the three factors (rate, time, or mark mean) in the compound total.",
         ],
       },
     },

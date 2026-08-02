@@ -31,5 +31,11 @@ export function migrateProgress(raw: unknown): UserProgress {
     onboardingTourDoneAt: r.onboardingTourDoneAt,
     // Additive, back-compatible: preserve diagnostic history if present.
     diagnosticHistory: r.diagnosticHistory,
+    // Additive, back-compatible: preserve the Goal Mode selector if present.
+    // `undefined` is treated as Case B ("interview") by `resolveGoalMode`, so a
+    // pre-mode save keeps today's exact experience.
+    goalMode: r.goalMode,
+    // Additive, back-compatible: preserve the persisted calibration log.
+    calibrationLog: r.calibrationLog,
   };
 }

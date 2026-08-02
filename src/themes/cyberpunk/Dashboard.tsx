@@ -9,6 +9,8 @@ import type { MasteryState } from "@/lib/mastery/verdict";
 import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
 import { MASTERY_BAR, P_TARGET } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import { CyberpunkAnimations, neonFilter } from "./neon";
 
 /**
@@ -466,35 +468,49 @@ const rx = (p: number) => SPAD + p * (SCOPE - 2 * SPAD);
 const ry = (p: number) => SCOPE - SPAD - p * (SCOPE - 2 * SPAD);
 
 function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
       <div
-        className="grid min-h-[180px] place-items-center rounded-sm border border-dashed p-6 text-center"
+        className="rounded-sm border border-dashed p-6 text-center"
         style={{ borderColor: "rgb(var(--color-accent) / 0.4)", background: "rgb(var(--color-surface-muted) / 0.6)" }}
       >
-        <div>
-          <div className="label text-accent">// Signal offline</div>
-          <p className="mt-2 max-w-xs text-sm leading-relaxed text-secondary">
-            Not enough data yet. As you answer graded items this session, we plot
-            how often your ~80%-confidence answers are actually right.
-          </p>
+        <div className="label text-accent">// Calibrating · Acquiring Signal</div>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-secondary">
+          Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+          confidence-rated questions and we'll show how well your confidence
+          matches your accuracy.
+        </p>
+        <p className="num mt-3 text-sm text-accent">
+          You're at {data.count}/{data.minPairs}.
+        </p>
+        <div className="mx-auto mt-2 h-2 w-full max-w-xs overflow-hidden rounded-sm border border-subtle bg-surface-muted">
+          <div
+            className="h-full"
+            style={{
+              width: `${progress}%`,
+              background: "rgb(var(--color-accent))",
+              boxShadow: "0 0 8px rgb(var(--color-accent) / 0.8)",
+            }}
+            aria-hidden="true"
+          />
         </div>
       </div>
     );
   }
 
-  // Net signed miscalibration → over/under-confidence read (same as base).
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? "well-calibrated"
-      : signed > 0
-        ? "over-confident"
-        : "under-confident";
-  const leanTone: Tone = lean === "over-confident" ? "red" : lean === "under-confident" ? "cyan" : "green";
+  // ONE signed calibration read (shared) → chip + caption can never contradict.
+  const calibration = data.calibration;
+  const lean = calibration?.lean ?? "well";
+  const leanText =
+    lean === "over" ? "over-confident" : lean === "under" ? "under-confident" : "well-calibrated";
+  const leanTone: Tone = lean === "over" ? "red" : lean === "under" ? "cyan" : "green";
+  const captionText =
+    lean === "over"
+      ? "Points below the diagonal = over-confident (confidence > accuracy)."
+      : lean === "under"
+        ? "Points above the diagonal = under-confident (accuracy > confidence)."
+        : "Points hug the diagonal = well-calibrated (confidence ≈ accuracy).";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -584,6 +600,11 @@ function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
       </svg>
 
       <div className="min-w-0 space-y-2">
+        {calibration && (
+          <p className={`text-sm font-semibold leading-relaxed ${TONE_TEXT[leanTone]}`}>
+            {calibration.label}
+          </p>
+        )}
         {data.headline && (
           <p className="text-sm leading-relaxed text-primary">
             When you say <span className="num font-semibold">~80%</span>, you're right{" "}
@@ -592,19 +613,30 @@ function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
           </p>
         )}
         <div className="flex flex-wrap gap-1.5">
-          <span className="chip border-subtle text-secondary">Brier gap {data.relGap.toFixed(3)}</span>
-          <span className="chip border-subtle text-secondary">Brier {data.brier.toFixed(3)}</span>
           <span
             className={`chip ${TONE_TEXT[leanTone]}`}
             style={{ borderColor: `rgb(${TONE_VAR[leanTone]})`, boxShadow: `0 0 8px rgb(${TONE_VAR[leanTone]} / 0.28)` }}
           >
-            {lean}
+            {leanText}
           </span>
         </div>
         <p className="text-xs leading-relaxed text-muted">
-          Points below the diagonal = over-confident; above = under-confident. The
-          magenta line marks your 80% target.
+          {captionText} The magenta line marks your 80% target.
         </p>
+        <details className="group mt-1">
+          <summary className="label cursor-pointer text-accent underline-offset-2 hover:underline">
+            // Advanced details
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="chip border-subtle text-secondary">Brier gap {data.relGap.toFixed(3)}</span>
+            <span className="chip border-subtle text-secondary">Brier {data.brier.toFixed(3)}</span>
+            {data.bins.map((b, i) => (
+              <span key={i} className="chip border-subtle text-muted">
+                {pct(b.predicted)} · n={b.count}
+              </span>
+            ))}
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -615,6 +647,8 @@ function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
 /* -------------------------------------------------------------------------- */
 
 export function CyberpunkDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -624,6 +658,7 @@ export function CyberpunkDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   return (
     <div className="relative min-h-[100dvh]">
       <CyberpunkAnimations />
@@ -660,6 +695,7 @@ export function CyberpunkDashboard({
               Mastery Terminal
             </div>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-secondary !min-h-0 shrink-0 !px-3 !py-1.5 text-[11px]"
@@ -730,16 +766,28 @@ export function CyberpunkDashboard({
           </HudPanel>
         )}
 
-        {/* 3) Weakness ranking */}
-        <HudPanel
-          tone="cyan"
-          label="// Threat Board · Weakest First by CI_low"
-          right={
-            <span className="label text-muted">{weaknesses.length} topics with evidence</span>
-          }
-        >
-          <ThreatBoard topics={weaknesses} />
-        </HudPanel>
+        {/* 3) Course readiness (Case A) or weakness ranking (Case B) */}
+        {courseMode ? (
+          <HudPanel
+            tone="cyan"
+            label="// Course Readiness · Mission Progress"
+            right={
+              <span className="label text-muted">{courses.length} courses</span>
+            }
+          >
+            <CourseReadinessCards courses={courses} />
+          </HudPanel>
+        ) : (
+          <HudPanel
+            tone="cyan"
+            label="// Threat Board · Weakest First by CI_low"
+            right={
+              <span className="label text-muted">{weaknesses.length} topics with evidence</span>
+            }
+          >
+            <ThreatBoard topics={weaknesses} />
+          </HudPanel>
+        )}
 
         {/* 4) Reliability scope */}
         <HudPanel tone="magenta" label="// Calibration Scope · Reliability">

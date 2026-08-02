@@ -21,31 +21,47 @@ export function ReliabilityDiagram({
 }: {
   data: ReliabilityDiagramData;
 }) {
-  if (data.count === 0) {
+  // Sufficiency gate (WS-CAL): never show a statistic from a near-empty sample.
+  // Below MIN_PAIRS we render an encouraging progress state instead of numbers —
+  // this is what eliminates the misleading "n=1" panel.
+  if (!data.sufficient) {
     return (
       <div className="grid min-h-[180px] place-items-center border border-dashed border-subtle bg-surface-muted p-6 text-center">
         <div>
           <div className="label text-muted">Reliability diagram</div>
-          <p className="mt-2 max-w-xs text-sm text-secondary">
-            Not enough data yet. As you answer graded items this session, we plot
-            how often your ~80%-confidence answers are actually right.
+          <p className="mt-2 max-w-sm text-sm text-secondary">
+            Calibration needs a bit more data — answer{" "}
+            <span className="num font-semibold text-primary">
+              ~{data.minPairs}
+            </span>{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches your accuracy.
           </p>
+          <p className="mt-2 num text-xs text-muted">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div className="mx-auto mt-2 h-1.5 w-48 max-w-full border border-subtle bg-surface">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{
+                width: `${Math.min(100, (data.count / data.minPairs) * 100)}%`,
+              }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  // Net signed miscalibration → over/under-confidence annotation.
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? "well-calibrated"
-      : signed > 0
-        ? "over-confident"
-        : "under-confident";
+  // ONE signed calibration read → the headline framing, the chip, and the
+  // caption all derive from the SAME sign, so they can never contradict.
+  const cal = data.calibration;
+  const leanLabel =
+    cal?.lean === "over"
+      ? "over-confident"
+      : cal?.lean === "under"
+        ? "under-confident"
+        : "well-calibrated";
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -113,8 +129,11 @@ export function ReliabilityDiagram({
       </svg>
 
       <div className="min-w-0 space-y-2">
+        {/* Primary read: one plain-language sentence (derived from the signed gap). */}
+        {cal && <p className="text-sm text-primary">{cal.label}</p>}
+
         {data.headline && (
-          <p className="text-sm text-primary">
+          <p className="text-sm text-secondary">
             When you say <span className="num font-semibold">~80%</span>, you're
             right{" "}
             <span className="num font-semibold text-accent">
@@ -124,28 +143,48 @@ export function ReliabilityDiagram({
             <span className="text-muted">(n={data.headline.count})</span>.
           </p>
         )}
-        <div className="flex flex-wrap gap-1.5">
-          <span className="chip border-subtle text-secondary">
-            Brier gap {data.relGap.toFixed(3)}
-          </span>
-          <span className="chip border-subtle text-secondary">
-            Brier {data.brier.toFixed(3)}
-          </span>
+
+        <div>
           <span
             className={`chip ${
-              lean === "over-confident"
+              leanLabel === "over-confident"
                 ? "border-bear text-bear"
-                : lean === "under-confident"
+                : leanLabel === "under-confident"
                   ? "border-accent text-accent"
                   : "border-bull text-bull"
             }`}
           >
-            {lean}
+            {leanLabel}
           </span>
         </div>
+
+        {/* Caption reconciled with the chip's sign (geometry: over-confident =
+            confidence > accuracy = points BELOW the diagonal). */}
         <p className="text-xs text-muted">
-          Points below the dashed line = over-confident; above = under-confident.
+          {leanLabel === "under-confident"
+            ? "Your points sit above the diagonal — you're more accurate than you feel."
+            : leanLabel === "over-confident"
+              ? "Your points sit below the diagonal — you're less accurate than you feel."
+              : "Your points hug the diagonal — confidence ≈ accuracy."}
         </p>
+
+        {/* Jargon on demand: raw Brier / reliability-gap / counts behind a details accordion. */}
+        <details className="group">
+          <summary className="label cursor-pointer list-none text-muted hover:text-secondary">
+            Advanced details ▾
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="chip border-subtle text-secondary">
+              Brier gap {data.relGap.toFixed(3)}
+            </span>
+            <span className="chip border-subtle text-secondary">
+              Brier {data.brier.toFixed(3)}
+            </span>
+            <span className="chip border-subtle text-secondary">
+              {data.count} pairs
+            </span>
+          </div>
+        </details>
       </div>
     </div>
   );

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ArenaOp, ArenaPreset } from "@/lib/arena/config";
 import { OPTIVER_COMPETITIVE, OPTIVER_PASS } from "@/lib/arena/config";
 import { scoreRun, type AnsweredItem } from "@/lib/arena/scoring";
+import { PACE_BAND_TOKEN, perQuestionBudgetMs } from "@/lib/arena/budget";
+import { questionPace } from "@/lib/arena/pacing";
 import { parseFreeResponse } from "@/lib/numeric";
 
 /** The common play shape (int stream OR the richer packs collapse to this). */
@@ -55,8 +57,11 @@ export function ArenaRunner({
   const cap = preset.questionCap
     ? Math.min(preset.questionCap, items.length)
     : items.length;
+  const interview = !!preset.interview;
+  const budgetMs = perQuestionBudgetMs(preset);
   const [index, setIndex] = useState(0);
   const [remainingMs, setRemainingMs] = useState(preset.durationSec * 1000);
+  const [qElapsedMs, setQElapsedMs] = useState(0);
   const [input, setInput] = useState("");
   const answeredRef = useRef<AnsweredItem[]>([]);
   const [answered, setAnswered] = useState<AnsweredItem[]>([]);
@@ -74,6 +79,7 @@ export function ArenaRunner({
   // tested separately). Finishes when the window elapses.
   useEffect(() => {
     const id = setInterval(() => {
+      if (interview) setQElapsedMs(Date.now() - qStartRef.current);
       setRemainingMs((prev) => {
         const next = prev - TICK_MS;
         if (next <= 0) {
@@ -94,6 +100,7 @@ export function ArenaRunner({
     setAnswered(next);
     setInput("");
     qStartRef.current = Date.now();
+    setQElapsedMs(0);
     if (index + 1 >= cap) {
       finish();
     } else {
@@ -131,6 +138,15 @@ export function ArenaRunner({
   const timerColor =
     remainingMs < 10_000 ? "text-bear" : "text-primary";
 
+  const pace = interview ? questionPace(qElapsedMs, budgetMs) : null;
+  const withinBudget = useMemo(
+    () =>
+      interview
+        ? answered.filter((a) => !a.skipped && a.rtMs <= budgetMs).length
+        : 0,
+    [answered, interview, budgetMs],
+  );
+
   if (!current) return null;
 
   return (
@@ -153,11 +169,46 @@ export function ArenaRunner({
         </div>
       </div>
 
-      <div className="text-right text-xs text-muted">
+      <div className="flex items-center justify-between text-xs text-muted">
+        {interview ? (
+          <span className="num">
+            within budget · {withinBudget}/{answered.length}
+          </span>
+        ) : (
+          <span />
+        )}
         <span className="num">
           {index + 1} / {cap}
         </span>
       </div>
+
+      {interview && pace && (
+        <div>
+          <div className="flex items-center justify-between">
+            <span className="label">This question</span>
+            <span className={`num text-sm font-bold ${PACE_BAND_TOKEN[pace.band]}`}>
+              {(pace.remainingMs / 1000).toFixed(1)}s
+              {pace.overBudget ? " · over budget" : ""}
+            </span>
+          </div>
+          <div className="mt-1 h-1.5 w-full overflow-hidden border border-subtle bg-surface">
+            <div
+              className={`h-full transition-[width] duration-100 ${
+                pace.band === "over"
+                  ? "bg-bear"
+                  : pace.band === "behind"
+                    ? "bg-gold"
+                    : "bg-accent"
+              }`}
+              style={{ width: `${pace.fraction * 100}%` }}
+            />
+          </div>
+          <p className="mt-1 text-[10px] text-muted">
+            Budget {(budgetMs / 1000).toFixed(1)}s/q · pacing feedback only, no
+            score effect.
+          </p>
+        </div>
+      )}
 
       <div className="panel p-8 text-center">
         <div className="num text-4xl font-bold text-primary">

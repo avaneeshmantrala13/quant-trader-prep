@@ -3,11 +3,12 @@ import { mixNumeric, mixQuiz } from "../coreScaffold";
 import { genClassify, genPnEntry } from "./generators";
 
 /**
- * **Markov structural theory** — Bucket 2 "Extra Relevant Knowledge" (M362M):
- * the transition-matrix / n-step (Pⁿ, Chapman–Kolmogorov) formalism (numeric) and
- * state classification (quiz). Two levels, both in the Extra section.
+ * **Markov structural theory** — a first-class course-completeness topic
+ * (M362M): the transition-matrix / n-step (Pⁿ, Chapman–Kolmogorov) formalism
+ * (numeric) and state classification (quiz). Two levels. Its own `section`
+ * (`probability::Markov Chain Structure`) = its own mastery bucket.
  */
-const SECTION = "Extra Relevant Knowledge";
+const SECTION = "Markov Chain Structure";
 
 export const markovStructureLevels: Level[] = [
   {

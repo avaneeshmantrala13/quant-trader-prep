@@ -70,3 +70,61 @@ export function poissonFirstStreamProb(rate1: number, rate2: number): {
 } {
   return { num: rate1, den: rate1 + rate2, value: rate1 / (rate1 + rate2) };
 }
+
+/* ========================================================================== */
+/*  PROCESS DEPTH: interarrivals, waiting times, conditional uniformity,       */
+/*  compound Poisson (M362M Poisson-process core)                              */
+/* ========================================================================== */
+
+/**
+ * Interarrival times of a rate-λ Poisson process are iid Exponential(λ), so the
+ * MEAN gap between consecutive events is 1/λ (exact rational num/den).
+ */
+export function poissonInterarrivalMean(rate: number): { num: number; den: number } {
+  return { num: 1, den: rate };
+}
+
+/**
+ * P(no event in a window of length t) = P(interarrival > t) = e^{−λt} (float,
+ * transcendental). Equivalently P(the first arrival happens after time t).
+ */
+export function poissonNoEventProb(rate: number, t: number): number {
+  return Math.exp(-rate * t);
+}
+
+/**
+ * Waiting time to the k-th arrival is Gamma/Erlang(k, λ) with MEAN k/λ (the sum
+ * of k iid Exp(λ) interarrivals). Exact rational num/den.
+ */
+export function poissonKthArrivalMean(k: number, rate: number): { num: number; den: number } {
+  return { num: k, den: rate };
+}
+
+/**
+ * CONDITIONAL UNIFORMITY: given exactly n events of a Poisson process in [0,T],
+ * the n arrival times are distributed as the order statistics of n iid
+ * Uniform(0,T) draws. Hence the expected time of the j-th (of n) arrival is
+ * E[S_(j) | N(T)=n] = j·T/(n+1). Exact rational num/den.
+ */
+export function poissonCondUniformKthTime(
+  j: number,
+  n: number,
+  T: number,
+): { num: number; den: number } {
+  return { num: j * T, den: n + 1 };
+}
+
+/**
+ * COMPOUND Poisson: if events arrive at rate λ over time t and each carries an
+ * iid mark of mean `markMean`, the total S = Σ marks has E[S] = λ·t·markMean
+ * (Wald over a Poisson count). Exact rational num/den for rational markMean given
+ * as `markNum/markDen`.
+ */
+export function compoundPoissonMean(
+  rate: number,
+  t: number,
+  markNum: number,
+  markDen: number,
+): { num: number; den: number } {
+  return { num: rate * t * markNum, den: markDen };
+}

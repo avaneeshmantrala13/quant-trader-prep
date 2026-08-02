@@ -1,10 +1,15 @@
 import type { Rng } from "@/lib/rng";
 import type { Difficulty, NumericQuestion } from "@/types/content";
 import { F, decText, fracText } from "../coreSolvers";
-import { cap, numericErrors } from "../coreScaffold";
+import { cap, numDp, numericErrors } from "../coreScaffold";
 import {
+  compoundPoissonMean,
   poissonAtLeastOne,
+  poissonCondUniformKthTime,
   poissonFirstStreamProb,
+  poissonInterarrivalMean,
+  poissonKthArrivalMean,
+  poissonNoEventProb,
   poissonPMF,
   poissonProcessMean,
   poissonSuperposedMean,
@@ -428,6 +433,291 @@ export function buildPoissonFirstStreamInstance(
 }
 
 /* ========================================================================== */
+/* ==========================  PROCESS DEPTH  ============================== */
+/* ========================================================================== */
+
+/**
+ * Mean interarrival time = 1/λ (interarrivals are Exp(λ)). Traps: reporting λ
+ * (the rate), 2/λ (time to the 2nd arrival), and 1/λ² (wrong units).
+ */
+export function buildInterarrivalMeanInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(PROC_THEME);
+  const rate = rng.pick([2, 4, 5, 8, 10]);
+  const { num, den } = poissonInterarrivalMean(rate);
+  const value = F(num, den);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(rate),
+    `${rate} is λ, the mean NUMBER of ${th.ev} per unit time. The mean TIME between them is the reciprocal 1/λ.`,
+  );
+  push(
+    F(2, rate),
+    `2/λ = ${fracText(F(2, rate))} is the mean time to the SECOND arrival, not the gap between consecutive events.`,
+  );
+  push(
+    F(1, rate * rate),
+    `1/λ² = ${fracText(F(1, rate * rate))} has the wrong units; the mean interarrival is 1/λ.`,
+  );
+
+  const prompt =
+    `${cap(th.ev)} occur as a Poisson process at rate λ = ${rate} ${th.rateU}. ` +
+    `What is the mean TIME between consecutive ${th.ev} (in ${th.t})? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Interarrival times of a Poisson process are Exponential(λ), so the mean gap is 1/λ = 1/${rate} = ${fracText(value)} ≈ ${decText(value, dp)} ${th.t}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-poisson-interarrival-${rate}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Interarrival mean = 1/λ (Exponential gaps)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Poisson process · interarrival mean",
+    },
+  };
+}
+
+/**
+ * P(no event before time t) = P(first arrival after t) = e^{−λt}. Traps:
+ * 1−e^{−λt} (the complement), e^{−λ} (dropped t), λt·e^{−λt} (P of exactly one).
+ */
+export function buildNoEventProbInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(PROC_THEME);
+  const rate = rng.pick([1, 2, 3]);
+  const t = rng.pick([2, 3, 4]);
+  const dp = 4;
+  const value = poissonNoEventProb(rate, t);
+  const answer = Number(decText(value, dp));
+  const m = rate * t;
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    1 - value,
+    `${decText(1 - value, dp)} = 1 − e^{−λt} is P(at least one ${th.ev.replace(/s$/, "")} by time t), the complement of "no events".`,
+  );
+  push(
+    Math.exp(-rate),
+    `${decText(Math.exp(-rate), dp)} = e^{−λ} drops the window length t; over ${t} ${th.t} the mean is λt = ${m}, so use e^{−λt}.`,
+  );
+  push(
+    m * Math.exp(-m),
+    `${decText(m * Math.exp(-m), dp)} = λt·e^{−λt} is P(exactly one), not P(none).`,
+  );
+
+  const prompt =
+    `${cap(th.ev)} occur as a Poisson process at rate λ = ${rate} ${th.rateU}. ` +
+    `What is the probability that the FIRST ${th.ev.replace(/s$/, "")} arrives only AFTER ${t} ${th.t} (i.e. no ${th.ev} in the first ${t} ${th.t})? (Round to ${dp} decimals.)`;
+  const explanation =
+    `P(first arrival > t) = P(0 events in [0,t]) = e^{−λt} = e^{−${rate}·${t}} = e^{−${m}} = ${decText(value, dp)}. ` +
+    `(Equivalently, the first interarrival — an Exp(λ) — exceeds t.)`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-poisson-noevent-${rate}-${t}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "P(no event in t) = P(T>t) = e^{−λt}",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Poisson process · waiting-time tail",
+    },
+  };
+}
+
+/**
+ * Mean waiting time to the k-th arrival = k/λ (Erlang(k,λ) mean = sum of k iid
+ * Exp(λ) gaps). Traps: 1/λ (only one gap), kλ (multiplied), k/λ² (wrong power).
+ */
+export function buildKthArrivalMeanInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(PROC_THEME);
+  const rate = rng.pick([2, 3, 4, 5]);
+  const k = rng.pick([2, 3, 4, 5]);
+  const { num, den } = poissonKthArrivalMean(k, rate);
+  const value = F(num, den);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(1, rate),
+    `1/λ = ${fracText(F(1, rate))} is the mean time to just ONE arrival; the k-th arrival waits for k gaps, so k/λ.`,
+  );
+  push(
+    F(k * rate),
+    `k·λ = ${k * rate} multiplies by the rate; you DIVIDE by it: the k-th arrival mean is k/λ.`,
+  );
+  push(
+    F(k, rate * rate),
+    `k/λ² = ${fracText(F(k, rate * rate))} uses the wrong power of λ; each Exp(λ) gap has mean 1/λ, so k of them give k/λ.`,
+  );
+
+  const prompt =
+    `${cap(th.ev)} occur as a Poisson process at rate λ = ${rate} ${th.rateU}. ` +
+    `What is the expected TIME (in ${th.t}) until the ${k}-th ${th.ev.replace(/s$/, "")}? (Round to ${dp} decimals.)`;
+  const explanation =
+    `The time to the k-th arrival is a sum of k iid Exp(λ) interarrivals (an Erlang(k,λ)), with mean k/λ = ${k}/${rate} = ${fracText(value)} ≈ ${decText(value, dp)} ${th.t}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-poisson-kth-${rate}-${k}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Time to k-th arrival ~ Erlang, mean k/λ",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Poisson process · k-th arrival mean",
+    },
+  };
+}
+
+/**
+ * Conditional uniformity: given exactly n events in [0,T], the arrival times are
+ * order statistics of n Uniform(0,T) draws, so E[S_(j)|N(T)=n] = j·T/(n+1).
+ * Traps: j·T/n (wrong split), T/2 (ignore the rank), T/(n+1) (assume j=1).
+ */
+export function buildCondUniformInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const th = rng.pick(PROC_THEME);
+  const T = rng.pick([6, 10, 12]);
+  const n = rng.pick([3, 4, 5]);
+  const j = rng.int(1, n);
+  const { num, den } = poissonCondUniformKthTime(j, n, T);
+  const value = F(num, den);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+
+  const ord = (r: number) =>
+    r === 1 ? "1st" : r === 2 ? "2nd" : r === 3 ? "3rd" : `${r}th`;
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(j * T, n),
+    `j·T/n = ${fracText(F(j * T, n))} divides by n; the n arrivals split [0,T] into n+1 equal expected gaps, so use n+1.`,
+  );
+  push(
+    F(T, 2),
+    `T/2 = ${fracText(F(T, 2))} is the mean of a single uniform point, ignoring the rank j among the n arrivals.`,
+  );
+  push(
+    F(T, n + 1),
+    `T/(n+1) = ${fracText(F(T, n + 1))} is the expected FIRST arrival time (j=1); scale it by j.`,
+  );
+
+  const prompt =
+    `${cap(th.ev)} occur as a Poisson process over a window [0, ${T}] ${th.t}. ` +
+    `GIVEN that exactly ${n} ${th.ev} occurred in the window, what is the expected time of the ${ord(j)} ${th.ev.replace(/s$/, "")}? (Round to ${dp} decimals.)`;
+  const explanation =
+    `Given N(T)=${n}, the arrival times are distributed as the order statistics of ${n} Uniform(0,${T}) draws, so E[S_(${j})|N=${n}] = j·T/(n+1) = ${j}·${T}/${n + 1} = ${fracText(value)} ≈ ${decText(value, dp)} ${th.t}.`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-poisson-conduniform-${T}-${n}-${j}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Conditional uniformity: E[S_(j)|N=n]=jT/(n+1)",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Poisson process · conditional uniformity",
+    },
+  };
+}
+
+const MARK_POOL: [number, number][] = [
+  [3, 1],
+  [5, 1],
+  [3, 2],
+  [5, 2],
+  [7, 2],
+];
+
+/**
+ * Compound Poisson mean: events at rate λ over time t, each carrying an iid mark
+ * of mean μ ⇒ E[total] = λtμ. Traps: λt (forgot the mark), λμ (forgot t),
+ * μt (forgot the rate).
+ */
+export function buildCompoundMeanInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const rate = rng.pick([2, 3, 4]);
+  const t = rng.pick([2, 3, 5]);
+  const [mn, md] = rng.pick(MARK_POOL);
+  const mark = F(mn, md);
+  const { num, den } = compoundPoissonMean(rate, t, mn, md);
+  const value = F(num, den);
+  const dp = numDp(value, 2, 4);
+  const answer = Number(decText(value, dp));
+
+  const { errors, push } = numericErrors(answer, dp);
+  push(
+    F(rate * t),
+    `λt = ${rate * t} is the expected NUMBER of claims; multiply by the mean claim size μ = ${fracText(mark)} to get the total.`,
+  );
+  push(
+    F(rate * mn, md),
+    `λμ = ${fracText(F(rate * mn, md))} forgets the time window t = ${t}.`,
+  );
+  push(
+    F(t * mn, md),
+    `μt = ${fracText(F(t * mn, md))} forgets the arrival rate λ = ${rate}.`,
+  );
+
+  const prompt =
+    `Insurance claims arrive as a Poisson process at rate λ = ${rate} per day, and each claim has an independent mean size of $${fracText(mark)}. ` +
+    `Over ${t} days, what is the EXPECTED total claim amount (in dollars)? (Round to ${dp} decimals.)`;
+  const explanation =
+    `A compound Poisson total has mean E[S] = λ·t·E[mark] = ${rate}·${t}·${fracText(mark)} = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
+    `(By Wald over the Poisson count N with E[N]=λt.)`;
+
+  return {
+    answer,
+    numeric: {
+      id: `gen-poisson-compound-${rate}-${t}-${mn}_${md}`,
+      prompt,
+      answer,
+      decimals: dp,
+      difficulty,
+      concept: "Compound Poisson mean = λt·E[mark]",
+      explanation,
+      unit: "",
+      commonErrors: errors,
+      source: "Poisson process · compound mean",
+    },
+  };
+}
+
+/* ========================================================================== */
 /*  Named generators (adapters)                                                */
 /* ========================================================================== */
 
@@ -445,3 +735,13 @@ export const genPoissonSuper = (rng: Rng): NumericQuestion =>
   buildPoissonSuperInstance(rng, "medium").numeric;
 export const genPoissonFirstStream = (rng: Rng): NumericQuestion =>
   buildPoissonFirstStreamInstance(rng, "hard").numeric;
+export const genPoissonInterarrival = (rng: Rng): NumericQuestion =>
+  buildInterarrivalMeanInstance(rng, "medium").numeric;
+export const genPoissonNoEvent = (rng: Rng): NumericQuestion =>
+  buildNoEventProbInstance(rng, "hard").numeric;
+export const genPoissonKthArrival = (rng: Rng): NumericQuestion =>
+  buildKthArrivalMeanInstance(rng, "hard").numeric;
+export const genPoissonCondUniform = (rng: Rng): NumericQuestion =>
+  buildCondUniformInstance(rng, "hard").numeric;
+export const genPoissonCompound = (rng: Rng): NumericQuestion =>
+  buildCompoundMeanInstance(rng, "hard").numeric;

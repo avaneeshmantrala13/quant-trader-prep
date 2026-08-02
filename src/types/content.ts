@@ -300,7 +300,7 @@ export interface Track {
   description: string;
   motif: MotifKey;
   levels: Level[];
-  /** Teaser-only track (e.g. Calibration Gym) — shown but not playable yet. */
+  /** Teaser-only ("coming soon") track — shown but not playable yet. */
   comingSoon?: boolean;
 }
 

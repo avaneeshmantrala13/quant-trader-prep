@@ -100,6 +100,7 @@ describe("integration with real tracks", () => {
       "Geometric Probability",
       "Conditional Probability",
       "Expected Value",
+      "Conditional Expectation",
       "Poisson Distribution & Process",
       "Betting & Sizing",
       "Order Statistics",
@@ -108,11 +109,19 @@ describe("integration with real tracks", () => {
       "Markov Chains",
       "Brownian Motion",
       "Game Theory & Puzzles",
-      "Extra Relevant Knowledge",
+      // The former single "Extra Relevant Knowledge" bucket is now SEVEN
+      // first-class course-completeness topics, in content (difficulty) order.
+      "Moment Generating Functions",
+      "Gamma Distribution",
+      "Joint Distributions",
+      "Branching Processes",
+      "Continuous-Time Markov Chains",
+      "Limit Theorems",
+      "Markov Chain Structure",
     ]);
     // Ranks are 1..N in data order.
     expect(topics.map((t) => t.rank)).toEqual([
-      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14,
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
     ]);
     // Topics partition the track with no gaps/overlaps.
     expect(topics[0].startIndex).toBe(0);

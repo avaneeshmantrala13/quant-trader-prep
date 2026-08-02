@@ -457,7 +457,7 @@ export function getCyberpunkStation(
   ctx: LevelIllustrationContext,
 ): MapStationComponent | null {
   const family = FAMILIES[ctx.trackId];
-  if (!family || family.length === 0) return null; // e.g. calibration-gym → plain node
+  if (!family || family.length === 0) return null; // no family → plain node
   const i = ((ctx.levelIndex % family.length) + family.length) % family.length;
   return family[i];
 }

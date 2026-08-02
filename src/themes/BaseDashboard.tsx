@@ -5,6 +5,8 @@ import { TopicCard } from "@/components/dashboard/TopicCard";
 import { WeaknessList } from "@/components/dashboard/WeaknessList";
 import { ReviewsDue } from "@/components/dashboard/ReviewsDue";
 import { ReliabilityDiagram } from "@/components/dashboard/ReliabilityDiagram";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 
 /**
  * BASE Dashboard renderer — the default, theme-agnostic Mastery & Calibration
@@ -20,6 +22,8 @@ import { ReliabilityDiagram } from "@/components/dashboard/ReliabilityDiagram";
  * only styles what it receives, never fetching data or building routes.
  */
 export function BaseDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -29,6 +33,7 @@ export function BaseDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   return (
     <div className="relative min-h-[100dvh] bg-surface">
       <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
@@ -45,6 +50,7 @@ export function BaseDashboard({
               Mastery Dashboard
             </div>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -135,16 +141,23 @@ export function BaseDashboard({
           </section>
         )}
 
-        {/* 3) Weakness ranking by CI_low */}
-        <section className="panel p-5">
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="label text-accent">Weakest First · by CI_low</h2>
-            <span className="label text-muted">
-              {weaknesses.length} topics with evidence
-            </span>
-          </div>
-          <WeaknessList topics={weaknesses} />
-        </section>
+        {/* 3) Mode focus: Case A course-readiness cards vs Case B weakness ranking. */}
+        {courseMode ? (
+          <section>
+            <h2 className="label mb-3 text-accent">Course Readiness</h2>
+            <CourseReadinessCards courses={courses} />
+          </section>
+        ) : (
+          <section className="panel p-5">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="label text-accent">Weakest First · by CI_low</h2>
+              <span className="label text-muted">
+                {weaknesses.length} topics with evidence
+              </span>
+            </div>
+            <WeaknessList topics={weaknesses} />
+          </section>
+        )}
 
         {/* 4) Accuracy × calibration reliability diagram */}
         <section className="panel p-5">

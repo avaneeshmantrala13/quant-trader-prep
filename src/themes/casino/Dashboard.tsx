@@ -4,6 +4,8 @@ import { ChevronLeftIcon } from "@/components/icons";
 import { MASTERY_BAR, P_TARGET, P_TARGET_BAND } from "@/lib/mastery/config";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import type {
   DashboardMisconception,
   DashboardTopicEntry,
@@ -319,7 +321,8 @@ const sx = (p: number) => PAD + p * (SIZE - 2 * PAD);
 const sy = (p: number) => SIZE - PAD - p * (SIZE - 2 * PAD);
 
 function ReliabilityTable({ data }: { data: ReliabilityDiagramData }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
       <div
         className="grid min-h-[180px] place-items-center rounded-sm border border-dashed border-gold/50 bg-surface-muted p-6 text-center"
@@ -327,27 +330,40 @@ function ReliabilityTable({ data }: { data: ReliabilityDiagramData }) {
       >
         <div className="max-w-xs">
           <Chip className="mx-auto h-9 w-9 text-accent/70" />
-          <div className="label mt-2 text-accent">No hands dealt yet</div>
+          <div className="label mt-2 text-accent">Building the ledger</div>
           <p className="mt-2 text-sm text-secondary">
-            Not enough data yet. As you answer graded items this session, we plot
-            how often your ~80%-confidence calls are actually right.
+            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches your accuracy.
           </p>
+          <p className="num mt-3 text-base font-semibold text-primary">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-gold/40 bg-surface">
+            <div
+              className="h-full bg-accent transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  // Net signed miscalibration → over/under-confidence read.
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? "well-calibrated"
-      : signed > 0
-        ? "over-confident"
-        : "under-confident";
+  // Single signed calibration read (over/under/well) — never recomputed here.
+  const cal = data.calibration;
+  const leanText =
+    cal?.lean === "over"
+      ? "over-confident"
+      : cal?.lean === "under"
+        ? "under-confident"
+        : "well-calibrated";
+  const caption =
+    cal?.lean === "under"
+      ? "Points above the gold line = under-confident; below = over-confident."
+      : cal?.lean === "well"
+        ? "Points hugging the gold line = well-calibrated; below = over-confident, above = under-confident."
+        : "Points below the gold line = over-confident; above = under-confident.";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -455,29 +471,37 @@ function ReliabilityTable({ data }: { data: ReliabilityDiagramData }) {
             <span className="text-muted">(n={data.headline.count})</span>.
           </p>
         )}
+        {cal && (
+          <p className="text-[15px] font-semibold text-primary">{cal.label}</p>
+        )}
         <div className="flex flex-wrap gap-1.5">
-          <span className="chip border-gold/50 text-secondary">
-            Brier gap {data.relGap.toFixed(3)}
-          </span>
-          <span className="chip border-gold/50 text-secondary">
-            Brier {data.brier.toFixed(3)}
-          </span>
           <span
             className={`chip ${
-              lean === "over-confident"
+              cal?.lean === "over"
                 ? "border-bear bg-bear/10 text-bear"
-                : lean === "under-confident"
+                : cal?.lean === "under"
                   ? "border-accent bg-gold/10 text-accent"
                   : "border-bull bg-bull/10 text-bull"
             }`}
             style={goldRing}
           >
-            {lean}
+            {leanText}
           </span>
         </div>
-        <p className="text-xs text-muted">
-          Points below the gold line = over-confident; above = under-confident.
-        </p>
+        <p className="text-xs text-muted">{caption}</p>
+        <details className="group">
+          <summary className="label cursor-pointer text-muted transition-colors hover:text-secondary">
+            Advanced details
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="chip border-gold/50 text-secondary">
+              Brier gap {data.relGap.toFixed(3)}
+            </span>
+            <span className="chip border-gold/50 text-secondary">
+              Brier {data.brier.toFixed(3)}
+            </span>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -514,6 +538,8 @@ function SectionRule({
 }
 
 export function CasinoDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -523,6 +549,7 @@ export function CasinoDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   return (
     <div className="relative min-h-[100dvh] bg-bg">
       <CasinoOrnamentStyle />
@@ -564,6 +591,7 @@ export function CasinoDashboard({
               Player Stats Sheet
             </div>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -658,15 +686,22 @@ export function CasinoDashboard({
           </section>
         )}
 
-        {/* 3) Weakness ranking by CI_low. */}
-        <section className="panel p-5" style={goldRing}>
-          <SectionRule suit="club">Weakest Hands · by CI_low</SectionRule>
-          <p className="-mt-1 mb-3 text-xs text-muted">
-            {weaknesses.length} table{weaknesses.length === 1 ? "" : "s"} with
-            evidence, worst-and-most-certain first.
-          </p>
-          <WeaknessRanking topics={weaknesses} />
-        </section>
+        {/* 3) Course readiness (Case A) or weakness ranking (Case B). */}
+        {courseMode ? (
+          <section className="panel p-5" style={goldRing}>
+            <SectionRule suit="club">Course Readiness · Your Tables</SectionRule>
+            <CourseReadinessCards courses={courses} />
+          </section>
+        ) : (
+          <section className="panel p-5" style={goldRing}>
+            <SectionRule suit="club">Weakest Hands · by CI_low</SectionRule>
+            <p className="-mt-1 mb-3 text-xs text-muted">
+              {weaknesses.length} table{weaknesses.length === 1 ? "" : "s"} with
+              evidence, worst-and-most-certain first.
+            </p>
+            <WeaknessRanking topics={weaknesses} />
+          </section>
+        )}
 
         {/* 4) Calibration reliability table. */}
         <section className="panel p-5" style={goldRing}>

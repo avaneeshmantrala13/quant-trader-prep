@@ -1,4 +1,5 @@
 import type { Difficulty } from "@/types/content";
+import type { GoalMode } from "@/types/progress";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 
 /**
@@ -264,6 +265,247 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
   },
 ];
 
+/**
+ * COURSE-MODE (Case A) BLUEPRINT — assesses the UT M362K / M362M course spine
+ * (Intro to Probability + Intro to Stochastic Processes) INSTEAD of the
+ * quant-interview set, including the seven now-first-class ex-"Extra Relevant
+ * Knowledge" topics (MGF / Gamma / Joint / Limit Theorems / Branching / CTMC /
+ * Markov Chain Structure) and Conditional Expectation. It deliberately DROPS the
+ * quant-only topics (Mental Math, Interview Games, Betting & Sizing, Game Theory,
+ * and the applied-math Rates/Number-Theory/Geometry word-problem spine) that
+ * Case B keeps.
+ *
+ * Same two-stage shape as the interview blueprint (a base breadth pass with Core
+ * Probability as the index-0 ROUTER, then a prerequisite-gated depth pass), and
+ * the SAME ≤ 30-item guarantee: 9 always-on base items (four 2-item slots + one
+ * 1-item breadth slot) + 16 gated items = 25 nominal; worst case adds one
+ * tiebreak per 2-item BASE slot (4) ⇒ 29 (< 31). Every gated slot gates on a
+ * BASE topic so its prerequisite is materialized in the base plan. Each slot
+ * re-uses an EXISTING quiz/numeric generator (no new content); numeric levels
+ * surface as MCQ via their authored `commonErrors` (see `items.ts`).
+ */
+export const COURSE_DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
+  /* ---------------------------- BASE (always-on) --------------------------- */
+  {
+    // slot 0 — ROUTER (must stay index 0, mirrors ROUTER_SLOT_INDEX).
+    topicKey: topicKeyOf("probability", "Core Probability"),
+    trackId: "probability",
+    levelId: "pr-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Core Probability",
+    probes:
+      "Axioms, sample space, inclusion–exclusion, independence — the M362K ch. 2 foundation.",
+    misconceptionTag: "union_rule_no_overlap",
+  },
+  {
+    topicKey: topicKeyOf("probability", "Conditional Probability"),
+    trackId: "probability",
+    levelId: "cp-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Conditional Probability & Bayes",
+    probes: "Reversed conditional, base-rate neglect, reduced sample space (M362K ch. 3).",
+    misconceptionTag: "reversed_conditional",
+  },
+  {
+    topicKey: topicKeyOf("probability", "Expected Value"),
+    trackId: "probability",
+    levelId: "ev-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Expected Value",
+    probes: "Probability-weighted sums; forgetting losing outcomes (M362K chs. 4/7).",
+    misconceptionTag: "unweighted_average",
+  },
+  {
+    topicKey: topicKeyOf("probability", "Continuous Distributions"),
+    trackId: "probability",
+    levelId: "cd-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Continuous Distributions",
+    probes: "PDF/CDF integration; Uniform/Exponential/Normal densities (M362K ch. 5).",
+    misconceptionTag: "memoryless_uniform",
+  },
+  {
+    // 1-item BREADTH probe.
+    topicKey: topicKeyOf("probability", "Combinatorial Analysis"),
+    trackId: "probability",
+    levelId: "ca-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Combinatorial Analysis",
+    probes: "Ordered vs unordered counts; with/without replacement (M362K ch. 1).",
+    misconceptionTag: "ordered_vs_unordered",
+  },
+  /* ------------------------ GATED (prerequisite-driven) -------------------- */
+  {
+    topicKey: topicKeyOf("probability", "Geometric Probability"),
+    trackId: "probability",
+    levelId: "geo-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Geometric Probability",
+    probes: "Favourable measure ÷ total; length vs area.",
+    misconceptionTag: "length_not_area",
+    gatedOnTopicKey: topicKeyOf("probability", "Core Probability"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Order Statistics"),
+    trackId: "probability",
+    levelId: "os-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Order Statistics",
+    probes: "Min/max/median of several draws; expected extremes.",
+    misconceptionTag: "single_draw_mean",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Variance, Covariance & the CLT"),
+    trackId: "probability",
+    levelId: "vc-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Variance, Covariance & the CLT",
+    probes: "Var(aX)=a²Var(X); adding SDs; covariance in Var(X+Y); CLT tails (M362K chs. 7–8).",
+    misconceptionTag: "variance_scaling",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Poisson Distribution & Process"),
+    trackId: "probability",
+    levelId: "po-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Poisson Distribution & Process",
+    probes: "Rare-event counts, E[X]=λ, exponential interarrivals (M362K ch. 4.7).",
+    misconceptionTag: "poisson_mean_variance",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Conditional Expectation"),
+    trackId: "probability",
+    levelId: "ce-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Conditional Expectation & the Tower Rule",
+    probes: "E[X]=E[E[X|Y]]; law of total expectation/variance (M362M ch. 1).",
+    misconceptionTag: "tower_rule_dropped",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Markov Chains"),
+    trackId: "probability",
+    levelId: "mc-1",
+    itemsPerTopic: 2,
+    startTier: "medium",
+    label: "Markov Chains (first-step analysis)",
+    probes: "First-step recursions, gambler's ruin, stationary πP=π (M362M).",
+    misconceptionTag: "dropped_plus_one",
+    gatedOnTopicKey: topicKeyOf("probability", "Conditional Probability"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Brownian Motion"),
+    trackId: "probability",
+    levelId: "bm-1",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Brownian Motion",
+    probes: "Drift + √t variance scaling; continuous-time limit of a random walk (M362M).",
+    misconceptionTag: "variance_linear_in_time",
+    gatedOnTopicKey: topicKeyOf("probability", "Continuous Distributions"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Moment Generating Functions"),
+    trackId: "probability",
+    levelId: "ek-mgf",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Moment Generating Functions",
+    probes: "Moments from M'(0)/M''(0); MGF method for independent sums (M362K).",
+    misconceptionTag: "mgf_moment_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Gamma Distribution"),
+    trackId: "probability",
+    levelId: "ek-gamma",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Gamma Distribution",
+    probes: "Gamma(k,λ) as a sum of k iid Exp(λ); mean k/λ, variance k/λ² (M362K).",
+    misconceptionTag: "gamma_param_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Continuous Distributions"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Joint Distributions"),
+    trackId: "probability",
+    levelId: "ek-joint",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Joint Distributions",
+    probes: "Joint densities, marginals, double integrals over a region (M362K chs. 6–7).",
+    misconceptionTag: "marginal_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Continuous Distributions"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Limit Theorems"),
+    trackId: "probability",
+    levelId: "ek-limit",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Limit Theorems",
+    probes: "Chebyshev, the (weak) LLN, and the formal CLT (M362K ch. 8).",
+    misconceptionTag: "chebyshev_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Branching Processes"),
+    trackId: "probability",
+    levelId: "ek-branching",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Branching Processes",
+    probes: "Galton–Watson mean growth μⁿ; extinction as the smallest fixed point (M362M).",
+    misconceptionTag: "extinction_fixed_point",
+    gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Continuous-Time Markov Chains"),
+    trackId: "probability",
+    levelId: "ek-ctmc",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Continuous-Time Markov Chains",
+    probes: "Exponential holding times, flow balance, the M/M/1 queue (M362M).",
+    misconceptionTag: "ctmc_balance_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Conditional Probability"),
+  },
+  {
+    topicKey: topicKeyOf("probability", "Markov Chain Structure"),
+    trackId: "probability",
+    levelId: "ek-markov-pn",
+    itemsPerTopic: 1,
+    startTier: "medium",
+    label: "Markov Chain Structure",
+    probes: "n-step Pⁿ / Chapman–Kolmogorov and state classification (M362M).",
+    misconceptionTag: "pn_composition_slip",
+    gatedOnTopicKey: topicKeyOf("probability", "Conditional Probability"),
+  },
+];
+
+/**
+ * The diagnostic blueprint for a given Goal Mode: Case A ("course") assesses the
+ * UT course spine ({@link COURSE_DIAGNOSTIC_BLUEPRINT}); Case B ("interview", the
+ * default) keeps the quant-interview set ({@link DIAGNOSTIC_BLUEPRINT}). Both put
+ * Core Probability at index 0 as the ROUTER, so `ROUTER_SLOT_INDEX` is shared.
+ */
+export function blueprintForMode(mode: GoalMode): DiagnosticSlot[] {
+  return mode === "course" ? COURSE_DIAGNOSTIC_BLUEPRINT : DIAGNOSTIC_BLUEPRINT;
+}
+
 /** The blueprint index of the ROUTER slot whose early items set the global tier. */
 export const ROUTER_SLOT_INDEX = 0;
 
@@ -273,8 +515,10 @@ export const ROUTER_SLOT_INDEX = 0;
  * probes appear only when their prerequisite passed, and split base slots add a
  * tiebreak 3rd item, so a run lands between ~14 and a worst case of 29 (≤ 30).
  */
-export function diagnosticItemCount(): number {
-  return DIAGNOSTIC_BLUEPRINT.reduce((n, s) => n + s.itemsPerTopic, 0);
+export function diagnosticItemCount(
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
+): number {
+  return blueprint.reduce((n, s) => n + s.itemsPerTopic, 0);
 }
 
 /**
@@ -282,17 +526,20 @@ export function diagnosticItemCount(): number {
  * opens AND every 2-item base slot splits (adding one tiebreak each). Kept as a
  * pure helper so a test can assert it stays ≤ 30.
  */
-export function diagnosticMaxItemCount(): number {
-  const baseTiebreaks = DIAGNOSTIC_BLUEPRINT.filter(
+export function diagnosticMaxItemCount(
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
+): number {
+  const baseTiebreaks = blueprint.filter(
     (s) => !s.gatedOnTopicKey && s.itemsPerTopic >= 2,
   ).length;
-  return diagnosticItemCount() + baseTiebreaks;
+  return diagnosticItemCount(blueprint) + baseTiebreaks;
 }
 
 /** The always-on (non-gated) base item count shown on every run. */
-export function diagnosticBaseItemCount(): number {
-  return DIAGNOSTIC_BLUEPRINT.filter((s) => !s.gatedOnTopicKey).reduce(
-    (n, s) => n + s.itemsPerTopic,
-    0,
-  );
+export function diagnosticBaseItemCount(
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
+): number {
+  return blueprint
+    .filter((s) => !s.gatedOnTopicKey)
+    .reduce((n, s) => n + s.itemsPerTopic, 0);
 }

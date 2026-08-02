@@ -20,6 +20,8 @@
  * rest are items inside the menu it opens. Keep this union in sync with the
  * `data-tour` attributes rendered in the shell.
  */
+import type { GoalMode } from "@/types/progress";
+
 export type TourTarget =
   | "menu"
   | "dashboard"
@@ -117,3 +119,98 @@ export const ONBOARDING_TOUR_STEPS: OnboardingStep[] = [
       "Recommended path: Dashboard → Probability & Statistics → the other tracks → Speed Arena, using Simulations whenever a concept needs to click, and recalibrating as you grow. Need this again later? Reopen it anytime from \"Show tutorial\" up in the nav.",
   },
 ];
+
+/**
+ * The Case-A (course-mastery) ONBOARDING TOUR script. Same SHAPE as
+ * `ONBOARDING_TOUR_STEPS` above — identical step ids, order, and `target`
+ * anchors so the coach-mark layout/behaviour is byte-for-byte the same — but the
+ * COPY is rewritten for a learner prepping the UT courses (Intro to Probability
+ * / Intro to Stochastic Processes) instead of quant-trading interviews. It drops
+ * all "become a trader" framing and only references UI that exists in the Case-A
+ * menu (the two course tracks, the Foundations group, the mode-aware Course
+ * Readiness dashboard, Simulations, the "Beyond the course" extras, Recalibrate,
+ * the mode toggle, and Themes). Anchors that Case A doesn't render (e.g. the
+ * standalone Probability track) simply fall back to centered, exactly as the
+ * overlay already handles a missing target.
+ */
+export const COURSE_ONBOARDING_TOUR_STEPS: OnboardingStep[] = [
+  {
+    id: "welcome",
+    title: "You're in — here's the game plan",
+    body:
+      "You just finished the diagnostic, which set your starting level across every topic. This quick tour shows you where to go and the order we recommend to master Intro to Probability, Intro to Stochastic Processes, or both. It takes about 30 seconds.",
+  },
+  {
+    id: "menu",
+    title: "1 · Everything lives in the menu",
+    body:
+      "Tap the ☰ menu button in the top-left to reach every part of the app — your Dashboard, the two course tracks, the Foundations that feed them, Simulations, and Themes. We'll open it as we go.",
+    target: "menu",
+  },
+  {
+    id: "dashboard",
+    title: "2 · Start at your Dashboard",
+    body:
+      "Your Dashboard reads your diagnostic into Course Readiness — a card per course showing how close you are, which topics are strong or shaky, and what to study next. Check it first, and come back after each session to see what moved.",
+    target: "dashboard",
+  },
+  {
+    id: "probability",
+    title: "3 · Pick your course track",
+    body:
+      "Open Intro to Probability or Intro to Stochastic Processes from the menu — do one, or both. Each lays out its topics in course order, and every level unlocks the next as you master it. Not sure where to start? Begin with Intro to Probability; it feeds the rest.",
+    target: "probability",
+  },
+  {
+    id: "tracks",
+    title: "4 · See the whole map in the Table of Contents",
+    body:
+      "The Table of Contents lists every course topic and lesson in one place. Under Foundations you'll also find the Mental Math and Applied Math the courses lean on — shore those up first if the diagnostic flagged them.",
+    target: "contents",
+  },
+  {
+    id: "simulations",
+    title: "5 · Make it click in Simulations",
+    body:
+      "Stuck on why a result is what it is? The Simulations tab lets you flip any coin, roll any die, and drag a trials slider to watch the empirical result converge to the theory — plus Venn diagrams, the CLT, and the double integral of a joint density. Reach for it whenever a course concept feels abstract.",
+    target: "simulations",
+  },
+  {
+    id: "arena",
+    title: "6 · Extras live under “Beyond the course”",
+    body:
+      "Below the course tracks, a “Beyond the course” section keeps optional extras — Speed Arena drills, brainteasers, and puzzles. They aren't required for the courses, so treat them as a fun warm-up once your Course Readiness is looking strong.",
+    target: "arena",
+  },
+  {
+    id: "recalibrate",
+    title: "7 · Recalibrate — and switch goals anytime",
+    body:
+      "As you improve, retake the diagnostic from the Recalibrate tab so your Course Readiness always matches where you actually are. Changing goals? Use the Course mastery / Interview prep toggle up in the header to reshape the whole app around what you're prepping for.",
+    target: "recalibrate",
+  },
+  {
+    id: "themes",
+    title: "8 · Make it yours in Themes",
+    body:
+      "Switch the whole look anytime in Themes — six styles, each with light and dark mode. Pick whatever keeps you coming back to practice.",
+    target: "themes",
+  },
+  {
+    id: "done",
+    title: "That's the tour — go master your courses",
+    body:
+      "Recommended path: Dashboard → your course track (Intro to Probability and/or Intro to Stochastic Processes) → shore up Foundations as needed, using Simulations whenever a concept needs to click, and recalibrating as you grow. Need this again later? Reopen it anytime from \"Show tutorial\" up in the nav.",
+  },
+];
+
+/**
+ * Pick the tour script for the learner's goal mode. Case A ("course") gets the
+ * course-mastery copy; everything else — including the default/undefined mode —
+ * keeps the original interview/quant tour EXACTLY as it is today.
+ */
+export function onboardingStepsForMode(mode: GoalMode): OnboardingStep[] {
+  return mode === "course"
+    ? COURSE_ONBOARDING_TOUR_STEPS
+    : ONBOARDING_TOUR_STEPS;
+}

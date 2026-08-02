@@ -37,9 +37,12 @@ function slotSeed(seed: number, slotIndex: number): number {
  * from one seed. Gated slots (the Markov probe) are injected later by
  * {@link buildFollowUpPlan} once the base answers are known.
  */
-export function buildDiagnosticPlan(seed: number): PlanItem[] {
+export function buildDiagnosticPlan(
+  seed: number,
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
+): PlanItem[] {
   const plan: PlanItem[] = [];
-  DIAGNOSTIC_BLUEPRINT.forEach((slot, slotIndex) => {
+  blueprint.forEach((slot, slotIndex) => {
     if (slot.gatedOnTopicKey) return;
     drawSlotItems(slot, slotSeed(seed, slotIndex)).forEach((item, indexInSlot) => {
       plan.push({ slotIndex, indexInSlot, topicKey: slot.topicKey, item });
@@ -100,11 +103,12 @@ export function buildFollowUpPlan(
   seed: number,
   basePlan: PlanItem[],
   baseAnswers: (number | null)[],
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
 ): PlanItem[] {
   const followups: PlanItem[] = [];
 
   // 1) Gated probes (e.g. Markov, gated on Conditional passing).
-  DIAGNOSTIC_BLUEPRINT.forEach((slot, slotIndex) => {
+  blueprint.forEach((slot, slotIndex) => {
     if (!slot.gatedOnTopicKey) return;
     if (!firstItemCorrect(basePlan, baseAnswers, slot.gatedOnTopicKey)) return;
     drawSlotItems(slot, slotSeed(seed, slotIndex)).forEach((item, indexInSlot) => {
@@ -113,7 +117,7 @@ export function buildFollowUpPlan(
   });
 
   // 2) Adaptive tiebreak on any base slot whose two items split.
-  DIAGNOSTIC_BLUEPRINT.forEach((slot, slotIndex) => {
+  blueprint.forEach((slot, slotIndex) => {
     if (slot.gatedOnTopicKey) return;
     const outcomes = gradedSlotOutcomes(basePlan, baseAnswers, slotIndex);
     if (!needsTiebreak(outcomes)) return;
@@ -155,6 +159,7 @@ function gradedSlotOutcomes(
 export function outcomesFromAnswers(
   plan: PlanItem[],
   answers: (number | null)[],
+  blueprint: DiagnosticSlot[] = DIAGNOSTIC_BLUEPRINT,
 ): DiagnosticOutcome[] {
   const route = routingTier(plan, answers);
 
@@ -167,7 +172,7 @@ export function outcomesFromAnswers(
 
   const outcomes: DiagnosticOutcome[] = [];
   for (const [slotIndex, arr] of bySlot) {
-    const slot = DIAGNOSTIC_BLUEPRINT[slotIndex];
+    const slot = blueprint[slotIndex];
     arr.sort((a, b) => a.entry.indexInSlot - b.entry.indexInSlot);
     const baseTier: Difficulty =
       slotIndex === ROUTER_SLOT_INDEX ? slot.startTier : route;

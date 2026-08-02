@@ -7,6 +7,8 @@ import {
 } from "@/components/icons";
 import {
   useRoadmapData,
+  type RoadmapCoursePath,
+  type RoadmapModel,
   type RoadmapSkillRow,
   type RoadmapTierGroup,
 } from "@/components/roadmap/useRoadmapData";
@@ -249,10 +251,141 @@ function TierSection({
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Case A — the two-course roadmap (WS3)                                      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One Case-A course path: the course's ordered topic sequence with per-topic
+ * mastery / lock / complete state and an overall per-path progress bar. Reuses
+ * the SAME `SkillRow` visual as the Case-B tiers — this is purely a regrouping.
+ */
+function CoursePathSection({ path }: { path: RoadmapCoursePath }) {
+  return (
+    <section className="panel p-5">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 className="font-display text-lg font-semibold text-primary">
+          {path.label}
+        </h2>
+        <span className="num shrink-0 text-xs text-secondary">
+          {path.masteredCount}/{path.totalCount} mastered
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-secondary">{path.blurb}</p>
+
+      {/* Overall progress toward completing this course. */}
+      <div className="mt-3">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="label text-secondary">Course progress</span>
+          <span className="num text-xs text-muted">{path.readiness}%</span>
+        </div>
+        <div
+          className="h-3 w-full overflow-hidden border border-subtle bg-surface-muted"
+          role="progressbar"
+          aria-valuenow={path.readiness}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={`${path.label} progress`}
+        >
+          <div
+            className="h-full bg-accent transition-all"
+            style={{ width: `${path.readiness}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-col gap-2">
+        {path.rows.map((row) => (
+          <SkillRow
+            key={row.node.topicKey}
+            row={row}
+            isCurrent={row.node.topicKey === path.currentKey}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** The Case-A roadmap: two course paths instead of the interview tiers. */
+function CourseRoadmap({
+  model,
+  onBack,
+}: {
+  model: RoadmapModel;
+  onBack: () => void;
+}) {
+  const { coursePaths, diagnosticDone } = model;
+  return (
+    <div className="relative min-h-[100dvh] bg-surface">
+      <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
+        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
+          <button
+            onClick={onBack}
+            className="btn-ghost !min-h-0 !px-2 !py-1.5"
+            aria-label="Back to contents"
+          >
+            <ChevronLeftIcon width={18} height={18} />
+          </button>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-display text-sm font-semibold text-primary">
+              Course Roadmap
+            </div>
+          </div>
+          <Link
+            to="/dashboard"
+            className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
+          >
+            Dashboard ▸
+          </Link>
+        </div>
+      </header>
+
+      <main className="relative z-10 mx-auto max-w-4xl space-y-6 px-4 py-6">
+        <section className="panel-ruled p-6">
+          <span className="label text-accent">Your Two Course Paths</span>
+          <h1 className="mt-1 font-display text-2xl font-black text-primary sm:text-3xl">
+            Course Roadmap
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-secondary">
+            Two guided paths — <strong>Intro to Probability</strong> and{" "}
+            <strong>Intro to Stochastic Processes</strong> — each ordered so
+            every topic builds on the ones before it. Master each topic to work
+            through the course and complete the path.
+          </p>
+
+          {!diagnosticDone && (
+            <p className="mt-3 border border-accent/50 bg-surface px-3 py-2 text-sm text-secondary">
+              Run the calibration warm-up first — it seeds an accurate starting
+              picture across both courses.{" "}
+              <Link
+                to="/diagnostic"
+                className="font-semibold text-accent underline underline-offset-2"
+              >
+                Run it now ▸
+              </Link>
+            </p>
+          )}
+        </section>
+
+        {coursePaths.map((path) => (
+          <CoursePathSection key={path.id} path={path} />
+        ))}
+      </main>
+    </div>
+  );
+}
+
 export function RoadmapPage() {
   const navigate = useNavigate();
   const model = useRoadmapData();
   const { state, currentRow, diagnosticDone } = model;
+
+  // Case A ("course"): regroup the pathway into the two UT course paths. Case B
+  // (interview / unset) renders the existing interview tiers below, unchanged.
+  if (model.goalMode === "course") {
+    return <CourseRoadmap model={model} onBack={() => navigate("/contents")} />;
+  }
 
   return (
     <div className="relative min-h-[100dvh] bg-surface">

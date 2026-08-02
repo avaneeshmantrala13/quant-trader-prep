@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ONBOARDING_TOUR_STEPS, type TourTarget } from "./steps";
+import {
+  COURSE_ONBOARDING_TOUR_STEPS,
+  ONBOARDING_TOUR_STEPS,
+  onboardingStepsForMode,
+  type TourTarget,
+} from "./steps";
 
 /**
  * The tour anchors steps to elements via `data-tour` hooks (wired in
@@ -92,5 +97,62 @@ describe("ONBOARDING_TOUR_STEPS", () => {
     expect(byId.recalibrate).toBe("recalibrate");
     expect(byId.themes).toBe("themes");
     expect(byId.done).toBeUndefined();
+  });
+});
+
+describe("onboardingStepsForMode", () => {
+  it("selects the course-mastery script in course mode and the original otherwise", () => {
+    expect(onboardingStepsForMode("course")).toBe(COURSE_ONBOARDING_TOUR_STEPS);
+    // Interview / default mode keeps the original interview tour EXACTLY.
+    expect(onboardingStepsForMode("interview")).toBe(ONBOARDING_TOUR_STEPS);
+  });
+});
+
+describe("COURSE_ONBOARDING_TOUR_STEPS (Case A · course mastery)", () => {
+  const joinedCopy = COURSE_ONBOARDING_TOUR_STEPS.map(
+    (s) => `${s.title}\n${s.body}`,
+  ).join("\n");
+
+  it("mirrors the interview tour's shape: same step ids, order, and anchors", () => {
+    expect(COURSE_ONBOARDING_TOUR_STEPS.map((s) => s.id)).toEqual(
+      ONBOARDING_TOUR_STEPS.map((s) => s.id),
+    );
+    expect(COURSE_ONBOARDING_TOUR_STEPS.map((s) => s.target)).toEqual(
+      ONBOARDING_TOUR_STEPS.map((s) => s.target),
+    );
+  });
+
+  it("has non-empty, unique-id, course-focused copy that differs from the interview tour", () => {
+    const ids = new Set<string>();
+    COURSE_ONBOARDING_TOUR_STEPS.forEach((step, i) => {
+      expect(ids.has(step.id)).toBe(false);
+      ids.add(step.id);
+      expect(step.title.trim().length).toBeGreaterThan(0);
+      expect(step.body.trim().length).toBeGreaterThan(0);
+      // The body copy is genuinely rewritten for at least the framing steps.
+      if (step.id === "welcome" || step.id === "done") {
+        expect(step.body).not.toBe(ONBOARDING_TOUR_STEPS[i].body);
+      }
+    });
+  });
+
+  it("orients the learner to the two course tracks", () => {
+    expect(joinedCopy).toContain("Intro to Probability");
+    expect(joinedCopy).toContain("Intro to Stochastic Processes");
+    // Course-mastery navigation landmarks that actually exist in Case A.
+    expect(joinedCopy).toContain("Course Readiness");
+    expect(joinedCopy).toContain("Foundations");
+    expect(joinedCopy).toContain("Beyond the course");
+    // The mode toggle used to switch goals.
+    expect(joinedCopy).toContain("Course mastery");
+  });
+
+  it("drops all quant-trader framing and Case-B-only menu references", () => {
+    // No "become a quant trader" / quant-interview framing.
+    expect(joinedCopy).not.toMatch(/quant/i);
+    expect(joinedCopy).not.toMatch(/become a trader/i);
+    // The standalone "Probability & Statistics" track is not in the Case-A menu.
+    expect(joinedCopy).not.toContain("Probability & Statistics");
+    expect(joinedCopy).not.toContain("Fermi Drill");
   });
 });

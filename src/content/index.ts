@@ -5,26 +5,13 @@ import { mentalMathTrack } from "./mentalMath/levels";
 import { brainteasersTrack } from "./brainteasers/levels";
 import { interviewGamesTrack } from "./interviewGames/levels";
 
-/** Teaser-only flagship. Rendered as "Coming soon" per the PRD scope. */
-export const calibrationGymTrack: Track = {
-  id: "calibration-gym",
-  title: "Calibration Gym",
-  tagline: "Price uncertainty. Beat the model.",
-  description:
-    "The flagship: submit a probability or interval under a timer, then a grand reveal scores you against a calibrated model on the same fresh problem — confetti on a win, a teaching moment on a loss. Coming soon.",
-  motif: "calibration",
-  levels: [],
-  comingSoon: true,
-};
-
-/** The playable tabs, in recommended order, plus the teaser. */
+/** The playable tabs, in recommended order. */
 export const TRACKS: Track[] = [
   probabilityTrack,
   mathQuestionsTrack,
   mentalMathTrack,
   brainteasersTrack,
   interviewGamesTrack,
-  calibrationGymTrack,
 ];
 
 export const PLAYABLE_TRACKS = TRACKS.filter((t) => !t.comingSoon);

@@ -2,6 +2,8 @@ import type { CSSProperties, ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
 import type { DashboardTopicEntry, DashboardViewProps } from "../types";
@@ -441,6 +443,8 @@ function Panel({
 /* -------------------------------------------------------------------------- */
 
 export function KidsDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -450,6 +454,7 @@ export function KidsDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   const superstars = topics.filter((t) => t.verdict === "STRONG").length;
   const exploring = topics.filter((t) => t.verdict === "UNCERTAIN").length;
   const growing = topics.filter((t) => t.verdict === "WEAK").length;
@@ -474,6 +479,7 @@ export function KidsDashboard({
               My Progress Adventure
             </div>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="shrink-0 rounded-full border-[3px] border-border-strong bg-surface px-3 py-1.5 font-display text-xs font-black text-primary transition-transform hover:-translate-y-0.5"
@@ -504,14 +510,24 @@ export function KidsDashboard({
           </Panel>
         )}
 
-        {/* 3) Weakness ranking (kindly framed) */}
-        <Panel>
-          <SectionHeading
-            title="Where to Grow Next"
-            kicker={`${weaknesses.length} topic${weaknesses.length === 1 ? "" : "s"} with clues so far`}
-          />
-          <WeaknessList topics={weaknesses} />
-        </Panel>
+        {/* 3) Course readiness (Case A) or weakness ranking (Case B) */}
+        {courseMode ? (
+          <Panel>
+            <SectionHeading
+              title="Course Readiness"
+              kicker={`${courses.length} course${courses.length === 1 ? "" : "s"} on your adventure map`}
+            />
+            <CourseReadinessCards courses={courses} />
+          </Panel>
+        ) : (
+          <Panel>
+            <SectionHeading
+              title="Where to Grow Next"
+              kicker={`${weaknesses.length} topic${weaknesses.length === 1 ? "" : "s"} with clues so far`}
+            />
+            <WeaknessList topics={weaknesses} />
+          </Panel>
+        )}
 
         {/* 4) Reliability diagram */}
         <Panel>
@@ -846,37 +862,52 @@ const rx = (p: number) => RPAD + p * (RSIZE - 2 * RPAD);
 const ry = (p: number) => RSIZE - RPAD - p * (RSIZE - 2 * RPAD);
 
 function ReliabilityChart({ data }: { data: ReliabilityDiagramData }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
       <div className="flex flex-col items-center gap-3 rounded-[16px] border-[3px] border-dashed border-subtle bg-surface-muted p-6 text-center sm:flex-row sm:text-left">
         <TargetBuddy className="h-16 w-16 shrink-0" />
-        <p className="max-w-md text-sm font-semibold text-secondary">
-          This chart is still asleep! Play a few graded rounds and we'll show how
-          often your "pretty sure" answers turn out right. We never make it up —
-          it appears once you've collected some clues.
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="max-w-md text-sm font-semibold text-secondary">
+            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches how often you're right.
+          </p>
+          <p className="mt-2 font-display text-sm font-black text-primary">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div className="mt-2 h-3 w-full overflow-hidden rounded-full border-[3px] border-border-strong bg-surface">
+            <div
+              className="h-full bg-accent"
+              style={{ width: `${progress}%` }}
+              aria-hidden="true"
+            />
+          </div>
+        </div>
       </div>
     );
   }
 
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02 ? "spot" : signed > 0 ? "over" : "under";
+  const calibration = data.calibration;
+  const lean = calibration?.lean ?? "well";
   const leanText =
-    lean === "spot"
-      ? "Spot on!"
-      : lean === "over"
-        ? "A little over-sure"
-        : "Braver than you think!";
+    lean === "over"
+      ? "over-confident"
+      : lean === "under"
+        ? "under-confident"
+        : "well-calibrated";
   const leanCls =
-    lean === "spot"
+    lean === "well"
       ? "border-bull bg-success-soft text-bull"
       : lean === "over"
-        ? "border-accent-2 bg-accent-2/10 text-accent-2"
+        ? "border-bear bg-danger-soft text-bear"
         : "border-accent bg-accent/10 text-accent";
+  const captionText =
+    lean === "over"
+      ? 'Dots below the dashed line mean "a little too sure."'
+      : lean === "under"
+        ? 'Dots above the dashed line mean "you knew more than you thought!"'
+        : "Dots hug the dashed line — your feeling matches how often you're right!";
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -962,6 +993,11 @@ function ReliabilityChart({ data }: { data: ReliabilityDiagramData }) {
       </svg>
 
       <div className="min-w-0 space-y-2.5">
+        {calibration && (
+          <p className="font-display text-sm font-black leading-snug text-primary">
+            {calibration.label}
+          </p>
+        )}
         {data.headline && (
           <p className="text-sm font-semibold text-secondary">
             When you feel about{" "}
@@ -980,17 +1016,29 @@ function ReliabilityChart({ data }: { data: ReliabilityDiagramData }) {
           >
             {leanText}
           </span>
-          <span className="inline-flex items-center rounded-full border-2 border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-secondary">
-            match gap {data.relGap.toFixed(2)}
-          </span>
-          <span className="inline-flex items-center rounded-full border-2 border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-secondary">
-            score {data.brier.toFixed(2)}
-          </span>
         </div>
-        <p className="text-xs font-semibold text-muted">
-          Dots below the dashed line mean "a little too sure"; above means "you
-          knew more than you thought!"
-        </p>
+        <p className="text-xs font-semibold text-muted">{captionText}</p>
+        <details className="group">
+          <summary className="cursor-pointer text-xs font-extrabold uppercase tracking-wide text-muted underline-offset-2 hover:underline">
+            Advanced details
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="inline-flex items-center rounded-full border-2 border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-secondary">
+              match gap {data.relGap.toFixed(2)}
+            </span>
+            <span className="inline-flex items-center rounded-full border-2 border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-secondary">
+              score {data.brier.toFixed(2)}
+            </span>
+            {data.bins.map((b, i) => (
+              <span
+                key={i}
+                className="inline-flex items-center rounded-full border-2 border-subtle bg-surface-muted px-2.5 py-0.5 text-[11px] font-bold text-muted"
+              >
+                {pct(b.predicted)}% · {b.count}
+              </span>
+            ))}
+          </div>
+        </details>
       </div>
     </div>
   );

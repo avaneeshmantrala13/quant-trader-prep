@@ -3,12 +3,15 @@ import { mixQuiz } from "../coreScaffold";
 import { genMgfIdentify, genMgfMean, genMgfSum, genMgfVar } from "./generators";
 
 /**
- * **Moment Generating Functions** — part of the Bucket 2 "Extra Relevant
- * Knowledge" section (untested at firms; added for M362K course-completeness).
- * A `quiz` level: MGF concepts are derivation/identity based, so multiple-choice
- * with misconception distractors is the right routing.
+ * **Moment Generating Functions** — a first-class course-completeness topic
+ * (untested at firms; added for M362K completeness). A `quiz` level: MGF
+ * concepts are derivation/identity based, so multiple-choice with misconception
+ * distractors is the right routing.
+ *
+ * Its own `section` (`probability::Moment Generating Functions`) so it is an
+ * independent mastery bucket / skill-graph node / remediation-DAG node.
  */
-export const EXTRA_SECTION = "Extra Relevant Knowledge";
+const SECTION = "Moment Generating Functions";
 
 export const mgfLevels: Level[] = [
   {
@@ -17,7 +20,7 @@ export const mgfLevels: Level[] = [
     subtitle: "E[X]=M'(0), Var=M''(0)−M'(0)², sums multiply",
     blurb:
       "The MGF method: moments from derivatives at 0 (E[X]=M'(0), Var=M''(0)−M'(0)²), spotting standard MGFs, and multiplying MGFs for independent sums.",
-    section: EXTRA_SECTION,
+    section: SECTION,
     difficulty: "medium",
     mode: "quiz",
     masteryThreshold: 0.75,

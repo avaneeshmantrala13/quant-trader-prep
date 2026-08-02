@@ -19,13 +19,23 @@ import {
 import {
   emptyProgress,
   type DiagnosticResult,
+  type GoalMode,
   type LevelProgress,
   type ResumeState,
   type UserProgress,
 } from "@/types/progress";
+import {
+  appendOaResult,
+  clearActiveSession,
+  putActiveSession,
+} from "@/lib/oa/store";
+import type { OaSessionResult, OaSessionState } from "@/lib/oa/types";
+import { appendPersistedPair } from "@/lib/calibration/persistedLog";
+import { recordCalibrationPair as recordSessionCalibrationPair } from "@/lib/calibration/sessionLog";
 import { appendDiagnosticResult } from "@/lib/diagnostic/history";
 import type { ItemAttempt, TopicMastery } from "@/types/mastery";
 import { migrateProgress } from "@/lib/mastery/migrate";
+import { migrateErkSplit } from "@/lib/mastery/migrateErkSplit";
 import { markOnboardingTourDoneInPlace } from "@/lib/onboarding/tour";
 import {
   applyDiagnosticSeed,
@@ -42,11 +52,22 @@ interface ProgressContextValue {
   getResume: (levelId: string) => ResumeState | undefined;
   saveResume: (state: ResumeState) => void;
   clearResume: (levelId: string) => void;
-  /** Record a finished level attempt; updates mastery, xp, and streak. */
+  /**
+   * Record a finished level attempt; updates mastery, xp, and streak.
+   *
+   * `scoreFraction` is the CREDIT-WEIGHTED VISIBLE score (mean of per-item
+   * hint-credit) — it is stored as `bestScore` (what the map/summary show) and
+   * drives `xpGained`. The pass/advance/unlock decision instead uses the
+   * optional lenient `gateFraction` (the binary "ultimately correct" fraction),
+   * so using hints lowers the displayed % but can NEVER bounce a learner below
+   * the pass bar. Back-compat: when `gateFraction` is omitted the gate falls
+   * back to `scoreFraction`, preserving the original behavior for other callers.
+   */
   recordAttempt: (
     levelId: string,
     scoreFraction: number,
     masteryThreshold: number,
+    gateFraction?: number,
   ) => { mastered: boolean; xpGained: number; isNewMastery: boolean };
   // ---- flashcard (integrity-based) levels ----
   /** The set of problem ids marked "Got it" for a flashcard level. */
@@ -107,6 +128,44 @@ interface ProgressContextValue {
    * `LevelProgress.mastered`, locking, scoring, or the v1→v2 migration.
    */
   markOnboardingTourDone: (at?: string) => void;
+  /**
+   * Set the user-selected Goal Mode (Case A "course" | Case B "interview"). A
+   * pure VIEW selector: it ONLY rewrites `goalMode` and NEVER touches mastery,
+   * levels, streak, xp, locking, scoring, or the v1→v2 migration — so toggling
+   * A↔B is instant and non-destructive (progress carries over by construction).
+   */
+  setGoalMode: (mode: GoalMode) => void;
+  /**
+   * Log ONE graded item's (predicted, outcome) calibration pair. Persists it to
+   * the capped, additive `calibrationLog` (so the reliability panel accrues
+   * ACROSS sessions) and mirrors it into the in-memory session log. Additive and
+   * INDEPENDENT of mastery/scoring/locking — never gates content.
+   */
+  recordCalibrationPair: (
+    topicKey: string,
+    pred: number,
+    outcome: 0 | 1,
+  ) => void;
+  // ---- Timed OA (Case B) persistence (src/lib/oa) ----
+  /**
+   * Persist (or overwrite) the single in-progress Timed OA session as the
+   * store's `active`, preserving completed `results`. Reload-proof: the session
+   * carries absolute epoch-ms deadlines, so exiting/reloading/re-login resumes
+   * it exactly. Additive & INDEPENDENT of mastery/scoring/locking — the OA store
+   * NEVER gates content or affects the v1→v2 migration.
+   */
+  saveOaSession: (session: OaSessionState) => void;
+  /**
+   * Clear the in-progress Timed OA `active` session (e.g. on abandon), keeping
+   * completed `results`. Additive & independent of mastery/scoring/locking.
+   */
+  clearOaActiveSession: () => void;
+  /**
+   * Record a completed Timed OA `result` into the capped history AND clear the
+   * `active` session in one step (finishing a session ends the resumable one, per
+   * `appendOaResult`). Additive & independent of mastery/scoring/locking.
+   */
+  recordOaResult: (result: OaSessionResult) => void;
 }
 
 /**
@@ -132,7 +191,9 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   // progress immediately — no first-paint flash of "empty" progress that would
   // wrongly re-lock levels or drop resume/understood state.
   const [progress, setProgress] = useState<UserProgress>(() =>
-    username ? migrateProgress(storage.loadProgress(username)) : emptyProgress(),
+    username
+      ? migrateErkSplit(migrateProgress(storage.loadProgress(username)))
+      : emptyProgress(),
   );
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -141,7 +202,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   // (empty mastery maps) without losing level mastery / xp / streak.
   useEffect(() => {
     if (username) {
-      setProgress(migrateProgress(storage.loadProgress(username)));
+      setProgress(migrateErkSplit(migrateProgress(storage.loadProgress(username))));
     } else {
       setProgress(emptyProgress());
     }
@@ -202,8 +263,18 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   );
 
   const recordAttempt = useCallback(
-    (levelId: string, scoreFraction: number, masteryThreshold: number) => {
-      const mastered = scoreFraction >= masteryThreshold;
+    (
+      levelId: string,
+      scoreFraction: number,
+      masteryThreshold: number,
+      gateFraction?: number,
+    ) => {
+      // Split the two concerns: `scoreFraction` is the credit-weighted VISIBLE
+      // score (bestScore + xp), while the pass/advance decision uses the lenient
+      // binary `gateFraction` (falling back to `scoreFraction` for back-compat)
+      // so hint use never bounces a learner below the pass bar.
+      const gate = gateFraction ?? scoreFraction;
+      const mastered = gate >= masteryThreshold;
       const prior = progress.levelProgress[levelId];
       const isNewMastery = mastered && !prior?.mastered;
       const xpGained = Math.round(scoreFraction * 100) + (isNewMastery ? 50 : 0);
@@ -357,6 +428,62 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const setGoalMode = useCallback(
+    (mode: GoalMode) => {
+      update((p) => {
+        p.goalMode = mode;
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const recordCalibrationPair = useCallback(
+    (topicKey: string, pred: number, outcome: 0 | 1) => {
+      // Mirror into the in-memory session log (kept for any session-scoped
+      // consumers) and persist a capped cross-session copy so the dashboard's
+      // reliability panel accrues instead of resetting on reload.
+      recordSessionCalibrationPair(topicKey, pred, outcome);
+      update((p) => {
+        p.calibrationLog = appendPersistedPair(p.calibrationLog, {
+          topicKey,
+          pred,
+          outcome,
+          at: new Date().toISOString(),
+        });
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const saveOaSession = useCallback(
+    (session: OaSessionState) => {
+      update((p) => {
+        p.oaTimed = putActiveSession(p.oaTimed, session);
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const clearOaActiveSession = useCallback(() => {
+    update((p) => {
+      p.oaTimed = clearActiveSession(p.oaTimed);
+      return p;
+    });
+  }, [update]);
+
+  const recordOaResult = useCallback(
+    (result: OaSessionResult) => {
+      update((p) => {
+        p.oaTimed = appendOaResult(p.oaTimed, result);
+        return p;
+      });
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -375,6 +502,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       applyDiagnosticSeeds,
       recordDiagnosticResult,
       markOnboardingTourDone,
+      setGoalMode,
+      recordCalibrationPair,
+      saveOaSession,
+      clearOaActiveSession,
+      recordOaResult,
     }),
     [
       progress,
@@ -393,6 +525,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       applyDiagnosticSeeds,
       recordDiagnosticResult,
       markOnboardingTourDone,
+      setGoalMode,
+      recordCalibrationPair,
+      saveOaSession,
+      clearOaActiveSession,
+      recordOaResult,
     ],
   );
 

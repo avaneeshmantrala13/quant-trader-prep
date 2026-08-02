@@ -1,4 +1,5 @@
 import { MASTERY_BAR } from "@/lib/mastery/config";
+import { UNLOCK_MEAN_BAR } from "@/lib/mastery/unlock";
 import { SKILL_GRAPH, type SkillNode } from "./skillGraph";
 
 /**
@@ -50,6 +51,14 @@ export interface SkillProgress {
   masteryPct: number;
   /** True once the skill counts as mastered (ciLow ≥ bar OR all levels mastered). */
   mastered: boolean;
+  /**
+   * Diagnostic-style LOW-CONFIDENCE unlock: graded point-estimate (Beta mean) is
+   * at/above the more-forgiving `UNLOCK_MEAN_BAR`, so the topic is unlocked even
+   * before it is confidently mastered. Additive signal (Part B) — it never gates
+   * prereqs or changes `status`; it flips false the moment a failing quiz swings
+   * the mean back under the bar (the "swing-and-relock" behavior).
+   */
+  unlocked: boolean;
   /** Any graded/level evidence exists. */
   hasEvidence: boolean;
   /** Prerequisites all mastered. */
@@ -95,6 +104,17 @@ export function isSkillMastered(e: SkillEvidence): boolean {
 }
 
 /**
+ * True when a skill is UNLOCKED at (at least) low confidence: it has graded
+ * evidence and its Beta mean clears the forgiving {@link UNLOCK_MEAN_BAR}. A
+ * strong diagnostic seeds this without conferring confident mastery; a failing
+ * quiz swings the mean back under the bar and this returns false (re-locked).
+ * Separate from {@link isSkillMastered} so earned-mastery gating is unchanged.
+ */
+export function isSkillUnlocked(e: SkillEvidence): boolean {
+  return e.gradedCount > 0 && e.mean >= UNLOCK_MEAN_BAR;
+}
+
+/**
  * Derive the whole roadmap state from a lookup of per-skill evidence. Skills
  * absent from `evidenceByKey` are treated as zero-evidence (fresh learner).
  * Pure and deterministic — same evidence ⇒ same state.
@@ -130,6 +150,7 @@ export function computeRoadmap(
       status,
       masteryPct: Math.round(100 * skillReadinessFraction(e)),
       mastered: isMastered,
+      unlocked: isSkillUnlocked(e),
       hasEvidence,
       prereqsMet,
       meanPct: e.gradedCount > 0 ? Math.round(100 * e.mean) : undefined,

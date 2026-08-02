@@ -3,6 +3,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useDashboardData } from "@/components/dashboard/useDashboardData";
 import { buildDashboardViewProps } from "@/components/dashboard/dashboardView";
 import { BaseDashboard } from "@/themes/BaseDashboard";
+import { OaTimingPanel } from "@/components/oa/OaTimingPanel";
 
 /**
  * `/dashboard` — the Phase-5 mastery + calibration dashboard (PHASE_5 §6), now a
@@ -27,10 +28,16 @@ export function DashboardPage() {
           `/track/${trackId}/level/${levelId}`,
         diagnosticHref: "/diagnostic",
         contentsHref: "/contents",
+        courseHref: (courseId) => `/course/${courseId}`,
       }),
     [model],
   );
 
   const ThemeDashboard = themeDef.Dashboard ?? BaseDashboard;
-  return <ThemeDashboard {...props} />;
+  return (
+    <>
+      <ThemeDashboard {...props} />
+      <OaTimingPanel />
+    </>
+  );
 }

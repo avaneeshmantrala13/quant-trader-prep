@@ -8,11 +8,13 @@ import {
 } from "./generators";
 
 /**
- * **Formal LLN, CLT & Chebyshev** — Bucket 2 "Extra Relevant Knowledge" (M362K
- * ch. 8). A `quiz` level: theorem statements/conditions + the Chebyshev bound,
- * taught by naming the misconceptions (LLN-vs-CLT, Chebyshev's a², CLT myths).
+ * **Formal LLN, CLT & Chebyshev** — a first-class course-completeness topic
+ * (M362K ch. 8). A `quiz` level: theorem statements/conditions + the Chebyshev
+ * bound, taught by naming the misconceptions (LLN-vs-CLT, Chebyshev's a², CLT
+ * myths). Its own `section` (`probability::Limit Theorems`) = its own mastery
+ * bucket.
  */
-const SECTION = "Extra Relevant Knowledge";
+const SECTION = "Limit Theorems";
 
 export const limitTheoremsLevels: Level[] = [
   {

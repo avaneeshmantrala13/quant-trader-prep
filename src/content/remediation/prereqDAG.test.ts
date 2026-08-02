@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getLevel } from "@/content";
-import { topicKeyForLevel } from "@/lib/mastery/topicKey";
+import { isFlashcardLevel } from "@/types/content";
+import { topicKeyForLevel, topicKeyOf } from "@/lib/mastery/topicKey";
 import {
   MISCONCEPTION_EDGE,
   PREREQ_DAG,
@@ -54,6 +55,18 @@ describe("PREREQ_DAG structure", () => {
     }
   });
 
+  it("every node's levelRef is a SCORED (non-flashcard) level — buildProbeItem needs one", () => {
+    // `buildProbeItem` returns null for flashcard levels, so a flashcard
+    // levelRef would silently disable remediation for that node.
+    for (const node of nodes) {
+      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+      expect(
+        isFlashcardLevel(resolved!.level),
+        `${node.topicKey} levelRef must be quiz/numeric`,
+      ).toBe(false);
+    }
+  });
+
   it("every MISCONCEPTION_EDGE value is a node", () => {
     for (const target of Object.values(MISCONCEPTION_EDGE)) {
       expect(PREREQ_DAG[target], target).toBeDefined();
@@ -81,6 +94,198 @@ describe("PREREQ_DAG structure", () => {
       );
       expect(someParent, target).toBe(true);
     }
+  });
+});
+
+describe("PREREQ_DAG scored-topic coverage (remediation gap fix)", () => {
+  /** Scored topics that were previously un-remediable (no DAG node). */
+  const NEWLY_COVERED = [
+    topicKeyOf("probability", "Geometric Probability"),
+    topicKeyOf("probability", "Poisson Distribution & Process"),
+    topicKeyOf("probability", "Betting & Sizing"),
+    topicKeyOf("probability", "Order Statistics"),
+    topicKeyOf("probability", "Continuous Distributions"),
+    topicKeyOf("probability", "Variance, Covariance & the CLT"),
+    topicKeyOf("probability", "Markov Chains"),
+    topicKeyOf("probability", "Brownian Motion"),
+    topicKeyOf("probability", "Game Theory & Puzzles"),
+    topicKeyOf("math-questions", "Rates, Algebra & Word Problems"),
+    topicKeyOf("math-questions", "Number Theory & Counting"),
+    topicKeyOf("math-questions", "Geometry & Derivations"),
+    topicKeyOf("interview-games"),
+  ];
+
+  it("every newly-added scored topic now returns a DAG node", () => {
+    for (const key of NEWLY_COVERED) {
+      expect(prereqNode(key), `${key} should be a DAG node`).toBeDefined();
+    }
+  });
+
+  it("each newly-covered node draws its probe from a real scored level", () => {
+    for (const key of NEWLY_COVERED) {
+      const node = prereqNode(key)!;
+      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+      expect(resolved, `${key} levelRef`).toBeDefined();
+      expect(isFlashcardLevel(resolved!.level), `${key} scored`).toBe(false);
+      expect(topicKeyForLevel(node.levelRef.trackId, resolved!.level)).toBe(key);
+    }
+  });
+
+  it("the original five foundational nodes are still present", () => {
+    for (const key of [
+      topicKeyOf("mental-math"),
+      topicKeyOf("probability", "Core Probability"),
+      topicKeyOf("probability", "Combinatorial Analysis"),
+      topicKeyOf("probability", "Conditional Probability"),
+      topicKeyOf("probability", "Expected Value"),
+    ]) {
+      expect(prereqNode(key), key).toBeDefined();
+    }
+  });
+
+  it("the newly-wired Conditional Expectation unit is covered (no silent no-gap)", () => {
+    const key = topicKeyOf("probability", "Conditional Expectation");
+    const node = prereqNode(key);
+    expect(node, `${key} should be a DAG node`).toBeDefined();
+    // Genuine upstream concepts: Conditional Probability & Bayes + Expected Value.
+    expect(node!.prereqs).toEqual(
+      expect.arrayContaining([
+        topicKeyOf("probability", "Conditional Probability"),
+        topicKeyOf("probability", "Expected Value"),
+      ]),
+    );
+    // Probes materialize from CE's own scored intro level.
+    const resolved = getLevel(node!.levelRef.trackId, node!.levelRef.levelId);
+    expect(resolved, `${key} levelRef`).toBeDefined();
+    expect(isFlashcardLevel(resolved!.level)).toBe(false);
+    expect(topicKeyForLevel(node!.levelRef.trackId, resolved!.level)).toBe(key);
+  });
+
+  it("the self-assessed Brainteaser flashcard tracks remain intentionally uncovered", () => {
+    // Both Brainteasers tracks are flashcard-only (no scored attempt to probe),
+    // so they are deliberately absent from the remediation DAG.
+    expect(prereqNode(topicKeyOf("brainteasers", "Core Puzzles"))).toBeUndefined();
+    expect(
+      prereqNode(topicKeyOf("brainteasers", "Techniques Toolkit")),
+    ).toBeUndefined();
+  });
+
+  it("every leaf is a scored floor (descent always bottoms out at a real, remediable floor)", () => {
+    // The only prereq-less nodes are the two scored foundation floors:
+    // Mental Arithmetic (L0) and Rates/Algebra (a skill-graph foundation root).
+    const leaves = new Set(
+      Object.values(PREREQ_DAG)
+        .filter((n) => n.prereqs.length === 0)
+        .map((n) => n.topicKey),
+    );
+    expect(leaves).toEqual(
+      new Set([
+        topicKeyOf("mental-math"),
+        topicKeyOf("math-questions", "Rates, Algebra & Word Problems"),
+      ]),
+    );
+    for (const n of Object.values(PREREQ_DAG)) {
+      if (n.prereqs.length === 0) expect(n.floor, n.topicKey).toBe(true);
+    }
+  });
+});
+
+describe("ERK super-node split into seven first-class topics", () => {
+  const P = (section: string) => topicKeyOf("probability", section);
+
+  /** Each new topic → its expected prereq set + its OWN easiest scored levelRef. */
+  const SPLIT: {
+    section: string;
+    prereqs: string[];
+    levelId: string;
+  }[] = [
+    {
+      section: "Moment Generating Functions",
+      prereqs: [P("Expected Value"), P("Variance, Covariance & the CLT")],
+      levelId: "ek-mgf",
+    },
+    {
+      section: "Gamma Distribution",
+      prereqs: [P("Continuous Distributions")],
+      levelId: "ek-gamma",
+    },
+    {
+      section: "Joint Distributions",
+      prereqs: [P("Continuous Distributions"), P("Conditional Probability")],
+      levelId: "ek-joint",
+    },
+    {
+      section: "Limit Theorems",
+      prereqs: [P("Variance, Covariance & the CLT")],
+      levelId: "ek-limit",
+    },
+    {
+      section: "Branching Processes",
+      prereqs: [P("Expected Value"), P("Conditional Expectation")],
+      levelId: "ek-branching",
+    },
+    {
+      section: "Continuous-Time Markov Chains",
+      prereqs: [P("Markov Chains"), P("Poisson Distribution & Process")],
+      levelId: "ek-ctmc",
+    },
+    {
+      section: "Markov Chain Structure",
+      prereqs: [P("Markov Chains")],
+      levelId: "ek-markov-pn",
+    },
+  ];
+
+  it("the old single 'Extra Relevant Knowledge' node is gone", () => {
+    expect(prereqNode(P("Extra Relevant Knowledge"))).toBeUndefined();
+  });
+
+  it("each of the seven new topics has a DAG node with the right prereqs", () => {
+    for (const t of SPLIT) {
+      const node = prereqNode(P(t.section));
+      expect(node, `${t.section} should be a DAG node`).toBeDefined();
+      expect(new Set(node!.prereqs), t.section).toEqual(new Set(t.prereqs));
+      // Every prereq is itself a real node.
+      for (const p of node!.prereqs) {
+        expect(PREREQ_DAG[p], `${t.section} → ${p}`).toBeDefined();
+      }
+    }
+  });
+
+  it("each new topic's levelRef is that topic's own SCORED level", () => {
+    for (const t of SPLIT) {
+      const node = prereqNode(P(t.section))!;
+      expect(node.levelRef.levelId).toBe(t.levelId);
+      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+      expect(resolved, `${t.section} levelRef`).toBeDefined();
+      expect(isFlashcardLevel(resolved!.level), `${t.section} scored`).toBe(false);
+      // A probe from this level writes to the node's own bucket.
+      expect(topicKeyForLevel(node.levelRef.trackId, resolved!.level)).toBe(
+        P(t.section),
+      );
+    }
+  });
+});
+
+describe("PREREQ_DAG edge corrections", () => {
+  const P = (section: string) => topicKeyOf("probability", section);
+
+  it("Markov Chains requires Conditional Expectation (tower-rule first-step analysis)", () => {
+    expect(prereqNode(P("Markov Chains"))!.prereqs).toContain(
+      P("Conditional Expectation"),
+    );
+  });
+
+  it("Poisson requires Continuous Distributions (exponential interarrivals)", () => {
+    expect(prereqNode(P("Poisson Distribution & Process"))!.prereqs).toContain(
+      P("Continuous Distributions"),
+    );
+  });
+
+  it("Game Theory & Puzzles requires Expected Value", () => {
+    expect(prereqNode(P("Game Theory & Puzzles"))!.prereqs).toContain(
+      P("Expected Value"),
+    );
   });
 });
 

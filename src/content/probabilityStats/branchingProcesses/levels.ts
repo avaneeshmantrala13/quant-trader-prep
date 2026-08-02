@@ -3,10 +3,11 @@ import { mixNumeric } from "../coreScaffold";
 import { genBranchingMean, genExtinction } from "./generators";
 
 /**
- * **Branching processes** (Galton–Watson) — Bucket 2 "Extra Relevant Knowledge"
- * (M362M core; academic for interviews). One `numeric` level.
+ * **Branching processes** (Galton–Watson) — a first-class course-completeness
+ * topic (M362M core; academic for interviews). One `numeric` level. Its own
+ * `section` (`probability::Branching Processes`) = its own mastery bucket.
  */
-const SECTION = "Extra Relevant Knowledge";
+const SECTION = "Branching Processes";
 
 export const branchingLevels: Level[] = [
   {

@@ -44,6 +44,14 @@ export interface FinishRemediationContext {
   alreadyRemediated: boolean;
   /** The remediation mode gate (`"dag"` = descend; `"in-place"` = disabled here). */
   mode: "dag" | "in-place";
+  /**
+   * Part B — the just-failed topic was only held at a diagnostic-seeded
+   * LOW-CONFIDENCE unlock and this failure RE-LOCKED it. That is a confirmed
+   * prerequisite gap, so bypass the Kapur first-stumble / bottom-out grace and
+   * descend straight to the ~85% prerequisite probe (via `forceDescend`).
+   * Additive: absent/false ⇒ the original conservative behavior is unchanged.
+   */
+  wasLowConfidenceUnlock?: boolean;
 }
 
 export type FinishRemediationPlan =
@@ -92,6 +100,9 @@ export function planFinishRemediation(
     // Finishing a whole level below mastery is never a fast+confident slip.
     responseFast: false,
     depthThisSession: 0,
+    // A relocked low-confidence unlock is a confirmed gap ⇒ force the descent
+    // to the ~0.85 prerequisite (Part B); otherwise the normal gates apply.
+    forceDescend: ctx.wasLowConfidenceUnlock === true,
   };
 
   const action = remediationStep(origin);

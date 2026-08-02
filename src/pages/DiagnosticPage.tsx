@@ -9,13 +9,15 @@ import {
   type PlanItem,
 } from "@/lib/diagnostic/run";
 import { diagnosticToSeeds, selfReportToSeed } from "@/lib/diagnostic/diagnosticSeed";
+import { blueprintForMode } from "@/content/diagnostic/blueprint";
 import {
   computeDiagnosticResult,
   diagnosticTrend,
 } from "@/lib/diagnostic/history";
-import type { DiagnosticResult } from "@/types/progress";
+import type { DiagnosticResult, GoalMode } from "@/types/progress";
 import { LineChart } from "@/components/simulations/charts/LineChart";
 import { ChevronLeftIcon } from "@/components/icons";
+import { GOAL_MODES, MODE_META, resolveGoalMode } from "@/lib/mode/goalMode";
 
 /**
  * `/diagnostic` — the REQUIRED-once onboarding warm-up (PHASE_3 + approved
@@ -32,7 +34,7 @@ import { ChevronLeftIcon } from "@/components/icons";
  * stage after the always-on base items.
  */
 
-type Phase = "intro" | "selfreport" | "quiz" | "summary";
+type Phase = "mode" | "intro" | "selfreport" | "quiz" | "summary";
 type Stage = "base" | "followup";
 type Lane = "full" | "self";
 
@@ -48,25 +50,42 @@ export function DiagnosticPage() {
     saveResume,
     getResume,
     clearResume,
+    setGoalMode,
   } = useProgress();
+
+  // PART A — the diagnostic is MODE-AWARE: Case A ("course") assesses the UT
+  // course spine, Case B ("interview") the quant-interview set. The selected
+  // blueprint drives item selection AND seeding, so results seed mastery for the
+  // correct per-mode topic set. The ≤ 30-item guarantee holds for both.
+  const blueprint = useMemo(
+    () => blueprintForMode(resolveGoalMode(progress)),
+    [progress],
+  );
 
   // Restore an in-progress base run (humane "answer later" — don't restart).
   // Only trust a snapshot whose shape still matches the current blueprint.
   const resumed = useRef(getResume(DIAGNOSTIC_RESUME_ID));
   const validResume =
     resumed.current &&
-    resumed.current.answers.length === buildDiagnosticPlan(resumed.current.seed).length
+    resumed.current.answers.length ===
+      buildDiagnosticPlan(resumed.current.seed, blueprint).length
       ? resumed.current
       : undefined;
 
-  const [phase, setPhase] = useState<Phase>(() => (validResume ? "quiz" : "intro"));
+  // The MANDATORY mode-select is the very FIRST screen (both lanes). A resumed
+  // base run already picked a mode before the quiz started, so it skips straight
+  // back to the quiz.
+  const [phase, setPhase] = useState<Phase>(() => (validResume ? "quiz" : "mode"));
   const [lane, setLane] = useState<Lane>("full");
   const [stage, setStage] = useState<Stage>("base");
   const [seed, setSeed] = useState(
     () => validResume?.seed ?? Date.now() % 2_000_000_000,
   );
 
-  const basePlan = useMemo<PlanItem[]>(() => buildDiagnosticPlan(seed), [seed]);
+  const basePlan = useMemo<PlanItem[]>(
+    () => buildDiagnosticPlan(seed, blueprint),
+    [seed, blueprint],
+  );
   const [baseAnswers, setBaseAnswers] = useState<(number | null)[]>(() =>
     validResume ? validResume.answers.slice() : new Array(basePlan.length).fill(null),
   );
@@ -120,7 +139,7 @@ export function DiagnosticPage() {
   ) => {
     // Compute graded outcomes once; reuse for the seed stamp AND the history
     // entry so both share a single timestamp.
-    const outcomes = outcomesFromAnswers(plan, answers);
+    const outcomes = outcomesFromAnswers(plan, answers, blueprint);
     const stamp = new Date().toISOString();
     applyDiagnosticSeeds(diagnosticToSeeds(outcomes), stamp);
     // Record this attempt for the improvement graph. Only the full lane grades
@@ -143,7 +162,7 @@ export function DiagnosticPage() {
         return;
       }
       // Base done — compute the adaptive follow-up (gated Markov + tiebreaks).
-      const followups = buildFollowUpPlan(seed, basePlan, baseAnswers);
+      const followups = buildFollowUpPlan(seed, basePlan, baseAnswers, blueprint);
       clearResume(DIAGNOSTIC_RESUME_ID);
       if (followups.length > 0) {
         setFollowupPlan(followups);
@@ -189,12 +208,12 @@ export function DiagnosticPage() {
     resumed.current = undefined;
     clearResume(DIAGNOSTIC_RESUME_ID);
     setSeed(s);
-    setBaseAnswers(new Array(buildDiagnosticPlan(s).length).fill(null));
+    setBaseAnswers(new Array(buildDiagnosticPlan(s, blueprint).length).fill(null));
     setFollowupPlan([]);
     setFollowupAnswers([]);
     setStage("base");
     setIndex(0);
-    setPhase("intro");
+    setPhase("mode");
   };
 
   return (
@@ -232,6 +251,17 @@ export function DiagnosticPage() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
+        {phase === "mode" && (
+          <ModeStep
+            current={resolveGoalMode(progress)}
+            hasChosen={progress.goalMode !== undefined}
+            onPick={(mode) => {
+              setGoalMode(mode);
+              setPhase("intro");
+            }}
+          />
+        )}
+
         {phase === "intro" && (
           <Intro
             baseTotal={baseTotal}
@@ -271,12 +301,85 @@ export function DiagnosticPage() {
         {phase === "summary" && (
           <Summary
             lane={lane}
+            mode={resolveGoalMode(progress)}
             history={progress.diagnosticHistory}
             onRetake={retake}
             onDone={() => navigate("/contents")}
           />
         )}
       </main>
+    </div>
+  );
+}
+
+/**
+ * The MANDATORY, non-graded mode-select — the very first screen of BOTH lanes.
+ * It ONLY sets `goalMode` (a pure view selector) and is therefore orthogonal to
+ * the graded warm-up: it does NOT count toward the diagnostic's ≤30-item
+ * guarantee, seed priors, or stamp `diagnosticDoneAt`. Advancing requires a
+ * pick, so there is no default advance.
+ */
+function ModeStep({
+  current,
+  hasChosen,
+  onPick,
+}: {
+  current: GoalMode;
+  hasChosen: boolean;
+  onPick: (mode: GoalMode) => void;
+}) {
+  return (
+    <div className="animate-print-in space-y-5">
+      <article className="panel-ruled p-6">
+        <span className="label text-accent">First · Pick your focus</span>
+        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
+          What are you here to do?
+        </h2>
+        <p className="mt-3 text-[15px] leading-relaxed text-secondary">
+          Pick a focus — you can switch anytime from the menu or your dashboard,
+          and{" "}
+          <span className="font-semibold text-primary">
+            your progress carries over
+          </span>
+          . Either choice uses the same practice history; switching never resets
+          your progress.
+        </p>
+      </article>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {GOAL_MODES.map((mode) => {
+          const meta = MODE_META[mode];
+          const isCurrent = hasChosen && mode === current;
+          return (
+            <button
+              key={mode}
+              onClick={() => onPick(mode)}
+              className={`flex flex-col gap-2 border p-5 text-left transition-colors min-h-[44px] ${
+                isCurrent
+                  ? "border-accent bg-success-soft"
+                  : "border-subtle bg-surface hover:bg-surface-muted"
+              }`}
+            >
+              <span className="flex items-center justify-between">
+                <span className="font-display text-lg font-semibold text-primary">
+                  {meta.blurb}
+                </span>
+                {isCurrent && (
+                  <span className="chip border-accent text-accent">Current</span>
+                )}
+              </span>
+              <span className="text-sm leading-relaxed text-secondary">
+                {meta.detail}
+              </span>
+              <span className="label mt-1 text-accent">{meta.label} ▸</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-center text-xs text-muted">
+        This choice only sets your focus — it is never scored and never locks or
+        unlocks anything.
+      </p>
     </div>
   );
 }
@@ -575,11 +678,13 @@ function DiagnosticCard({
 
 function Summary({
   lane,
+  mode,
   history,
   onRetake,
   onDone,
 }: {
   lane: Lane;
+  mode: GoalMode;
   history?: DiagnosticResult[];
   onRetake: () => void;
   onDone: () => void;
@@ -589,7 +694,9 @@ function Summary({
       <div className="panel-ruled p-6 text-center">
         <span className="label text-accent">Warm-Up Complete</span>
         <h2 className="mt-4 font-display text-2xl font-semibold text-primary">
-          Calibrated your starting point
+          {mode === "course"
+            ? "We've tuned your course starting point"
+            : "Calibrated your starting point"}
         </h2>
         <p className="mt-2 text-sm text-secondary">
           {lane === "self"

@@ -1,0 +1,220 @@
+/**
+ * lib/oa/config.ts — the DATA-DRIVEN catalog of the timed practice formats.
+ * Counts, durations, and scoring live here (and nowhere else) so the feature is
+ * trivially tunable. Every number is informed by the firm research
+ * (`datasets/FIRM_TIMED_ASSESSMENTS.md` + `QUANT_OA_RESEARCH_CLUSTER1/2.md`) and
+ * cross-checked against the OA benchmark catalog (`content/arena/oaFormats.ts`).
+ *
+ * The three ORIGINAL formats (Sprint / Section / Measured) are joined by four
+ * research-derived, firm-INSPIRED formats (Rapid Mixed Battery, Blitz, Derivation
+ * Set, Deep Set) — each modelled on a real firm's tested skills + pacing and tuned
+ * a notch STRICTER than reality. All seven reuse the same pure engine + scoring
+ * (no new session kinds); Derivation is a module-locked section (forward-only).
+ *
+ * Design defaults (see FIRM_TIMED_ASSESSMENTS.md §1, §4):
+ *  - Sprint: a "Timed Probability Sprint" at ~90 s/q (§4 row 2), 12 Qs, Optiver
+ *    "Beat the Odds" +1/−1/0 penalty scoring (§1 Optiver). Strict per-question
+ *    clock, auto-advance, no going back — the short-brutal pacing (Five Rings
+ *    ~60–80 s/q, `five-rings-20`) rounded to a clean 90 s.
+ *  - Section: 30 min / 17 Qs (~105 s/q), one running section clock, free
+ *    navigation, +1/0/0 (DRW/SIG — no wrong penalty), auto-submit at time up,
+ *    with an optional hard-mode −1 penalty toggle. Grounded in the mixed-battery
+ *    / short-brutal windows (DRW 6–8 Qs / 45–60 min; Belvedere 30–40 Qs / 60 min
+ *    ≈ 100–120 s/q; SIG 20-min eval).
+ *  - Measured: untimed practice; still records time-per-question so the average
+ *    feeds the dashboard trend graph. Paced against the sprint 90 s/q budget so
+ *    "% within budget" stays a meaningful cross-format reference.
+ */
+import type { OaFormatConfig, OaFormatKind, OaScoringRule } from "./types";
+
+/** Max completed OA results retained per user (keeps the store bounded). */
+export const MAX_OA_RESULTS = 100;
+
+/** +1 correct / −1 wrong / 0 skip — Optiver "Beat the Odds" penalty scoring. */
+const OPTIVER_STYLE: OaScoringRule = { correct: 1, wrong: -1, skip: 0 };
+/** +1 correct / 0 wrong / 0 skip — DRW/SIG style (no wrong penalty). */
+const COUNT_STYLE: OaScoringRule = { correct: 1, wrong: 0, skip: 0 };
+
+export const SPRINT_FORMAT: OaFormatConfig = {
+  id: "sprint-default",
+  kind: "sprint",
+  label: "Per-Question Sprint",
+  blurb:
+    "One question at a time on a strict ~90s clock. It auto-advances when time runs out and you can't go back — Optiver Beat-the-Odds scoring (+1 / −1 / 0).",
+  questionCount: 12,
+  perQuestionSec: 90,
+  freeNavigation: false,
+  autoAdvance: true,
+  scoring: OPTIVER_STYLE,
+  budgetMs: 90_000,
+  oaFormatId: "five-rings-20",
+  sourceNote:
+    "FIRM_TIMED_ASSESSMENTS.md §4 row 2 (timed probability sprint ~90 s/q); §1 Optiver +1/−1 penalty; short-brutal pace (Five Rings).",
+};
+
+export const SECTION_FORMAT: OaFormatConfig = {
+  id: "section-default",
+  kind: "section",
+  label: "Section Exam",
+  blurb:
+    "17 questions, one 30-minute section clock. Navigate freely, flag and revisit, and it auto-submits at time up. +1 correct / 0 otherwise (optional hard-mode −1 penalty).",
+  questionCount: 17,
+  sectionSec: 30 * 60,
+  freeNavigation: true,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  hardModePenalty: -1,
+  // Per-question fair share = 1800s / 17 ≈ 105.9 s → ms.
+  budgetMs: Math.round(((30 * 60) / 17) * 1000),
+  sourceNote:
+    "FIRM_TIMED_ASSESSMENTS.md §1 short-brutal / §2 mixed battery (DRW 6–8/45–60min; Belvedere 30–40/60min ≈ 100–120 s/q; SIG 20-min eval); +1/0 DRW/SIG scoring.",
+};
+
+/* -------------------------------------------------------------------------- */
+/*  Research-derived, firm-INSPIRED formats (QUANT_OA_RESEARCH_CLUSTER1/2.md). */
+/*  Each mirrors a firm's tested skills + pacing, tuned a notch STRICTER than   */
+/*  the real screen. They reuse the same pure engine + scoring as the three     */
+/*  originals (no new kinds); Derivation is a module-locked SECTION (see the     */
+/*  `freeNavigation:false` ⇒ `OaSessionState.noBack` forward-only lock).        */
+/* -------------------------------------------------------------------------- */
+
+export const RAPID_BATTERY_FORMAT: OaFormatConfig = {
+  id: "rapid-battery",
+  kind: "sprint",
+  label: "Rapid Mixed Battery",
+  blurb:
+    "40 rapid-fire questions on a brutal ~15s clock — mixed probability, EV, and quick-quant. It auto-advances and you can't go back. Penalty scoring (+1 / −1 / 0) rewards knowing when to skip.",
+  questionCount: 40,
+  perQuestionSec: 15,
+  freeNavigation: false,
+  autoAdvance: true,
+  scoring: OPTIVER_STYLE,
+  budgetMs: 15_000,
+  oaFormatId: "citadel-50-12",
+  firmAttribution: "Citadel-style",
+  contentPool: "rapidMixed",
+  sourceNote:
+    "CLUSTER1 §2 / CLUSTER2 TL;DR: Citadel Sec. mixed cognitive/quant battery ≈50 Q/12 min (~14.4 s/q); made stricter to 15 s/q over 40 Q with Optiver-style +1/−1 penalty to reward calibrated skipping.",
+};
+
+export const BLITZ_FORMAT: OaFormatConfig = {
+  id: "blitz",
+  kind: "section",
+  label: "Blitz",
+  blurb:
+    "20 questions on one 16-minute clock (~48s each) — probability, combinatorics, and estimation with no calculator. Navigate freely and it auto-submits at time. +1 correct / 0 otherwise.",
+  questionCount: 20,
+  sectionSec: 16 * 60,
+  freeNavigation: true,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  hardModePenalty: -1,
+  // Per-question fair share = 960s / 20 = 48s → ms.
+  budgetMs: Math.round(((16 * 60) / 20) * 1000),
+  oaFormatId: "five-rings-20",
+  firmAttribution: "Five Rings-style",
+  contentPool: "blitz",
+  sourceNote:
+    "CLUSTER2 §4: Five Rings ~15–20 typed Q / <20 min (~60–75 s/q), no-calculator probability + combinatorics + estimation; tightened to ~48 s/q over 20 Q.",
+};
+
+export const DERIVATION_FORMAT: OaFormatConfig = {
+  id: "derivation-set",
+  kind: "section",
+  label: "Derivation Set",
+  blurb:
+    "12 harder multi-step derivations on one 36-minute clock (~3 min each). Module-locked: you answer in order and can't go back, and it auto-submits at time. +1 correct / 0 otherwise.",
+  questionCount: 12,
+  sectionSec: 36 * 60,
+  // Module-lock: no free navigation ⇒ the engine seeds `noBack` (forward-only).
+  freeNavigation: false,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  // Per-question fair share = 2160s / 12 = 180s → ms.
+  budgetMs: Math.round(((36 * 60) / 12) * 1000),
+  oaFormatId: "sig-quant-eval",
+  firmAttribution: "IMC-style",
+  contentPool: "derivation",
+  sourceNote:
+    "CLUSTER1 §5 / CLUSTER2 IMC row: IMC math module ~15 Q / ~60 min (~3–4 min/q), module-locked (no back-nav, no time carryover); tightened to ~3 min/q over 12 Q.",
+};
+
+export const DEEP_SET_FORMAT: OaFormatConfig = {
+  id: "deep-set",
+  kind: "section",
+  label: "Deep Set",
+  blurb:
+    "6 deep, multi-step problems (probability, Markov chains, recursion) on one 36-minute clock (~6 min each). Navigate freely — leave the hardest one blank and still advance. +1 correct / 0 otherwise.",
+  questionCount: 6,
+  sectionSec: 36 * 60,
+  freeNavigation: true,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  // Per-question fair share = 2160s / 6 = 360s → ms.
+  budgetMs: Math.round(((36 * 60) / 6) * 1000),
+  oaFormatId: "drw-6-45",
+  firmAttribution: "DRW-style",
+  contentPool: "deepSet",
+  sourceNote:
+    "CLUSTER2 §3: DRW 6 Q / 45 min (~7.5 min/q), +1/0-wrong/0-skip, free navigation, probability / linear algebra / Markov chains; tightened to ~6 min/q over 6 Q. (Linear-algebra archetype not yet in the pool — see report.)",
+};
+
+export const MEASURED_FORMAT: OaFormatConfig = {
+  id: "measured-default",
+  kind: "measured",
+  label: "Measured (Untimed)",
+  blurb:
+    "No time limit — think it through. We track your time per question and show your average so you can watch your speed improve over time.",
+  questionCount: 12,
+  freeNavigation: true,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  // No clock; pace against the sprint 90 s/q reference for a comparable "% within budget".
+  budgetMs: 90_000,
+  sourceNote:
+    "FIRM_TIMED_ASSESSMENTS.md §4 (accuracy-first practice); untimed measured mode feeds the average-time trend.",
+};
+
+/**
+ * All timed formats, ordered fastest-pace → slowest (the UI difficulty
+ * gradient), with the untimed Measured mode last. Per-question pace (sec/q):
+ * Rapid 15 · Blitz 48 · Sprint 90 · Section ~106 · Derivation 180 · Deep 360.
+ */
+export const OA_FORMATS: readonly OaFormatConfig[] = [
+  RAPID_BATTERY_FORMAT,
+  BLITZ_FORMAT,
+  SPRINT_FORMAT,
+  SECTION_FORMAT,
+  DERIVATION_FORMAT,
+  DEEP_SET_FORMAT,
+  MEASURED_FORMAT,
+] as const;
+
+/** Lookup a format config by id. */
+export function oaFormatById(id: string): OaFormatConfig | undefined {
+  return OA_FORMATS.find((f) => f.id === id);
+}
+
+/** Lookup a format config by kind (the three kinds are 1:1 with a default config). */
+export function oaFormatByKind(kind: OaFormatKind): OaFormatConfig {
+  const f = OA_FORMATS.find((x) => x.kind === kind);
+  // Every kind has exactly one default format; assert for the type-narrowing.
+  if (!f) throw new Error(`No OA format for kind ${kind}`);
+  return f;
+}
+
+/**
+ * Resolve the EFFECTIVE scoring rule for a format, applying the optional
+ * hard-mode wrong penalty when enabled. Pure — the single place the hard-mode
+ * toggle is folded into a concrete rule (so the session/scoring never re-derive
+ * it inconsistently).
+ */
+export function resolveScoring(
+  config: OaFormatConfig,
+  hardMode: boolean,
+): OaScoringRule {
+  if (hardMode && config.hardModePenalty != null) {
+    return { ...config.scoring, wrong: config.hardModePenalty };
+  }
+  return { ...config.scoring };
+}

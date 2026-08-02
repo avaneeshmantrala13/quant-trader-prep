@@ -1,7 +1,9 @@
 import type { ComponentType } from "react";
 import type { Difficulty, LevelMode, MotifKey } from "@/types/content";
+import type { GoalMode } from "@/types/progress";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import type { CourseId } from "@/lib/mode/courseMap";
 
 /**
  * ============================================================================
@@ -164,8 +166,8 @@ export interface TocTrack {
 }
 
 /**
- * A teaser-only ("coming soon") track, e.g. the Calibration Gym. It has no
- * playable lessons — a theme may render it as a disabled/teaser card or omit it.
+ * A teaser-only ("coming soon") track. It has no playable lessons — a theme
+ * may render it as a disabled/teaser card or omit it.
  */
 export interface TocComingSoonTrack {
   id: string;
@@ -196,7 +198,7 @@ export interface TocViewProps {
   intro: string;
   /** Playable tracks, in curriculum order, each with its lessons + states. */
   tracks: TocTrack[];
-  /** Teaser-only tracks (e.g. Calibration Gym); may be rendered or ignored. */
+  /** Teaser-only ("coming soon") tracks; may be rendered or ignored. */
   comingSoon: TocComingSoonTrack[];
   /**
    * Navigate to a lesson. A no-op for locked lessons (the page guards this), so
@@ -303,7 +305,64 @@ export interface DashboardRecommendation {
  *     — the dashboard is read-only over already-unlocked-or-evidenced topics),
  *   • stay responsive (360px → ≥1280px), respect light/dark, and be WCAG-AA.
  */
+/** One per-course topic row on a Case-A course-readiness card. */
+export interface CourseReadinessTopic {
+  topicKey: string;
+  /** Friendly topic name (already resolved). */
+  name: string;
+  /** Calibration-aware verdict (STRONG / WEAK / UNCERTAIN). */
+  verdict: MasteryState;
+  /** True once the topic has any graded evidence. */
+  hasEvidence: boolean;
+  /** Topic-level mastered signal (CI_low ≥ bar). */
+  mastered: boolean;
+  /** True for shared/upstream topics (owned by the other course). */
+  shared: boolean;
+  /** Deep-link to practice this topic (its first level). */
+  href: string;
+}
+
+/**
+ * Per-course readiness for the Case-A dashboard: how close the learner is to
+ * completing each course, the next unmastered topic, and a compact topic list.
+ */
+export interface CourseReadiness {
+  id: CourseId;
+  /** Course label — the ONLY name shown (never the M362 code). */
+  label: string;
+  blurb: string;
+  /** Route to the course curation page (`/course/:id`). */
+  href: string;
+  /** Mastered PRIMARY topics / total primary topics. */
+  masteredCount: number;
+  totalCount: number;
+  /** Fraction mastered in [0,1]. */
+  pct: number;
+  /** The next unmastered primary topic to tackle, if any. */
+  nextTopic?: { name: string; href: string };
+  /** Every displayed topic (primary + shared), in course order. */
+  topics: CourseReadinessTopic[];
+}
+
 export interface DashboardViewProps {
+  /**
+   * The active Goal Mode. Case A ("course") ⇒ course-readiness focus; Case B
+   * ("interview", the default) ⇒ today's weakness-ranking focus. A theme MUST
+   * keep Case B byte-for-byte identical to today's dashboard.
+   */
+  goalMode: GoalMode;
+  /**
+   * Per-course readiness cards, populated ONLY in Case A (empty in Case B). A
+   * theme renders these instead of the weakness ranking + timing when
+   * `goalMode === "course"`.
+   */
+  courses: CourseReadiness[];
+  /**
+   * True when the learner has any Speed Arena attempts. Case B may show a timing
+   * panel ONLY when this is true (never an empty panel); false ⇒ no timing panel
+   * (identical to today).
+   */
+  hasTimingData: boolean;
   /** True once the learner has completed the calibration warm-up (diagnostic). */
   diagnosticDone: boolean;
   /** Route to (re)run the calibration warm-up. */

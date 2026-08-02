@@ -3,10 +3,12 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useProgress } from "@/context/ProgressContext";
 import { useTheme } from "@/context/ThemeContext";
-import { TRACKS } from "@/content";
+import { resolveGoalMode } from "@/lib/mode/goalMode";
+import { navFor } from "@/lib/mode/visibility";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { OnboardingTour } from "@/components/onboarding/OnboardingTour";
-import { ONBOARDING_TOUR_STEPS } from "@/lib/onboarding/steps";
+import { onboardingStepsForMode } from "@/lib/onboarding/steps";
 import { shouldShowOnboardingTour } from "@/lib/onboarding/tour";
 import {
   CandlestickIcon,
@@ -26,15 +28,6 @@ function today(): string {
       day: "numeric",
     })
     .toUpperCase();
-}
-
-function Readout({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="flex flex-col items-end leading-none">
-      <span className="label text-[9px]">{label}</span>
-      <span className="num text-sm font-semibold text-primary">{value}</span>
-    </div>
-  );
 }
 
 export function AppShell() {
@@ -134,32 +127,13 @@ export function AppShell() {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  // `tour` tags a menu item with a stable `data-tour` hook so the onboarding
-  // coach-marks can anchor an arrow to it (see `@/lib/onboarding`). The tracks
-  // step points at the Table of Contents; probability gets its own hook; the
-  // new Simulations tab gets one too.
-  const navItems: {
-    to: string;
-    label: string;
-    end: boolean;
-    tour?: string;
-  }[] = [
-    { to: "/", label: "Home", end: true },
-    { to: "/roadmap", label: "Roadmap", end: false },
-    { to: "/dashboard", label: "Dashboard", end: false, tour: "dashboard" },
-    { to: "/contents", label: "Table of Contents", end: false, tour: "contents" },
-    { to: "/simulations", label: "Simulations", end: false, tour: "simulations" },
-    { to: "/fermi", label: "Fermi Drill", end: false },
-    ...TRACKS.map((t) => ({
-      to: `/track/${t.id}`,
-      label: t.title,
-      end: false,
-      tour: t.id === "probability" ? "probability" : undefined,
-    })),
-    { to: "/arena", label: "Speed Arena", end: false, tour: "arena" },
-    { to: "/diagnostic", label: "Recalibrate", end: false, tour: "recalibrate" },
-    { to: "/themes", label: "Themes", end: false, tour: "themes" },
-  ];
+  // Mode-aware navigation (WS2). `navFor(mode)` returns grouped nav items: Case B
+  // is EXACTLY today's flat list (a single un-headed group); Case A restructures
+  // into the two course tracks + a small Foundations group + a de-emphasized
+  // "Beyond the course" group. Each item keeps its `data-tour` hook so the
+  // onboarding coach-marks still anchor correctly.
+  const mode = resolveGoalMode(progress);
+  const navGroups = navFor(mode);
 
   return (
     <div className="relative min-h-[100dvh]">
@@ -178,8 +152,8 @@ export function AppShell() {
             <span className="label hidden truncate text-[9px] sm:block">
               {today()}
             </span>
-            <span className="label text-[9px] text-bull">● Markets Open</span>
             <div className="flex items-center gap-1">
+              <ModeToggle size="sm" />
               <button
                 onClick={() => setTourOpen(true)}
                 className="btn-ghost !min-h-0 gap-1.5 !px-2 !py-1.5"
@@ -253,24 +227,38 @@ export function AppShell() {
                   aria-label="Main navigation"
                   className="absolute left-0 top-full z-40 mt-2 max-h-[70vh] w-64 overflow-y-auto rounded-md border border-border-strong bg-surface p-1 shadow-2xl motion-safe:animate-print-in"
                 >
-                  {navItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.end}
-                      role="menuitem"
-                      data-tour={item.tour}
-                      onClick={closeMenu}
-                      className={({ isActive }) =>
-                        `block rounded-sm px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
-                          isActive
-                            ? "bg-accent text-accent-contrast"
-                            : "text-secondary hover:bg-surface-muted hover:text-primary"
-                        }`
-                      }
+                  {navGroups.map((group, gi) => (
+                    <div
+                      key={group.heading ?? `group-${gi}`}
+                      className={gi > 0 ? "mt-1 border-t border-subtle pt-1" : ""}
                     >
-                      {item.label}
-                    </NavLink>
+                      {group.heading && (
+                        <div className="label px-3 pb-1 pt-2 text-[9px] text-muted">
+                          {group.heading}
+                        </div>
+                      )}
+                      {group.items.map((item) => (
+                        <NavLink
+                          key={item.to}
+                          to={item.to}
+                          end={item.end}
+                          role="menuitem"
+                          data-tour={item.tour}
+                          onClick={closeMenu}
+                          className={({ isActive }) =>
+                            `block rounded-sm px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
+                              isActive
+                                ? "bg-accent text-accent-contrast"
+                                : item.emphasis === "beyond"
+                                  ? "text-muted hover:bg-surface-muted hover:text-primary"
+                                  : "text-secondary hover:bg-surface-muted hover:text-primary"
+                            }`
+                          }
+                        >
+                          {item.label}
+                        </NavLink>
+                      ))}
+                    </div>
                   ))}
                 </div>
               )}
@@ -284,17 +272,8 @@ export function AppShell() {
                 <span className="font-display text-2xl font-black tracking-tight text-primary sm:text-3xl">
                   Quant Trader Prep
                 </span>
-                <span className="label mt-1 hidden text-[9px] sm:block">
-                  The Interview Desk · Beginner → Expert Edition
-                </span>
               </span>
             </NavLink>
-          </div>
-
-          <div className="flex items-center gap-4">
-            <Readout label="Streak" value={`${progress.streak}d`} />
-            <div className="h-8 w-px bg-subtle" />
-            <Readout label="XP" value={progress.xp} />
           </div>
         </div>
       </header>
@@ -326,7 +305,7 @@ export function AppShell() {
 
       <OnboardingTour
         open={tourOpen}
-        steps={ONBOARDING_TOUR_STEPS}
+        steps={onboardingStepsForMode(mode)}
         onClose={closeTour}
         onActiveTargetChange={setTourTarget}
       />

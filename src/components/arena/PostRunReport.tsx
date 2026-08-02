@@ -1,5 +1,6 @@
 import type { RunReport } from "@/lib/arena/analytics";
 import type { PersonalBest } from "@/lib/arena/localPb";
+import type { SpeedStats } from "@/lib/arena/speedStats";
 
 /**
  * PostRunReport — thin view of the pure `RunReport`. The per-question strip is
@@ -20,12 +21,18 @@ export function PostRunReport({
   pb,
   isNewBest,
   trend,
+  speed,
+  nextBudgetMs,
   onAgain,
 }: {
   report: RunReport;
   pb: PersonalBest | null;
   isNewBest: boolean;
   trend: number | null;
+  /** Interview-overlay speed stats; omitted for casual (non-interview) runs. */
+  speed?: SpeedStats | null;
+  /** Adaptively-tightened budget (ms) suggested for the next run, if any. */
+  nextBudgetMs?: number | null;
   onAgain: () => void;
 }) {
   const strip = report.perQuestion;
@@ -52,6 +59,50 @@ export function PostRunReport({
         <Stat label="Best" value={pb ? pb.bestScore : report.score} />
         <Stat label="7-day med" value={trend ?? "—"} />
       </div>
+
+      {/* Interview-overlay SPEED panel — time-to-solve vs the OA budget,
+          surfaced alongside accuracy. Only present on interview-pacing runs. */}
+      {speed && (
+        <div className="panel-ruled space-y-3 p-3">
+          <div className="flex items-center justify-between">
+            <span className="label text-accent">Speed vs budget</span>
+            <span
+              className={`num text-xs font-bold ${
+                speed.beatTarget ? "text-bull" : "text-gold"
+              }`}
+            >
+              {speed.beatTarget ? "★ beat the target" : "keep pushing pace"}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <Stat
+              label="Median solve"
+              value={`${(speed.medianSolveMs / 1000).toFixed(1)}s`}
+            />
+            <Stat
+              label="Budget"
+              value={`${(speed.budgetMs / 1000).toFixed(1)}s`}
+            />
+            <Stat
+              label="Within budget"
+              value={`${Math.round(speed.pctWithinBudget * 100)}%`}
+            />
+            <Stat
+              label="Correct + in time"
+              value={`${Math.round(speed.pctCorrectWithinBudget * 100)}%`}
+            />
+          </div>
+          {nextBudgetMs != null && nextBudgetMs < speed.budgetMs && (
+            <p className="text-sm text-primary">
+              Accuracy is holding — tightening next run's budget to{" "}
+              <span className="num font-semibold">
+                {(nextBudgetMs / 1000).toFixed(1)}s/q
+              </span>
+              . Keep beating the clock.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Per-question strip: each attempted item colored by correctness. */}
       <div className="panel p-3">

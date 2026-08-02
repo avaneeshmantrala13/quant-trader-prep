@@ -2,6 +2,8 @@ import { Link } from "react-router-dom";
 import type { CSSProperties } from "react";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import type { MasteryState } from "@/lib/mastery/verdict";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import type {
   DashboardTopicEntry,
   DashboardViewProps,
@@ -601,43 +603,56 @@ function ReliabilityChalkPlot({
 }: {
   data: DashboardViewProps["reliability"];
 }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
       <div className="grid min-h-[200px] place-items-center rounded-md border-2 border-dashed border-border-strong/35 bg-surface-muted/40 p-6 text-center">
         <div className="max-w-sm">
           <div
-            className="mx-auto mb-3 font-display text-4xl text-muted"
+            className="mx-auto mb-3 font-display text-4xl text-accent"
             aria-hidden="true"
           >
-            ∅
+            ✎
           </div>
           <div className="label text-muted">Reliability diagram</div>
           <p className="mt-2 font-sans text-sm leading-relaxed text-secondary">
-            The board's still blank here. As you answer graded items this
-            session, we'll chalk in how often your ~80%-confidence calls actually
-            turn out right — no guessing at a curve until there's real data.
+            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches your accuracy.
           </p>
+          <p className="mt-3 font-display text-base font-bold text-primary">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div className="mx-auto mt-2 h-2.5 w-full max-w-[15rem] overflow-hidden rounded-full border border-border-strong/40 bg-surface">
+            <div
+              className="h-full rounded-full bg-accent transition-all"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? "well-calibrated"
-      : signed > 0
-        ? "over-confident"
-        : "under-confident";
+  const cal = data.calibration;
+  const leanText =
+    cal?.lean === "over"
+      ? "over-confident"
+      : cal?.lean === "under"
+        ? "under-confident"
+        : "well-calibrated";
   const leanChip =
-    lean === "over-confident"
+    cal?.lean === "over"
       ? "border-bear text-bear"
-      : lean === "under-confident"
+      : cal?.lean === "under"
         ? "border-accent text-accent"
         : "border-bull text-bull";
+  const caption =
+    cal?.lean === "under"
+      ? "Dots above the dashed line = under-confident; below = over-confident."
+      : cal?.lean === "well"
+        ? "Dots hugging the dashed line = well-calibrated; below = over-confident, above = under-confident."
+        : "Dots below the dashed line = over-confident; above = under-confident.";
 
   const curve = data.bins
     .map((b) => `${px(b.predicted)},${py(b.observed)}`)
@@ -763,19 +778,30 @@ function ReliabilityChalkPlot({
             <span className="text-muted">(n = {data.headline.count})</span>.
           </p>
         )}
+        {cal && (
+          <p className="font-sans text-[15px] font-semibold leading-relaxed text-primary">
+            {cal.label}
+          </p>
+        )}
         <div className="flex flex-wrap gap-1.5">
-          <span className="chip border-border-strong/40 text-secondary">
-            Brier gap {data.relGap.toFixed(3)}
-          </span>
-          <span className="chip border-border-strong/40 text-secondary">
-            Brier {data.brier.toFixed(3)}
-          </span>
-          <span className={`chip ${leanChip}`}>{lean}</span>
+          <span className={`chip ${leanChip}`}>{leanText}</span>
         </div>
         <p className="font-sans text-xs leading-relaxed text-muted">
-          Dots below the dashed line = over-confident; above = under-confident.
-          The shaded stripe marks your 80% "pass" band.
+          {caption} The shaded stripe marks your 80% "pass" band.
         </p>
+        <details className="group">
+          <summary className="label cursor-pointer text-muted transition-colors hover:text-secondary">
+            Advanced details
+          </summary>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <span className="chip border-border-strong/40 text-secondary">
+              Brier gap {data.relGap.toFixed(3)}
+            </span>
+            <span className="chip border-border-strong/40 text-secondary">
+              Brier {data.brier.toFixed(3)}
+            </span>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -786,6 +812,8 @@ function ReliabilityChalkPlot({
 /* -------------------------------------------------------------------------- */
 
 export function ChalkboardDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -795,6 +823,7 @@ export function ChalkboardDashboard({
   due,
   reliability,
 }: DashboardViewProps) {
+  const courseMode = goalMode === "course";
   return (
     <div className="relative min-h-[100dvh]">
       <ChalkDashAnimations />
@@ -814,6 +843,7 @@ export function ChalkboardDashboard({
               Progress Report
             </span>
           </div>
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2.5 !py-1.5 font-display !text-base !normal-case !tracking-normal"
@@ -929,20 +959,31 @@ export function ChalkboardDashboard({
           </BoardPanel>
         )}
 
-        {/* 3) Weakness ranking by CI_low. */}
-        <BoardPanel className="p-5 sm:p-6">
-          <SectionHead
-            eyebrow="Weakest first · by CI low"
-            title="Shore These Up"
-            underlineWidth="w-36"
-            aside={
-              <span className="label text-muted">
-                {weaknesses.length} with evidence
-              </span>
-            }
-          />
-          <WeaknessRanking topics={weaknesses} />
-        </BoardPanel>
+        {/* 3) Course readiness (Case A) or weakness ranking (Case B). */}
+        {courseMode ? (
+          <BoardPanel className="p-5 sm:p-6">
+            <SectionHead
+              eyebrow="How close each course is"
+              title="Course Readiness"
+              underlineWidth="w-44"
+            />
+            <CourseReadinessCards courses={courses} />
+          </BoardPanel>
+        ) : (
+          <BoardPanel className="p-5 sm:p-6">
+            <SectionHead
+              eyebrow="Weakest first · by CI low"
+              title="Shore These Up"
+              underlineWidth="w-36"
+              aside={
+                <span className="label text-muted">
+                  {weaknesses.length} with evidence
+                </span>
+              }
+            />
+            <WeaknessRanking topics={weaknesses} />
+          </BoardPanel>
+        )}
 
         {/* 4) Calibration reliability diagram. */}
         <BoardPanel className="p-5 sm:p-6">

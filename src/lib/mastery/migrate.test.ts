@@ -84,6 +84,23 @@ describe("migrateProgress (v1 → v2)", () => {
     expect(out.topicMastery).toEqual({});
   });
 
+  it("leaves `goalMode` undefined for a pre-mode save (existing users default to Case B)", () => {
+    const out = migrateProgress({ ...emptyProgress(), version: 1 });
+    expect(out.goalMode).toBeUndefined();
+  });
+
+  it("preserves an explicit `goalMode` and the additive `calibrationLog`", () => {
+    const saved = {
+      ...emptyProgress(),
+      goalMode: "course" as const,
+      calibrationLog: [{ topicKey: "probability::Expected Value", pred: 0.8, outcome: 1 as const }],
+    };
+    const out = migrateProgress(saved);
+    expect(out.goalMode).toBe("course");
+    expect(out.calibrationLog).toHaveLength(1);
+    expect(out.calibrationLog?.[0].pred).toBe(0.8);
+  });
+
   it("returns a fresh empty (v2) progress for garbage input", () => {
     expect(migrateProgress(null).version).toBe(2);
     expect(migrateProgress(undefined).topicMastery).toEqual({});

@@ -99,3 +99,40 @@ describe("reliabilityDiagram", () => {
     expect(d.headline).toBeUndefined();
   });
 });
+
+describe("reliabilityDiagram — WS-CAL sufficiency gate + single signed label", () => {
+  it("gates the panel below MIN_PAIRS (kills the n=1 nonsense)", () => {
+    const d = reliabilityDiagram(group(0.8, 1, 1)); // a single data point
+    expect(d.sufficient).toBe(false);
+    expect(d.count).toBe(1);
+    expect(d.minPairs).toBe(25);
+    // A single ~80% pair must NOT produce a headline ("right 100%, n=1").
+    expect(d.headline).toBeUndefined();
+  });
+
+  it("becomes sufficient once ≥ MIN_PAIRS pooled pairs exist", () => {
+    const d = reliabilityDiagram(group(0.8, 25, 20));
+    expect(d.sufficient).toBe(true);
+    expect(d.headline).toBeDefined();
+  });
+
+  it("derives ONE signed label so headline/chip/caption can never contradict", () => {
+    // Says ~80% but only right 30% ⇒ over-confident (signed > 0).
+    const over = reliabilityDiagram(group(0.8, 40, 12));
+    expect(over.calibration?.lean).toBe("over");
+    expect(over.calibration?.signed).toBeGreaterThan(0);
+    expect(over.calibration?.label).toMatch(/over-confident/);
+
+    // Says ~30% but right 80% ⇒ under-confident (signed < 0).
+    const under = reliabilityDiagram(group(0.3, 40, 32));
+    expect(under.calibration?.lean).toBe("under");
+    expect(under.calibration?.signed).toBeLessThan(0);
+
+    // Confidence ≈ accuracy ⇒ well-calibrated (dead-band).
+    const well = reliabilityDiagram([
+      ...group(0.1, 20, 2),
+      ...group(0.9, 20, 18),
+    ]);
+    expect(well.calibration?.lean).toBe("well");
+  });
+});

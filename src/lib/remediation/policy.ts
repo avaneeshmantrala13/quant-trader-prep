@@ -50,6 +50,16 @@ export interface RemediationInput {
   responseFast?: boolean;
   /** Edges descended so far this session (drives the depth cap). */
   depthThisSession: number;
+  /**
+   * ORIGIN-ONLY override (Part B, low-confidence unlock relock). When true and we
+   * are at the origin node, skip the Kapur first-stumble grace and bottom-out
+   * gate and descend to the ~85% prerequisite immediately: a topic that was only
+   * held at a diagnostic-seeded LOW-CONFIDENCE unlock and then failed is a
+   * confirmed gap (the mastery was never earned), so it routes straight to the
+   * prerequisite probe. Floors still teach in place. Ignored while descending
+   * (depth > 0) so the descent still terminates normally.
+   */
+  forceDescend?: boolean;
 }
 
 const TIER_ORDER: Difficulty[] = (
@@ -151,6 +161,13 @@ export function remediationStep(inp: RemediationInput): RemediationAction {
   }
 
   // --- At the ORIGIN node (STEP A/B) ---------------------------------------
+  // Part B override — a failed LOW-CONFIDENCE (diagnostic-seeded) unlock is a
+  // confirmed prerequisite gap: descend to the ~0.85 prereq now (floors teach).
+  if (inp.forceDescend) {
+    if (node.floor) return { kind: "floor-teach", atTopicKey: inp.topicKey };
+    return descendAction(node, inp);
+  }
+
   // STEP A — Kapur: don't remediate the first stumble; keep easing in place.
   if (inp.consecutiveMisses < BOTTOM_OUT_MISSES) {
     return {

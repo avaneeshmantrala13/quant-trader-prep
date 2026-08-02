@@ -18,6 +18,7 @@
 export type SimGroupId =
   | "core"
   | "distributions"
+  | "joint-distributions"
   | "ev-processes"
   | "real-world"
   | "games"
@@ -59,6 +60,12 @@ export const SIM_GROUPS: SimGroupMeta[] = [
     title: "Distributions & the Central Limit Theorem",
     blurb:
       "Where randomness piles up. Sampling distributions, the bell curve emerging from averages, and the behaviour of extremes.",
+  },
+  {
+    id: "joint-distributions",
+    title: "Joint Distributions",
+    blurb:
+      "Two variables at once. See a joint density surface over the plane and take its double integral over a region — the volume under the surface, i.e. the probability that BOTH quantities land in that range together.",
   },
   {
     id: "ev-processes",
@@ -153,6 +160,16 @@ export const SIMULATIONS: SimMeta[] = [
     topics: ["Order Statistics"],
     whatShows:
       "The distribution of the minimum, maximum, or median of n uniforms — see how extremes concentrate near the edges.",
+  },
+
+  /* ---- GROUP: joint-distributions --------------------------------------- */
+  {
+    id: "joint-density-integral",
+    title: "Double Integral of a Joint Density",
+    group: "joint-distributions",
+    topics: ["Joint Distributions"],
+    whatShows:
+      "A bivariate-normal joint density of two correlated asset returns shown as a heatmap; drag a rectangular region and watch the double integral ∫∫ f dx dy — the probability/volume that BOTH returns land in the box — update live, with a Monte-Carlo scatter converging onto it.",
   },
 
   /* ---- GROUP: ev-processes ---------------------------------------------- */

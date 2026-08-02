@@ -41,6 +41,28 @@ export interface ArenaPreset {
   ops: ArenaOp[];
   packs: ArenaPack[];
   ranges: Record<string, [number, number]>;
+  /**
+   * Interview pacing overlay (Case B speed focus). Additive and orthogonal to
+   * scoring — it is DELIBERATELY excluded from `configHash` so turning it on
+   * never changes the leaderboard bucket. When `interview` is true the runner
+   * shows a per-question countdown + pacing feedback and the report surfaces
+   * speed stats alongside accuracy.
+   */
+  interview?: boolean;
+  /**
+   * Optional explicit per-question budget (ms) for the interview overlay. When
+   * absent it is derived from the window/cap (see `arena/budget.ts`). Used for
+   * pacing feedback + "% within budget" only; never affects scoring.
+   */
+  budgetMs?: number;
+  /** Optional adaptive time pressure: tighten the budget as accuracy stabilizes. */
+  adaptive?: boolean;
+  /**
+   * Optional id of the real OA this preset mirrors (see
+   * `@/content/arena/oaFormats.ts`). Powers the budget-parity audit. Never
+   * affects scoring or the leaderboard bucket.
+   */
+  oaFormatId?: string;
 }
 
 /** Zetamac's classic operand ranges (integers), keyed by operation. */
@@ -104,6 +126,14 @@ export const CARELESS_RATIO = 0.4;
 /** Optiver score markers (see §5). */
 export const OPTIVER_PASS = 56;
 export const OPTIVER_COMPETITIVE = 70;
+
+/**
+ * Default per-question budget (ms) for the interview overlay when a preset has
+ * no fixed question cap (e.g. Zetamac's open count-up window). Grounded in the
+ * arithmetic-sprint consensus of ~6 s/q — Optiver 80-in-8, Flow 60-in-6, and
+ * Maven 50-in-5 all land at 6.0 s/q (FIRM_TIMED_ASSESSMENTS.md §1).
+ */
+export const DEFAULT_SPRINT_BUDGET_MS = 6000;
 
 /** Return the built-in default preset for a mode. */
 export function presetForMode(mode: ArenaMode): ArenaPreset {

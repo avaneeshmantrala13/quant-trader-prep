@@ -8,6 +8,8 @@ import type { MasteryState } from "@/lib/mastery/verdict";
 import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
+import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
+import { ModeToggle } from "@/components/mode/ModeToggle";
 import { MinimalBackground } from "./Background";
 
 /**
@@ -37,6 +39,8 @@ const pct = (x: number) => `${pctNum(x)}%`;
 /* -------------------------------------------------------------------------- */
 
 export function MinimalistDashboard({
+  goalMode,
+  courses,
   diagnosticDone,
   diagnosticHref,
   contentsHref,
@@ -48,6 +52,7 @@ export function MinimalistDashboard({
 }: DashboardViewProps) {
   const evidenced = topics.filter((t) => t.hasEvidence).length;
   const strong = topics.filter((t) => t.verdict === "STRONG").length;
+  const courseMode = goalMode === "course";
 
   return (
     <div className="relative min-h-[100dvh] bg-bg font-sans">
@@ -65,6 +70,7 @@ export function MinimalistDashboard({
             <span className="label leading-none">Contents</span>
           </Link>
           <span className="h-px flex-1 bg-border-strong" />
+          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="label leading-none text-secondary transition-colors hover:text-accent"
@@ -141,14 +147,20 @@ export function MinimalistDashboard({
           )}
         </Section>
 
-        {/* ---- 02 · Weakness ranking by CI_low ---- */}
-        <Section
-          n={2}
-          title="Weakest First"
-          aside={`${weaknesses.length} evidenced · by CI-low`}
-        >
-          <WeaknessRanking topics={weaknesses} />
-        </Section>
+        {/* ---- 02 · Course readiness (Case A) or weakness ranking (Case B) ---- */}
+        {courseMode ? (
+          <Section n={2} title="Course Readiness" aside="By course">
+            <CourseReadinessCards courses={courses} />
+          </Section>
+        ) : (
+          <Section
+            n={2}
+            title="Weakest First"
+            aside={`${weaknesses.length} evidenced · by CI-low`}
+          >
+            <WeaknessRanking topics={weaknesses} />
+          </Section>
+        )}
 
         {/* ---- 03 · Reviews due ---- */}
         <Section
@@ -626,32 +638,60 @@ const ry = (p: number) => R_SIZE - R_PAD - p * (R_SIZE - 2 * R_PAD);
 const GUIDES = [0.25, 0.5, 0.75];
 
 function Reliability({ data }: { data: ReliabilityDiagramData }) {
-  if (data.count === 0) {
+  if (!data.sufficient) {
+    const progress = Math.min(100, (data.count / data.minPairs) * 100);
     return (
-      <div className="grid min-h-[180px] place-items-center border border-dashed border-subtle bg-surface px-6 py-10 text-center">
+      <div className="border border-dashed border-subtle bg-surface px-6 py-8">
         <div className="max-w-sm">
-          <div className="label text-muted">Reliability · insufficient data</div>
+          <div className="label text-accent">Calibration · warming up</div>
           <p className="mt-2 text-sm leading-relaxed text-secondary">
-            Not enough data yet. As you answer graded items this session, we plot
-            how often your ~80%-confidence answers are actually right — no curve
-            is fabricated until there's evidence.
+            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
+            confidence-rated questions and we'll show how well your confidence
+            matches your accuracy.
           </p>
+          <p className="mt-3 num text-sm tabular-nums text-primary">
+            You're at {data.count}/{data.minPairs}.
+          </p>
+          <div
+            role="img"
+            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} confidence-rated questions`}
+            className="mt-2 h-1.5 w-full bg-surface-muted"
+          >
+            <div
+              aria-hidden="true"
+              className="h-full bg-accent"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
         </div>
       </div>
     );
   }
 
-  // Net signed miscalibration → over/under-confidence read.
-  const signed = data.bins.reduce(
-    (s, b) => s + (b.count / data.count) * (b.predicted - b.observed),
-    0,
-  );
-  const lean =
-    Math.abs(signed) < 0.02
-      ? { text: "Well-calibrated", cls: "text-bull" }
-      : signed > 0
-        ? { text: "Over-confident", cls: "text-bear" }
-        : { text: "Under-confident", cls: "text-accent" };
+  // ONE plain-language read from the shared calibration signal → chip + caption
+  // can never contradict. Over-confident ⇒ points BELOW the diagonal.
+  const lean = data.calibration
+    ? data.calibration.lean === "over"
+      ? {
+          text: "Over-confident",
+          cls: "border-bear/50 text-bear",
+          caption:
+            "Your curve sits below the dashed diagonal — confidence runs ahead of accuracy.",
+        }
+      : data.calibration.lean === "under"
+        ? {
+            text: "Under-confident",
+            cls: "border-accent/50 text-accent",
+            caption:
+              "Your curve sits above the dashed diagonal — accuracy runs ahead of confidence.",
+          }
+        : {
+            text: "Well-calibrated",
+            cls: "border-bull/50 text-bull",
+            caption:
+              "Your curve hugs the dashed diagonal — confidence matches accuracy.",
+          }
+    : null;
 
   return (
     <div className="grid grid-cols-1 gap-6 border border-subtle bg-surface p-5 sm:grid-cols-[auto_1fr] sm:items-center sm:gap-8 sm:p-6">
@@ -775,21 +815,37 @@ function Reliability({ data }: { data: ReliabilityDiagramData }) {
           </p>
         )}
 
-        <dl className="flex flex-wrap items-end gap-x-8 gap-y-4">
-          <ReliabilityStat label="Brier gap" value={data.relGap.toFixed(3)} />
-          <ReliabilityStat label="Brier" value={data.brier.toFixed(3)} />
+        {data.calibration && (
           <div>
-            <dd className={`num text-lg font-semibold ${lean.cls}`}>
-              {lean.text}
-            </dd>
-            <dt className="label mt-1">Calibration lean</dt>
+            <p className="text-lg font-medium leading-relaxed text-primary">
+              {data.calibration.label}
+            </p>
+            {lean && (
+              <span
+                className={`mt-2 inline-flex items-center rounded-sm border bg-surface px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-label ${lean.cls}`}
+              >
+                {lean.text}
+              </span>
+            )}
           </div>
-        </dl>
+        )}
 
         <p className="border-t border-subtle pt-3 text-xs leading-relaxed text-muted">
-          Points below the dashed diagonal are over-confident; above are
-          under-confident. Pair count: {data.count}.
+          {lean
+            ? lean.caption
+            : "Points below the dashed diagonal are over-confident; above are under-confident."}
         </p>
+
+        <details className="border-t border-subtle pt-3">
+          <summary className="label cursor-pointer text-secondary transition-colors hover:text-primary">
+            Advanced details
+          </summary>
+          <dl className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-4">
+            <ReliabilityStat label="Brier gap" value={data.relGap.toFixed(3)} />
+            <ReliabilityStat label="Brier" value={data.brier.toFixed(3)} />
+            <ReliabilityStat label="Pairs" value={String(data.count)} />
+          </dl>
+        </details>
       </div>
     </div>
   );

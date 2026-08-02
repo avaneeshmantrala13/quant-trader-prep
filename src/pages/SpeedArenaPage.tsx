@@ -10,6 +10,9 @@ import {
   type KeyValueStore,
   type PersonalBest,
 } from "@/lib/arena/localPb";
+import { perQuestionBudgetMs } from "@/lib/arena/budget";
+import { speedStats, type SpeedStats } from "@/lib/arena/speedStats";
+import { readSpeedProfile, recordSpeedRun } from "@/lib/arena/speedProfile";
 import { arenaQuestionStream, streamPrompt } from "@/lib/leaderboard/seed";
 import { arenaItemStream } from "@/content/arena/generators";
 import {
@@ -80,10 +83,23 @@ export function SpeedArenaPage() {
   const [pb, setPb] = useState<PersonalBest | null>(null);
   const [isNewBest, setIsNewBest] = useState(false);
   const [trend, setTrend] = useState<number | null>(null);
+  const [speed, setSpeed] = useState<SpeedStats | null>(null);
+  const [nextBudgetMs, setNextBudgetMs] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const start = async (p: ArenaPreset) => {
+  const start = async (raw: ArenaPreset) => {
     setLoading(true);
+    // Seed the interview-overlay budget from the persisted (possibly adaptively
+    // tightened) speed profile so the pressure carries over between runs.
+    let p = raw;
+    if (raw.interview) {
+      const profile = readSpeedProfile(
+        store(),
+        boardOf(raw),
+        configHash(raw),
+      );
+      p = { ...raw, budgetMs: profile?.budgetMs ?? perQuestionBudgetMs(raw) };
+    }
     try {
       const count = Math.min(
         p.questionCap ?? Math.ceil(p.durationSec * 3),
@@ -146,6 +162,31 @@ export function SpeedArenaPage() {
     setPb(newPb);
     setIsNewBest(nb);
     setTrend(trailing7DayMedian(store(), board, cfg, Date.now()));
+
+    // Interview overlay: compute speed stats and persist the speed profile,
+    // which also derives the (optionally adaptive) budget for the next run.
+    if (preset.interview) {
+      const budgetMs = perQuestionBudgetMs(preset);
+      const sp = speedStats(answered, budgetMs);
+      const profile = recordSpeedRun(
+        store(),
+        board,
+        cfg,
+        {
+          medianSolveMs: sp.medianSolveMs,
+          accuracy: rep.accuracy,
+          attempted: sp.attempted,
+          budgetMs,
+          atMs: Date.now(),
+        },
+        { adaptive: !!preset.adaptive },
+      );
+      setSpeed(sp);
+      setNextBudgetMs(preset.adaptive ? profile.budgetMs : null);
+    } else {
+      setSpeed(null);
+      setNextBudgetMs(null);
+    }
     setPhase("report");
 
     // Ranked submission (server re-scores; fire-and-forget, never blocks UI).
@@ -220,6 +261,8 @@ export function SpeedArenaPage() {
               pb={pb}
               isNewBest={isNewBest}
               trend={trend}
+              speed={speed}
+              nextBudgetMs={nextBudgetMs}
               onAgain={() => setPhase("pick")}
             />
             <Leaderboard

@@ -1,5 +1,8 @@
 import { useLayoutEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useProgress } from "@/context/ProgressContext";
+import { resolveGoalMode } from "@/lib/mode/goalMode";
+import { featureEmphasis } from "@/lib/mode/visibility";
 import {
   SIM_GROUPS,
   SIMULATIONS,
@@ -10,6 +13,7 @@ import {
 import { CoreGroup } from "@/components/simulations/groups/CoreGroup";
 import { VennGroup } from "@/components/simulations/groups/VennGroup";
 import { DistributionsGroup } from "@/components/simulations/groups/DistributionsGroup";
+import { JointDensityGroup } from "@/components/simulations/groups/JointDensityGroup";
 import { EvGroup } from "@/components/simulations/groups/EvGroup";
 import { ProcessesGroup } from "@/components/simulations/groups/ProcessesGroup";
 import { GamesGroup } from "@/components/simulations/groups/GamesGroup";
@@ -35,6 +39,7 @@ import { ChartIcon } from "@/components/icons";
 const GROUP_COMPONENTS: Record<SimGroupId, (() => JSX.Element)[]> = {
   core: [CoreGroup, VennGroup],
   distributions: [DistributionsGroup],
+  "joint-distributions": [JointDensityGroup],
   "ev-processes": [EvGroup, ProcessesGroup],
   "real-world": [StockMarketGroup, PokerGroup],
   games: [GamesGroup],
@@ -43,6 +48,13 @@ const GROUP_COMPONENTS: Record<SimGroupId, (() => JSX.Element)[]> = {
 
 export function SimulationsPage() {
   const { hash } = useLocation();
+  const { progress } = useProgress();
+  // Mode-aware sim emphasis (WS-SIM): the double-integral joint-density sim is a
+  // first-class COURSE feature in Case A (emphasized) and shown-but-not-emphasized
+  // in Case B. Wired through the visibility module so the rule lives in one place.
+  const mode = resolveGoalMode(progress);
+  const doubleIntegralProminent =
+    featureEmphasis(mode, "double-integral-sim") === "prominent";
   const [selectedId, setSelectedId] = useState<string>(SIMULATIONS[0].id);
 
   // Deep-link support: arriving at `/simulations#<id>` (e.g. from a hint
@@ -125,9 +137,17 @@ export function SimulationsPage() {
       {/* Heading for the selected sim's group */}
       {selectedGroup ? (
         <div className="border-b-2 border-border-strong pb-2">
-          <h2 className="font-display text-2xl font-black text-primary">
-            {selectedGroup.title}
-          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="font-display text-2xl font-black text-primary">
+              {selectedGroup.title}
+            </h2>
+            {selectedGroup.id === "joint-distributions" &&
+              doubleIntegralProminent && (
+                <span className="chip border-accent text-accent">
+                  Course feature
+                </span>
+              )}
+          </div>
           <p className="mt-1 max-w-3xl text-sm text-secondary">
             {selectedGroup.blurb}
           </p>

@@ -87,48 +87,7 @@ export function RoadmapVisual() {
   );
 }
 
-/* ---------- 2. Calibration Gym: reliability diagram + grand reveal ---------- */
-export function ReliabilityVisual() {
-  // Overconfident curve bows below the perfect-calibration diagonal.
-  const pts = [
-    [10, 88],
-    [26, 78],
-    [42, 66],
-    [58, 50],
-    [74, 30],
-    [90, 14],
-  ];
-  const diag = "M10,90 L90,10";
-  const curve =
-    "M" + pts.map(([x, y]) => `${x},${y}`).join(" L");
-  return (
-    <div className="panel overflow-hidden">
-      <PanelHead tag="Your Reliability" right="Say 80% → right ~61%" />
-      <div className="tex-grid p-3">
-        <svg viewBox="0 0 100 100" className="aspect-square w-full">
-          {/* axes */}
-          <line x1="10" y1="10" x2="10" y2="90" stroke="rgb(var(--color-border-strong))" strokeWidth="0.6" />
-          <line x1="10" y1="90" x2="90" y2="90" stroke="rgb(var(--color-border-strong))" strokeWidth="0.6" />
-          {/* perfect calibration */}
-          <path d={diag} stroke="rgb(var(--color-muted))" strokeWidth="0.7" strokeDasharray="2 2" fill="none" />
-          {/* your curve */}
-          <path d={curve} stroke="rgb(var(--color-accent))" strokeWidth="1.4" fill="none" vectorEffect="non-scaling-stroke" />
-          {pts.map(([x, y], i) => (
-            <rect key={i} x={x - 1.6} y={y - 1.6} width="3.2" height="3.2" fill="rgb(var(--color-accent))" />
-          ))}
-        </svg>
-      </div>
-      {/* grand reveal ticket */}
-      <div className="flex items-center justify-between border-t border-subtle bg-bull px-3 py-2 text-bg">
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-label">● You 0.62</span>
-        <span className="font-mono text-[10px] uppercase tracking-label">vs Model 0.55</span>
-        <span className="font-mono text-[11px] font-semibold uppercase tracking-label">You Win ▸</span>
-      </div>
-    </div>
-  );
-}
-
-/* ---------- 3. Socratic tutor: hint ladder ---------- */
+/* ---------- 2. Socratic tutor: hint ladder ---------- */
 export function TutorVisual() {
   const rungs = [
     { who: "You", t: "I'm stuck on P(at least one six in 4 rolls)." },
@@ -170,7 +129,7 @@ export function TutorVisual() {
   );
 }
 
-/* ---------- 4. Fresh, verifier-checked questions ---------- */
+/* ---------- 3. Fresh, verifier-checked questions ---------- */
 export function FreshVisual() {
   return (
     <div className="relative">
@@ -205,7 +164,7 @@ export function FreshVisual() {
   );
 }
 
-/* ---------- 5. Full curriculum coverage ---------- */
+/* ---------- 4. Full curriculum coverage ---------- */
 export function CurriculumVisual({ linked = false }: { linked?: boolean }) {
   const mods = [
     { motif: "probability" as const, id: "probability", name: "Probability", n: "5 levels" },
@@ -246,7 +205,7 @@ export function CurriculumVisual({ linked = false }: { linked?: boolean }) {
   );
 }
 
-/* ---------- 6. Mental-math speed drill ---------- */
+/* ---------- 5. Mental-math speed drill ---------- */
 export function MentalMathVisual() {
   const sums = ["47 × 8", "816 ÷ 12", "23 × 41", "18% of 250", "3/8 = ?", "7:1 → P?"];
   return (
