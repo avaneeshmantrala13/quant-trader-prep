@@ -24,6 +24,7 @@ export type FeatureKey =
   | "speed-arena"
   | "interview-games"
   | "market-making-sims"
+  | "trading-floor"
   | "fermi"
   | "timing"
   | "betting-kelly"
@@ -36,6 +37,7 @@ const QUANT_ONLY: FeatureKey[] = [
   "speed-arena",
   "interview-games",
   "market-making-sims",
+  "trading-floor",
   "fermi",
   "timing",
   "betting-kelly",
@@ -187,10 +189,25 @@ export interface NavItem {
   emphasis?: "beyond";
 }
 
+/**
+ * A COLLAPSIBLE navigation SUBSECTION. Every group now carries a stable `id`
+ * (used as the React key and the localStorage persistence key for its
+ * expand/collapse state), a short `heading`, and a `defaultOpen` flag that
+ * decides the initial expanded state when the user has no saved preference.
+ * Groups flagged `emphasis: "beyond"` are the optional, quant-heavy sections a
+ * Case-A (course) learner can safely treat as extra-curricular — they render
+ * de-emphasized and start collapsed.
+ */
 export interface NavGroup {
-  /** Optional section heading; omitted for the main/un-headed group. */
-  heading?: string;
+  /** Stable id: React key + localStorage expand/collapse persistence key. */
+  id: string;
+  /** Section heading rendered on the collapsible group header. */
+  heading: string;
   items: NavItem[];
+  /** Initial expanded state when the user has no saved preference. */
+  defaultOpen: boolean;
+  /** Case-A de-emphasis marker for optional "beyond the course" groups. */
+  emphasis?: "beyond";
 }
 
 /** A track link, mirroring today's AppShell `TRACKS.map`. */
@@ -206,34 +223,98 @@ function trackItem(id: string, extra?: Partial<NavItem>): NavItem {
 }
 
 /**
- * The Case-B navigation — EXACTLY today's AppShell `navItems`, as a single
- * un-headed group so it renders byte-for-byte identically to the current flat
- * menu.
+ * The Case-B (interview) navigation — the full flat menu reorganised into
+ * logical, collapsible SUBSECTIONS so the growing feature set no longer forces
+ * the learner to scroll one long list. Every route and every `data-tour` anchor
+ * from the old flat menu is preserved (just regrouped), and the unified
+ * Leaderboard is now a first-class nav item under Games.
  */
 function interviewNav(): NavGroup[] {
   return [
     {
+      id: "overview",
+      heading: "Overview",
+      defaultOpen: true,
       items: [
         { to: "/", label: "Home", end: true },
-        { to: "/roadmap", label: "Roadmap", end: false },
         { to: "/dashboard", label: "Dashboard", end: false, tour: "dashboard" },
+        { to: "/roadmap", label: "Roadmap", end: false },
+      ],
+    },
+    {
+      id: "learn",
+      heading: "Learn",
+      defaultOpen: true,
+      items: [
         {
           to: "/contents",
           label: "Table of Contents",
           end: false,
           tour: "contents",
         },
+        ...TRACKS.map((t) => trackItem(t.id)),
         {
           to: "/simulations",
           label: "Simulations",
           end: false,
           tour: "simulations",
         },
-        { to: "/fermi", label: "Fermi Drill", end: false },
-        { to: "/games", label: "Quant Games", end: false, tour: "games" },
-        ...TRACKS.map((t) => trackItem(t.id)),
+      ],
+    },
+    {
+      id: "practice",
+      heading: "Practice",
+      defaultOpen: true,
+      items: [
+        { to: "/oa", label: "Timed Sections", end: false, tour: "timed-oa" },
         { to: "/arena", label: "Speed Arena", end: false, tour: "arena" },
-        { to: "/oa", label: "Timed Sections", end: false },
+        { to: "/arbitrage", label: "Arbitrage & De-vig", end: false },
+        { to: "/ev-timed", label: "EV Under Time", end: false },
+        { to: "/fermi", label: "Fermi Drill", end: false },
+      ],
+    },
+    {
+      id: "games",
+      heading: "Games",
+      defaultOpen: false,
+      items: [
+        { to: "/games", label: "Quant Games", end: false, tour: "games" },
+        {
+          to: "/trading-floor",
+          label: "The Trading Floor",
+          end: false,
+          tour: "trading-floor",
+        },
+        { to: "/leaderboard", label: "Leaderboard", end: false },
+      ],
+    },
+    {
+      id: "interview-prep",
+      heading: "Interview Prep",
+      defaultOpen: true,
+      items: [
+        { to: "/mock", label: "Mock Interview", end: false, tour: "mock" },
+        {
+          to: "/verified-bank",
+          label: "Verified Bank",
+          end: false,
+          tour: "verified-bank",
+        },
+      ],
+    },
+    {
+      id: "community",
+      heading: "Community",
+      defaultOpen: false,
+      items: [
+        { to: "/community", label: "Community", end: false, tour: "community" },
+      ],
+    },
+    {
+      id: "settings",
+      heading: "Settings",
+      defaultOpen: false,
+      items: [
         {
           to: "/diagnostic",
           label: "Recalibrate",
@@ -247,17 +328,30 @@ function interviewNav(): NavGroup[] {
 }
 
 /**
- * The Case-A navigation — two course tracks up top, a small Foundations group,
- * and the quant-only competitive content collapsed (visible) under "Beyond the
- * course".
+ * The Case-A (course) navigation — the course-relevant subsections (Overview,
+ * Courses, Foundations) stay prominent and expanded, while the quant-heavy
+ * competitive content keeps its "beyond the course" framing: those groups are
+ * marked `emphasis: "beyond"` (de-emphasized, visible-not-hidden) and collapsed
+ * by default. Every Case-A route and `data-tour` anchor is preserved; the
+ * Leaderboard is added under the (optional) Games group.
  */
 function courseNav(): NavGroup[] {
   return [
     {
+      id: "overview",
+      heading: "Overview",
+      defaultOpen: true,
       items: [
         { to: "/", label: "Home", end: true },
-        { to: "/roadmap", label: "Roadmap", end: false },
         { to: "/dashboard", label: "Dashboard", end: false, tour: "dashboard" },
+        { to: "/roadmap", label: "Roadmap", end: false },
+      ],
+    },
+    {
+      id: "courses",
+      heading: "Courses",
+      defaultOpen: true,
+      items: [
         {
           to: "/contents",
           label: "Table of Contents",
@@ -276,24 +370,22 @@ function courseNav(): NavGroup[] {
           end: false,
           tour: "simulations",
         },
-        {
-          to: "/diagnostic",
-          label: "Recalibrate",
-          end: false,
-          tour: "recalibrate",
-        },
-        { to: "/themes", label: "Themes", end: false, tour: "themes" },
       ],
     },
     {
+      id: "foundations",
       heading: "Foundations",
+      defaultOpen: true,
       items: [
         trackItem("mental-math", { emphasis: "beyond" }),
         trackItem("math-questions", { emphasis: "beyond" }),
       ],
     },
     {
+      id: "extra-topics",
       heading: "Beyond the course",
+      defaultOpen: false,
+      emphasis: "beyond",
       items: [
         {
           to: "/track/probability?topic=betting-and-sizing",
@@ -309,9 +401,103 @@ function courseNav(): NavGroup[] {
         },
         trackItem("interview-games", { emphasis: "beyond" }),
         trackItem("brainteasers", { emphasis: "beyond" }),
-        { to: "/arena", label: "Speed Arena", end: false, tour: "arena", emphasis: "beyond" },
+      ],
+    },
+    {
+      id: "practice",
+      heading: "Practice",
+      defaultOpen: false,
+      emphasis: "beyond",
+      items: [
+        {
+          to: "/arena",
+          label: "Speed Arena",
+          end: false,
+          tour: "arena",
+          emphasis: "beyond",
+        },
+        {
+          to: "/arbitrage",
+          label: "Arbitrage & De-vig",
+          end: false,
+          emphasis: "beyond",
+        },
+        { to: "/ev-timed", label: "EV Under Time", end: false, emphasis: "beyond" },
         { to: "/fermi", label: "Fermi Drill", end: false, emphasis: "beyond" },
-        { to: "/games", label: "Quant Games", end: false, emphasis: "beyond" },
+      ],
+    },
+    {
+      id: "games",
+      heading: "Games",
+      defaultOpen: false,
+      emphasis: "beyond",
+      items: [
+        {
+          to: "/games",
+          label: "Quant Games",
+          end: false,
+          tour: "games",
+          emphasis: "beyond",
+        },
+        {
+          to: "/trading-floor",
+          label: "The Trading Floor",
+          end: false,
+          tour: "trading-floor",
+          emphasis: "beyond",
+        },
+        { to: "/leaderboard", label: "Leaderboard", end: false, emphasis: "beyond" },
+      ],
+    },
+    {
+      id: "interview-prep",
+      heading: "Interview Prep",
+      defaultOpen: false,
+      emphasis: "beyond",
+      items: [
+        {
+          to: "/mock",
+          label: "Mock Interview",
+          end: false,
+          tour: "mock",
+          emphasis: "beyond",
+        },
+        {
+          to: "/verified-bank",
+          label: "Verified Bank",
+          end: false,
+          tour: "verified-bank",
+          emphasis: "beyond",
+        },
+      ],
+    },
+    {
+      id: "community",
+      heading: "Community",
+      defaultOpen: false,
+      emphasis: "beyond",
+      items: [
+        {
+          to: "/community",
+          label: "Community",
+          end: false,
+          tour: "community",
+          emphasis: "beyond",
+        },
+      ],
+    },
+    {
+      id: "settings",
+      heading: "Settings",
+      defaultOpen: false,
+      items: [
+        {
+          to: "/diagnostic",
+          label: "Recalibrate",
+          end: false,
+          tour: "recalibrate",
+        },
+        { to: "/themes", label: "Themes", end: false, tour: "themes" },
       ],
     },
   ];

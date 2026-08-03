@@ -709,3 +709,153 @@ export class AwsStorageProvider implements StorageProvider {
     safeSet(THEME_ID_KEY, id);
   }
 }
+
+// ---------------------------------------------------------------------------
+// ADD-ONLY (T13): shared Dynamo credential/client path.
+//
+// The community backend (`src/lib/community/awsCommunityStore.ts`) needs the
+// SAME owner-scoped temporary-credential + DynamoDBDocumentClient path that
+// `AwsStorageProvider` uses for progress. Rather than re-implement Cognito
+// Identity-Pool cred minting there, this factory exposes it as a small,
+// self-contained helper that REUSES this module's config/session helpers
+// (`safeGet`, the OAuth token keys, `CachedCreds`, the lazy `@aws-sdk/*`
+// imports). Everything below is additive — the existing `AwsStorageProvider`
+// behavior above is untouched.
+//
+// Nothing here runs at import time or touches the network until `docClient()`
+// is awaited, so the module still imports cleanly in a no-AWS test env and the
+// community factory stays offline-graceful.
+// ---------------------------------------------------------------------------
+
+/**
+ * A lazily-authenticated DynamoDB document-client source. `docClient()` mints
+ * (and caches) fine-grained temporary AWS credentials for the CURRENT Cognito
+ * session and builds a `DynamoDBDocumentClient`, or resolves `null` when there
+ * is no live session (logged-out / offline) so callers degrade gracefully.
+ */
+export interface AwsDynamoContext {
+  docClient(): Promise<{
+    doc: DynamoDBDocumentClient;
+    identityId: string;
+  } | null>;
+}
+
+/**
+ * Build an {@link AwsDynamoContext} for `cfg`. This is the ONE credential path
+ * the whole AWS backend shares. It mirrors `AwsStorageProvider`'s private
+ * `getIdToken`/`ensureCreds`/`docClient` chain exactly (same Identity-Pool
+ * exchange, same `removeUndefinedValues` marshalling) so community writes and
+ * progress writes authenticate identically.
+ */
+export function createAwsDynamoContext(cfg: AwsConfig): AwsDynamoContext {
+  let creds: CachedCreds | null = null;
+  let doc: DynamoDBDocumentClient | null = null;
+  let poolPromise: Promise<CognitoUserPool> | null = null;
+
+  const providerName = `cognito-idp.${cfg.region}.amazonaws.com/${cfg.userPoolId}`;
+
+  const userPool = async (): Promise<CognitoUserPool> => {
+    if (!poolPromise) {
+      poolPromise = import("amazon-cognito-identity-js").then(
+        (m) =>
+          new m.CognitoUserPool({
+            UserPoolId: cfg.userPoolId,
+            ClientId: cfg.userPoolClientId,
+          }),
+      );
+    }
+    return poolPromise;
+  };
+
+  const getIdToken = async (): Promise<string | null> => {
+    const oauthTok = safeGet(OAUTH_ID_TOKEN);
+    const oauthExp = Number(safeGet(OAUTH_EXP) ?? "0");
+    if (oauthTok && oauthExp > Date.now()) return oauthTok;
+
+    const pool = await userPool();
+    return new Promise((resolve) => {
+      const user = pool.getCurrentUser();
+      if (!user) {
+        resolve(null);
+        return;
+      }
+      user.getSession(
+        (
+          err: Error | null,
+          session: { getIdToken(): { getJwtToken(): string } } | null,
+        ) => {
+          if (err || !session) {
+            resolve(null);
+            return;
+          }
+          resolve(session.getIdToken().getJwtToken());
+        },
+      );
+    });
+  };
+
+  const ensureCreds = async (): Promise<CachedCreds | null> => {
+    if (creds && creds.expiresAt > Date.now() + 60_000) return creds;
+    const idToken = await getIdToken();
+    if (!idToken) return null;
+
+    const {
+      CognitoIdentityClient,
+      GetIdCommand,
+      GetCredentialsForIdentityCommand,
+    } = await import("@aws-sdk/client-cognito-identity");
+    const client = new CognitoIdentityClient({ region: cfg.region });
+    const logins = { [providerName]: idToken };
+
+    const idRes = await client.send(
+      new GetIdCommand({
+        IdentityPoolId: cfg.identityPoolId,
+        Logins: logins,
+      }),
+    );
+    const identityId = idRes.IdentityId;
+    if (!identityId) return null;
+
+    const credRes = await client.send(
+      new GetCredentialsForIdentityCommand({
+        IdentityId: identityId,
+        Logins: logins,
+      }),
+    );
+    const c = credRes.Credentials;
+    if (!c?.AccessKeyId || !c.SecretKey || !c.SessionToken) return null;
+
+    creds = {
+      accessKeyId: c.AccessKeyId,
+      secretAccessKey: c.SecretKey,
+      sessionToken: c.SessionToken,
+      identityId,
+      expiresAt: c.Expiration ? c.Expiration.getTime() : Date.now() + 3_000_000,
+    };
+    doc = null; // rebuild the doc client with fresh creds
+    return creds;
+  };
+
+  return {
+    async docClient() {
+      const c = await ensureCreds();
+      if (!c) return null;
+      if (!doc) {
+        const { DynamoDBClient } = await import("@aws-sdk/client-dynamodb");
+        const { DynamoDBDocumentClient } = await import("@aws-sdk/lib-dynamodb");
+        const ddb = new DynamoDBClient({
+          region: cfg.region,
+          credentials: {
+            accessKeyId: c.accessKeyId,
+            secretAccessKey: c.secretAccessKey,
+            sessionToken: c.sessionToken,
+          },
+        });
+        doc = DynamoDBDocumentClient.from(ddb, {
+          marshallOptions: { removeUndefinedValues: true },
+        });
+      }
+      return { doc, identityId: c.identityId };
+    },
+  };
+}

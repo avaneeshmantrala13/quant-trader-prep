@@ -246,3 +246,162 @@ export const FERMI_BAND_COPY: Record<
   close: { label: "Right ballpark", tone: "accent" },
   incorrect: { label: "Off the mark", tone: "bear" },
 };
+
+/* -------------------------------------------------------------------------- */
+/*  Interval (90% CI) elicitation — proper Winkler interval score             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * ADDITIVE, second grading path for the "90% CI in 60s" calibration mode. This
+ * lives ALONGSIDE the point-estimate path above and shares nothing with it — the
+ * log-distance grader (`gradeFermi`/`gradeFermiValue`) and `parseFermiInput`
+ * stay byte-identical. Here the learner commits a lo/hi range instead of a point
+ * and we score how well-calibrated + how sharp that range is.
+ *
+ * The score is the WINKLER INTERVAL SCORE (Winkler 1972; Gneiting & Raftery
+ * 2007), the canonical PROPER score for a central prediction interval. For a
+ * (1 − alpha) interval [lo, hi] and realized truth y it is
+ *
+ *     S = (hi − lo)                          // width — always paid (rewards sharpness)
+ *       + (2/alpha)(lo − y)   if  y < lo      // miss low  — penalty
+ *       + (2/alpha)(y − hi)   if  y > hi      // miss high — penalty
+ *
+ * LOWER is better. Being proper means you minimize your expected score by
+ * reporting your true (1 − alpha) interval — you cannot game it by quoting an
+ * absurdly wide range (the width term punishes that) nor a hair-thin one (the
+ * miss term, blown up by 2/alpha, punishes that). For the 90% case alpha = 0.1
+ * so a miss costs 20× its distance outside the band.
+ *
+ * IMPORTANT (calibration guardrail): this Winkler score is FERMI-LOCAL and
+ * in-round only. The persisted calibration log receives ONLY the binary
+ * 90%-CI-hit event via the existing writer — the interval score has no home in
+ * the log and never touches mastery/progress.
+ */
+
+/** Default miss level for a 90% central interval (alpha = 0.1). */
+export const FERMI_CI_ALPHA = 0.1;
+
+/** A learner-entered central prediction interval. */
+export interface FermiIntervalInput {
+  lo: number;
+  hi: number;
+}
+
+export interface FermiIntervalGrade {
+  /** Lower bound actually scored (defensively min/max-normalized). */
+  lo: number;
+  /** Upper bound actually scored. */
+  hi: number;
+  /** The coded reference the interval was scored against. */
+  reference: number;
+  /** Did the interval contain the truth? (the binary calibration event). */
+  hit: boolean;
+  /** Interval width `hi − lo` (the sharpness term of the score). */
+  width: number;
+  /** Miss penalty `(2/alpha) × distance outside the band`; 0 on a hit. */
+  penalty: number;
+  /** Winkler interval score = width + penalty (LOWER is better). */
+  score: number;
+  /** The alpha used (0.1 for a 90% interval). */
+  alpha: number;
+  /** False when the entry was unparseable / non-finite / non-positive-width. */
+  valid: boolean;
+}
+
+/**
+ * Score a learner's [lo, hi] interval against a reference with the Winkler
+ * interval score. `lo`/`hi` are min/max-normalized defensively so a swapped
+ * entry is still scored on its true span. Invalid entries (non-finite bounds)
+ * return a `valid: false` grade counted as a miss with no finite score, so the
+ * UI never crashes.
+ */
+export function gradeInterval(
+  interval: FermiIntervalInput,
+  reference: number,
+  alpha: number = FERMI_CI_ALPHA,
+): FermiIntervalGrade {
+  const rawLo = interval?.lo;
+  const rawHi = interval?.hi;
+  const bad = (): FermiIntervalGrade => ({
+    lo: rawLo,
+    hi: rawHi,
+    reference,
+    hit: false,
+    width: NaN,
+    penalty: NaN,
+    score: NaN,
+    alpha,
+    valid: false,
+  });
+  if (
+    rawLo == null ||
+    rawHi == null ||
+    !Number.isFinite(rawLo) ||
+    !Number.isFinite(rawHi) ||
+    !Number.isFinite(reference) ||
+    !Number.isFinite(alpha) ||
+    alpha <= 0
+  ) {
+    return bad();
+  }
+  const lo = Math.min(rawLo, rawHi);
+  const hi = Math.max(rawLo, rawHi);
+  const width = hi - lo;
+  const k = 2 / alpha;
+  let penalty = 0;
+  if (reference < lo) penalty = k * (lo - reference);
+  else if (reference > hi) penalty = k * (reference - hi);
+  const hit = reference >= lo && reference <= hi;
+  return {
+    lo,
+    hi,
+    reference,
+    hit,
+    width,
+    penalty,
+    score: width + penalty,
+    alpha,
+    valid: true,
+  };
+}
+
+/** Running empirical coverage over a list of interval hits. */
+export interface FermiCoverage {
+  /** Number of intervals recorded. */
+  n: number;
+  /** How many contained the truth. */
+  hits: number;
+  /** Empirical coverage `hits / n` (0 when `n === 0`). */
+  coverage: number;
+}
+
+/**
+ * Fold a list of hit/miss booleans into running empirical coverage — the
+ * fraction of the learner's 90% intervals that actually contained the truth.
+ * For well-calibrated 90% CIs this trends toward 0.9; markedly below ⇒
+ * over-confident (intervals too tight), markedly above ⇒ under-confident.
+ */
+export function intervalCoverage(hits: readonly boolean[]): FermiCoverage {
+  const n = hits.length;
+  const hitCount = hits.reduce((s, h) => s + (h ? 1 : 0), 0);
+  return { n, hits: hitCount, coverage: n === 0 ? 0 : hitCount / n };
+}
+
+/** How a learner's empirical CI coverage compares to the 90% target. */
+export type FermiCalibrationLean = "over" | "under" | "on-target";
+
+/**
+ * Classify empirical coverage against the nominal 90% target with a small
+ * dead-band, mirroring the dashboard's over/under/well framing. Returns
+ * `"on-target"` for an empty sample (nothing to judge yet).
+ */
+export function coverageLean(
+  cov: FermiCoverage,
+  target = 1 - FERMI_CI_ALPHA,
+  deadBand = 0.05,
+): FermiCalibrationLean {
+  if (cov.n === 0) return "on-target";
+  if (cov.coverage < target - deadBand) return "over";
+  if (cov.coverage > target + deadBand) return "under";
+  return "on-target";
+}

@@ -40,6 +40,9 @@ const warmups: Flashcard[] = [
     difficulty: "easy",
     concept: "Rate / simultaneous processes",
     source: "Classic burning-rope fuse puzzle",
+    gradable: true,
+    numericAnswer: 45,
+    tolerance: 0,
   },
   {
     id: "bt-bridge",
@@ -52,6 +55,9 @@ const warmups: Flashcard[] = [
     difficulty: "easy",
     concept: "Optimization / greedy vs optimal",
     source: "Bridge-and-torch puzzle",
+    gradable: true,
+    numericAnswer: 17,
+    tolerance: 0,
   },
   {
     id: "bt-backup-dealer",
@@ -64,6 +70,9 @@ const warmups: Flashcard[] = [
     difficulty: "easy",
     concept: "Expected value / order statistics (min + max identity)",
     source: "Original house brainteaser",
+    gradable: true,
+    numericAnswer: 4,
+    tolerance: 0.005,
   },
   {
     id: "bt-lockers",
@@ -76,6 +85,9 @@ const warmups: Flashcard[] = [
     difficulty: "medium",
     concept: "Divisor parity / perfect squares",
     source: "100 lockers / factors puzzle",
+    gradable: true,
+    numericAnswer: 10,
+    tolerance: 0,
   },
   {
     id: "bt-switches",
@@ -88,6 +100,7 @@ const warmups: Flashcard[] = [
     difficulty: "medium",
     concept: "Adding an information channel",
     source: "Three switches, one bulb",
+    gradable: false,
   },
 ];
 
@@ -103,6 +116,9 @@ const classics: Flashcard[] = [
     difficulty: "medium",
     concept: "Linearity of expectation",
     source: "Original house brainteaser",
+    gradable: true,
+    numericAnswer: 5,
+    tolerance: 0,
   },
   {
     id: "bt-walk-offer-down",
@@ -115,6 +131,7 @@ const classics: Flashcard[] = [
     difficulty: "medium",
     concept: "Sequential pricing / price discrimination",
     source: "Original house brainteaser",
+    gradable: false,
   },
   {
     id: "bt-8balls",
@@ -127,6 +144,9 @@ const classics: Flashcard[] = [
     difficulty: "medium",
     concept: "Information per weighing (ternary)",
     source: "Balance-scale weighing puzzle",
+    gradable: true,
+    numericAnswer: 2,
+    tolerance: 0,
   },
   {
     id: "bt-poison",
@@ -139,6 +159,9 @@ const classics: Flashcard[] = [
     difficulty: "hard",
     concept: "Binary encoding",
     source: "Poisoned wine / binary encoding",
+    gradable: true,
+    numericAnswer: 10,
+    tolerance: 0,
   },
   {
     id: "bt-monty",
@@ -151,6 +174,7 @@ const classics: Flashcard[] = [
     difficulty: "medium",
     concept: "Conditional probability / information",
     source: "Monty Hall problem",
+    gradable: false,
   },
   {
     id: "bt-25horses",
@@ -163,6 +187,9 @@ const classics: Flashcard[] = [
     difficulty: "hard",
     concept: "Tournament / partial ordering",
     source: "25 horses, 5 lanes puzzle",
+    gradable: true,
+    numericAnswer: 7,
+    tolerance: 0,
   },
   {
     id: "bt-2eggs",
@@ -175,6 +202,9 @@ const classics: Flashcard[] = [
     difficulty: "hard",
     concept: "Minimax / triangular numbers",
     source: "Two-egg drop puzzle",
+    gradable: true,
+    numericAnswer: 14,
+    tolerance: 0,
   },
 ];
 
@@ -190,6 +220,7 @@ const hard: Flashcard[] = [
     difficulty: "hard",
     concept: "Optimal stopping (threshold = continuation value)",
     source: "Original house brainteaser",
+    gradable: false,
   },
   {
     id: "bt-round-trip",
@@ -202,6 +233,9 @@ const hard: Flashcard[] = [
     difficulty: "hard",
     concept: "Optimal stopping (two-sided) / backward induction",
     source: "Original house brainteaser",
+    gradable: true,
+    numericAnswer: 25,
+    tolerance: 0,
   },
   {
     id: "bt-inventory-cap",
@@ -214,6 +248,9 @@ const hard: Flashcard[] = [
     difficulty: "hard",
     concept: "Markov chains / steady state (balance equations)",
     source: "Original house brainteaser",
+    gradable: true,
+    numericAnswer: 0.2,
+    tolerance: 0.005,
   },
   {
     id: "bt-12balls",
@@ -288,6 +325,9 @@ const countingPigeonhole: Flashcard[] = [
     difficulty: "easy",
     concept: "Digit counting by position (k·10^(k−1))",
     source: "Brainteasers · Simplification (How Many Twos, fresh variant)",
+    gradable: true,
+    numericAnswer: 50000,
+    tolerance: 0,
   },
   {
     id: "bt-count-handshakes",
@@ -464,6 +504,9 @@ const gamesInductionLateral: Flashcard[] = [
     difficulty: "medium",
     concept: "Fixed-quantity invariant (percentage trap)",
     source: "Brainteasers · Logical (Watermelon, fresh variant)",
+    gradable: true,
+    numericAnswer: 100,
+    tolerance: 0,
   },
   {
     id: "bt-game-horse-race",
@@ -476,6 +519,9 @@ const gamesInductionLateral: Flashcard[] = [
     difficulty: "medium",
     concept: "Tournament / partial ordering (top-3 selection)",
     source: "Brainteasers · Logical (Horse Race, fresh variant)",
+    gradable: true,
+    numericAnswer: 9,
+    tolerance: 0,
   },
   {
     id: "bt-game-explorers",
@@ -488,6 +534,9 @@ const gamesInductionLateral: Flashcard[] = [
     difficulty: "hard",
     concept: "Backward induction / game theory (cheapest majority)",
     source: "Brainteasers · Simplification (Pirates, fresh variant)",
+    gradable: true,
+    numericAnswer: 29,
+    tolerance: 0,
   },
   {
     id: "bt-game-fox-duck",

@@ -1,5 +1,6 @@
 import type { Rng } from "@/lib/rng";
 import type { Difficulty, NumericQuestion } from "@/types/content";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import { F, decText, fracText } from "../coreSolvers";
 import { numDp, numericErrors } from "../coreScaffold";
 import {
@@ -403,6 +404,7 @@ export function buildJointIndependenceInstance(
   push(
     marginalX(w, row).add(marginalY(w, col)),
     `${fracText(marginalX(w, row).add(marginalY(w, col)))} ADDS the marginals; independence multiplies them.`,
+    MISCONCEPTION.andMeansAdd,
   );
 
   const prompt =

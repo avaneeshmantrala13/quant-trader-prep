@@ -13,6 +13,7 @@ import {
   resolveScoring,
 } from "./config";
 import type { OaFormatConfig } from "./types";
+import { OA_CONTENT_POOLS } from "./questionPool";
 
 /** Every timed (non-measured) format's derived per-question budget = window ÷ count. */
 function expectedBudgetMs(config: OaFormatConfig): number {
@@ -165,6 +166,27 @@ describe("the three ORIGINAL formats are unchanged", () => {
     expect(MEASURED_FORMAT.sectionSec).toBeUndefined();
     expect(MEASURED_FORMAT.perQuestionSec).toBeUndefined();
     expect(MEASURED_FORMAT.contentPool).toBeUndefined();
+  });
+});
+
+describe("format ↔ content pool wiring (T11)", () => {
+  it("every research-derived format points at a defined, non-empty pool", () => {
+    for (const f of OA_FORMATS) {
+      if (!f.contentPool) continue;
+      const pool = OA_CONTENT_POOLS[f.contentPool];
+      expect(pool, f.id).toBeDefined();
+      expect(pool.length, f.id).toBeGreaterThan(0);
+    }
+  });
+
+  it("the four research-derived formats each declare a wired pool", () => {
+    expect(RAPID_BATTERY_FORMAT.contentPool).toBe("rapidMixed");
+    expect(BLITZ_FORMAT.contentPool).toBe("blitz");
+    expect(DERIVATION_FORMAT.contentPool).toBe("derivation");
+    expect(DEEP_SET_FORMAT.contentPool).toBe("deepSet");
+    for (const key of ["rapidMixed", "blitz", "derivation", "deepSet"] as const) {
+      expect(OA_CONTENT_POOLS[key], key).toBeDefined();
+    }
   });
 });
 

@@ -3,7 +3,11 @@ import {
   computeFermiReference,
   gradeFermiValue,
 } from "@/lib/fermi/grader";
-import { FERMI_ITEMS, FERMI_CATEGORY_ORDER } from "./items";
+import {
+  FERMI_ITEMS,
+  FERMI_CATEGORY_ORDER,
+  FERMI_MARKETS_CATEGORIES,
+} from "./items";
 
 describe("FERMI_ITEMS — content integrity", () => {
   it("has a healthy, well-spread pool", () => {
@@ -15,6 +19,23 @@ describe("FERMI_ITEMS — content integrity", () => {
     expect(
       FERMI_ITEMS.filter((i) => i.category === "Markets & Trading").length,
     ).toBeGreaterThanOrEqual(2);
+  });
+
+  it("is an expanded bank of at least 45 items (T1 bank expansion)", () => {
+    expect(FERMI_ITEMS.length).toBeGreaterThanOrEqual(45);
+  });
+
+  it("is weighted toward markets/trading estimation", () => {
+    // >=3 items in the dedicated Markets & Trading category...
+    expect(
+      FERMI_ITEMS.filter((i) => i.category === "Markets & Trading").length,
+    ).toBeGreaterThanOrEqual(3);
+    // ...and >=3 DISTINCT markets-related categories represented in the bank.
+    const present = new Set(FERMI_ITEMS.map((i) => i.category));
+    const marketsPresent = FERMI_MARKETS_CATEGORIES.filter((c) =>
+      present.has(c),
+    );
+    expect(marketsPresent.length).toBeGreaterThanOrEqual(3);
   });
 
   it("has unique ids", () => {
@@ -54,6 +75,19 @@ describe("FERMI_ITEMS — numerically verifiable references", () => {
       const g = gradeFermiValue(item.reference, computed);
       expect(g.logDistance).not.toBeNull();
       expect(g.logDistance as number).toBeLessThan(0.05); // within ~12%
+    }
+  });
+
+  it("the coded product EQUALS the stated reference (self-consistency invariant)", () => {
+    // The product of `factors` must equal `reference` within a tight 2% band —
+    // 25x tighter than the ~12% full-credit gate above, and only that loose to
+    // permit references rounded to a clean display magnitude (e.g. 8.1M for a
+    // computed 8.14M). Any real factor typo (a changed digit) moves the product
+    // by far more than 2%, so it is guaranteed to break this invariant.
+    for (const item of FERMI_ITEMS) {
+      const computed = computeFermiReference(item.factors);
+      const relError = Math.abs(computed / item.reference - 1);
+      expect(relError).toBeLessThan(0.02);
     }
   });
 

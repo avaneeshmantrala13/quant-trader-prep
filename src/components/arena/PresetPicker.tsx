@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   CUSTOM_DEFAULT,
   OPTIVER_DEFAULT,
+  WEAKSPOT_DEFAULT,
   ZETAMAC_DEFAULT,
   ZETAMAC_DURATIONS,
   type ArenaMode,
@@ -56,6 +57,8 @@ export function PresetPicker({
   const start = () => {
     if (mode === "zetamac") return onStart(withOverlay({ ...ZETAMAC_DEFAULT }));
     if (mode === "optiver") return onStart(withOverlay({ ...OPTIVER_DEFAULT }));
+    if (mode === "weakspot")
+      return onStart(withOverlay({ ...WEAKSPOT_DEFAULT }));
     onStart(withOverlay({ ...custom }));
   };
 
@@ -64,14 +67,16 @@ export function PresetPicker({
       ? ZETAMAC_DEFAULT
       : mode === "optiver"
         ? OPTIVER_DEFAULT
-        : custom;
+        : mode === "weakspot"
+          ? WEAKSPOT_DEFAULT
+          : custom;
   const budgetMs = perQuestionBudgetMs(selected);
   const oaId = MODE_OA_FORMAT[mode];
   const parity = oaId ? auditPresetBudget(oaId, budgetMs) : undefined;
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         {(
           [
             ["zetamac", "Zetamac", "120s · count · no penalty"],
@@ -79,6 +84,11 @@ export function PresetPicker({
               "optiver",
               "80/8 Mental-Math Sprint",
               "80Q / 8:00 · +1 / −1 · skips free",
+            ],
+            [
+              "weakspot",
+              "Weak-Spot Trainer",
+              "120s · over-samples your weakest ops",
             ],
             ["custom", "Custom", "Your ops, packs & clock"],
           ] as [ArenaMode, string, string][]
@@ -136,6 +146,18 @@ export function PresetPicker({
           </div>
         );
       })()}
+
+      {mode === "weakspot" && (
+        <div className="panel-ruled space-y-1 p-3 text-xs text-muted">
+          <span className="label text-[9px]">Adaptive drill</span>
+          <p className="text-secondary">
+            Buckets your past attempts by operation × operand size and
+            over-samples the buckets you miss most — spending practice where it
+            pays off. Same count-only scoring as Zetamac; only the question mix
+            adapts.
+          </p>
+        </div>
+      )}
 
       {mode === "custom" && (
         <div className="panel-ruled space-y-4 p-4">

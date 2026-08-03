@@ -11,3 +11,13 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </React.StrictMode>,
 );
+
+// PWA (TASK T14): register the app-shell service worker in production only, and
+// only when supported. Dev + tests never run this path.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {
+      /* offline support is best-effort; ignore registration failures */
+    });
+  });
+}

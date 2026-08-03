@@ -1,0 +1,118 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Quant Trader Prep — COMMUNITY & social-proof layer (T13). A SEPARATE, additive
+  stack (it does NOT touch the main auth/data, AI, or leaderboard stacks): ONE
+  provisioned DynamoDB table holding every community record (experience reports,
+  discussion comments, submitted solutions, quality/difficulty votes,
+  verified-solution flags, and the durable reputation ledger), plus an IAM
+  MANAGED POLICY that grants the app's EXISTING authenticated Cognito role
+  read/write access to that table.
+
+  Data model (mirrors the leaderboard's bounded PK/SK single-table design — NO
+  GSIs, so there is no sort index to provision):
+    PK = collection kind: "REPORT" | "COMMENT" | "SOLUTION" | "VOTE" | "VERIFY"
+         | "REP"
+    SK encodes the scope + id so ONE Query (optionally begins_with) serves every
+       read the `CommunityStore` port needs:
+         REPORT / COMMENT / SOLUTION : "<itemId>#<createdAtMs>#<id>"
+         VOTE                        : "<targetKind>#<targetId>#<id>"
+         VERIFY                      : "<solutionId>#<id>"
+         REP                         : "<handle>#<id>"
+  See src/lib/community/awsCommunityStore.ts for the client that reads/writes it.
+
+  PRIVACY: records carry ONLY a public display `handle` (the port's PII screen
+  refuses emails/usernames/ids), so nothing PII-shaped is ever persisted here.
+
+  Free-Tier fit: PROVISIONED at 25 WCU / 25 RCU (on-demand has NO free
+  requests), Standard class, no GSIs — a report/comment/vote is a single tiny
+  write; per-item reads are a small Query ⇒ ≈ $0/month at pilot scale.
+
+# ---------------------------------------------------------------------------
+Parameters:
+  ProjectName:
+    Type: String
+    Default: quant-trader-prep
+    Description: Prefix for community resource names.
+
+  ReadCapacity:
+    Type: Number
+    Default: 25
+    Description: PROVISIONED RCU (Free-Tier: 25). Do NOT switch to on-demand.
+
+  WriteCapacity:
+    Type: Number
+    Default: 25
+    Description: PROVISIONED WCU (Free-Tier: 25). Do NOT switch to on-demand.
+
+  PermissionsBoundaryArn:
+    Type: String
+    Default: ""
+    Description: >
+      (Optional) IAM permissions-boundary policy ARN. Not required here (this
+      stack creates a managed policy, not a role), but kept for parity with the
+      other stacks / restricted sandbox accounts.
+
+# ---------------------------------------------------------------------------
+Resources:
+  # ---- The ONE community table: PROVISIONED (25/25), Standard, NO GSIs.
+  #      Single-table (PK/SK) design — see the stack Description for the SK
+  #      encoding used by src/lib/community/awsCommunityStore.ts.
+  CommunityTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${ProjectName}-community"
+      BillingMode: PROVISIONED
+      ProvisionedThroughput:
+        ReadCapacityUnits: !Ref ReadCapacity
+        WriteCapacityUnits: !Ref WriteCapacity
+      TableClass: STANDARD
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+
+  # ---- Managed policy granting the app's authenticated users community access.
+  #      Community content is PUBLIC (shared) rather than owner-scoped like the
+  #      progress item, so there is NO dynamodb:LeadingKeys condition here; the
+  #      client writes carry only public handles (enforced by the port's PII
+  #      screen). ATTACH this to the main stack's `AuthenticatedRole` (add its
+  #      ARN to that role's ManagedPolicyArns, or attach out-of-band) so signed
+  #      -in users can read/write community records directly. A moderation
+  #      Lambda can be layered in later without changing the table.
+  CommunityAccessPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub "${ProjectName}-community-access"
+      Description: Read/write access to the community table for authenticated users.
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - dynamodb:GetItem
+              - dynamodb:BatchGetItem
+              - dynamodb:Query
+              - dynamodb:PutItem
+              - dynamodb:UpdateItem
+            Resource:
+              - !GetAtt CommunityTable.Arn
+
+# ---------------------------------------------------------------------------
+Outputs:
+  CommunityTableName:
+    Description: VITE_DYNAMODB_COMMUNITY_TABLE (DynamoDB table name)
+    Value: !Ref CommunityTable
+  CommunityTableArn:
+    Description: Community DynamoDB table ARN
+    Value: !GetAtt CommunityTable.Arn
+  CommunityAccessPolicyArn:
+    Description: >
+      Attach this managed policy to the main stack's AuthenticatedRole so
+      signed-in users can read/write community records.
+    Value: !Ref CommunityAccessPolicy

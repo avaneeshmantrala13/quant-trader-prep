@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
@@ -6,6 +6,14 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon, CandlestickIcon, BoltIcon, GaugeIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import {
   validateInterval,
   validateQuote,
@@ -45,6 +53,18 @@ type Phase = "setup" | "interval" | "tight" | "quiz" | "summary";
 
 const TIGHT_ROUNDS = 4;
 
+const GAME_ID = "make-market";
+
+/** Durable, reload-proof snapshot of an in-progress game (JSON-serializable). */
+interface MakeMarketSession {
+  phase: Phase;
+  scenario: Scenario;
+  fills: Fill[];
+  roundIdx: number;
+  log: LogEntry[];
+  coach: Coaching | null;
+}
+
 export function MakeMarketPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
@@ -67,6 +87,33 @@ export function MakeMarketPage() {
     [scenario],
   );
   const net = netPosition(fills);
+
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<MakeMarketSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    setScenario(s.scenario);
+    setFills(s.fills);
+    setRoundIdx(s.roundIdx);
+    setLog(s.log);
+    setCoach(s.coach);
+    setPhase(s.phase);
+  }, []);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase === "setup" || phase === "summary") return;
+    saveGameSession<MakeMarketSession>(
+      browserSessionStore(),
+      GAME_ID,
+      { phase, scenario, fills, roundIdx, log, coach },
+      Date.now(),
+    );
+  }, [phase, scenario, fills, roundIdx, log, coach]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   // Deal a fresh, randomized scenario and open the market. The player never
@@ -129,6 +176,11 @@ export function MakeMarketPage() {
   const finishQuiz = () => {
     setPhase("summary");
     const bal = finalBalance(fills, scenario.trueValue);
+    // Score = final settlement balance (higher-is-better). Record on the unified
+    // leaderboard + optional server board, and clear the durable session.
+    submitLocalScore(browserBoardStore(), GAME_ID, { score: bal, atMs: Date.now() });
+    void submitGameScore(GAME_ID, bal);
+    clearGameSession(browserSessionStore(), GAME_ID);
     if (bal >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
 
@@ -193,7 +245,10 @@ export function MakeMarketPage() {
           <SummaryView
             scenario={scenario}
             fills={fills}
-            onReplay={() => setPhase("setup")}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
           />
         )}
       </main>

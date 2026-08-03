@@ -20,6 +20,7 @@ import { GamesGroup } from "@/components/simulations/groups/GamesGroup";
 import { StockMarketGroup } from "@/components/simulations/groups/StockMarketGroup";
 import { PokerGroup } from "@/components/simulations/groups/PokerGroup";
 import { TradingDeskGroup } from "@/components/simulations/groups/TradingDeskGroup";
+import { FloorGroup } from "@/components/tradingFloor/FloorGroup";
 import { ChartIcon } from "@/components/icons";
 
 /**
@@ -43,7 +44,7 @@ const GROUP_COMPONENTS: Record<SimGroupId, (() => JSX.Element)[]> = {
   "ev-processes": [EvGroup, ProcessesGroup],
   "real-world": [StockMarketGroup, PokerGroup],
   games: [GamesGroup],
-  "trading-desk": [TradingDeskGroup],
+  "trading-desk": [FloorGroup, TradingDeskGroup],
 };
 
 export function SimulationsPage() {

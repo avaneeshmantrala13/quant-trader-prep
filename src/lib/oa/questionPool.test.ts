@@ -6,11 +6,16 @@ import {
   OA_QUESTION_GENERATORS,
   drawOaQuestions,
   drawOaQuestionsForFormat,
+  drawOaQuestionsForFormatRotated,
   drawOaQuestionsFromPool,
   poolForFormat,
   toOaQuestion,
 } from "./questionPool";
 import { OA_FORMATS } from "./config";
+import { emptyOaStore, getRotationState } from "./store";
+import { SEQUENCE_QUIZ_GENERATORS } from "@/content/sequences/generators";
+import { ARBITRAGE_QUIZ_GENERATORS } from "@/content/arbitrage/generators";
+import { AUCTION_QUIZ_GENERATORS } from "@/content/auctions/generators";
 
 /** Assert a single OaQuestion is structurally well-formed. */
 function expectWellFormed(q: OaQuestion): void {
@@ -175,5 +180,165 @@ describe("poolForFormat + drawOaQuestionsForFormat", () => {
     expect(drawOaQuestions(42, 8)).toEqual(
       drawOaQuestionsFromPool(42, 8, OA_QUESTION_GENERATORS),
     );
+  });
+});
+
+describe("new archetype pool memberships (T11)", () => {
+  it("rapidMixed carries quick sequence + arbitrage archetypes", () => {
+    const pool = OA_CONTENT_POOLS.rapidMixed;
+    for (const key of [
+      "arithmeticNext",
+      "geometricNext",
+      "caesarNext",
+      "alternatingShiftNext",
+      "analogyNext",
+    ] as const) {
+      expect(pool, `rapidMixed ${key}`).toContain(SEQUENCE_QUIZ_GENERATORS[key]);
+    }
+    for (const key of ["genArbDetect", "genValueLeg", "genBasketArb"] as const) {
+      expect(pool, `rapidMixed ${key}`).toContain(
+        ARBITRAGE_QUIZ_GENERATORS[key],
+      );
+    }
+  });
+
+  it("blitz carries sequence pattern-recognition archetypes", () => {
+    const pool = OA_CONTENT_POOLS.blitz;
+    for (const key of [
+      "polynomialNext",
+      "interleavedNext",
+      "fibonacciNext",
+      "alternatingOpNext",
+      "oddOneOut",
+    ] as const) {
+      expect(pool, `blitz ${key}`).toContain(SEQUENCE_QUIZ_GENERATORS[key]);
+    }
+  });
+
+  it("derivation carries arbitrage value/direction + auction archetypes", () => {
+    const pool = OA_CONTENT_POOLS.derivation;
+    for (const key of ["genValueLeg", "genBasketArb"] as const) {
+      expect(pool, `derivation ${key}`).toContain(ARBITRAGE_QUIZ_GENERATORS[key]);
+    }
+    for (const key of [
+      "genBidEvDecision",
+      "genShadingWithN",
+      "genAcquireDecision",
+    ] as const) {
+      expect(pool, `derivation ${key}`).toContain(AUCTION_QUIZ_GENERATORS[key]);
+    }
+  });
+
+  it("deepSet carries the auction winner's-curse archetypes", () => {
+    const pool = OA_CONTENT_POOLS.deepSet;
+    for (const key of [
+      "genBidEvDecision",
+      "genShadingWithN",
+      "genAcquireDecision",
+    ] as const) {
+      expect(pool, `deepSet ${key}`).toContain(AUCTION_QUIZ_GENERATORS[key]);
+    }
+  });
+
+  it("all 10 sequence families are reachable via the Case-B rapidMixed/blitz pools", () => {
+    const reachable = new Set<unknown>([
+      ...OA_CONTENT_POOLS.rapidMixed,
+      ...OA_CONTENT_POOLS.blitz,
+    ]);
+    for (const gen of Object.values(SEQUENCE_QUIZ_GENERATORS)) {
+      expect(reachable.has(gen)).toBe(true);
+    }
+  });
+
+  it("all 3 arbitrage + 3 auction families are reachable via a Case-B pool", () => {
+    const reachable = new Set<unknown>([
+      ...OA_CONTENT_POOLS.rapidMixed,
+      ...OA_CONTENT_POOLS.derivation,
+      ...OA_CONTENT_POOLS.deepSet,
+    ]);
+    for (const gen of Object.values(ARBITRAGE_QUIZ_GENERATORS)) {
+      expect(reachable.has(gen)).toBe(true);
+    }
+    for (const gen of Object.values(AUCTION_QUIZ_GENERATORS)) {
+      expect(reachable.has(gen)).toBe(true);
+    }
+  });
+
+  it("every newly-wired generator is MCQ-shaped (2–4 choices, valid correctIndex)", () => {
+    const newGens = [
+      ...Object.values(SEQUENCE_QUIZ_GENERATORS),
+      ...Object.values(ARBITRAGE_QUIZ_GENERATORS),
+      ...Object.values(AUCTION_QUIZ_GENERATORS),
+    ];
+    for (const gen of newGens) {
+      const q = gen(new Rng(5));
+      expect(q.choices.length).toBeGreaterThanOrEqual(2);
+      expect(q.choices.length).toBeLessThanOrEqual(4);
+      expect(q.correctIndex).toBeGreaterThanOrEqual(0);
+      expect(q.correctIndex).toBeLessThan(q.choices.length);
+      expect(q.prompt.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("sequence + auction generators stamp a stable `family` matching their key", () => {
+    for (const [key, gen] of Object.entries(SEQUENCE_QUIZ_GENERATORS)) {
+      expect(gen(new Rng(7)).family).toBe(key);
+    }
+    for (const [key, gen] of Object.entries(AUCTION_QUIZ_GENERATORS)) {
+      expect(gen(new Rng(7)).family).toBe(key);
+    }
+  });
+});
+
+describe("drawOaQuestionsForFormatRotated (rotation-aware, additive)", () => {
+  const rapid = OA_FORMATS.find((f) => f.id === "rapid-battery")!;
+
+  it("returns exactly `count` well-formed, unique-id questions + an advanced store", () => {
+    const { questions, store } = drawOaQuestionsForFormatRotated(
+      rapid,
+      2026,
+      12,
+      undefined,
+    );
+    expect(questions).toHaveLength(12);
+    for (const q of questions) expectWellFormed(q);
+    const ids = questions.map((q) => q.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids[0]).toBe("oa-2026-0");
+    // The served signatures are recorded in the returned store's rotation ring.
+    const rot = getRotationState(store);
+    expect(rot.recent.length).toBeGreaterThan(0);
+    expect(rot.recent.length).toBeLessThanOrEqual(rot.windowSize);
+  });
+
+  it("is deterministic given (config, seed, count, store)", () => {
+    const a = drawOaQuestionsForFormatRotated(rapid, 9, 10, undefined);
+    const b = drawOaQuestionsForFormatRotated(rapid, 9, 10, undefined);
+    expect(a.questions).toEqual(b.questions);
+    expect(a.store).toEqual(b.store);
+  });
+
+  it("does not mutate the input store, and the pure draw path is unaffected", () => {
+    const base = emptyOaStore();
+    const before = JSON.stringify(base);
+    drawOaQuestionsForFormatRotated(rapid, 3, 8, base);
+    expect(JSON.stringify(base)).toBe(before);
+    // The pure format draw remains deterministic and independent of rotation.
+    expect(drawOaQuestionsForFormat(rapid, 3, 8)).toEqual(
+      drawOaQuestionsForFormat(rapid, 3, 8),
+    );
+  });
+
+  it("threads the ring forward across successive draws (bounded to the window)", () => {
+    const first = drawOaQuestionsForFormatRotated(rapid, 1, 6, undefined);
+    const second = drawOaQuestionsForFormatRotated(rapid, 1, 6, first.store);
+    const ring = getRotationState(second.store);
+    expect(ring.recent.length).toBeGreaterThan(0);
+    expect(ring.recent.length).toBeLessThanOrEqual(ring.windowSize);
+  });
+
+  it("returns an empty draw for count 0 without throwing", () => {
+    const { questions } = drawOaQuestionsForFormatRotated(rapid, 5, 0, undefined);
+    expect(questions).toEqual([]);
   });
 });

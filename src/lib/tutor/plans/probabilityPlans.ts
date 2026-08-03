@@ -28,6 +28,9 @@ const PLAN_COMPLEMENT: AttackPlan =
 const PLAN_CONDITIONAL: AttackPlan =
   "Let's make a plan. (1) Which direction is being asked — the chance of A given B, or of B given A? (2) Which group does the 'given' fact restrict you to before you look at anything else? (3) Within only that restricted group, what fraction has the feature you care about?";
 
+const PLAN_COND_EXP: AttackPlan =
+  "Let's make a plan. (1) What quantity are you averaging, and what other quantity are you told to hold fixed while you average it? (2) For each fixed value of that conditioning quantity, what does the inner average become — a plain number, or something that still depends on it? (3) How likely is each value of the conditioning quantity, so those inner averages can be combined into the single overall expectation the question is really after?";
+
 const PLAN_BAYES: AttackPlan =
   "Let's make a plan. (1) Which direction is the question asking — the chance of the cause given the evidence, or the evidence given the cause? (2) How common is the condition to begin with, before any test result is seen? (3) Among everyone who shows this evidence, which subgroup are you trying to isolate?";
 
@@ -83,6 +86,9 @@ const KEYWORD_PLANS: ReadonlyArray<readonly [string, AttackPlan]> = [
   ["at-least-one", PLAN_AT_LEAST_ONE],
   ["at least one", PLAN_AT_LEAST_ONE],
   ["complement", PLAN_COMPLEMENT],
+  // "conditional expectation" (E[X|Y] / tower rule / random sums) must win
+  // before the plain "conditional" P(A|B) plan — order matters here.
+  ["conditional expectation", PLAN_COND_EXP],
   ["conditional", PLAN_CONDITIONAL],
   ["independent", PLAN_INDEP_AND],
   ["union", PLAN_UNION],

@@ -214,13 +214,25 @@ export function buildHintLadder(args: {
   // Resolve the single most relevant Simulations-tab sim for this item and
   // point at it by name. The inline coin/dice ConfrontSim payload is retained
   // (so the deterministic confront still renders) — the deep link is additive.
+  // When NO sim is a confident match, `simLinkFor` returns null and we fall back
+  // to an answer-free generic elicitation rather than misdirecting the learner
+  // to an unrelated sim (the old code silently pointed everything at coin-flips).
   const sim = simLinkFor({ section, family, misconceptionTag });
-  const rung4Base: HintRung = {
-    rung: 4,
-    kind: "elicit-confront",
-    text: `Open the Simulations tab → “${sim.title}” and ${sim.blurb}`,
-    simLink: { href: sim.href, title: sim.title, blurb: sim.blurb },
-  };
+  const rung4Base: HintRung = sim
+    ? {
+        rung: 4,
+        kind: "elicit-confront",
+        text: `Open the Simulations tab → “${sim.title}” and ${sim.blurb}`,
+        simLink: { href: sim.href, title: sim.title, blurb: sim.blurb },
+      }
+    : {
+        rung: 4,
+        kind: "elicit-confront",
+        text:
+          "Re-create this situation from scratch and let the data settle it: " +
+          "enumerate the full set of equally-likely outcomes (or run many quick trials), " +
+          "then count how often the event actually happens and compare that empirical frequency against the answer you reported.",
+      };
   let rung4: HintRung;
   if (confront === "coin-sim") {
     rung4 = {

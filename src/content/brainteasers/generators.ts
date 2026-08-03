@@ -89,6 +89,9 @@ export function genBackupDealer(rng: Rng): Flashcard {
     difficulty: "easy",
     concept: "Expected value / order statistics (min + max identity)",
     source: "Original house brainteaser · parametric",
+    gradable: true,
+    numericAnswer: price.valueOf(),
+    tolerance: 0.005,
   };
 }
 
@@ -130,6 +133,9 @@ export function genAdjacentCross(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Linearity of expectation",
     source: "Original house brainteaser · parametric",
+    gradable: true,
+    numericAnswer: expected.valueOf(),
+    tolerance: 0.001,
   };
 }
 
@@ -174,6 +180,8 @@ export function genWalkOfferDown(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Sequential pricing / price discrimination",
     source: "Original house brainteaser · parametric",
+    // Multi-part answer (a full price schedule + revenue), not a single number.
+    gradable: false,
   };
 }
 
@@ -214,6 +222,8 @@ export function genFadingBuyer(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Optimal stopping (threshold = continuation value)",
     source: "Original house brainteaser · parametric",
+    // Irrational threshold + EV and a two-part answer — not objectively gradable.
+    gradable: false,
   };
 }
 
@@ -258,6 +268,9 @@ export function genRoundTrip(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Optimal stopping (two-sided) / backward induction",
     source: "Original house brainteaser · parametric",
+    gradable: true,
+    numericAnswer: profit.valueOf(),
+    tolerance: 0.005,
   };
 }
 
@@ -314,6 +327,9 @@ export function genInventoryCap(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Markov chains / steady state (balance equations)",
     source: "Original house brainteaser · parametric",
+    gradable: true,
+    numericAnswer: rejectionRate.valueOf(),
+    tolerance: 0.001,
   };
 }
 

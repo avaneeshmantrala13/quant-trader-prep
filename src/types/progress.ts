@@ -1,5 +1,5 @@
 import type { NumericQuestion, Question } from "./content";
-import type { TierDifficultyMap, TopicMasteryMap } from "./mastery";
+import type { GlickoDifficultyMap, TierDifficultyMap, TopicMasteryMap } from "./mastery";
 import type { OaTimedStore } from "@/lib/oa/types";
 
 export interface LevelProgress {
@@ -82,7 +82,7 @@ export interface PersistedCalibrationPair {
 }
 
 export interface UserProgress {
-  version: number; // was 1; Phase 1 writes 2 (see src/lib/mastery/migrate.ts)
+  version: number; // was 1; Phase 1 wrote 2; T12 adaptive engine writes 3 (see src/lib/mastery/migrate.ts)
   levelProgress: Record<string, LevelProgress>;
   resume: Record<string, ResumeState>;
   xp: number;
@@ -139,12 +139,21 @@ export interface UserProgress {
    * dashboard trend graph.
    */
   oaTimed?: OaTimedStore;
+  /**
+   * OPTIONAL, additive (T12 adaptive engine — v2→v3). Per (topic,tier) Glicko
+   * difficulty rating + RD, updated from `ItemAttempt` outcomes
+   * (`src/lib/mastery/glicko.ts`). A PARALLEL, richer companion to the frozen
+   * Elo `tierDifficulty` map — it NEVER replaces it and NEVER gates content or
+   * affects scoring / the confident-mastery (ciLow ≥ 0.8) or unlock bars. Older
+   * saves without it load unchanged; the v2→v3 migration leaves it absent.
+   */
+  glickoDifficulty?: GlickoDifficultyMap;
 }
 
 export function emptyProgress(): UserProgress {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    version: 2,
+    version: 3,
     levelProgress: {},
     resume: {},
     xp: 0,
@@ -153,5 +162,8 @@ export function emptyProgress(): UserProgress {
     createdAt: new Date().toISOString(),
     topicMastery: {},
     tierDifficulty: {},
+    // T12 adaptive-engine state starts empty; all new estimator fields are
+    // OPTIONAL, so absence here is valid and older saves load unchanged.
+    glickoDifficulty: {},
   };
 }

@@ -52,7 +52,11 @@ import {
   genRuinReach,
 } from "@/content/probabilityStats/markovChains/generators";
 import { genRuin } from "@/content/probabilityStats/markovChains/genGeneralWalks";
-import type { OaFormatConfig, OaQuestion } from "./types";
+import { SEQUENCE_QUIZ_GENERATORS } from "@/content/sequences/generators";
+import { ARBITRAGE_QUIZ_GENERATORS } from "@/content/arbitrage/generators";
+import { AUCTION_QUIZ_GENERATORS } from "@/content/auctions/generators";
+import { selectSequenceServed } from "./store";
+import type { OaFormatConfig, OaQuestion, OaTimedStore } from "./types";
 
 /**
  * The curated interview-grade pool. Spans three genre clusters, favoring
@@ -82,23 +86,30 @@ export const OA_QUESTION_GENERATORS: QuestionGenerator[] = [
 /**
  * Per-format curated pools mapping each research-derived format to the
  * archetypes the firm actually tests. Every entry reuses an EXISTING
- * interview-grade generator (no fabricated content); where a firm's ideal
- * archetype is missing from the app (pure combinatorics, true Fermi word
- * problems, linear algebra) we fall back to the closest available generator and
- * flag the gap in the build report rather than authoring low-quality filler.
+ * interview-grade generator (no fabricated content). The pools now include
+ * dedicated pattern-recognition (`SEQUENCE_QUIZ_GENERATORS`), no-arbitrage /
+ * de-vig (`ARBITRAGE_QUIZ_GENERATORS`), and common-value / winner's-curse
+ * auction (`AUCTION_QUIZ_GENERATORS`) archetypes, so those firm-tested skills
+ * are FIRST-CLASS rather than approximated by a nearby generator.
  *
  *  - `mixed`      — the default interview pool (`OA_QUESTION_GENERATORS`); the
  *                   three original formats draw from it unchanged.
  *  - `rapidMixed` — Citadel-style rapid mixed battery: quick probability / EV /
- *                   estimation / arbitrage that reward fast intuition.
- *  - `blitz`      — Five Rings-style probability + combinatorics + estimation
- *                   (dice-combinatorics + geometry/Fermi stand in for the thin
- *                   pure-combinatorics/estimation archetypes).
+ *                   estimation, number/letter SEQUENCE pattern items, and
+ *                   de-vig / value-leg / basket ARBITRAGE decisions that reward
+ *                   fast intuition.
+ *  - `blitz`      — Five Rings-style probability + combinatorics + estimation,
+ *                   now anchored by real number / interleaved / letter SEQUENCE
+ *                   pattern-recognition items alongside dice-combinatorics and
+ *                   geometry/Fermi estimation.
  *  - `derivation` — IMC-style harder multi-step derivations (optimal stopping,
- *                   Wald/martingale, random-walk EV, recursion, conditioning).
+ *                   Wald/martingale, random-walk EV, recursion, conditioning),
+ *                   plus multi-step no-arbitrage value/direction and
+ *                   common-value AUCTION winner's-curse reasoning.
  *  - `deepSet`    — DRW-style deep problems: Markov chains + recursion + deep
- *                   probability/EV. (Linear-algebra archetype unavailable — a
- *                   noted content gap; Markov/recursion cover the rest.)
+ *                   probability/EV, plus common-value AUCTION winner's-curse
+ *                   conditional-EV problems. (A linear-algebra archetype is still
+ *                   unavailable — a noted content gap; the rest are covered.)
  */
 export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
   mixed: OA_QUESTION_GENERATORS,
@@ -115,16 +126,26 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     genBayesTest,
     genWhichDie,
     genDiceSumQuiz,
+    // Sequences & pattern recognition (quick number/letter series + analogy).
+    SEQUENCE_QUIZ_GENERATORS.arithmeticNext,
+    SEQUENCE_QUIZ_GENERATORS.geometricNext,
+    SEQUENCE_QUIZ_GENERATORS.caesarNext,
+    SEQUENCE_QUIZ_GENERATORS.alternatingShiftNext,
+    SEQUENCE_QUIZ_GENERATORS.analogyNext,
+    // No-arbitrage / de-vig / basket decisions (fast Dutch-book intuition).
+    ARBITRAGE_QUIZ_GENERATORS.genArbDetect,
+    ARBITRAGE_QUIZ_GENERATORS.genValueLeg,
+    ARBITRAGE_QUIZ_GENERATORS.genBasketArb,
   ],
   blitz: [
-    // Combinatorics (dice-combinatorics — closest available archetype)
+    // Combinatorics (dice-combinatorics).
     genDiceSumQuiz,
     genParitySymmetry,
     genDieCompare,
-    // Estimation / geometry
+    // Estimation / geometry.
     genGeoArea,
     TRADING_QUIZ_GENERATORS.genFermiMagnitude,
-    // Probability
+    // Probability.
     genBoth,
     genGivenSum,
     genBertrand,
@@ -132,6 +153,12 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     genBayesTest,
     genWhichDie,
     genTwoDiceMatch,
+    // Sequence pattern-recognition (number / interleaved / letter series).
+    SEQUENCE_QUIZ_GENERATORS.polynomialNext,
+    SEQUENCE_QUIZ_GENERATORS.interleavedNext,
+    SEQUENCE_QUIZ_GENERATORS.fibonacciNext,
+    SEQUENCE_QUIZ_GENERATORS.alternatingOpNext,
+    SEQUENCE_QUIZ_GENERATORS.oddOneOut,
   ],
   derivation: [
     EV_GENERATORS.genReRollDie,
@@ -146,20 +173,31 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     genInversion,
     genPatternWait,
     TRADING_QUIZ_GENERATORS.genMakeMarketPnl,
+    // Multi-step no-arbitrage value/direction reasoning.
+    ARBITRAGE_QUIZ_GENERATORS.genValueLeg,
+    ARBITRAGE_QUIZ_GENERATORS.genBasketArb,
+    // Common-value auction / winner's-curse decisions.
+    AUCTION_QUIZ_GENERATORS.genBidEvDecision,
+    AUCTION_QUIZ_GENERATORS.genShadingWithN,
+    AUCTION_QUIZ_GENERATORS.genAcquireDecision,
   ],
   deepSet: [
-    // Markov chains / recursion (the DRW signature)
+    // Markov chains / recursion (the DRW signature).
     genPatternWait,
     genPatternRace,
     genRuinReach,
     genBoldPlay,
     genRuin,
-    // Deep probability / EV
+    // Deep probability / EV.
     genWald,
     EV_GENERATORS.genReRollDie,
     genRRRespun,
     genCheerLoser,
     genWalkDuration,
+    // Deep common-value auction / winner's-curse conditional-EV problems.
+    AUCTION_QUIZ_GENERATORS.genBidEvDecision,
+    AUCTION_QUIZ_GENERATORS.genShadingWithN,
+    AUCTION_QUIZ_GENERATORS.genAcquireDecision,
   ],
 };
 
@@ -231,4 +269,64 @@ export function drawOaQuestionsForFormat(
   count: number,
 ): OaQuestion[] {
   return drawOaQuestionsFromPool(seed, count, poolForFormat(config));
+}
+
+/**
+ * Cache of a generator → its stable `family` signature. A generator's `family`
+ * is a per-generator string literal, so probing it once (with a throwaway rng)
+ * discovers it without ever perturbing a draw's rng. WeakMap-keyed so shared
+ * generator references across pools resolve identically and cost one probe.
+ */
+const GENERATOR_FAMILY_CACHE = new WeakMap<QuestionGenerator, string>();
+
+/**
+ * The rotation SIGNATURE of a generator = the `family` id its items carry
+ * (matching the "signature = family" contract). A few legacy generators don't
+ * stamp a `family`; those fall back to a stable `concept`/`id` so every
+ * generator still has a deterministic, distinct-enough signature to rotate on.
+ */
+function generatorFamily(gen: QuestionGenerator): string {
+  const cached = GENERATOR_FAMILY_CACHE.get(gen);
+  if (cached !== undefined) return cached;
+  const probe = gen(new Rng(0));
+  const sig = probe.family ?? probe.concept ?? probe.id;
+  GENERATOR_FAMILY_CACHE.set(gen, sig);
+  return sig;
+}
+
+/**
+ * ROTATION-AWARE draw (ADDITIVE — the pure `drawOaQuestions*` above are
+ * UNCHANGED and remain the entry points existing formats + tests rely on).
+ *
+ * Selects `count` generators from the format's pool BIASED AWAY from the
+ * `family` signatures most recently served (the bounded ring persisted in the
+ * OA store's `rotation`), materializes one question per chosen generator, and
+ * returns the questions ALONGSIDE the advanced store (with the served
+ * signatures recorded). Deterministic given `(config, seed, count, store)`: one
+ * `Rng(seed)` drives BOTH the rotation-biased selection and the per-question
+ * generation, and ids are forced unique (`oa-${seed}-${i}`).
+ *
+ * The store is threaded ONLY through `selectSequenceServed` from `./store` (the
+ * sanctioned rotation API); this module never touches the persisted rotation
+ * shape directly and never mutates the input store.
+ */
+export function drawOaQuestionsForFormatRotated(
+  config: OaFormatConfig,
+  seed: number,
+  count: number,
+  store: OaTimedStore | undefined,
+): { questions: OaQuestion[]; store: OaTimedStore } {
+  const rng = new Rng(seed);
+  const pool = poolForFormat(config);
+  const { chosen, store: nextStore } = selectSequenceServed(
+    store,
+    pool,
+    rng,
+    Math.max(0, count),
+    generatorFamily,
+  );
+  const questions = chosen.map((gen, i) =>
+    toOaQuestion(gen(rng), `oa-${seed}-${i}`),
+  );
+  return { questions, store: nextStore };
 }

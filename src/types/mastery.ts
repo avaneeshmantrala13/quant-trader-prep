@@ -28,12 +28,52 @@ export interface TopicMastery {
   reviewStep?: number;
   /** misconceptionKey → decayed hit count. Cleared by a remediation/spaced-review pass. */
   misconceptions: Record<string, number>;
+  /**
+   * OPTIONAL, additive (T12 adaptive engine). A rigorous 2PL IRT ability estimate
+   * for this topic on the logit scale, recovered from the topic's graded
+   * responses with per-item discrimination/difficulty (`src/lib/mastery/irt.ts`).
+   * This is a PARALLEL psychometric signal to the incremental Elo `theta`; it
+   * NEVER replaces `theta` and is only present once enough responses accrue to
+   * fit it. Absent ⇒ not yet estimated (fall back to Elo `theta`).
+   */
+  irtAbility?: number;
+  /**
+   * OPTIONAL, additive (T12). Standard error of {@link irtAbility} (posterior /
+   * observed-information SE). Smaller ⇒ more confident. Absent when
+   * `irtAbility` is absent.
+   */
+  irtAbilitySe?: number;
 }
 
 export type TopicMasteryMap = Record<string, TopicMastery>;
 
 /** Per (topic,tier) Elo difficulty d[topic,τ]. Key = `${topicKey}#${difficulty}`. */
 export type TierDifficultyMap = Record<string, number>;
+
+/**
+ * OPTIONAL, additive (T12 adaptive engine). A Glicko-style rating for the
+ * difficulty of a single (topic,tier) item bucket, updated from `ItemAttempt`
+ * outcomes (`src/lib/mastery/glicko.ts`). The `rating` is on the classic Glicko
+ * scale (1500-centered; higher ⇒ harder); `rd` is the rating deviation
+ * (uncertainty) that shrinks with evidence and re-inflates over idle time. This
+ * is a PARALLEL, richer companion to the frozen-at-N Elo `TierDifficultyMap`; it
+ * NEVER replaces it.
+ */
+export interface GlickoRating {
+  /** Difficulty rating (classic Glicko scale, 1500-centered; higher = harder). */
+  rating: number;
+  /** Rating deviation (uncertainty). Larger = less certain. */
+  rd: number;
+  /** ISO timestamp of the last update (drives RD re-inflation over idle time). */
+  lastAt?: string;
+}
+
+/**
+ * OPTIONAL, additive (T12). Per (topic,tier) Glicko difficulty rating map. Key =
+ * `${topicKey}#${difficulty}` (same convention as {@link TierDifficultyMap} via
+ * `tierDifficultyKey`), so the two difficulty views line up 1:1.
+ */
+export type GlickoDifficultyMap = Record<string, GlickoRating>;
 
 /** The immutable, verifier-produced record of ONE graded item. The ONLY input to mastery. */
 export interface ItemAttempt {

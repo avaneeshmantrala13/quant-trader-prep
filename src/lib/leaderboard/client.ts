@@ -161,6 +161,40 @@ export async function submitRankedRun(
 }
 
 /**
+ * ADD-ONLY (Worker C): the competitive-games leaderboard path.
+ *
+ * The Speed Arena flow above is server-AUTHORITATIVE (the client sends answers;
+ * the Lambda re-scores). The competitive games (Make-a-Market, Cards,
+ * Probability Betting, Fruit Market, Dice & Cards, Next Card Betting, Trading
+ * Floor) instead reduce a finished run to a single numeric score that is not
+ * server-reproducible, so they submit that score directly. Both functions are
+ * the SAME graceful no-op: `null` when the layer is off/unconfigured or on any
+ * error, so the games are fully functional OFFLINE on the local board only.
+ */
+
+/** Submit a finished competitive-game run's score. Graceful no-op when off. */
+export async function submitGameScore(
+  board: string,
+  score: number,
+  meta?: Record<string, string | number>,
+): Promise<{ ok: boolean; rank?: number } | null> {
+  const e = env();
+  const cfg = readLeaderboardConfig(e);
+  if (!cfg) return null;
+  const payload = await postBoard(cfg, e, "/leaderboard/score", {
+    board,
+    score,
+    meta,
+  });
+  if (!payload) return null;
+  return {
+    ok: payload["ok"] === true,
+    rank:
+      typeof payload["rank"] === "number" ? (payload["rank"] as number) : undefined,
+  };
+}
+
+/**
  * Fetch a board (leagues / friends / global) for a config. Returns `null` when
  * the layer is off/unconfigured or on any error (the UI then shows local PB).
  */

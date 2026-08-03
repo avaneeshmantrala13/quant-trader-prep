@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
@@ -6,6 +6,14 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon, CardsIcon, GaugeIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import {
   dealRound,
   gradeOutcome,
@@ -39,6 +47,25 @@ type Phase = "setup" | "voi" | "quote" | "reveal" | "pnl" | "result" | "summary"
 const SUIT_TONE = (suit: string) =>
   suit === "♥" || suit === "♦" ? "text-bear" : "text-primary";
 
+const GAME_ID = "cards-market-making";
+
+/** Durable, reload-proof snapshot of an in-progress game (JSON-serializable). */
+interface CardsSession {
+  numRounds: number;
+  numCards: number;
+  aceHigh: boolean;
+  phase: Phase;
+  balance: number;
+  roundIdx: number;
+  round: CardsRound | null;
+  action: Action;
+  size: number;
+  pnlGuess: string;
+  voiGuess: string;
+  outcome: RoundOutcome | null;
+  log: RoundOutcome[];
+}
+
 export function CardsMarketMakingPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
@@ -66,6 +93,43 @@ export function CardsMarketMakingPage() {
     () => ({ numCards, aceValue: aceHigh ? 14 : 1, replace: false }),
     [numCards, aceHigh],
   );
+
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  // Resume a partly-played game on re-entry (a fresh Rng powers future deals;
+  // the games are random every deal, so only the user's PROGRESS must persist).
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<CardsSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    setNumRounds(s.numRounds);
+    setNumCards(s.numCards);
+    setAceHigh(s.aceHigh);
+    setBalance(s.balance);
+    setRoundIdx(s.roundIdx);
+    setRound(s.round);
+    setAction(s.action);
+    setSize(s.size);
+    setPnlGuess(s.pnlGuess);
+    setVoiGuess(s.voiGuess);
+    setOutcome(s.outcome);
+    setLog(s.log);
+    setPhase(s.phase);
+  }, []);
+  // Persist every meaningful change while a run is in progress.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase === "setup" || phase === "summary") return;
+    saveGameSession<CardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      { numRounds, numCards, aceHigh, phase, balance, roundIdx, round, action, size, pnlGuess, voiGuess, outcome, log },
+      Date.now(),
+    );
+  }, [phase, balance, roundIdx, round, action, size, pnlGuess, voiGuess, outcome, log, numRounds, numCards, aceHigh]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -109,6 +173,11 @@ export function CardsMarketMakingPage() {
   const advance = () => {
     if (roundIdx >= numRounds) {
       setPhase("summary");
+      // Score = ending points balance. Record on the unified leaderboard and
+      // clear the durable session (a finished run is not resumable).
+      submitLocalScore(browserBoardStore(), GAME_ID, { score: balance, atMs: Date.now() });
+      void submitGameScore(GAME_ID, balance);
+      clearGameSession(browserSessionStore(), GAME_ID);
       if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -217,7 +286,14 @@ export function CardsMarketMakingPage() {
         )}
 
         {phase === "summary" && (
-          <SummaryScreen balance={balance} log={log} onReplay={() => setPhase("setup")} />
+          <SummaryScreen
+            balance={balance}
+            log={log}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
+          />
         )}
       </main>
     </div>

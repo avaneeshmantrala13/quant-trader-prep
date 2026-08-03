@@ -153,6 +153,31 @@ export interface Flashcard {
   source?: string;
   /** Stable family ("template") id of the flashcard generator — see `Question.family`. */
   family?: string;
+  /**
+   * OPTIONAL, additive (T7 — objective-grade brainteasers). When `true` this
+   * flashcard has a CLOSED-FORM numeric answer, so the player runs a
+   * COMMIT-THEN-REVEAL flow: the learner types a free-response number and
+   * commits it BEFORE the answer is revealed, and that commit emits ONE graded
+   * `ItemAttempt` (mode `"flashcard"`) into the mastery layer. When omitted /
+   * `false` the card keeps the pure reveal-then-self-assess flow and records
+   * NOTHING (open-ended puzzles whose "answer" is a strategy/proof, not a
+   * number). Purely additive — every existing card omits it.
+   */
+  gradable?: boolean;
+  /**
+   * The exact closed-form numeric answer used to grade a `gradable` card (e.g.
+   * the locker problem = 10, the bridge crossing = 17). The prose `answer` /
+   * `explanation` stay intact; this is the machine-gradable value only. Present
+   * iff `gradable` is `true`.
+   */
+  numericAnswer?: number;
+  /**
+   * Absolute tolerance for the tolerant compare against `numericAnswer` (a
+   * committed value `v` grades correct iff `|v − numericAnswer| ≤ tolerance`).
+   * Use `0` for exact-integer answers; a small positive value for reals such as
+   * a probability or a rounded price. Present iff `gradable` is `true`.
+   */
+  tolerance?: number;
 }
 
 /**

@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
+import { Rng } from "@/lib/rng";
+import { createRotation } from "@/lib/content/rotation";
 import { MAX_OA_RESULTS } from "./config";
 import {
+  DEFAULT_OA_ROTATION_WINDOW,
   appendOaResult,
   clearActiveSession,
   emptyOaStore,
   getActiveSession,
   getOaResults,
+  getRotationState,
   putActiveSession,
+  putRotationState,
+  recordServedSignature,
+  recordServedSignatures,
+  selectSequenceServed,
+  selectServed,
 } from "./store";
 import type {
   OaSessionResult,
@@ -276,5 +285,141 @@ describe("persistence round-trip (plain-serializable)", () => {
     const finished = appendOaResult(round, makeResult("r2", 1_700_000_200_000));
     expect(finished.active).toBeUndefined();
     expect(finished.results.map((r) => r.id)).toEqual(["r1", "r2"]);
+  });
+});
+
+/* ------------------------------------------------------------------------- *
+ * T8 anti-repeat rotation wiring (served-signature state on the OA store).
+ * ------------------------------------------------------------------------- */
+describe("rotation — served-signature state", () => {
+  it("getRotationState initializes an empty ring when absent (old saves load)", () => {
+    // An OLD save has NO `rotation` field — it must still load and yield a fresh
+    // ring rather than throwing or returning undefined.
+    const oldSave: OaTimedStore = { results: [] };
+    expect(oldSave.rotation).toBeUndefined();
+    const rot = getRotationState(oldSave);
+    expect(rot).toEqual(createRotation(DEFAULT_OA_ROTATION_WINDOW));
+    // Undefined store initializes too.
+    expect(getRotationState(undefined, 5)).toEqual(createRotation(5));
+  });
+
+  it("returns an existing ring as-is (its own window wins)", () => {
+    const store: OaTimedStore = {
+      results: [],
+      rotation: { windowSize: 3, recent: ["a", "b"] },
+    };
+    expect(getRotationState(store, 99)).toEqual({
+      windowSize: 3,
+      recent: ["a", "b"],
+    });
+  });
+
+  it("putRotationState preserves active + results, immutably", () => {
+    const base = putActiveSession(
+      { results: [makeResult("r1", 1)] },
+      makeSession(),
+    );
+    const next = putRotationState(base, createRotation(8));
+    expect(next.rotation).toEqual(createRotation(8));
+    expect(next.active).toEqual(base.active);
+    expect(next.results).toEqual(base.results);
+    expect(next).not.toBe(base);
+    expect(base.rotation).toBeUndefined();
+  });
+
+  it("recordServedSignature appends into the (lazily created) ring", () => {
+    let store: OaTimedStore | undefined = undefined;
+    store = recordServedSignature(store, "sig-1");
+    store = recordServedSignature(store, "sig-2");
+    expect(store.rotation?.recent).toEqual(["sig-1", "sig-2"]);
+    expect(store.rotation?.windowSize).toBe(DEFAULT_OA_ROTATION_WINDOW);
+  });
+
+  it("recordServedSignatures batches in order and trims to the window", () => {
+    const store = recordServedSignatures(
+      { results: [], rotation: createRotation(2) },
+      ["a", "b", "c"],
+    );
+    // Window of 2 keeps only the two most-recent signatures.
+    expect(store.rotation?.recent).toEqual(["b", "c"]);
+  });
+
+  it("rotation state persists/round-trips through JSON with results", () => {
+    const store: OaTimedStore = {
+      active: makeSession(),
+      results: [makeResult("r1", 1_700_000_000_000)],
+      rotation: { windowSize: 4, recent: ["q1", "q2", "q3"] },
+    };
+    const round = JSON.parse(JSON.stringify(store)) as OaTimedStore;
+    expect(round.rotation).toEqual(store.rotation);
+    // The resumed store keeps advancing the SAME ring.
+    const advanced = recordServedSignature(round, "q4");
+    expect(advanced.rotation?.recent).toEqual(["q1", "q2", "q3", "q4"]);
+    expect(getOaResults(advanced)).toEqual(store.results);
+  });
+
+  it("survives clear/append without losing the ring", () => {
+    let store = putRotationState(emptyOaStore(), createRotation(6));
+    store = recordServedSignatures(store, ["a", "b"]);
+    store = putActiveSession(store, makeSession());
+    expect(store.rotation?.recent).toEqual(["a", "b"]);
+    store = clearActiveSession(store);
+    expect(store.rotation?.recent).toEqual(["a", "b"]);
+    store = appendOaResult(store, makeResult("r1", 1));
+    expect(store.rotation?.recent).toEqual(["a", "b"]);
+    expect(store.results.map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("selectServed biases away from in-window signatures and records the pick", () => {
+    // Seed the ring so every candidate BUT one is in-window.
+    const store: OaTimedStore = {
+      results: [],
+      rotation: { windowSize: 4, recent: ["a", "b", "c"] },
+    };
+    const { chosen, store: next } = selectServed(
+      store,
+      ["a", "b", "c", "d"],
+      new Rng(1),
+    );
+    // "d" is the only eligible candidate ⇒ it MUST be chosen.
+    expect(chosen).toBe("d");
+    expect(next.rotation?.recent).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("selectSequenceServed yields no in-window repeat and is deterministic-by-seed", () => {
+    const candidates = ["q1", "q2", "q3", "q4", "q5", "q6"];
+    const base: OaTimedStore = { results: [], rotation: createRotation(3) };
+
+    const runA = selectSequenceServed(base, candidates, new Rng(7), 6);
+    const runB = selectSequenceServed(base, candidates, new Rng(7), 6);
+    expect(runA.chosen).toEqual(runB.chosen); // deterministic by seed
+
+    // No signature repeats within the 3-wide window.
+    const picks = runA.chosen;
+    for (let i = 1; i < picks.length; i++) {
+      const window = picks.slice(Math.max(0, i - 3), i);
+      expect(window).not.toContain(picks[i]);
+    }
+    // The final ring reflects the last `windowSize` served signatures.
+    expect(runA.store.rotation?.recent).toEqual(picks.slice(-3));
+  });
+
+  it("selectServed supports a custom signatureOf mapper", () => {
+    const items = [
+      { id: 1, family: "alpha" },
+      { id: 2, family: "beta" },
+    ];
+    const store: OaTimedStore = {
+      results: [],
+      rotation: { windowSize: 2, recent: ["alpha"] },
+    };
+    const { chosen, store: next } = selectServed(
+      store,
+      items,
+      new Rng(1),
+      (it) => it.family,
+    );
+    expect(chosen.family).toBe("beta"); // "alpha" is in-window
+    expect(next.rotation?.recent).toEqual(["alpha", "beta"]);
   });
 });

@@ -13,13 +13,27 @@ import {
 import { perQuestionBudgetMs } from "@/lib/arena/budget";
 import { speedStats, type SpeedStats } from "@/lib/arena/speedStats";
 import { readSpeedProfile, recordSpeedRun } from "@/lib/arena/speedProfile";
+import {
+  DEFAULT_WEAK_SPOT_CONFIG,
+  bucketWeights,
+  selectBucketSequence,
+  shapeRange,
+  type WeakSpotAttempt,
+} from "@/lib/arena/weakSpot";
+import {
+  readWeakSpotHistory,
+  recordWeakSpotAttempts,
+} from "@/lib/arena/weakSpotProfile";
+import { Rng } from "@/lib/rng";
 import { arenaQuestionStream, streamPrompt } from "@/lib/leaderboard/seed";
-import { arenaItemStream } from "@/content/arena/generators";
+import { arenaItemStream, generateArenaItem } from "@/content/arena/generators";
 import {
   isLeaderboardEnabled,
   requestRankedSeed,
   submitRankedRun,
+  submitGameScore,
 } from "@/lib/leaderboard/client";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
 import { PresetPicker } from "@/components/arena/PresetPicker";
 import { ArenaRunner, type PlayItem } from "@/components/arena/ArenaRunner";
 import { PostRunReport } from "@/components/arena/PostRunReport";
@@ -108,7 +122,9 @@ export function SpeedArenaPage() {
       let play: PlayItem[];
       let usedSeed: number | null = null;
 
-      if (rankedEligible(p)) {
+      if (p.mode === "weakspot") {
+        play = weakSpotItems(p, count);
+      } else if (rankedEligible(p)) {
         const issued = await requestRankedSeed(boardOf(p), configHash(p));
         if (issued) {
           usedSeed = issued.seed;
@@ -146,6 +162,38 @@ export function SpeedArenaPage() {
     }));
   };
 
+  /**
+   * Weak-Spot Trainer stream: read the persisted attempt history, weight each
+   * (op × shape) bucket by how often it's missed, draw a seeded over-sampled
+   * bucket sequence, then generate one integer item per chosen bucket by
+   * widening the operand range to that bucket's shape. Each item carries its
+   * `shape` so the finish handler can record the attempt back into the history.
+   */
+  const weakSpotItems = (p: ArenaPreset, count: number): PlayItem[] => {
+    const history = readWeakSpotHistory(store());
+    const weighted = bucketWeights(history, p.ops, DEFAULT_WEAK_SPOT_CONFIG);
+    const selSeed = Date.now() % 2_000_000_000;
+    const genRng = new Rng((selSeed ^ 0x9e3779b9) >>> 0);
+    const seq = selectBucketSequence(weighted, new Rng(selSeed), count);
+    return seq.map((bucket, i) => {
+      const [lo, hi] = shapeRange(bucket.shape);
+      const shaped: ArenaPreset = {
+        ...p,
+        ops: [bucket.op],
+        packs: ["int"],
+        ranges: { ...p.ranges, [bucket.op]: [lo, hi] },
+      };
+      const it = generateArenaItem(genRng, bucket.op, "int", shaped);
+      return {
+        id: `${it.id}#${i}`,
+        prompt: it.prompt,
+        answer: it.answer,
+        op: it.op,
+        shape: bucket.shape,
+      };
+    });
+  };
+
   const finish = (answered: AnsweredItem[], elapsedMs: number) => {
     if (!preset) return;
     const rep = buildReport(answered, preset, {});
@@ -162,6 +210,17 @@ export function SpeedArenaPage() {
     setPb(newPb);
     setIsNewBest(nb);
     setTrend(trailing7DayMedian(store(), board, cfg, Date.now()));
+
+    // Unified competitive leaderboard: also record this run's score on the
+    // cross-game local board (higher-is-better), and submit to the optional
+    // server board (graceful no-op when unconfigured). Keeps Speed Arena's own
+    // PB/trend above untouched — this is purely additive.
+    submitLocalScore(browserBoardStore(), "speed-arena", {
+      score: rep.score,
+      atMs: Date.now(),
+      meta: { accuracyPct: Math.round(rep.accuracy * 100) },
+    });
+    void submitGameScore("speed-arena", rep.score);
 
     // Interview overlay: compute speed stats and persist the speed profile,
     // which also derives the (optionally adaptive) budget for the next run.
@@ -187,6 +246,25 @@ export function SpeedArenaPage() {
       setSpeed(null);
       setNextBudgetMs(null);
     }
+
+    // Weak-Spot Trainer: fold this run's graded (op × shape) attempts back into
+    // the persisted history so the NEXT drill over-samples whatever is still weak.
+    if (preset.mode === "weakspot") {
+      const shapeById = new Map(items.map((i) => [i.id, i.shape]));
+      const attempts: WeakSpotAttempt[] = [];
+      for (const a of answered) {
+        const shape = shapeById.get(a.id);
+        if (!shape) continue;
+        attempts.push({
+          op: a.op as ArenaOp,
+          shape,
+          correct: a.correct,
+          skipped: a.skipped,
+        });
+      }
+      recordWeakSpotAttempts(store(), attempts);
+    }
+
     setPhase("report");
 
     // Ranked submission (server re-scores; fire-and-forget, never blocks UI).

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
@@ -6,6 +6,14 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon, DiceIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import { PlayingCard, Die, CountUp, RoundPips } from "@/components/games/GameBits";
 import {
   freshDeck,
@@ -38,6 +46,8 @@ type Phase = "setup" | "sd" | "trade" | "reveal" | "pnl" | "score" | "final" | "
 
 const NUM_ROUNDS = 4;
 
+const GAME_ID = "dice-and-cards";
+
 interface RoundLog {
   round: Round;
   action: Action;
@@ -46,6 +56,20 @@ interface RoundLog {
   guess: number;
   guessCorrect: boolean;
   points: number;
+}
+
+/** Durable, reload-proof snapshot of an in-progress game (JSON-serializable). */
+interface DiceCardsSession {
+  config: GameConfig;
+  phase: Phase;
+  roundIdx: number;
+  balance: number;
+  log: RoundLog[];
+  round: Round | null;
+  action: Action | null;
+  size: number;
+  pnlGuess: string;
+  current: RoundLog | null;
 }
 
 export function DiceAndCardsPage() {
@@ -88,6 +112,39 @@ export function DiceAndCardsPage() {
     dealNext(0);
   };
 
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<DiceCardsSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    // Fresh Rng + deck power future deals; the in-progress round is preserved.
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    deckRef.current = rngRef.current.shuffle(freshDeck());
+    setConfig(s.config);
+    setRoundIdx(s.roundIdx);
+    setBalance(s.balance);
+    setLog(s.log);
+    setRound(s.round);
+    setAction(s.action);
+    setSize(s.size);
+    setPnlGuess(s.pnlGuess);
+    setCurrent(s.current);
+    setPhase(s.phase);
+  }, []);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase === "setup" || phase === "summary") return;
+    saveGameSession<DiceCardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      { config, phase, roundIdx, balance, log, round, action, size, pnlGuess, current },
+      Date.now(),
+    );
+  }, [phase, roundIdx, balance, log, round, action, size, pnlGuess, current, config]);
+
   const submitTrade = (a: Action, n: number) => {
     setAction(a);
     setSize(n);
@@ -118,6 +175,11 @@ export function DiceAndCardsPage() {
 
   const finishFinal = () => {
     setPhase("summary");
+    // Score = ending points balance. Record on the unified leaderboard +
+    // optional server board, and clear the durable session.
+    submitLocalScore(browserBoardStore(), GAME_ID, { score: balance, atMs: Date.now() });
+    void submitGameScore(GAME_ID, balance);
+    clearGameSession(browserSessionStore(), GAME_ID);
     if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
 
@@ -204,7 +266,14 @@ export function DiceAndCardsPage() {
         )}
 
         {phase === "summary" && (
-          <SummaryView log={log} balance={balance} onReplay={() => setPhase("setup")} />
+          <SummaryView
+            log={log}
+            balance={balance}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
+          />
         )}
       </main>
     </div>

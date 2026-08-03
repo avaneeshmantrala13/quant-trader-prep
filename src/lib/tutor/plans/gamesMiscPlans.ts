@@ -71,7 +71,12 @@ function planFromTag(tag: string): AttackPlan | null {
 /** case-insensitive keyword on `${section} ${family}` → plan. */
 function planFromSection(haystack: string): AttackPlan | null {
   const h = haystack.toLowerCase();
-  if (h.includes("geometr")) return PLANS.geometric;
+  // Only the geometric-PROBABILITY section wants the favourable-measure plan.
+  // The Math-Questions "Geometry & Derivations" section is plain-geometry word
+  // problems (area/angle/volume derivations) — it must NOT match here, so we
+  // require the full "geometric probability" phrase rather than the "geometr"
+  // stem (which "geometry" would also trip).
+  if (h.includes("geometric probability")) return PLANS.geometric;
   if (
     h.includes("game theory") ||
     h.includes("puzzle") ||

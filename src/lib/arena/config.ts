@@ -19,7 +19,7 @@
  * tunable — do not treat them as hard invariants.
  */
 
-export type ArenaMode = "zetamac" | "optiver" | "custom";
+export type ArenaMode = "zetamac" | "optiver" | "custom" | "weakspot";
 export type ArenaOp = "add" | "sub" | "mul" | "div";
 export type ArenaPack = "int" | "fraction" | "decimal" | "percent";
 export type BoardKind = "zetamac" | "optiver";
@@ -116,6 +116,26 @@ export const CUSTOM_DEFAULT: ArenaPreset = {
   ranges: { ...DEFAULT_RANGES },
 };
 
+/**
+ * Weak-Spot Trainer: a 120s count-only integer drill (Zetamac-style scoring) that
+ * — unlike the fixed presets — OVER-SAMPLES the operations × operand-shapes the
+ * learner actually misses (see `arena/weakSpot.ts` + `arena/weakSpotProfile.ts`).
+ * Scoring is deliberately identical to Zetamac (count-only, no penalty, skips
+ * free) so the mode is a pure practice aid; only the QUESTION MIX changes, biased
+ * toward the learner's weak buckets. Draws the full operand range across shapes,
+ * so `ranges` is left at the Zetamac default here and widened per-item at draw
+ * time from the chosen bucket's shape.
+ */
+export const WEAKSPOT_DEFAULT: ArenaPreset = {
+  mode: "weakspot",
+  durationSec: 120,
+  penalty: false,
+  skipsFree: true,
+  ops: ["add", "sub", "mul", "div"],
+  packs: ["int"],
+  ranges: { ...DEFAULT_RANGES },
+};
+
 /** Rushing detector: hard floor (ms) below which "fast" always counts. */
 export const RUSH_FLOOR_MS = 800;
 /** Rushing detector: wrong && rt < RUSH_RATIO × median[op] ⇒ a rush error. */
@@ -139,6 +159,7 @@ export const DEFAULT_SPRINT_BUDGET_MS = 6000;
 export function presetForMode(mode: ArenaMode): ArenaPreset {
   if (mode === "zetamac") return { ...ZETAMAC_DEFAULT };
   if (mode === "optiver") return { ...OPTIVER_DEFAULT };
+  if (mode === "weakspot") return { ...WEAKSPOT_DEFAULT };
   return { ...CUSTOM_DEFAULT };
 }
 

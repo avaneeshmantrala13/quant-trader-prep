@@ -26,6 +26,13 @@ import { MarketOfCardsPage } from "./pages/MarketOfCardsPage";
 import { FruitMarketPage } from "./pages/FruitMarketPage";
 import { DiceAndCardsPage } from "./pages/DiceAndCardsPage";
 import { NextCardBettingPage } from "./pages/NextCardBettingPage";
+import { TradingFloorPage } from "./pages/TradingFloorPage";
+import { EvTimedPage } from "./pages/EvTimedPage";
+import { MockPage } from "./pages/MockPage";
+import { ArbitragePage } from "./pages/ArbitragePage";
+import { VerifiedBankPage } from "./pages/VerifiedBankPage";
+import { CommunityPage } from "./pages/CommunityPage";
+import { LeaderboardPage } from "./pages/LeaderboardPage";
 import type { ReactNode } from "react";
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -101,6 +108,10 @@ export default function App() {
               <Route path="/contents" element={<TableOfContentsPage />} />
               <Route path="/simulations" element={<SimulationsPage />} />
               <Route path="/games" element={<GamesHubPage />} />
+              {/* Human-verified interview question bank (T9) — a browse surface. */}
+              <Route path="/verified-bank" element={<VerifiedBankPage />} />
+              {/* Community & social-proof layer (T13). */}
+              <Route path="/community" element={<CommunityPage />} />
               <Route path="/themes" element={<ThemesPage />} />
             </Route>
 
@@ -215,6 +226,68 @@ export default function App() {
                 <ProtectedRoute>
                   <RequireDiagnostic>
                     <NextCardBettingPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* The Trading Floor — flagship adversarial make-a-market mock (own
+                full-screen layout, self-contained — see TradingFloorPage). */}
+            <Route
+              path="/trading-floor"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <TradingFloorPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Unified competitive-games leaderboard (own full-screen layout,
+                self-contained — see LeaderboardPage). Local-first, optional AWS. */}
+            <Route
+              path="/leaderboard"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <LeaderboardPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* EV-under-time decision drill (T4, own full-screen layout). */}
+            <Route
+              path="/ev-timed"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <EvTimedPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* AI-voice Mock Interview (T10, own full-screen layout). */}
+            <Route
+              path="/mock"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <MockPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* No-arbitrage / de-vig reasoning drill (T3, own full-screen layout). */}
+            <Route
+              path="/arbitrage"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <ArbitragePage />
                   </RequireDiagnostic>
                 </ProtectedRoute>
               }

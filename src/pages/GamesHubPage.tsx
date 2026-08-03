@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   GAMES,
   DIFFICULTY_ORDER,
@@ -82,7 +82,7 @@ export function GamesHubPage() {
           <span className="hidden h-12 w-12 place-items-center border border-border-strong text-accent sm:grid">
             <DiceIcon width={26} height={26} />
           </span>
-          <div>
+          <div className="flex-1">
             <span className="label text-accent">Superday Games · Play to learn</span>
             <h1 className="mt-1 font-display text-3xl font-black text-primary sm:text-4xl">
               Interview Games
@@ -94,6 +94,12 @@ export function GamesHubPage() {
               seat and play.
             </p>
           </div>
+          <Link
+            to="/leaderboard"
+            className="chip shrink-0 border-accent text-accent transition-colors hover:bg-accent hover:text-accent-contrast"
+          >
+            Leaderboard →
+          </Link>
         </div>
       </header>
 

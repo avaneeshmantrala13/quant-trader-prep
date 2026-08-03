@@ -22,6 +22,7 @@ import {
   gradeFreeResponse,
   numericMatches,
   formatNumericAnswer,
+  parseFreeResponse,
 } from "@/lib/numeric";
 import {
   canRegenerateQuiz,
@@ -566,6 +567,37 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
 
 type FlashPhase = "lesson" | "cards" | "done";
 
+/**
+ * A flashcard is OBJECTIVE-GRADABLE (T7) iff it declares `gradable: true` AND
+ * carries a closed-form `numericAnswer`. Those run the commit-then-reveal flow
+ * and emit ONE `recordItemAttempt` per committed non-bonus card; everything else
+ * keeps the pure reveal + self-assess flow and records no graded evidence.
+ */
+function isGradableFlashcard(
+  card: Flashcard,
+): card is Flashcard & { numericAnswer: number } {
+  return card.gradable === true && typeof card.numericAnswer === "number";
+}
+
+/**
+ * Grade a committed free-response entry against a gradable card's closed-form
+ * answer using the tolerant `@/lib/numeric` parser (fractions / percents /
+ * simple expressions all parse) and an absolute `tolerance` window. Returns the
+ * parsed value (null when unparseable) and whether it counts as correct.
+ */
+function gradeFlashcardEntry(
+  card: Flashcard & { numericAnswer: number },
+  raw: string,
+): { value: number | null; correct: boolean } {
+  const value = parseFreeResponse(raw);
+  if (value === null) return { value: null, correct: false };
+  const tol = Math.abs(card.tolerance ?? 0);
+  // `1e-9` absorbs floating-point noise so an exact integer answer with
+  // `tolerance: 0` still accepts the exact typed value.
+  const correct = Math.abs(value - card.numericAnswer) <= tol + 1e-9;
+  return { value, correct };
+}
+
 function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
   const navigate = useNavigate();
   const {
@@ -573,7 +605,12 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
     getUnderstood,
     markUnderstood,
     completeFlashcardLevel,
+    recordItemAttempt,
   } = useProgress();
+  const topicKey = useMemo(
+    () => topicKeyForLevel(track.id, level),
+    [track.id, level],
+  );
   const { themeDef } = useTheme();
 
   const pool = level.flashcards ?? [];
@@ -600,6 +637,13 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
   const [understood, setUnderstood] = useState<Set<string>>(new Set());
   const [current, setCurrent] = useState(0); // index into `pool`
   const [revealed, setRevealed] = useState(false);
+  // The learner's committed free-response for a GRADABLE card (T7). Set on
+  // commit (which also reveals) so the graded verdict + their entry can be shown
+  // after reveal; null for the pure reveal-then-self-assess (non-gradable) flow.
+  const [committed, setCommitted] = useState<{
+    value: number | null;
+    correct: boolean;
+  } | null>(null);
   // A fresh, parametric BONUS card (from `flashcardGenerators`). When non-null it
   // is shown IN PLACE of the pool card, but is completely isolated from mastery:
   // it never enters the `understood` set / streak (same isolation as the
@@ -618,6 +662,7 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
     const firstUnlearned = pool.findIndex((c) => !saved.has(c.id));
     setCurrent(firstUnlearned === -1 ? 0 : firstUnlearned);
     setRevealed(false);
+    setCommitted(null);
     setGenerated(null);
     setResult(null);
     setPhase("lesson");
@@ -651,10 +696,32 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
   // WITHOUT touching mastery/understood (isolated bonus practice). For a real
   // pool card it marks the problem understood, persists, then either finishes
   // the level (all cards done → auto-advance) or moves to the next unlearned one.
+  // COMMIT-THEN-REVEAL (T7). For a GRADABLE card the learner commits a numeric
+  // free-response BEFORE seeing the answer; committing grades it, reveals the
+  // answer, and — for a real (non-bonus) mastery-deck card — emits EXACTLY ONE
+  // graded `ItemAttempt` (mode "flashcard") into the mastery layer via
+  // `recordItemAttempt`. Bonus/generated cards reveal the same way but record
+  // nothing (isolated practice), and non-gradable cards never reach here.
+  const commitGradable = (value: number | null, correct: boolean) => {
+    setCommitted({ value, correct });
+    if (!isBonus && isGradableFlashcard(card)) {
+      recordItemAttempt({
+        topicKey,
+        tier: level.difficulty,
+        correct,
+        mode: "flashcard",
+        chosenValue: value ?? undefined,
+        at: new Date().toISOString(),
+      });
+    }
+    setRevealed(true);
+  };
+
   const gotIt = () => {
     if (isBonus) {
       setGenerated(null);
       setRevealed(false);
+      setCommitted(null);
       return;
     }
     const poolCard = pool[current];
@@ -678,6 +745,7 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
     }
     setCurrent(target);
     setRevealed(false);
+    setCommitted(null);
   };
 
   // "Give me another at this difficulty": when the level has parametric families
@@ -704,6 +772,7 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
         bonusSigsRef.current.add(flashcardSignature(fresh));
         setGenerated(fresh);
         setRevealed(false);
+        setCommitted(null);
         return;
       }
     }
@@ -714,6 +783,7 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
       setCurrent(i);
     }
     setRevealed(false);
+    setCommitted(null);
   };
 
   const nextLevel = track.levels[levelIndex + 1];
@@ -776,7 +846,9 @@ function FlashcardLevel({ track, level }: { track: Track; level: Level }) {
             card={card}
             revealed={revealed}
             bonus={isBonus}
+            committed={committed}
             onReveal={() => setRevealed(true)}
+            onCommit={commitGradable}
             onGotIt={gotIt}
             onAnother={giveAnother}
             onUnderstandTopic={complete}
@@ -804,7 +876,9 @@ function FlashCard({
   card,
   revealed,
   bonus = false,
+  committed,
   onReveal,
+  onCommit,
   onGotIt,
   onAnother,
   onUnderstandTopic,
@@ -813,11 +887,35 @@ function FlashCard({
   revealed: boolean;
   /** True for a freshly-generated BONUS card (not counted toward mastery). */
   bonus?: boolean;
+  /** The learner's committed graded entry (gradable cards only), else null. */
+  committed?: { value: number | null; correct: boolean } | null;
   onReveal: () => void;
+  /** Commit a graded free-response (gradable cards): grade → reveal → record. */
+  onCommit: (value: number | null, correct: boolean) => void;
   onGotIt: () => void;
   onAnother: () => void;
   onUnderstandTopic: () => void;
 }) {
+  const gradable = isGradableFlashcard(card);
+  const [entry, setEntry] = useState("");
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Focus the commit field the moment a gradable card appears (keyboard-first).
+  useEffect(() => {
+    if (gradable && !revealed) inputRef.current?.focus();
+  }, [gradable, revealed]);
+
+  const tryCommit = () => {
+    if (!isGradableFlashcard(card)) return;
+    const value = parseFreeResponse(entry);
+    if (value === null) {
+      setEntryError("Enter a number (e.g. 17, 2/3, or 0.2) before revealing.");
+      return;
+    }
+    const { correct } = gradeFlashcardEntry(card, entry);
+    onCommit(value, correct);
+  };
+
   return (
     <div className="animate-print-in space-y-4">
       <div className="panel p-5">
@@ -853,17 +951,102 @@ function FlashCard({
       </div>
 
       {!revealed ? (
-        <div className="space-y-3">
-          <p className="text-center text-sm text-secondary">
-            Reason it through on your own first — then reveal and be honest with
-            yourself.
-          </p>
-          <button onClick={onReveal} className="btn-primary w-full">
-            Reveal answer ▸
-          </button>
-        </div>
+        gradable ? (
+          <div className="space-y-3">
+            <p className="text-center text-sm text-secondary">
+              Work it out, then COMMIT your numeric answer — the reveal unlocks
+              once you do. Your commit is graded objectively.
+            </p>
+            <div className="panel p-5">
+              <label
+                htmlFor={`flash-commit-${card.id}`}
+                className="label text-accent"
+              >
+                Your answer
+              </label>
+              <div className="mt-2 flex items-stretch gap-2">
+                <div className="flex flex-1 items-center border-2 border-border-strong bg-surface focus-within:border-accent">
+                  <input
+                    id={`flash-commit-${card.id}`}
+                    ref={inputRef}
+                    type="text"
+                    inputMode="text"
+                    autoComplete="off"
+                    value={entry}
+                    onChange={(e) => {
+                      setEntry(e.target.value);
+                      if (entryError) setEntryError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") tryCommit();
+                    }}
+                    placeholder="Type a number, then Enter"
+                    aria-label="Your numeric answer"
+                    aria-invalid={entryError ? true : undefined}
+                    className="num min-h-[44px] w-full bg-transparent px-3 py-2 text-lg font-semibold text-primary outline-none"
+                  />
+                </div>
+                <button
+                  onClick={tryCommit}
+                  disabled={entry.trim() === ""}
+                  className="btn-primary px-5 disabled:opacity-50"
+                >
+                  Commit &amp; reveal ▸
+                </button>
+              </div>
+              {entryError && (
+                <p className="mt-2 text-sm text-bear" role="alert">
+                  {entryError}
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-center text-sm text-secondary">
+              Reason it through on your own first — then reveal and be honest
+              with yourself.
+            </p>
+            <button onClick={onReveal} className="btn-primary w-full">
+              Reveal answer ▸
+            </button>
+          </div>
+        )
       ) : (
         <div className="animate-print-in space-y-4">
+          {gradable && committed && (
+            <div
+              className={`border px-4 py-3 ${
+                committed.correct
+                  ? "border-bull/60 bg-bull/10"
+                  : "border-bear/60 bg-bear/10"
+              }`}
+            >
+              <span
+                className={`font-mono text-xs font-semibold uppercase tracking-label ${
+                  committed.correct ? "text-bull" : "text-bear"
+                }`}
+              >
+                {committed.correct ? "✓ Correct" : "✗ Not quite"}
+              </span>
+              <p className="mt-1 text-sm text-secondary">
+                You committed{" "}
+                <span className="num font-semibold text-primary">
+                  {committed.value ?? "—"}
+                </span>
+                {!committed.correct && (
+                  <>
+                    {" "}
+                    · the exact answer is{" "}
+                    <span className="num font-semibold text-primary">
+                      {card.numericAnswer}
+                    </span>
+                  </>
+                )}
+                .
+              </p>
+            </div>
+          )}
           <div className="border border-subtle">
             <div className="flex items-center justify-between bg-bull px-4 py-2 text-bg">
               <span className="font-mono text-xs font-semibold uppercase tracking-label">

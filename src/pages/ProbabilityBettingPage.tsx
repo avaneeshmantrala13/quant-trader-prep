@@ -1,8 +1,16 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { StampSeal } from "@/components/visuals/StampSeal";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import {
   ChevronLeftIcon,
   DiceIcon,
@@ -43,6 +51,23 @@ import { buildRound } from "@/content/games/probabilityBettingEvents";
 
 type Phase = "setup" | "bet" | "settled" | "summary";
 
+const GAME_ID = "probability-betting";
+
+/** Durable, reload-proof snapshot of an in-progress game (JSON-serializable). */
+interface ProbBettingSession {
+  numRounds: number;
+  perCategory: number;
+  aceHigh: boolean;
+  phase: Phase;
+  balance: number;
+  roundIdx: number;
+  round: RoundEvents | null;
+  stakes: Record<string, number>;
+  specialStakes: Record<string, number>;
+  settlement: RoundSettlement | null;
+  gradeLog: { round: number; grades: EventGrade[] }[];
+}
+
 const CATEGORY_META: Record<
   Category,
   { title: string; icon: (p: { width: number; height: number }) => JSX.Element }
@@ -71,6 +96,38 @@ export function ProbabilityBettingPage() {
   const [specialStakes, setSpecialStakes] = useState<Record<string, number>>({});
   const [settlement, setSettlement] = useState<RoundSettlement | null>(null);
   const [gradeLog, setGradeLog] = useState<{ round: number; grades: EventGrade[] }[]>([]);
+
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<ProbBettingSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    setNumRounds(s.numRounds);
+    setPerCategory(s.perCategory);
+    setAceHigh(s.aceHigh);
+    setBalance(s.balance);
+    setRoundIdx(s.roundIdx);
+    setRound(s.round);
+    setStakes(s.stakes);
+    setSpecialStakes(s.specialStakes);
+    setSettlement(s.settlement);
+    setGradeLog(s.gradeLog);
+    setPhase(s.phase);
+  }, []);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase === "setup" || phase === "summary") return;
+    saveGameSession<ProbBettingSession>(
+      browserSessionStore(),
+      GAME_ID,
+      { numRounds, perCategory, aceHigh, phase, balance, roundIdx, round, stakes, specialStakes, settlement, gradeLog },
+      Date.now(),
+    );
+  }, [phase, balance, roundIdx, round, stakes, specialStakes, settlement, gradeLog, numRounds, perCategory, aceHigh]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -117,6 +174,18 @@ export function ProbabilityBettingPage() {
   const advance = () => {
     if (roundIdx >= numRounds) {
       setPhase("summary");
+      // Score = composite skill × P&L leaderboard score (matches SummaryScreen).
+      const allGrades = gradeLog.flatMap((g) => g.grades);
+      const skill = skillScore(allGrades);
+      const pnl = round2(balance - START_BALANCE);
+      const board = round2(skill.total * pnl);
+      submitLocalScore(browserBoardStore(), GAME_ID, {
+        score: board,
+        atMs: Date.now(),
+        meta: { skill: round2(skill.total), pnl },
+      });
+      void submitGameScore(GAME_ID, board);
+      clearGameSession(browserSessionStore(), GAME_ID);
       if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -204,7 +273,10 @@ export function ProbabilityBettingPage() {
           <SummaryScreen
             balance={balance}
             gradeLog={gradeLog}
-            onReplay={() => setPhase("setup")}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
           />
         )}
       </main>

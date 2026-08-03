@@ -115,7 +115,11 @@ export const SIMULATIONS: SimMeta[] = [
     id: "sample-space",
     title: "Two-Dice Sample Space",
     group: "core",
-    topics: ["Core Probability", "Combinatorial Analysis"],
+    topics: [
+      "Core Probability",
+      "Combinatorial Analysis",
+      "Number Theory & Counting",
+    ],
     whatShows:
       "Every equally-likely outcome of two dice as a grid; pick an event and read its probability by counting cells.",
   },
@@ -149,7 +153,7 @@ export const SIMULATIONS: SimMeta[] = [
     id: "clt",
     title: "Central Limit Theorem",
     group: "distributions",
-    topics: ["Variance, Covariance & the CLT"],
+    topics: ["Variance, Covariance & the CLT", "Limit Theorems"],
     whatShows:
       "Average n draws from a lumpy source; as n grows the distribution of the sample mean becomes a smooth bell curve.",
   },
@@ -177,7 +181,7 @@ export const SIMULATIONS: SimMeta[] = [
     id: "expected-value",
     title: "Expected Value (Long-Run Average)",
     group: "ev-processes",
-    topics: ["Expected Value"],
+    topics: ["Expected Value", "Conditional Expectation"],
     whatShows:
       "Set the payoffs of a die/coin game; the running average payoff converges to the theoretical expected value.",
   },
@@ -201,7 +205,11 @@ export const SIMULATIONS: SimMeta[] = [
     id: "markov-chain",
     title: "Markov Chain → Stationary Distribution",
     group: "ev-processes",
-    topics: ["Markov Chains"],
+    topics: [
+      "Markov Chains",
+      "Markov Chain Structure",
+      "Continuous-Time Markov Chains",
+    ],
     whatShows:
       "Set the transition probabilities and watch the state distribution converge to the stationary distribution.",
   },
@@ -219,7 +227,7 @@ export const SIMULATIONS: SimMeta[] = [
     id: "stock-random-walk",
     title: "Stock Trader — Buy, Sell, or Hold?",
     group: "real-world",
-    topics: ["Expected Value", "Markov Chains"],
+    topics: ["Expected Value", "Markov Chains", "Brownian Motion"],
     whatShows:
       "A stock ticks up or down each step with your chosen probabilities; make a buy/sell/hold call, then watch the price path, the distribution of final P&L over many trials, and the per-step drift (EV) that decides the right action.",
   },
@@ -284,6 +292,14 @@ export const SIMULATIONS: SimMeta[] = [
 
   /* ---- GROUP: trading-desk ---------------------------------------------- */
   {
+    id: "trading-floor-live",
+    title: "The Trading Floor — Live Make-a-Market",
+    group: "trading-desk",
+    topics: ["Market Making", "Adverse Selection", "Calibration"],
+    whatShows:
+      "The flagship interactive desk: quote a two-sided market round by round while an informed-with-noise counterparty picks you off only when you're mispriced, manage inventory and P&L under a shot clock, and get a coaching-grade calibration debrief (reliability diagram + Brier) vs an honest benchmark desk.",
+  },
+  {
     id: "basketball-book",
     title: "Basketball — Live Book Management",
     group: "trading-desk",
@@ -295,7 +311,12 @@ export const SIMULATIONS: SimMeta[] = [
     id: "marble-winner-markets",
     title: "Marble Olympics — Winner Markets",
     group: "trading-desk",
-    topics: ["Market Making", "No-Arbitrage / De-Vig", "Correlated Outcomes"],
+    topics: [
+      "Market Making",
+      "No-Arbitrage / De-Vig",
+      "Correlated Outcomes",
+      "No-Arbitrage",
+    ],
     whatShows:
       "Quote correlated winner markets across marble races; renormalize your book to stay arbitrage-free (de-vig) or leak a Dutch book to the arbitrageur, scored vs the arb-free desk.",
   },

@@ -19,7 +19,13 @@ const KNOWN_TARGETS: TourTarget[] = [
   "probability",
   "contents",
   "simulations",
+  "games",
+  "trading-floor",
   "arena",
+  "timed-oa",
+  "mock",
+  "verified-bank",
+  "community",
   "recalibrate",
   "themes",
 ];
@@ -93,10 +99,41 @@ describe("ONBOARDING_TOUR_STEPS", () => {
     expect(byId.probability).toBe("probability");
     expect(byId.tracks).toBe("contents");
     expect(byId.simulations).toBe("simulations");
+    expect(byId.games).toBe("games");
+    expect(byId["trading-floor"]).toBe("trading-floor");
     expect(byId.arena).toBe("arena");
+    expect(byId.timed).toBe("timed-oa");
+    expect(byId.mock).toBe("mock");
+    expect(byId["verified-bank"]).toBe("verified-bank");
+    expect(byId.community).toBe("community");
     expect(byId.recalibrate).toBe("recalibrate");
     expect(byId.themes).toBe("themes");
     expect(byId.done).toBeUndefined();
+  });
+
+  it("teaches the Wave-1 features a new interview-prep user must know", () => {
+    const joined = ONBOARDING_TOUR_STEPS.map(
+      (s) => `${s.title}\n${s.body}`,
+    ).join("\n");
+    // The header mode toggle + both modes.
+    expect(joined).toContain("Interview prep");
+    expect(joined).toContain("Course mastery");
+    // The competitive surfaces + the unified leaderboard that ranks them.
+    expect(joined).toContain("Quant Games");
+    expect(joined).toContain("Trading Floor");
+    expect(joined).toContain("Speed Arena");
+    expect(joined).toContain("Leaderboard");
+    // Timed / assessment surfaces + the AI mock.
+    expect(joined).toContain("Timed Sections");
+    expect(joined).toContain("Mock Interview");
+    // The new drills that feed the timed pool.
+    expect(joined).toContain("Arbitrage & De-vig");
+    expect(joined).toContain("EV Under Time");
+    // Trusted-content surfaces.
+    expect(joined).toContain("Verified Bank");
+    expect(joined).toContain("Community");
+    // Weak-spot practice.
+    expect(joined).toContain("weak-spot");
   });
 });
 
@@ -154,5 +191,22 @@ describe("COURSE_ONBOARDING_TOUR_STEPS (Case A · course mastery)", () => {
     // The standalone "Probability & Statistics" track is not in the Case-A menu.
     expect(joinedCopy).not.toContain("Probability & Statistics");
     expect(joinedCopy).not.toContain("Fermi Drill");
+  });
+
+  it("still surfaces the Wave-1 extras — but framed as OPTIONAL beyond-the-course items", () => {
+    // The competitive/assessment surfaces are taught, just de-emphasized. The
+    // leaderboard is covered in-body (it has no nav anchor of its own).
+    expect(joinedCopy).toContain("Leaderboard");
+    expect(joinedCopy).toContain("Trading Floor");
+    expect(joinedCopy).toContain("Speed Arena");
+    expect(joinedCopy).toContain("Timed Sections");
+    expect(joinedCopy).toContain("Mock Interview");
+    expect(joinedCopy).toContain("Verified Bank");
+    expect(joinedCopy).toContain("Community");
+    expect(joinedCopy).toContain("Arbitrage & De-vig");
+    expect(joinedCopy).toContain("EV Under Time");
+    expect(joinedCopy).toContain("weak-spot");
+    // Every one of those extras is repeatedly framed as optional.
+    expect(joinedCopy).toMatch(/optional|not required|not needed|isn't required/i);
   });
 });

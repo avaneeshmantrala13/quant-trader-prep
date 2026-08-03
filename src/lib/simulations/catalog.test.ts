@@ -43,10 +43,11 @@ describe("simulations catalog", () => {
     expect(simAnchorHref("coin-flips")).toBe("/simulations#coin-flips");
   });
 
-  it("exposes the live Trading Desk group and its three simulators", () => {
+  it("exposes the live Trading Desk group and its simulators", () => {
     expect(SIM_GROUPS.some((g) => g.id === "trading-desk")).toBe(true);
     const deskIds = simsInGroup("trading-desk").map((s) => s.id);
     expect(deskIds).toEqual([
+      "trading-floor-live",
       "basketball-book",
       "marble-winner-markets",
       "etf-creation-redemption",

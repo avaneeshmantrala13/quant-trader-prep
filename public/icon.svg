@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Quant Trader Prep">
+  <rect width="512" height="512" rx="96" fill="#0d1117"/>
+  <path d="M96 336 L200 232 L280 312 L416 176" fill="none" stroke="#39d353" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="416" cy="176" r="20" fill="#39d353"/>
+  <text x="256" y="452" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="120" font-weight="700" fill="#e6edf3">Q</text>
+</svg>

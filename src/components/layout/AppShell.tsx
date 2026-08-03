@@ -12,12 +12,45 @@ import { onboardingStepsForMode } from "@/lib/onboarding/steps";
 import { shouldShowOnboardingTour } from "@/lib/onboarding/tour";
 import {
   CandlestickIcon,
+  ChevronDownIcon,
   CloseIcon,
   LogoutIcon,
   MenuIcon,
   MoonIcon,
   SunIcon,
 } from "@/components/icons";
+
+/**
+ * localStorage-persisted map of nav SUBSECTION id → user's explicit
+ * expanded(true)/collapsed(false) preference. Only groups the user has actually
+ * toggled appear here; everything else falls back to the group's `defaultOpen`.
+ * SSR/privacy-mode safe (guards `localStorage`), and tolerant of malformed JSON.
+ */
+const NAV_OPEN_KEY = "qtp.nav.open";
+
+function readNavOpen(): Record<string, boolean> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(NAV_OPEN_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed && typeof parsed === "object") {
+      return parsed as Record<string, boolean>;
+    }
+  } catch {
+    /* ignore malformed / unavailable storage */
+  }
+  return {};
+}
+
+function writeNavOpen(map: Record<string, boolean>): void {
+  if (typeof localStorage === "undefined") return;
+  try {
+    localStorage.setItem(NAV_OPEN_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore quota / unavailable storage */
+  }
+}
 
 function today(): string {
   return new Date()
@@ -127,13 +160,28 @@ export function AppShell() {
     setMenuOpen(false);
   }, [location.pathname]);
 
-  // Mode-aware navigation (WS2). `navFor(mode)` returns grouped nav items: Case B
-  // is EXACTLY today's flat list (a single un-headed group); Case A restructures
-  // into the two course tracks + a small Foundations group + a de-emphasized
-  // "Beyond the course" group. Each item keeps its `data-tour` hook so the
-  // onboarding coach-marks still anchor correctly.
+  // Mode-aware navigation (WS2). `navFor(mode)` returns the nav organised into
+  // collapsible SUBSECTIONS (Overview / Learn / Practice / Games / Interview
+  // Prep / Community / …). Case A keeps the course-relevant groups prominent and
+  // the quant-heavy groups de-emphasized under a "beyond the course" framing.
+  // Each item keeps its `data-tour` hook so the onboarding coach-marks still
+  // anchor correctly (a collapsed group is force-expanded while the tour points
+  // into it — see `tourWantsMenu` below).
   const mode = resolveGoalMode(progress);
   const navGroups = navFor(mode);
+
+  // Per-subsection expand/collapse. `navOpen` holds only the user's EXPLICIT
+  // toggles (persisted); anything absent falls back to the group's `defaultOpen`
+  // (and, until the user has an opinion, to auto-expanding whichever group holds
+  // the active route). Writing an explicit value always wins from then on.
+  const [navOpen, setNavOpen] = useState<Record<string, boolean>>(readNavOpen);
+  const setGroupOpen = useCallback((id: string, open: boolean) => {
+    setNavOpen((prev) => {
+      const next = { ...prev, [id]: open };
+      writeNavOpen(next);
+      return next;
+    });
+  }, []);
 
   return (
     <div className="relative min-h-[100dvh]">
@@ -227,39 +275,84 @@ export function AppShell() {
                   aria-label="Main navigation"
                   className="absolute left-0 top-full z-40 mt-2 max-h-[70vh] w-64 overflow-y-auto rounded-md border border-border-strong bg-surface p-1 shadow-2xl motion-safe:animate-print-in"
                 >
-                  {navGroups.map((group, gi) => (
-                    <div
-                      key={group.heading ?? `group-${gi}`}
-                      className={gi > 0 ? "mt-1 border-t border-subtle pt-1" : ""}
-                    >
-                      {group.heading && (
-                        <div className="label px-3 pb-1 pt-2 text-[9px] text-muted">
-                          {group.heading}
-                        </div>
-                      )}
-                      {group.items.map((item) => (
-                        <NavLink
-                          key={item.to}
-                          to={item.to}
-                          end={item.end}
-                          role="menuitem"
-                          data-tour={item.tour}
-                          onClick={closeMenu}
-                          className={({ isActive }) =>
-                            `block rounded-sm px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
-                              isActive
-                                ? "bg-accent text-accent-contrast"
-                                : item.emphasis === "beyond"
-                                  ? "text-muted hover:bg-surface-muted hover:text-primary"
-                                  : "text-secondary hover:bg-surface-muted hover:text-primary"
-                            }`
-                          }
+                  {navGroups.map((group, gi) => {
+                    // A group is active when the current route lives inside it.
+                    const groupHasActiveRoute = group.items.some((item) => {
+                      const base = item.to.split("?")[0];
+                      return item.end
+                        ? location.pathname === base
+                        : location.pathname === base ||
+                            location.pathname.startsWith(`${base}/`);
+                    });
+                    // Display state (what the chevron/toggle reflect): explicit
+                    // user pref wins; otherwise auto-open the active group, else
+                    // fall back to the group's default.
+                    const explicit = navOpen[group.id];
+                    const displayOpen =
+                      explicit !== undefined
+                        ? explicit
+                        : groupHasActiveRoute || group.defaultOpen;
+                    // While the tour points into this group, force it open so the
+                    // coach-mark can anchor to the item's `data-tour` element.
+                    const tourInGroup =
+                      tourTarget != null &&
+                      group.items.some((item) => item.tour === tourTarget);
+                    const open = displayOpen || tourInGroup;
+                    const panelId = `nav-group-${group.id}`;
+                    return (
+                      <div
+                        key={group.id}
+                        className={gi > 0 ? "mt-1 border-t border-subtle pt-1" : ""}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => setGroupOpen(group.id, !displayOpen)}
+                          aria-expanded={open}
+                          aria-controls={panelId}
+                          className={`label flex w-full items-center justify-between gap-2 rounded-sm px-3 pb-1 pt-2 text-left text-[9px] transition-colors hover:text-primary ${
+                            group.emphasis === "beyond"
+                              ? "text-muted/80"
+                              : "text-muted"
+                          }`}
                         >
-                          {item.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  ))}
+                          <span className="truncate">{group.heading}</span>
+                          <ChevronDownIcon
+                            aria-hidden="true"
+                            width={12}
+                            height={12}
+                            className={`shrink-0 transition-transform ${
+                              open ? "" : "-rotate-90"
+                            }`}
+                          />
+                        </button>
+                        {open && (
+                          <div id={panelId} role="group" aria-label={group.heading}>
+                            {group.items.map((item) => (
+                              <NavLink
+                                key={item.to}
+                                to={item.to}
+                                end={item.end}
+                                role="menuitem"
+                                data-tour={item.tour}
+                                onClick={closeMenu}
+                                className={({ isActive }) =>
+                                  `block rounded-sm px-3 py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
+                                    isActive
+                                      ? "bg-accent text-accent-contrast"
+                                      : item.emphasis === "beyond"
+                                        ? "text-muted hover:bg-surface-muted hover:text-primary"
+                                        : "text-secondary hover:bg-surface-muted hover:text-primary"
+                                  }`
+                                }
+                              >
+                                {item.label}
+                              </NavLink>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

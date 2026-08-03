@@ -1,0 +1,19 @@
+{
+  "name": "Quant Trader Prep",
+  "short_name": "QuantPrep",
+  "description": "Deliberate practice for quant-trading interviews: drills, timed sections, and mock interviews.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

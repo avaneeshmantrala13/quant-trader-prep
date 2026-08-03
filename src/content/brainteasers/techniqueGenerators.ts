@@ -69,6 +69,9 @@ export function genPigeonhole(rng: Rng): Flashcard {
       difficulty: "medium",
       concept: "Pigeonhole principle (≥ m per box threshold)",
       source: "Brainteasers · Pigeonhole · parametric",
+      gradable: true,
+      numericAnswer: k,
+      tolerance: 0,
     };
   }
 
@@ -92,6 +95,9 @@ export function genPigeonhole(rng: Rng): Flashcard {
       difficulty: "medium",
       concept: "Pigeonhole principle (complementary-pair threshold)",
       source: "Brainteasers · Pigeonhole · parametric",
+      gradable: true,
+      numericAnswer: k,
+      tolerance: 0,
     };
   }
 
@@ -116,6 +122,9 @@ export function genPigeonhole(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Pigeonhole principle (avoid-then-+1 threshold)",
     source: "Brainteasers · Pigeonhole · parametric",
+    gradable: true,
+    numericAnswer: k,
+    tolerance: 0,
   };
 }
 
@@ -143,6 +152,9 @@ export function genHouseOfCards(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Triangular summation Σi = n(n+1)/2",
     source: "Brainteasers · Summation · parametric",
+    gradable: true,
+    numericAnswer: cards,
+    tolerance: 0,
   };
 }
 
@@ -172,6 +184,9 @@ export function genTwoBalls(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Minimax via triangular numbers N(N+1)/2 ≥ floors",
     source: "Brainteasers · Summation · parametric",
+    gradable: true,
+    numericAnswer: n,
+    tolerance: 0,
   };
 }
 
@@ -204,6 +219,9 @@ export function genTrailingZeros(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Trailing zeros of n! = Σ⌊n/5^i⌋",
     source: "Brainteasers · Number theory · parametric",
+    gradable: true,
+    numericAnswer: zeros,
+    tolerance: 0,
   };
 }
 
@@ -241,6 +259,9 @@ export function genDigitProduct(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Smallest number with a given digit product (greedy 9→2)",
     source: "Brainteasers · Number theory · parametric",
+    gradable: true,
+    numericAnswer: Number(num),
+    tolerance: 0,
   };
 }
 
@@ -272,6 +293,11 @@ export function genBinaryWeights(rng: Rng): Flashcard {
     difficulty: "medium",
     concept: "Binary weights: min = ⌊log₂N⌋ + 1",
     source: "Brainteasers · Number theory · parametric",
+    // The minimum COUNT of weights is objectively gradable (the specific weight
+    // set is shown in the reveal but is not what the learner types).
+    gradable: true,
+    numericAnswer: b,
+    tolerance: 0,
   };
 }
 
@@ -311,6 +337,8 @@ export function genModularHats(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Modular checksum broadcast (n−1 saved, back 1/k)",
     source: "Brainteasers · Modular · parametric",
+    // Answer is a protocol + two numbers (guaranteed survivors and a probability).
+    gradable: false,
   };
 }
 
@@ -351,6 +379,8 @@ export function genSubtractionGame(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Subtraction game / mod-(s+1) invariant",
     source: "Brainteasers · Games · parametric",
+    // Answer is a yes/no + a strategy, not a single number.
+    gradable: false,
   };
 }
 

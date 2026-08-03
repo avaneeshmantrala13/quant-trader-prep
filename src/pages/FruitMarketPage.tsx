@@ -19,6 +19,8 @@ import {
   type FruitEvent,
   type MarketConfig,
 } from "@/lib/games/fruitMarket/engine";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
 
 /**
  * FRUIT MARKET (`/fruit-market`) — the speed mental-math game (QuantGames #5).
@@ -133,6 +135,18 @@ export function FruitMarketPage() {
     if (next >= numMarkets) {
       setPhase("summary");
       const raw = played.reduce((a, p) => a + p.captured, 0);
+      // Final score = raw profit × first-click accuracy (see SummaryView). Record
+      // it on the unified competitive leaderboard (local-first + optional server).
+      const acc = firstClickAccuracy(
+        played.map((p) => ({ firstActionCorrect: p.action === p.correct })),
+      );
+      const score = finalScore(raw, acc);
+      submitLocalScore(browserBoardStore(), "fruit-market", {
+        score,
+        atMs: Date.now(),
+        meta: { accuracyPct: Math.round(acc * 100) },
+      });
+      void submitGameScore("fruit-market", score);
       if (raw > 0) setTimeout(themeDef.celebration ?? celebrate, 260);
     } else {
       dealNext(next);

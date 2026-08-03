@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
@@ -6,6 +6,14 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon, CardsIcon, BrainIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import { PlayingCard, CountUp, RoundPips, ProbBar } from "@/components/games/GameBits";
 import {
   freshDeck,
@@ -46,6 +54,8 @@ import {
 type Phase = "setup" | "bet" | "reveal" | "summary";
 
 const NUM_CYCLES = 3;
+
+const GAME_ID = "next-card-betting";
 
 const BET_LABEL: Record<BetType, string> = {
   "higher-lower": "Higher / Lower",
@@ -93,6 +103,29 @@ interface CycleLog {
   drawn: Card;
   results: BetResult[];
   net: number;
+}
+
+/**
+ * Durable snapshot of an in-progress game. `visibleSuits` is a `Set` (not
+ * JSON-serializable), so the active cycle stores it as an array here and it's
+ * rehydrated back into a `Set` on resume. The accumulated scoring refs
+ * (`placed`/`decisions`) and the visible-card table are persisted too, so the
+ * final skill/leaderboard score after a resume counts the WHOLE game.
+ */
+interface ActiveCycleSnapshot extends Omit<ActiveCycle, "visibleSuits"> {
+  visibleSuits: Suit[];
+}
+interface NextCardSession {
+  config: GameConfig;
+  balance: number;
+  phase: Phase;
+  active: ActiveCycleSnapshot | null;
+  selections: Record<string, Selection>;
+  log: CycleLog[];
+  lastCycle: CycleLog | null;
+  visible: Card[];
+  placed: PlacedBet[];
+  decisions: RoundDecision[];
 }
 
 export function NextCardBettingPage() {
@@ -177,6 +210,58 @@ export function NextCardBettingPage() {
     dealCycleAt(0, START_CHIPS);
   };
 
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<NextCardSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    const savedActive = s.active;
+    if (!savedActive) return;
+    // Rebuild the (non-serializable) deck + Rng. The remaining deck is a fresh
+    // deck minus the already-visible cards, so a resumed draw stays sane.
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    const seen = new Set(s.visible.map((c) => `${c.rank}${c.suit}`));
+    deckRef.current = freshDeck(s.config).filter(
+      (c) => !seen.has(`${c.rank}${c.suit}`),
+    );
+    visibleRef.current = s.visible;
+    placedRef.current = s.placed;
+    decisionsRef.current = s.decisions;
+    setConfig(s.config);
+    setBalance(s.balance);
+    setActive({ ...savedActive, visibleSuits: new Set<Suit>(savedActive.visibleSuits) });
+    setSelections(s.selections);
+    setLog(s.log);
+    setLastCycle(s.lastCycle);
+    setPhase(s.phase);
+  }, []);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase === "setup" || phase === "summary") return;
+    saveGameSession<NextCardSession>(
+      browserSessionStore(),
+      GAME_ID,
+      {
+        config,
+        balance,
+        phase,
+        active: active
+          ? { ...active, visibleSuits: [...active.visibleSuits] }
+          : null,
+        selections,
+        log,
+        lastCycle,
+        visible: visibleRef.current,
+        placed: placedRef.current,
+        decisions: decisionsRef.current,
+      },
+      Date.now(),
+    );
+  }, [phase, balance, active, selections, log, lastCycle, config]);
+
   const resolveCycle = () => {
     if (!active) return;
     // Draw the resolving card from the remaining deck.
@@ -249,6 +334,17 @@ export function NextCardBettingPage() {
     const next = (active?.index ?? 0) + 1;
     if (next >= NUM_CYCLES) {
       setPhase("summary");
+      // Score = bankroll × Kelly-sizing skill (matches SummaryView). Record on
+      // the unified leaderboard + optional server board, and clear the session.
+      const skill = skillScore(placedRef.current, decisionsRef.current);
+      const board = leaderboardScore(balance, skill);
+      submitLocalScore(browserBoardStore(), GAME_ID, {
+        score: board,
+        atMs: Date.now(),
+        meta: { skill: Math.round(skill * 10) / 10, bankroll: balance },
+      });
+      void submitGameScore(GAME_ID, board);
+      clearGameSession(browserSessionStore(), GAME_ID);
       if (balance >= START_CHIPS) setTimeout(themeDef.celebration ?? celebrate, 260);
     } else {
       dealCycleAt(next, balance);
@@ -318,7 +414,10 @@ export function NextCardBettingPage() {
             decisions={decisionsRef.current}
             log={log}
             aceMode={config.aceMode}
-            onReplay={() => setPhase("setup")}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
           />
         )}
       </main>

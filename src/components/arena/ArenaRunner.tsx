@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ArenaOp, ArenaPreset } from "@/lib/arena/config";
 import { OPTIVER_COMPETITIVE, OPTIVER_PASS } from "@/lib/arena/config";
+import type { OperandShape } from "@/lib/arena/weakSpot";
 import { scoreRun, type AnsweredItem } from "@/lib/arena/scoring";
 import { PACE_BAND_TOKEN, perQuestionBudgetMs } from "@/lib/arena/budget";
 import { questionPace } from "@/lib/arena/pacing";
@@ -14,6 +15,12 @@ export interface PlayItem {
   op: ArenaOp;
   /** When present, grade by rounded compare to this many places. */
   decimals?: number;
+  /**
+   * Weak-Spot Trainer only: the operand-shape bucket this item was drawn for, so
+   * the page can record the (op × shape) attempt after grading. Absent for every
+   * other mode, so their play shape is unchanged.
+   */
+  shape?: OperandShape;
 }
 
 const TICK_MS = 100;

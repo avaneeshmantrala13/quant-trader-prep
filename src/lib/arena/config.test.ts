@@ -6,6 +6,7 @@ import {
   OPTIVER_PASS,
   RUSH_FLOOR_MS,
   RUSH_RATIO,
+  WEAKSPOT_DEFAULT,
   ZETAMAC_DEFAULT,
   ZETAMAC_DURATIONS,
   configHash,
@@ -37,6 +38,18 @@ describe("preset + constant conformance to spec §5", () => {
     expect(RUSH_FLOOR_MS).toBe(800);
     expect(RUSH_RATIO).toBe(0.5);
     expect(CARELESS_RATIO).toBe(0.4);
+  });
+
+  it("Weak-Spot Trainer: Zetamac-identical scoring, own mode bucket", () => {
+    // Practice aid — only the question MIX differs, never scoring.
+    expect(WEAKSPOT_DEFAULT.mode).toBe("weakspot");
+    expect(WEAKSPOT_DEFAULT.penalty).toBe(false);
+    expect(WEAKSPOT_DEFAULT.skipsFree).toBe(true);
+    expect(WEAKSPOT_DEFAULT.packs).toEqual(["int"]);
+    expect(WEAKSPOT_DEFAULT.questionCap).toBeUndefined();
+    // Distinct leaderboard bucket from Zetamac despite matching scoring rules.
+    expect(configHash(WEAKSPOT_DEFAULT)).not.toBe(configHash(ZETAMAC_DEFAULT));
+    expect(presetForMode("weakspot")).toEqual(WEAKSPOT_DEFAULT);
   });
 
   it("presetForMode returns independent copies", () => {

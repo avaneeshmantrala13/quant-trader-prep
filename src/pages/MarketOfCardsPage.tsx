@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
@@ -6,6 +6,14 @@ import { StampSeal } from "@/components/visuals/StampSeal";
 import { ChevronLeftIcon, CardsIcon, BoltIcon, GaugeIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
+import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
+import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import { netPosition, type Fill, type Side } from "@/lib/games/makeMarket/engine";
 import {
   dealGame,
@@ -45,6 +53,22 @@ type SubPhase = "quote" | "flow";
 const SUIT_TONE = (suit: string) =>
   suit === "♥" || suit === "♦" ? "text-bear" : "text-primary";
 
+const GAME_ID = "market-of-cards";
+
+type Activity = { round: number; text: string; tone: Side | "info" };
+
+/** Durable, reload-proof snapshot of an in-progress game (JSON-serializable). */
+interface MarketOfCardsSession {
+  numBots: number;
+  numRounds: number;
+  aceHigh: boolean;
+  phase: Phase;
+  subPhase: SubPhase;
+  game: GameState | null;
+  activity: Activity[];
+  botMarkets: { bot: Bot; quote: Quote }[];
+}
+
 export function MarketOfCardsPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
@@ -67,6 +91,35 @@ export function MarketOfCardsPage() {
     () => ({ numBots, numRounds, aceMode: aceHigh ? "high" : "low" }),
     [numBots, numRounds, aceHigh],
   );
+
+  /* ---- durable save/resume (mirrors the OA session pattern) ------------ */
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<MarketOfCardsSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active" || !env.snapshot.game) return;
+    const s = env.snapshot;
+    rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
+    setNumBots(s.numBots);
+    setNumRounds(s.numRounds);
+    setAceHigh(s.aceHigh);
+    setGame(s.game);
+    setActivity(s.activity);
+    setBotMarkets(s.botMarkets);
+    setSubPhase(s.subPhase);
+    setPhase(s.phase);
+  }, []);
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (phase !== "round") return; // only an in-progress round is resumable
+    saveGameSession<MarketOfCardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      { numBots, numRounds, aceHigh, phase, subPhase, game, activity, botMarkets },
+      Date.now(),
+    );
+  }, [phase, subPhase, game, activity, botMarkets, numBots, numRounds, aceHigh]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -123,6 +176,11 @@ export function MarketOfCardsPage() {
       const s = settle(game);
       setSettlement(s);
       setPhase("settle");
+      // Score = net position marked to the true total (P&L). Record on the
+      // unified leaderboard + optional server board, and clear the session.
+      submitLocalScore(browserBoardStore(), GAME_ID, { score: s.markPnl, atMs: Date.now() });
+      void submitGameScore(GAME_ID, s.markPnl);
+      clearGameSession(browserSessionStore(), GAME_ID);
       if (s.markPnl >= 0) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -204,7 +262,10 @@ export function MarketOfCardsPage() {
           <SettleScreen
             game={game}
             settlement={settlement}
-            onReplay={() => setPhase("setup")}
+            onReplay={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setPhase("setup");
+            }}
           />
         )}
       </main>

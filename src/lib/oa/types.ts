@@ -15,6 +15,7 @@
  * model below rather than a tick counter.
  */
 import type { Difficulty } from "@/types/content";
+import type { RotationState } from "@/lib/content/rotation";
 
 /**
  * The three timed practice formats:
@@ -192,4 +193,13 @@ export interface OaTimedStore {
   active?: OaSessionState;
   /** Completed results, oldest → newest (capped). */
   results: OaSessionResult[];
+  /**
+   * ADDITIVE & OPTIONAL anti-repeat rotation state: a bounded ring of the most
+   * recently SERVED question signatures (see `@/lib/content/rotation`). Persists
+   * across sessions so future draws can be biased AWAY from recent repeats.
+   * Absent on old saves (they load unchanged); the store helpers initialize it
+   * on first use. Owned/managed only via `lib/oa/store.ts`; the question pool
+   * (T11) reads/updates it exclusively through those helpers.
+   */
+  rotation?: RotationState;
 }

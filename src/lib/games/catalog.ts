@@ -178,6 +178,38 @@ export const GAMES: GameMeta[] = [
       "See a defensible decomposition every round",
     ],
   },
+  {
+    id: "arbitrage",
+    to: "/arbitrage",
+    title: "Arbitrage & De-vig",
+    tagline: "Strip the vig, spot the Dutch book, and call the no-arbitrage direction.",
+    skill: "No-arbitrage · de-vig",
+    role: "Bettor",
+    difficulty: "Core",
+    icon: "gauge",
+    gameNo: 7,
+    highlights: [
+      "Remove the overround to recover fair probabilities",
+      "Flag when a book of odds is a guaranteed arb",
+      "Pick the value leg and the basket-vs-parts trade",
+    ],
+  },
+  {
+    id: "ev-timed",
+    to: "/ev-timed",
+    title: "EV Under Time",
+    tagline: "Make the +EV call before a per-question clock runs out.",
+    skill: "EV · fair value",
+    role: "Bettor",
+    difficulty: "Core",
+    icon: "bolt",
+    gameNo: 8,
+    highlights: [
+      "Decide fair value / optimal-stopping under a countdown",
+      "Speed adds points — but only when you're right",
+      "Every item is exact-verified from the EV generators",
+    ],
+  },
 ];
 
 export const GAME_BY_ID: Record<string, GameMeta> = Object.fromEntries(
