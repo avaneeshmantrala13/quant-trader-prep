@@ -58,7 +58,7 @@ Parameters:
 
   CorsOrigins:
     Type: CommaDelimitedList
-    Default: "http://localhost:5173,http://localhost:4173"
+    Default: "http://localhost:5173,http://localhost:4173,https://prod.dmvk4805myovs.amplifyapp.com"
     Description: Allowed CORS origins for the leaderboard endpoint (add your prod URL).
 
   PermissionsBoundaryArn:

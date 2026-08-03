@@ -42,7 +42,7 @@ LEAGUE_COUNT="${LEAGUE_COUNT:-20}"
 RANKED_PER_HOUR="${RANKED_PER_HOUR:-60}"
 READ_CAPACITY="${READ_CAPACITY:-25}"
 WRITE_CAPACITY="${WRITE_CAPACITY:-25}"
-CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}"
+CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173,https://prod.dmvk4805myovs.amplifyapp.com}"
 ENV_OUT="${ENV_OUT:-$REPO_ROOT/.env.local}"
 
 # ---- IAM permissions boundary (for restricted / sandbox accounts). ----------

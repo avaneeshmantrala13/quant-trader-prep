@@ -17,14 +17,14 @@ Parameters:
 
   CallbackUrls:
     Type: CommaDelimitedList
-    Default: "http://localhost:5173/,http://localhost:4173/"
+    Default: "http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/"
     Description: >
       OAuth callback URLs for the app client (Google Hosted-UI redirect).
       Add your Vercel/prod URL here too, e.g. https://yourapp.vercel.app/.
 
   LogoutUrls:
     Type: CommaDelimitedList
-    Default: "http://localhost:5173/,http://localhost:4173/"
+    Default: "http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/"
     Description: OAuth sign-out URLs for the app client.
 
   GoogleClientId:

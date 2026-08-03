@@ -87,8 +87,8 @@ aws cloudformation deploy \
   --capabilities CAPABILITY_NAMED_IAM \
   --parameter-overrides \
     ProjectName=quant-trader-prep \
-    CallbackUrls="http://localhost:5173/,http://localhost:4173/" \
-    LogoutUrls="http://localhost:5173/,http://localhost:4173/"
+    CallbackUrls="http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/" \
+    LogoutUrls="http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/"
     # In a restricted/sandbox account, also add (see "Restricted / sandbox accounts"):
     #   PermissionsBoundaryArn="arn:aws:iam::<acct>:policy/InternSandboxBoundary"
 ```

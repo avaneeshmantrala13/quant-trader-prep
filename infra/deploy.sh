@@ -15,7 +15,7 @@
 #   AWS_REGION      (default: your CLI default, else us-east-1)
 #   STACK_NAME      (default: quant-trader-prep)
 #   PROJECT_NAME    (default: quant-trader-prep)
-#   CALLBACK_URLS   (comma list; default: http://localhost:5173/,http://localhost:4173/)
+#   CALLBACK_URLS   (comma list; default: http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/)
 #   LOGOUT_URLS     (comma list; default: same as CALLBACK_URLS)
 #   ENV_OUT         (default: .env.local at repo root)
 #
@@ -38,7 +38,7 @@ TEMPLATE="$HERE/cloudformation/quant-trader-prep.yaml"
 STACK_NAME="${STACK_NAME:-quant-trader-prep}"
 PROJECT_NAME="${PROJECT_NAME:-quant-trader-prep}"
 AWS_REGION="${AWS_REGION:-$(aws configure get region 2>/dev/null || echo us-east-1)}"
-CALLBACK_URLS="${CALLBACK_URLS:-http://localhost:5173/,http://localhost:4173/}"
+CALLBACK_URLS="${CALLBACK_URLS:-http://localhost:5173/,http://localhost:4173/,https://prod.dmvk4805myovs.amplifyapp.com,https://prod.dmvk4805myovs.amplifyapp.com/}"
 LOGOUT_URLS="${LOGOUT_URLS:-$CALLBACK_URLS}"
 GOOGLE_CLIENT_ID="${GOOGLE_CLIENT_ID:-}"
 GOOGLE_CLIENT_SECRET="${GOOGLE_CLIENT_SECRET:-}"

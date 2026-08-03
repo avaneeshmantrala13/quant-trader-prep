@@ -55,7 +55,7 @@ AI_BASE_URL="${AI_BASE_URL:-https://api.openai.com/v1}"
 AI_MODEL="${AI_MODEL:-gpt-4o-mini}"
 AI_SSM_PARAM="${AI_SSM_PARAM:-/quant-trader-prep/ai/api-key}"
 DAILY_QUOTA="${DAILY_QUOTA:-50}"
-CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173}"
+CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:5173,http://localhost:4173,https://prod.dmvk4805myovs.amplifyapp.com}"
 ENV_OUT="${ENV_OUT:-$REPO_ROOT/.env.local}"
 
 # ---- IAM permissions boundary (for restricted / sandbox accounts). ----------
