@@ -5,6 +5,7 @@ import type { AuthResult } from "@/lib/storage";
 import { isAwsBackend, type EnvLike } from "@/lib/awsConfig";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { MoonIcon, SunIcon } from "@/components/icons";
 
 /**
@@ -136,17 +137,20 @@ export function LoginPage() {
     <div className="relative min-h-[100dvh]">
       <ThemeBackground />
 
-      <button
-        onClick={toggleTheme}
-        className="btn-ghost absolute right-3 top-3 z-20 !min-h-0 !px-2 !py-1.5"
-        aria-label="Toggle theme"
-      >
-        {theme === "dark" ? (
-          <SunIcon width={16} height={16} />
-        ) : (
-          <MoonIcon width={16} height={16} />
-        )}
-      </button>
+      <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
+        <ThemeSwitcher />
+        <button
+          onClick={toggleTheme}
+          className="btn-ghost !min-h-0 !px-2 !py-1.5"
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? (
+            <SunIcon width={16} height={16} />
+          ) : (
+            <MoonIcon width={16} height={16} />
+          )}
+        </button>
+      </div>
 
       <div className="relative z-10 mx-auto max-w-5xl px-4 py-8">
         {/* Nameplate */}

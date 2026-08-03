@@ -223,6 +223,56 @@ export function currentReveal<Truth>(
   return state.revealed[state.revealed.length - 1];
 }
 
+/* ========================================================================== */
+/*  Durable save/resume — replay a recorded run (the state is not JSON-safe)   */
+/* ========================================================================== */
+
+/**
+ * A recorded per-round INPUT: either a real human quote (`standAside=false`) or
+ * a shot-clock timeout (`standAside=true`, a size-0 stand aside that earns no
+ * calibration credit). Because `FloorState` holds live functions + an `Rng`, we
+ * never serialize it directly — a page persists just `(seed, packId, configId)`
+ * plus this ordered list of moves, and `resumeFloor` replays them to rebuild the
+ * EXACT state (cash, inventory, calibration, rng position and all).
+ */
+export interface FloorMove {
+  quote: UserQuote;
+  standAside: boolean;
+}
+
+/**
+ * Replay one recorded move onto a state, first advancing a trailing reveal into
+ * the next quoting round. Pure; used only to rebuild a saved session.
+ */
+export function replayMove<Truth>(
+  state: FloorState<Truth>,
+  move: FloorMove,
+): FloorState<Truth> {
+  const s = state.phase === "revealed" ? advanceReveal(state) : state;
+  return resolveRound(s, move.quote, move.standAside);
+}
+
+/**
+ * Rebuild a `FloorState` from its deterministic inputs by replaying recorded
+ * moves from a fresh start. Identical `(scenario, config, seed, moves)` ⇒ an
+ * identical state (the engine is deterministic and each resolved round consumes
+ * the rng once, regardless of stand-aside). `resumeQuoting` advances a trailing
+ * revealed round into a fresh quoting round (new shot clock) — pass it true when
+ * the user navigated away mid-quote so they land back on the quote pad.
+ */
+export function resumeFloor<Truth>(
+  scenario: Scenario<Truth>,
+  config: FloorConfig,
+  seed: number,
+  moves: FloorMove[],
+  resumeQuoting: boolean,
+): FloorState<Truth> {
+  let s = startFloor(scenario, config, seed);
+  for (const m of moves) s = replayMove(s, m);
+  if (resumeQuoting && s.phase === "revealed") s = advanceReveal(s);
+  return s;
+}
+
 /**
  * Settle the book and compute the final metrics + honest-desk comparison on the
  * identical recorded stream. Idempotent given a finished (or fully-resolved)

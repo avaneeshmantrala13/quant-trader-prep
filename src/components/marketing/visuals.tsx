@@ -87,40 +87,44 @@ export function RoadmapVisual() {
   );
 }
 
-/* ---------- 2. Socratic tutor: hint ladder ---------- */
-export function TutorVisual() {
+/* ---------- 2. The hint ladder: 5 answer-withholding rungs ---------- */
+export function HintLadderVisual() {
+  // Mirrors the REAL 5-rung ladder in `src/lib/tutor/hintLadder.ts`: coaching
+  // escalates while the final answer stays withheld until the last rung.
   const rungs = [
-    { who: "You", t: "I'm stuck on P(at least one six in 4 rolls)." },
-    { who: "Tutor", t: "What's the opposite of “at least one”?" },
-    { who: "You", t: "…none at all?" },
-    { who: "Tutor", t: "Right. So compute P(none) first — then?" },
-  ];
+    { n: 1, label: "Name the trap", t: "You subtracted where the events overlap — that's the miss." },
+    { n: 2, label: "Make a plan of attack", t: "First find P(none). What does “at least one” become then?" },
+    { n: 3, label: "Study a worked sibling", t: "Same problem, fresh numbers — worked one step at a time." },
+    { n: 4, label: "Confront it", t: "Open the dice simulation and watch the frequency settle.", sim: true },
+  ] as const;
   return (
     <div className="panel overflow-hidden">
-      <PanelHead tag="Socratic Tutor" right="Hints · Never the answer" />
+      <PanelHead tag="The Hint Ladder" right="Coaching · Not the answer yet" />
       <div className="space-y-2 p-3">
-        {rungs.map((r, i) => {
-          const tutor = r.who === "Tutor";
-          return (
-            <div key={i} className={`flex ${tutor ? "justify-start" : "justify-end"}`}>
-              <div
-                className={`max-w-[85%] border px-3 py-1.5 ${
-                  tutor
-                    ? "border-accent bg-surface-muted"
-                    : "border-subtle bg-surface"
-                }`}
-              >
-                <div className={`label text-[8px] ${tutor ? "text-accent" : ""}`}>{r.who}</div>
-                <div className="mt-0.5 text-[13px] leading-snug text-primary">{r.t}</div>
+        {rungs.map((r) => (
+          <div key={r.n} className="border-l-2 border-accent bg-surface-muted/60 py-1.5 pl-3 pr-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="label text-[8px] text-secondary">
+                Rung {r.n} · {r.label}
               </div>
+              {"sim" in r && r.sim && (
+                <span className="label text-[8px] text-accent">Open sim →</span>
+              )}
             </div>
-          );
-        })}
-        <div className="flex justify-start">
-          <div className="border border-dashed border-subtle bg-surface px-3 py-1.5">
-            <div className="label text-[8px]">Answer</div>
-            <div className="mt-0.5 font-mono text-[13px] tracking-widest text-muted">
-              ██████ withheld
+            <div className="mt-0.5 text-[12px] leading-snug text-primary">{r.t}</div>
+          </div>
+        ))}
+        <div className="flex items-center gap-2 border border-dashed border-subtle bg-surface px-3 py-1.5">
+          <span className="grid h-5 w-5 shrink-0 place-items-center border border-subtle text-muted">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="5" y="11" width="14" height="9" rx="2" />
+              <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+            </svg>
+          </span>
+          <div>
+            <div className="label text-[8px]">Rung 5 · Full solution</div>
+            <div className="mt-0.5 font-mono text-[12px] tracking-widest text-muted">
+              revealed only after you've tried
             </div>
           </div>
         </div>

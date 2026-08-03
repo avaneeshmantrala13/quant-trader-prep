@@ -166,6 +166,17 @@ export function ChartIcon(props: IconProps) {
   );
 }
 
+export function PaletteIcon(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M12 3a9 9 0 1 0 0 18 2 2 0 0 0 2-2 2 2 0 0 1 2-2h1.5a3.5 3.5 0 0 0 3.5-3.5C21 6.6 17 3 12 3Z" />
+      <circle cx="7.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="7.5" r="1" fill="currentColor" stroke="none" />
+      <circle cx="16.5" cy="10.5" r="1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export const MOTIF_ICON: Record<
   MotifKey,
   (props: IconProps) => JSX.Element

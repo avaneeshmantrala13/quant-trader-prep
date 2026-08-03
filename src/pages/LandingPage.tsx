@@ -6,13 +6,14 @@ import { useTheme } from "@/context/ThemeContext";
 import { PLAYABLE_TRACKS } from "@/content";
 import type { Track } from "@/types/content";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
+import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { CandlestickIcon, LogoutIcon, MoonIcon, SunIcon } from "@/components/icons";
 import {
   CurriculumVisual,
   FreshVisual,
+  HintLadderVisual,
   MentalMathVisual,
   RoadmapVisual,
-  TutorVisual,
 } from "@/components/marketing/visuals";
 
 function today(): string {
@@ -60,6 +61,7 @@ function LandingHeader() {
         </Link>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          <ThemeSwitcher />
           <button
             onClick={toggleTheme}
             className="btn-ghost !min-h-0 !px-2 !py-2"
@@ -374,7 +376,7 @@ function ClosingCTA() {
 function Footer() {
   const cols = [
     ["Sections", ["Probability & Statistics", "Mental Math", "Brainteasers", "Interview Games"]],
-    ["The Product", ["The Roadmap", "Socratic Tutor", "Fresh Questions"]],
+    ["The Product", ["The Roadmap", "The Hint Ladder", "Fresh Questions"]],
     ["The Funnel", ["Online Assessment", "Technical Interview", "Superday Games"]],
   ] as const;
   return (
@@ -447,15 +449,15 @@ export function LandingPage() {
 
           <Feature
             no="No. 02"
-            kicker="Socratic Tutor"
-            title="Hints that make you think — never the answer."
-            body="Stuck? The tutor asks one leading question at a time, escalating only as much as you need, and never hands you the final number while the problem is still open. You build the reasoning interviewers actually probe for — instead of memorizing solutions you can't reproduce under pressure."
+            kicker="The Hint Ladder"
+            title="Five rungs of coaching — never the answer."
+            body="Miss a problem and you don't get the solution dumped on you. A five-rung ladder escalates exactly as much as you need — name the trap, make a plan of attack, study a worked sibling, then confront it in a simulation — and withholds the final number until the last rung. You build the reasoning interviewers actually probe for, instead of memorizing solutions you can't reproduce under pressure."
             bullets={[
-              "A ladder of hints, never a spoiler",
-              "The answer stays withheld until you've tried",
-              "Full worked solution unlocked after you commit",
+              "Five escalating rungs, keyed to the mistake you actually made",
+              "The final answer stays withheld through the first four rungs",
+              "Full worked solution unlocks only once you've worked the ladder",
             ]}
-            visual={<TutorVisual />}
+            visual={<HintLadderVisual />}
             reverse
           />
 

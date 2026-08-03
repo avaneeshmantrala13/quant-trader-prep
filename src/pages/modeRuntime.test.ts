@@ -44,6 +44,8 @@ vi.mock("@/lib/storage", () => ({
 }));
 
 // eslint-disable-next-line import/first
+import { ThemeProvider } from "@/context/ThemeContext";
+// eslint-disable-next-line import/first
 import { AuthProvider } from "@/context/AuthContext";
 // eslint-disable-next-line import/first
 import { ProgressProvider, useProgress } from "@/context/ProgressContext";
@@ -66,9 +68,13 @@ function wrap(children: ReactNode, initialPath = "/") {
       MemoryRouter,
       { initialEntries: [initialPath] },
       createElement(
-        AuthProvider,
+        ThemeProvider,
         null,
-        createElement(ProgressProvider, null, children),
+        createElement(
+          AuthProvider,
+          null,
+          createElement(ProgressProvider, null, children),
+        ),
       ),
     ),
   );

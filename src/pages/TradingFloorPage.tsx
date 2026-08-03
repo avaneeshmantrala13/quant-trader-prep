@@ -33,12 +33,14 @@ import {
   currentFair,
   currentPosteriorSd,
   currentReveal,
+  resumeFloor,
   type ScenarioPack,
   type FloorConfig,
   type FloorState,
   type FloorResult,
   type UserQuote,
   type RoundFill,
+  type FloorMove,
 } from "@/lib/tradingFloor";
 import {
   recordLocalRun,
@@ -47,6 +49,12 @@ import {
 } from "@/lib/arena/localPb";
 import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
 import { submitGameScore } from "@/lib/leaderboard/client";
+import {
+  browserSessionStore,
+  clearGameSession,
+  loadGameSession,
+  saveGameSession,
+} from "@/lib/leaderboard/gameSession";
 import { QuotePad } from "@/components/tradingFloor/QuotePad";
 import { RoundBoard } from "@/components/tradingFloor/RoundBoard";
 import { LivePnl, InventoryPill } from "@/components/tradingFloor/LivePnl";
@@ -55,12 +63,30 @@ import { clock, fmtNum, fmtPct } from "@/components/tradingFloor/format";
 
 const TICK_MS = 100;
 
+const GAME_ID = "trading-floor";
+
 type Screen = "setup" | "playing" | "debrief";
 
 interface PbView {
   pb: PersonalBest | null;
   isNewBest: boolean;
   median7d: number | null;
+}
+
+/**
+ * Durable, reload-proof snapshot of an in-progress floor. `FloorState` holds
+ * live functions + an `Rng`, so we persist only the DETERMINISTIC inputs — the
+ * seed, pack/config ids, and the ordered per-round moves — and rebuild the exact
+ * state on resume via `resumeFloor` (see the engine).
+ */
+interface FloorSession {
+  packId: string;
+  configId: string;
+  coachOn: boolean;
+  seed: number;
+  moves: FloorMove[];
+  /** True ⇒ the user left while quoting (land back on the quote pad). */
+  resumeQuoting: boolean;
 }
 
 export function TradingFloorPage(): JSX.Element {
@@ -86,6 +112,12 @@ export function TradingFloorPage(): JSX.Element {
   const sessionRef = useRef<{ pack: ScenarioPack; config: FloorConfig } | null>(null);
   // Guards the once-per-finished side effects (PB, calibration, celebration).
   const finishedRef = useRef<FloorState | null>(null);
+  // Durable save/resume bookkeeping: the seed the live run started from and the
+  // ordered per-round moves (real quotes + shot-clock stand-asides) that, with
+  // the seed + ids, deterministically rebuild the state on re-entry.
+  const seedRef = useRef<number>(0);
+  const movesRef = useRef<FloorMove[]>([]);
+  const hydratedRef = useRef(false);
 
   const pack = useMemo(
     () => SCENARIO_PACKS.find((p) => p.id === packId) ?? SCENARIO_PACKS[0],
@@ -102,6 +134,9 @@ export function TradingFloorPage(): JSX.Element {
     const fresh = startFloor(scenario, config, seed);
     sessionRef.current = { pack, config };
     finishedRef.current = null;
+    seedRef.current = seed;
+    movesRef.current = [];
+    clearGameSession(browserSessionStore(), GAME_ID);
     setResult(null);
     setPbView(null);
     setFloor(fresh);
@@ -111,6 +146,7 @@ export function TradingFloorPage(): JSX.Element {
   const submitQuote = (quote: UserQuote) => {
     const cur = stateRef.current;
     if (!cur || cur.phase !== "quoting") return;
+    movesRef.current = [...movesRef.current, { quote, standAside: false }];
     setFloor(postQuote(cur, quote));
   };
 
@@ -121,16 +157,75 @@ export function TradingFloorPage(): JSX.Element {
   };
 
   // Wall clock: advance the shot clock while quoting (the engine auto-stands
-  // aside on timeout). One interval spans the whole playing screen.
+  // aside on timeout). One interval spans the whole playing screen. A timeout
+  // (quoting → resolved this tick) is recorded as a stand-aside MOVE so a resumed
+  // run replays it identically.
   useEffect(() => {
     if (screen !== "playing") return;
     const id = setInterval(() => {
       const cur = stateRef.current;
       if (!cur || cur.phase !== "quoting") return;
-      setFloor(tick(cur, TICK_MS));
+      const fairNow = currentFair(cur);
+      const nextState = tick(cur, TICK_MS);
+      if (nextState.phase !== "quoting") {
+        // The shot clock expired: the engine auto-resolved with a size-0 stand
+        // aside quoted at the current fair (see `tick`). Record it verbatim.
+        movesRef.current = [
+          ...movesRef.current,
+          { quote: { mid: fairNow, half: 0, skew: 0, size: 0 }, standAside: true },
+        ];
+      }
+      setFloor(nextState);
     }, TICK_MS);
     return () => clearInterval(id);
   }, [screen]);
+
+  // Durable resume: rebuild an in-progress floor from its saved moves on mount.
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
+    const env = loadGameSession<FloorSession>(browserSessionStore(), GAME_ID);
+    if (!env || env.status !== "active") return;
+    const s = env.snapshot;
+    const savedPack = SCENARIO_PACKS.find((p) => p.id === s.packId);
+    const savedConfig = FLOOR_CONFIGS.find((c) => c.id === s.configId);
+    if (!savedPack || !savedConfig) return;
+    const scenario = savedPack.build(new Rng(s.seed));
+    const rebuilt = resumeFloor(scenario, savedConfig, s.seed, s.moves, s.resumeQuoting);
+    if (rebuilt.phase === "finished") return; // never resume a completed run
+    sessionRef.current = { pack: savedPack, config: savedConfig };
+    seedRef.current = s.seed;
+    movesRef.current = s.moves;
+    finishedRef.current = null;
+    setPackId(s.packId);
+    setConfigId(s.configId);
+    setCoachOn(s.coachOn);
+    setResult(null);
+    setPbView(null);
+    setFloor(rebuilt);
+    setScreen("playing");
+  }, []);
+
+  // Snapshot the in-progress run after every resolved round / phase change so a
+  // navigate-away resumes instead of resetting. The finished state clears the
+  // session in the finish effect below, so we never persist a completed run.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (screen !== "playing" || !state || state.phase === "finished") return;
+    saveGameSession<FloorSession>(
+      browserSessionStore(),
+      GAME_ID,
+      {
+        packId,
+        configId,
+        coachOn,
+        seed: seedRef.current,
+        moves: movesRef.current,
+        resumeQuoting: state.phase === "quoting",
+      },
+      Date.now(),
+    );
+  }, [screen, state, packId, configId, coachOn]);
 
   // Finish once: settle the book, record PB + calibration, celebrate a win.
   useEffect(() => {
@@ -183,6 +278,8 @@ export function TradingFloorPage(): JSX.Element {
       setTimeout(themeDef.celebration ?? celebrate, 260);
     }
 
+    // Run finished: drop the durable session so it can't resurrect a done game.
+    clearGameSession(browserSessionStore(), GAME_ID);
     setScreen("debrief");
   }, [state, recordCalibrationPair, themeDef.celebration]);
 
@@ -236,7 +333,10 @@ export function TradingFloorPage(): JSX.Element {
             pb={pbView?.pb ?? null}
             isNewBest={pbView?.isNewBest ?? false}
             median7d={pbView?.median7d ?? null}
-            onRestart={() => setScreen("setup")}
+            onRestart={() => {
+              clearGameSession(browserSessionStore(), GAME_ID);
+              setScreen("setup");
+            }}
           />
         )}
       </main>
