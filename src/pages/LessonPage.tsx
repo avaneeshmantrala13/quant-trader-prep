@@ -48,6 +48,8 @@ import { celebrate } from "@/lib/celebrate";
 import { topicKeyForLevel, tierDifficultyKey } from "@/lib/mastery/topicKey";
 import { predictSuccess, seedTierDifficulty } from "@/lib/mastery/elo";
 import { isLowConfidenceUnlock, isTopicUnlocked } from "@/lib/mastery/unlock";
+import { WhyThisQuestion } from "@/components/tutor/WhyThisQuestion";
+import type { TopicVerdict } from "@/lib/mastery/verdict";
 import { planRoundReview } from "@/lib/adaptivity/review";
 import { buildHintLadder } from "@/lib/tutor/hintLadder";
 import { selectTutorPhase } from "@/lib/tutor/phase";
@@ -145,6 +147,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
     recordAttempt,
     recordItemAttempt,
     getTopicMastery,
+    getTopicVerdict,
     setReviewSchedule,
     recordCalibrationPair,
   } = useProgress();
@@ -270,6 +273,24 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
   // Round score is computed ONLY over the fixed materialized questions/answers;
   // bonus practice lives in a separate component and can never affect it.
   const correctCount = countQuizCorrect(questions, answers);
+
+  // Part A — honest "Why this question?" adaptive read. Same guessing-corrected
+  // prediction the calibration logger uses (PRE-answer snapshot), plus the live
+  // topic verdict. Presentational only; never mutates mastery.
+  const whyProps: WhyThisQuestionProps | undefined = q
+    ? {
+        topicKey,
+        difficulty: level.difficulty,
+        predicted: predictSuccess(
+          theta,
+          progress.tierDifficulty?.[
+            tierDifficultyKey(topicKey, level.difficulty)
+          ] ?? seedTierDifficulty(level.difficulty),
+          q.choices.length,
+        ),
+        verdict: getTopicVerdict(topicKey),
+      }
+    : undefined;
 
   const select = (choice: number) => {
     if (answered) return;
@@ -499,6 +520,7 @@ function QuizLevel({ track, level }: { track: Track; level: Level }) {
             onSelect={select}
             onNext={goNext}
             hintLevel={level}
+            why={whyProps}
           />
         )}
 
@@ -1263,6 +1285,14 @@ function LessonIntro({
   );
 }
 
+/** Props for the honest "Why this question?" adaptive-read panel (Part A). */
+interface WhyThisQuestionProps {
+  topicKey: string;
+  difficulty: Difficulty;
+  predicted?: number;
+  verdict: TopicVerdict;
+}
+
 function QuizCard({
   question,
   number,
@@ -1275,6 +1305,7 @@ function QuizCard({
   headerLabel,
   nextLabel,
   hintLevel,
+  why,
 }: {
   question: Question;
   number: number;
@@ -1288,6 +1319,12 @@ function QuizCard({
   headerLabel?: string;
   /** Overrides the advance-button label (used for bonus practice). */
   nextLabel?: string;
+  /**
+   * OPTIONAL, additive. When present, renders the honest "Why this question?"
+   * adaptive-read panel next to the concept chip. Omitted for bonus practice /
+   * remediation cards (where per-item mastery data is not the primary signal).
+   */
+  why?: WhyThisQuestionProps;
   /**
    * When present, a WRONG answer shows the answer-withholding hint ladder
    * (PHASE_2 §5/§6) instead of the immediate explanation — the level is used to
@@ -1338,11 +1375,14 @@ function QuizCard({
             {headerLabel ??
               `Question ${String(number).padStart(2, "0")} / ${total}`}
           </span>
-          {question.concept && (
-            <span className="chip border-subtle text-secondary">
-              {question.concept}
-            </span>
-          )}
+          <span className="flex items-center gap-2">
+            {question.concept && (
+              <span className="chip border-subtle text-secondary">
+                {question.concept}
+              </span>
+            )}
+            {why && <WhyThisQuestion {...why} />}
+          </span>
         </div>
         <p className="mt-3 font-display text-xl font-semibold leading-relaxed text-primary">
           {question.prompt}
@@ -1578,6 +1618,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
     recordAttempt,
     recordItemAttempt,
     getTopicMastery,
+    getTopicVerdict,
     setReviewSchedule,
     recordCalibrationPair,
   } = useProgress();
@@ -1707,6 +1748,22 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
   // Round score is computed ONLY over the fixed materialized questions/answers;
   // bonus practice lives in a separate component and can never affect it.
   const correctCount = countNumericCorrect(questions, answers);
+
+  // Part A — honest "Why this question?" adaptive read (numeric mode: free-entry,
+  // so predictSuccess uses no guessing correction). Presentational only.
+  const whyProps: WhyThisQuestionProps | undefined = q
+    ? {
+        topicKey,
+        difficulty: level.difficulty,
+        predicted: predictSuccess(
+          theta,
+          progress.tierDifficulty?.[
+            tierDifficultyKey(topicKey, level.difficulty)
+          ] ?? seedTierDifficulty(level.difficulty),
+        ),
+        verdict: getTopicVerdict(topicKey),
+      }
+    : undefined;
 
   // PHASE_1 free-response re-attempt flow: the FreeResponseCard runs the 5-rung
   // hint→re-attempt episode locally and calls this ONCE, when the episode
@@ -1947,6 +2004,7 @@ function NumericLevel({ track, level }: { track: Track; level: Level }) {
             onResolve={resolveItem}
             onNext={goNext}
             hintLevel={level}
+            why={whyProps}
           />
         )}
 
@@ -2020,6 +2078,7 @@ function NumericCard({
   headerLabel,
   nextLabel,
   hintLevel,
+  why,
 }: {
   question: NumericQuestion;
   number: number;
@@ -2035,6 +2094,8 @@ function NumericCard({
   nextLabel?: string;
   /** When present, a WRONG answer shows the answer-withholding hint ladder. */
   hintLevel?: Level;
+  /** OPTIONAL honest "Why this question?" adaptive-read panel (Part A). */
+  why?: WhyThisQuestionProps;
 }) {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -2110,11 +2171,14 @@ function NumericCard({
             {headerLabel ??
               `Question ${String(number).padStart(2, "0")} / ${total}`}
           </span>
-          {question.concept && (
-            <span className="chip border-subtle text-secondary">
-              {question.concept}
-            </span>
-          )}
+          <span className="flex items-center gap-2">
+            {question.concept && (
+              <span className="chip border-subtle text-secondary">
+                {question.concept}
+              </span>
+            )}
+            {why && <WhyThisQuestion {...why} />}
+          </span>
         </div>
         <p className="mt-3 font-display text-xl font-semibold leading-relaxed text-primary">
           {question.prompt}
@@ -2255,6 +2319,7 @@ function FreeResponseCard({
   hintLevel,
   onResolve,
   onNext,
+  why,
 }: {
   question: NumericQuestion;
   number: number;
@@ -2268,6 +2333,8 @@ function FreeResponseCard({
     firstWrongValue?: number;
   }) => void;
   onNext: () => void;
+  /** OPTIONAL honest "Why this question?" adaptive-read panel (Part A). */
+  why?: WhyThisQuestionProps;
 }) {
   const [raw, setRaw] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -2366,11 +2433,14 @@ function FreeResponseCard({
           <span className="label">
             {`Question ${String(number).padStart(2, "0")} / ${total}`}
           </span>
-          {question.concept && (
-            <span className="chip border-subtle text-secondary">
-              {question.concept}
-            </span>
-          )}
+          <span className="flex items-center gap-2">
+            {question.concept && (
+              <span className="chip border-subtle text-secondary">
+                {question.concept}
+              </span>
+            )}
+            {why && <WhyThisQuestion {...why} />}
+          </span>
         </div>
         <p className="mt-3 font-display text-xl font-semibold leading-relaxed text-primary">
           {question.prompt}

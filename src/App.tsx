@@ -18,6 +18,7 @@ import { DashboardPage } from "./pages/DashboardPage";
 import { RoadmapPage } from "./pages/RoadmapPage";
 import { SimulationsPage } from "./pages/SimulationsPage";
 import { FermiPage } from "./pages/FermiPage";
+import { DrillPage } from "./pages/DrillPage";
 import { GamesHubPage } from "./pages/GamesHubPage";
 import { MakeMarketPage } from "./pages/MakeMarketPage";
 import { ProbabilityBettingPage } from "./pages/ProbabilityBettingPage";
@@ -135,6 +136,20 @@ export default function App() {
                 <ProtectedRoute>
                   <RequireDiagnostic>
                     <FermiPage />
+                  </RequireDiagnostic>
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Custom Drill Builder — chatbot-style drill of EXISTING verified
+                questions (own full-screen layout, self-contained — see
+                DrillPage). Never writes mastery/unlock/resume. */}
+            <Route
+              path="/drill"
+              element={
+                <ProtectedRoute>
+                  <RequireDiagnostic>
+                    <DrillPage />
                   </RequireDiagnostic>
                 </ProtectedRoute>
               }

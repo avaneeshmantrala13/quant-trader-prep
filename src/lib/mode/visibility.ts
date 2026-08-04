@@ -271,6 +271,7 @@ function interviewNav(): NavGroup[] {
         { to: "/arbitrage", label: "Arbitrage & De-vig", end: false },
         { to: "/ev-timed", label: "EV Under Time", end: false },
         { to: "/fermi", label: "Fermi Drill", end: false },
+        { to: "/drill", label: "Custom Drill", end: false },
       ],
     },
     {
@@ -424,6 +425,7 @@ function courseNav(): NavGroup[] {
         },
         { to: "/ev-timed", label: "EV Under Time", end: false, emphasis: "beyond" },
         { to: "/fermi", label: "Fermi Drill", end: false, emphasis: "beyond" },
+        { to: "/drill", label: "Custom Drill", end: false, emphasis: "beyond" },
       ],
     },
     {
