@@ -232,6 +232,36 @@ function hintMessages(body) {
 }
 
 /**
+ * PARSE-DRILL-INTENT mode (Custom Drill Builder): map a free-text practice
+ * request onto the app's KNOWN drill vocabulary. "LLM proposes, code verifies":
+ * the model may ONLY choose `topicKey`s from the provided vocabulary and a
+ * difficulty window / count; the client then snaps the proposal back onto that
+ * same vocabulary (drops unknown keys, clamps orders + count) before it is ever
+ * used. The model never invents a section, a question, or an answer.
+ */
+function parseDrillIntentMessages(body) {
+  const vocab = Array.isArray(body.vocabulary) ? body.vocabulary : [];
+  const orders = body.difficultyOrders || {};
+  const band = body.countBand || { min: 5, max: 25 };
+  const sys =
+    "You translate a learner's free-text practice request into a strict JSON drill spec. " +
+    "You may ONLY select topics from the provided vocabulary, choosing each by its exact " +
+    '"topicKey" string. Respond with strict JSON having keys: "topicKeys" (array of the chosen ' +
+    'topicKey strings, most relevant first), "minOrder" and "maxOrder" (integers giving the ' +
+    "inclusive difficulty window using the provided difficulty order scale), and \"count\" (integer " +
+    "number of questions requested). If the learner names no difficulty, span the full range. If " +
+    "they name no count, use 10. Never invent a topicKey that is not in the vocabulary. Return no " +
+    "markdown and no extra keys.";
+  const user =
+    `Learner request:\n${body.text || ""}\n\n` +
+    `Vocabulary (choose topicKeys ONLY from these):\n${JSON.stringify(vocab)}\n\n` +
+    `Difficulty order scale: ${JSON.stringify(orders)}\n` +
+    `Count must be between ${band.min} and ${band.max}.\n\n` +
+    "Return the JSON spec now:";
+  return { sys, user };
+}
+
+/**
  * SELF-EXPLAIN mode (Phase 7, decompose-then-verify): the VERIFIER has ALREADY
  * decided correctness + which structural check failed. The model ONLY narrates
  * encouragement/elaboration around that fixed verdict — it cannot change it.
@@ -395,6 +425,28 @@ export const handler = async (event) => {
         answer: parsed.answer || "",
         explanation: parsed.explanation || "",
         verified: false,
+      });
+    }
+
+    if (body.mode === "parse-drill-intent") {
+      // Map free text onto the KNOWN drill vocabulary. The model proposes a
+      // spec (topicKeys + difficulty window + count); the CLIENT snaps it back
+      // onto the vocabulary (drops unknown keys, clamps orders/count) before use,
+      // so a malformed proposal degrades safely to the deterministic parser.
+      const { sys, user } = parseDrillIntentMessages(body);
+      const text = await callLLM(key, sys, user, true);
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return reply(502, { ok: false, error: "model returned non-JSON" });
+      }
+      return reply(200, {
+        ok: true,
+        topicKeys: Array.isArray(parsed.topicKeys) ? parsed.topicKeys : [],
+        minOrder: parsed.minOrder,
+        maxOrder: parsed.maxOrder,
+        count: parsed.count,
       });
     }
 

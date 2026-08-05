@@ -104,13 +104,7 @@ export function cardValue(rank: number, suit: Suit, aceMode: AceMode): number {
   return isRed(suit) ? mag : -mag;
 }
 
-export function rankLabel(rank: number): string {
-  if (rank === 14) return "A";
-  if (rank === 13) return "K";
-  if (rank === 12) return "Q";
-  if (rank === 11) return "J";
-  return String(rank);
-}
+export { rankLabel } from "@/lib/games/format";
 
 /** A fresh, ordered 52-card deck valued under `aceMode`. */
 export function freshDeck(aceMode: AceMode): Card[] {

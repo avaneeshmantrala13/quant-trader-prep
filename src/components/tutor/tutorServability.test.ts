@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { createElement } from "react";
 import { emptyProgress, type UserProgress } from "@/types/progress";
@@ -59,16 +60,32 @@ function unlockThrough(levelId: string): UserProgress {
   return p; // no topicMastery ⇒ θ=0, n=0 ⇒ "worked" phase
 }
 
-function renderLessonIntro(levelId: string): string {
+// Routes are code-split (React.lazy in App.tsx). We client-render in jsdom and
+// `waitFor` the lazy page chunk to resolve (effects run under `act`), then read
+// the lesson `<main>`. NOTE: this used to use `renderToStaticMarkup` (SSR), but
+// SSR cannot resolve `React.lazy` — it only ever paints the Suspense fallback —
+// so a client render that awaits the boundary is required now.
+async function renderLessonIntro(levelId: string): Promise<string> {
   CURRENT = unlockThrough(levelId);
-  return renderToStaticMarkup(
+  const { container } = render(
     createElement(
       MemoryRouter,
       { initialEntries: [`/track/${track.id}/level/${levelId}`] },
       createElement(App),
     ),
   );
+  // 5s timeout: under full-suite parallelism the first dynamic import() has to
+  // transform the (large) LessonPage chunk, which can exceed waitFor's 1s default.
+  await waitFor(
+    () => {
+      if (!container.querySelector("main")) throw new Error("lazy chunk pending");
+    },
+    { timeout: 5000 },
+  );
+  return container.querySelector("main")?.innerHTML ?? container.innerHTML;
 }
+
+afterEach(cleanup);
 
 /** A lesson intro offers a way forward when a start/continue/answer affordance exists. */
 function offersWayForward(html: string): boolean {
@@ -79,30 +96,30 @@ describe("every playable level's fresh lesson intro is servable (no blank screen
   const playable = track.levels.filter((l) => l.mode !== "flashcard");
 
   for (const level of playable) {
-    it(`${level.id} (${level.section ?? "-"}) offers a way to start`, () => {
-      const html = renderLessonIntro(level.id);
+    it(`${level.id} (${level.section ?? "-"}) offers a way to start`, async () => {
+      const html = await renderLessonIntro(level.id);
       expect(offersWayForward(html), `${level.id} rendered a blank lesson`).toBe(
         true,
       );
     });
   }
 
-  it("the static-pool interview levels specifically show the Start fallback", () => {
+  it("the static-pool interview levels specifically show the Start fallback", async () => {
     // These have no parametric generator — the previously-broken path.
     for (const id of ["pr-4", "pr-5"]) {
       const level = track.levels.find((l) => l.id === id)!;
       expect(level.generator, `${id} unexpectedly has a generator`).toBeUndefined();
-      const html = renderLessonIntro(id);
+      const html = await renderLessonIntro(id);
       expect(html).toContain("Start Practice");
     }
   });
 
-  it("first level of every section is servable from a fresh profile", () => {
+  it("first level of every section is servable from a fresh profile", async () => {
     const topics = groupLevelsIntoTopics(track.levels);
     for (const t of topics) {
       const first = track.levels[t.startIndex];
       if (first.mode === "flashcard") continue;
-      const html = renderLessonIntro(first.id);
+      const html = await renderLessonIntro(first.id);
       expect(offersWayForward(html), `first-of-section ${first.id} blank`).toBe(
         true,
       );

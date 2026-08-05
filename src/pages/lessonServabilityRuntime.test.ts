@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { render, cleanup } from "@testing-library/react";
+import { render, cleanup, waitFor } from "@testing-library/react";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { emptyProgress, type UserProgress } from "@/types/progress";
@@ -101,14 +101,31 @@ function buildProgress(
   return p;
 }
 
-/** Mount the real lesson player and return the inner HTML of its `<main>`. */
-function mountMain(track: Track, level: Level): string {
+/**
+ * Mount the real lesson player and return the inner HTML of its `<main>`.
+ *
+ * Routes are code-split (React.lazy in `App.tsx`), so the page chunk resolves a
+ * microtask AFTER mount — the first synchronous render only paints the Suspense
+ * fallback. We therefore `waitFor` the lazy boundary to settle: the standalone
+ * player routes render their own `<main>`, so its appearance is the signal the
+ * chunk has loaded and effects have run. (`waitFor` wraps each poll in `act`, so
+ * this also flushes the player's mount effects.)
+ */
+async function mountMain(track: Track, level: Level): Promise<string> {
   const { container } = render(
     createElement(
       MemoryRouter,
       { initialEntries: [`/track/${track.id}/level/${level.id}`] },
       createElement(App),
     ),
+  );
+  // 5s timeout: under full-suite parallelism the first dynamic import() has to
+  // transform the (large) LessonPage chunk, which can exceed waitFor's 1s default.
+  await waitFor(
+    () => {
+      if (!container.querySelector("main")) throw new Error("lazy chunk pending");
+    },
+    { timeout: 5000 },
   );
   const main = container.querySelector("main");
   return main ? main.innerHTML : `__NO_MAIN__:${container.innerHTML.slice(0, 200)}`;
@@ -134,9 +151,9 @@ describe("every level, every mode, every learner state renders a working (non-bl
       // Flashcard levels have no tutor-phase branch; one mount per is enough.
       const levelStates = isFlashcardLevel(level) ? (["fresh"] as LearnerState[]) : states;
       for (const state of levelStates) {
-        it(`${track.id}/${level.id} (${level.mode ?? "quiz"}) — ${state}`, () => {
+        it(`${track.id}/${level.id} (${level.mode ?? "quiz"}) — ${state}`, async () => {
           CURRENT = buildProgress(track, level, state);
-          const main = mountMain(track, level);
+          const main = await mountMain(track, level);
           expect(main.startsWith("__NO_MAIN__"), `no <main> for ${level.id}`).toBe(
             false,
           );
@@ -151,7 +168,11 @@ describe("every level, every mode, every learner state renders a working (non-bl
 });
 
 describe("standalone drill routes render (Speed Arena, Fermi) — never blank", () => {
-  function mountRoute(path: string): string {
+  // Routes are lazy (see `mountMain`), so wait for the page to paint before
+  // reading the DOM — the first render is only the Suspense fallback (`null`).
+  // These standalone routes (Fermi, Speed Arena) don't all render a `<main>`, so
+  // we gate on the container growing past the empty fallback shell instead.
+  async function mountRoute(path: string): Promise<string> {
     const { container } = render(
       createElement(
         MemoryRouter,
@@ -159,26 +180,34 @@ describe("standalone drill routes render (Speed Arena, Fermi) — never blank", 
         createElement(App),
       ),
     );
+    await waitFor(
+      () => {
+        if (container.innerHTML.length < 200) {
+          throw new Error("lazy chunk pending");
+        }
+      },
+      { timeout: 5000 },
+    );
     return container.innerHTML;
   }
 
-  it("/fermi renders its intro with a Start affordance", () => {
+  it("/fermi renders its intro with a Start affordance", async () => {
     CURRENT = (() => {
       const p = emptyProgress();
       p.diagnosticDoneAt = "2020-01-01T00:00:00.000Z";
       return p;
     })();
-    const html = mountRoute("/fermi");
+    const html = await mountRoute("/fermi");
     expect(html.length > 200 && /Fermi|Estimat|Start|Begin/i.test(html)).toBe(true);
   });
 
-  it("/arena renders its preset picker / start affordance", () => {
+  it("/arena renders its preset picker / start affordance", async () => {
     CURRENT = (() => {
       const p = emptyProgress();
       p.diagnosticDoneAt = "2020-01-01T00:00:00.000Z";
       return p;
     })();
-    const html = mountRoute("/arena");
+    const html = await mountRoute("/arena");
     expect(html.length > 200 && /Arena|Preset|Start|Begin|Play/i.test(html)).toBe(
       true,
     );
@@ -207,12 +236,12 @@ describe("theme chrome renders the player on default + cyberpunk (spot-check)", 
   for (const themeId of ["broadsheet", "cyberpunk"]) {
     for (const [trackId, levelId] of samples) {
       if (!levelId) continue;
-      it(`${themeId} · ${trackId}/${levelId} renders interactive content`, () => {
+      it(`${themeId} · ${trackId}/${levelId} renders interactive content`, async () => {
         THEME_ID = themeId;
         const track = PLAYABLE_TRACKS.find((t) => t.id === trackId)!;
         const level = track.levels.find((l) => l.id === levelId)!;
         CURRENT = buildProgress(track, level, "independent");
-        const main = mountMain(track, level);
+        const main = await mountMain(track, level);
         expect(
           main.length > 40 && offersInteraction(main),
           `theme ${themeId} blank for ${trackId}/${levelId}: ${main.slice(0, 200)}`,

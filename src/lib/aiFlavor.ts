@@ -265,13 +265,13 @@ export async function postAi(
       signal,
     });
     if (!res.ok) {
-      // eslint-disable-next-line no-console
+       
       console.warn(`[ai] endpoint returned ${res.status}; falling back.`);
       return null;
     }
     return (await res.json()) as Record<string, unknown>;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn("[ai] request failed; falling back:", err);
     return null;
   }
@@ -340,7 +340,7 @@ export async function requestFlavoredVariant<
     disallowNewNumbers: opts.disallowNewNumbers,
   });
   if (!check.ok) {
-    // eslint-disable-next-line no-console
+     
     console.warn(`[ai] flavor guardrail rejected output: ${check.reason}`);
     return { question, source: "fallback" };
   }

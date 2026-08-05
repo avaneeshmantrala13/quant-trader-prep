@@ -83,7 +83,7 @@ export async function requestHintPhrasing(
     requiredNumbers,
   });
   if (!check.ok) {
-    // eslint-disable-next-line no-console
+     
     console.warn(`[ai] hint guardrail rejected rephrase: ${check.reason}`);
     return rung.text;
   }

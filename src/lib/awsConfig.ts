@@ -93,7 +93,7 @@ export function readAwsConfig(env: EnvLike): AwsConfig | null {
   ];
   const missing = required.filter((k) => !cfg[k]);
   if (missing.length > 0) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       `[storage] VITE_STORAGE_BACKEND=aws but missing required env: ${missing
         .map((k) => k)

@@ -123,7 +123,6 @@ function drawBook(
  */
 function genImpliedProb(rng: Rng): NumericQuestion {
   const format = rng.pick(["decimal", "fractional", "moneyline"] as const);
-  let prompt: string;
   let answer: number;
   let raw: RawErr[];
   let quoteLabel: string;
@@ -166,7 +165,7 @@ function genImpliedProb(rng: Rng): NumericQuestion {
   }
 
   const errors = dedupeErrors(raw, answer, 4);
-  prompt = `A single outcome is quoted at ${quoteLabel}. What is its IMPLIED probability (as a decimal in 0–1)? Do NOT de-vig — just convert the quote.`;
+  const prompt = `A single outcome is quoted at ${quoteLabel}. What is its IMPLIED probability (as a decimal in 0–1)? Do NOT de-vig — just convert the quote.`;
   return {
     id: `arb-implied-${format}-${quoteLabel.replace(/\W+/g, "")}`,
     prompt,

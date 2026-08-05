@@ -73,14 +73,8 @@ export function cardValue(rank: number, aceValue: number): number {
   return rank === 14 ? aceValue : rank;
 }
 
-/** Human label for a rank, e.g. 11 → "J", 14 → "A". */
-export function rankLabel(rank: number): string {
-  if (rank === 14) return "A";
-  if (rank === 13) return "K";
-  if (rank === 12) return "Q";
-  if (rank === 11) return "J";
-  return String(rank);
-}
+/** Human label for a rank, e.g. 11 → "J", 14 → "A". Shared across the games. */
+export { rankLabel } from "@/lib/games/format";
 
 /** A fresh, ordered 52-card deck valued under `aceValue`. */
 export function freshDeck(aceValue: number): Card[] {

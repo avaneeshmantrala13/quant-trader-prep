@@ -42,7 +42,7 @@ export function readLeaderboardConfig(env: EnvLike): LeaderboardConfig | null {
   const endpoint =
     str(env.VITE_LEADERBOARD_ENDPOINT) || str(env.VITE_API_BASE_URL);
   if (!endpoint) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       "[leaderboard] VITE_LEADERBOARD=on but no VITE_LEADERBOARD_ENDPOINT " +
         "(or VITE_API_BASE_URL) is set. Leaderboard disabled (local PB only).",

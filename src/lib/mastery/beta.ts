@@ -29,7 +29,7 @@ export function lnGamma(x: number): number {
       Math.log(Math.PI / Math.sin(Math.PI * x)) - lnGamma(1 - x)
     );
   }
-  let xx = x - 1;
+  const xx = x - 1;
   let a = LANCZOS_C[0];
   const t = xx + LANCZOS_G + 0.5;
   for (let i = 1; i < LANCZOS_G + 2; i++) {

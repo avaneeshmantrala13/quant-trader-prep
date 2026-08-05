@@ -18,6 +18,7 @@ import { SimCard } from "@/components/simulations/SimCard";
 import { LineChart } from "@/components/simulations/charts/LineChart";
 import { SIM_BY_ID } from "@/lib/simulations/catalog";
 import { downsample } from "@/lib/simulations/shared";
+import { signed, pnlTone as pnlToneClass } from "@/components/tradingFloor/format";
 import {
   gradeVsBenchmark,
   maxDrawdown,
@@ -72,16 +73,6 @@ function Slider(props: {
 }
 
 /** A signed P&L string like "+12.4" / "−3.0". */
-function signed(n: number, dp = 1): string {
-  const v = Number(n.toFixed(dp));
-  const sign = v > 0 ? "+" : v < 0 ? "−" : "";
-  return `${sign}${Math.abs(v).toFixed(dp)}`;
-}
-
-function pnlToneClass(n: number): string {
-  return n > 0 ? "text-bull" : n < 0 ? "text-bear" : "text-primary";
-}
-
 function Stat(props: {
   label: string;
   value: ReactNode;

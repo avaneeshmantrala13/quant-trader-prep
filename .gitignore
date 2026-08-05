@@ -78,3 +78,6 @@ coverage/
 
 # ---- Manual Amplify deploy artifact ------------------------------------------
 dist-deploy.zip
+
+# Claude Code local session/tool state
+.claude/

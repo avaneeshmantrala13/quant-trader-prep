@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
-import { ThemeBackground } from "@/components/visuals/ThemeBackground";
+import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
-import { ChevronLeftIcon, CardsIcon, BoltIcon, GaugeIcon } from "@/components/icons";
+import { CardsIcon, BoltIcon, GaugeIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
 import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
@@ -198,40 +198,26 @@ export function MarketOfCardsPage() {
 
   /* ---- render ---------------------------------------------------------- */
   return (
-    <div className="relative min-h-[100dvh]">
-      <ThemeBackground />
-
-      <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
-          <button
-            onClick={() => navigate("/")}
-            className="btn-ghost !min-h-0 !px-2 !py-1.5"
-            aria-label="Back home"
-          >
-            <ChevronLeftIcon width={18} height={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-display text-sm font-semibold text-primary">
-              Market of Cards · Maker
+    <GameChrome
+      title="Market of Cards · Maker"
+      onBack={() => navigate("/")}
+      maxWidth="4xl"
+      subtitle={
+        game && phase !== "setup"
+          ? `Round ${game.roundIdx} / ${numRounds}`
+          : undefined
+      }
+      headerRight={
+        game && phase !== "setup" ? (
+          <div className="text-right">
+            <div className="label text-muted">Position</div>
+            <div className="num text-sm font-semibold text-primary">
+              {signed(netPosition(game.fills))} lots
             </div>
-            {game && phase !== "setup" && (
-              <div className="label mt-0.5 text-muted">
-                Round {game.roundIdx} / {numRounds}
-              </div>
-            )}
           </div>
-          {game && phase !== "setup" && (
-            <div className="text-right">
-              <div className="label text-muted">Position</div>
-              <div className="num text-sm font-semibold text-primary">
-                {signed(netPosition(game.fills))} lots
-              </div>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-4xl px-4 py-6">
+        ) : undefined
+      }
+    >
         {phase === "setup" && (
           <SetupScreen
             numBots={numBots}
@@ -268,8 +254,7 @@ export function MarketOfCardsPage() {
             }}
           />
         )}
-      </main>
-    </div>
+    </GameChrome>
   );
 }
 

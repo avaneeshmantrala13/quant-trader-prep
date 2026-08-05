@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { useProgress } from "@/context/ProgressContext";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
-import { ThemeBackground } from "@/components/visuals/ThemeBackground";
+import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
-import { ChevronLeftIcon, GaugeIcon } from "@/components/icons";
+import { GaugeIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { DIFFICULTY_META } from "@/types/content";
 import {
@@ -86,7 +86,7 @@ export function FermiPage() {
       return undefined;
     }
     return saved;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [items.length]);
 
   const [phase, setPhase] = useState<Phase>(resumed ? "drill" : "intro");
@@ -173,42 +173,18 @@ export function FermiPage() {
   };
 
   return (
-    <div className="relative min-h-[100dvh]">
-      <ThemeBackground />
-
-      <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-2.5">
-          <button
-            onClick={() => navigate("/")}
-            className="btn-ghost !min-h-0 !px-2 !py-1.5"
-            aria-label="Back home"
-          >
-            <ChevronLeftIcon width={18} height={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="truncate font-display text-sm font-semibold text-primary">
-              Fermi Estimation Drill
-            </div>
-            {phase === "drill" && (
-              <div className="mt-1 h-1.5 w-full border border-subtle bg-surface">
-                <div
-                  className="h-full bg-accent transition-all"
-                  style={{
-                    width: `${((index + (answered ? 1 : 0)) / total) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
-          </div>
-          {phase === "drill" && (
-            <span className="num text-xs text-secondary">
-              {String(index + 1).padStart(2, "0")}/{total}
-            </span>
-          )}
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
+    <GameChrome
+      title="Fermi Estimation Drill"
+      onBack={() => navigate("/")}
+      progress={phase === "drill" ? (index + (answered ? 1 : 0)) / total : undefined}
+      headerRight={
+        phase === "drill" ? (
+          <span className="num text-xs text-secondary">
+            {String(index + 1).padStart(2, "0")}/{total}
+          </span>
+        ) : undefined
+      }
+    >
         {phase === "intro" && (
           <FermiIntro
             total={total}
@@ -244,8 +220,7 @@ export function FermiPage() {
             onDone={() => navigate("/")}
           />
         )}
-      </main>
-    </div>
+    </GameChrome>
   );
 }
 

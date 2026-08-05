@@ -1,3 +1,4 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -6,34 +7,120 @@ import { shouldRedirectToDiagnostic } from "./lib/diagnostic/gate";
 import { AppShell } from "./components/layout/AppShell";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
-import { TrackPage } from "./pages/TrackPage";
-import { CourseTrackPage } from "./pages/CourseTrackPage";
-import { ThemesPage } from "./pages/ThemesPage";
-import { LessonPage } from "./pages/LessonPage";
-import { TableOfContentsPage } from "./pages/TableOfContentsPage";
-import { DiagnosticPage } from "./pages/DiagnosticPage";
-import { SpeedArenaPage } from "./pages/SpeedArenaPage";
-import { OaSectionsPage } from "./pages/OaSectionsPage";
-import { DashboardPage } from "./pages/DashboardPage";
-import { RoadmapPage } from "./pages/RoadmapPage";
-import { SimulationsPage } from "./pages/SimulationsPage";
-import { FermiPage } from "./pages/FermiPage";
-import { GamesHubPage } from "./pages/GamesHubPage";
-import { MakeMarketPage } from "./pages/MakeMarketPage";
-import { ProbabilityBettingPage } from "./pages/ProbabilityBettingPage";
-import { CardsMarketMakingPage } from "./pages/CardsMarketMakingPage";
-import { MarketOfCardsPage } from "./pages/MarketOfCardsPage";
-import { FruitMarketPage } from "./pages/FruitMarketPage";
-import { DiceAndCardsPage } from "./pages/DiceAndCardsPage";
-import { NextCardBettingPage } from "./pages/NextCardBettingPage";
-import { TradingFloorPage } from "./pages/TradingFloorPage";
-import { EvTimedPage } from "./pages/EvTimedPage";
-import { MockPage } from "./pages/MockPage";
-import { ArbitragePage } from "./pages/ArbitragePage";
-import { VerifiedBankPage } from "./pages/VerifiedBankPage";
-import { CommunityPage } from "./pages/CommunityPage";
-import { LeaderboardPage } from "./pages/LeaderboardPage";
-import type { ReactNode } from "react";
+
+// Landing / Login / AppShell stay eager: they are on the first-paint path (the
+// unauthenticated home + auth screen, and the authenticated layout shell). Every
+// other page is code-split with React.lazy so its module — and, crucially, the
+// heavy per-track question generators it pulls in — only downloads when the user
+// navigates there. This is what keeps the initial JS chunk small.
+const TrackPage = lazy(() =>
+  import("./pages/TrackPage").then((m) => ({ default: m.TrackPage })),
+);
+const CourseTrackPage = lazy(() =>
+  import("./pages/CourseTrackPage").then((m) => ({
+    default: m.CourseTrackPage,
+  })),
+);
+const ThemesPage = lazy(() =>
+  import("./pages/ThemesPage").then((m) => ({ default: m.ThemesPage })),
+);
+const LessonPage = lazy(() =>
+  import("./pages/LessonPage").then((m) => ({ default: m.LessonPage })),
+);
+const TableOfContentsPage = lazy(() =>
+  import("./pages/TableOfContentsPage").then((m) => ({
+    default: m.TableOfContentsPage,
+  })),
+);
+const DiagnosticPage = lazy(() =>
+  import("./pages/DiagnosticPage").then((m) => ({ default: m.DiagnosticPage })),
+);
+const SpeedArenaPage = lazy(() =>
+  import("./pages/SpeedArenaPage").then((m) => ({ default: m.SpeedArenaPage })),
+);
+const OaSectionsPage = lazy(() =>
+  import("./pages/OaSectionsPage").then((m) => ({ default: m.OaSectionsPage })),
+);
+const DashboardPage = lazy(() =>
+  import("./pages/DashboardPage").then((m) => ({ default: m.DashboardPage })),
+);
+const RoadmapPage = lazy(() =>
+  import("./pages/RoadmapPage").then((m) => ({ default: m.RoadmapPage })),
+);
+const SimulationsPage = lazy(() =>
+  import("./pages/SimulationsPage").then((m) => ({
+    default: m.SimulationsPage,
+  })),
+);
+const FermiPage = lazy(() =>
+  import("./pages/FermiPage").then((m) => ({ default: m.FermiPage })),
+);
+const DrillPage = lazy(() =>
+  import("./pages/DrillPage").then((m) => ({ default: m.DrillPage })),
+);
+const GamesHubPage = lazy(() =>
+  import("./pages/GamesHubPage").then((m) => ({ default: m.GamesHubPage })),
+);
+const MakeMarketPage = lazy(() =>
+  import("./pages/MakeMarketPage").then((m) => ({ default: m.MakeMarketPage })),
+);
+const ProbabilityBettingPage = lazy(() =>
+  import("./pages/ProbabilityBettingPage").then((m) => ({
+    default: m.ProbabilityBettingPage,
+  })),
+);
+const CardsMarketMakingPage = lazy(() =>
+  import("./pages/CardsMarketMakingPage").then((m) => ({
+    default: m.CardsMarketMakingPage,
+  })),
+);
+const MarketOfCardsPage = lazy(() =>
+  import("./pages/MarketOfCardsPage").then((m) => ({
+    default: m.MarketOfCardsPage,
+  })),
+);
+const FruitMarketPage = lazy(() =>
+  import("./pages/FruitMarketPage").then((m) => ({
+    default: m.FruitMarketPage,
+  })),
+);
+const DiceAndCardsPage = lazy(() =>
+  import("./pages/DiceAndCardsPage").then((m) => ({
+    default: m.DiceAndCardsPage,
+  })),
+);
+const NextCardBettingPage = lazy(() =>
+  import("./pages/NextCardBettingPage").then((m) => ({
+    default: m.NextCardBettingPage,
+  })),
+);
+const TradingFloorPage = lazy(() =>
+  import("./pages/TradingFloorPage").then((m) => ({
+    default: m.TradingFloorPage,
+  })),
+);
+const EvTimedPage = lazy(() =>
+  import("./pages/EvTimedPage").then((m) => ({ default: m.EvTimedPage })),
+);
+const MockPage = lazy(() =>
+  import("./pages/MockPage").then((m) => ({ default: m.MockPage })),
+);
+const ArbitragePage = lazy(() =>
+  import("./pages/ArbitragePage").then((m) => ({ default: m.ArbitragePage })),
+);
+const VerifiedBankPage = lazy(() =>
+  import("./pages/VerifiedBankPage").then((m) => ({
+    default: m.VerifiedBankPage,
+  })),
+);
+const CommunityPage = lazy(() =>
+  import("./pages/CommunityPage").then((m) => ({ default: m.CommunityPage })),
+);
+const LeaderboardPage = lazy(() =>
+  import("./pages/LeaderboardPage").then((m) => ({
+    default: m.LeaderboardPage,
+  })),
+);
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
   const { isAuthed } = useAuth();
@@ -56,278 +143,274 @@ function RequireDiagnostic({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * The standard authenticated + onboarded gate. Nearly every route needs both
+ * `ProtectedRoute` (must be signed in) and `RequireDiagnostic` (must have
+ * finished the one-time diagnostic), so this collapses that repeated two-wrapper
+ * nesting into one element. `/diagnostic` itself deliberately does NOT use this
+ * (it only needs auth — see its route below).
+ */
+function Guarded({ children }: { children: ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <RequireDiagnostic>{children}</RequireDiagnostic>
+    </ProtectedRoute>
+  );
+}
+
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <ProgressProvider>
-          <Routes>
-            {/* The landing page is the home for EVERYONE — it renders
-                auth-aware header/CTAs (see LandingPage). No separate dashboard. */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<LoginPage />} />
+          {/* A single Suspense boundary covers every lazy route. The fallback is
+              intentionally minimal — route modules are small and load fast on a
+              warm cache; a heavier skeleton would flash more than it helps. */}
+          <Suspense fallback={null}>
+            <Routes>
+              {/* The landing page is the home for EVERYONE — it renders
+                  auth-aware header/CTAs (see LandingPage). No separate dashboard. */}
+              <Route path="/" element={<LandingPage />} />
+              <Route path="/login" element={<LoginPage />} />
 
-            {/* Phase-5 mastery + calibration dashboard (reclaimed from the old redirect). */}
-            <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Phase-5 mastery + calibration dashboard (own full-screen layout). */}
+              <Route
+                path="/dashboard"
+                element={
+                  <Guarded>
                     <DashboardPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Readiness Roadmap — the ordered skill pathway + readiness meter
-                (own full-screen layout, like the Dashboard). Additive. */}
-            <Route
-              path="/roadmap"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Readiness Roadmap — the ordered skill pathway + readiness meter
+                  (own full-screen layout, like the Dashboard). Additive. */}
+              <Route
+                path="/roadmap"
+                element={
+                  <Guarded>
                     <RoadmapPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Authenticated app shell (track maps) */}
-            <Route
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Authenticated app shell (track maps) */}
+              <Route
+                element={
+                  <Guarded>
                     <AppShell />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            >
-              <Route path="/track/:trackId" element={<TrackPage />} />
-              {/* Case-A course curation page (additive; reuses lesson routes). */}
-              <Route path="/course/:courseId" element={<CourseTrackPage />} />
-              <Route path="/contents" element={<TableOfContentsPage />} />
-              <Route path="/simulations" element={<SimulationsPage />} />
-              <Route path="/games" element={<GamesHubPage />} />
-              {/* Human-verified interview question bank (T9) — a browse surface. */}
-              <Route path="/verified-bank" element={<VerifiedBankPage />} />
-              {/* Community & social-proof layer (T13). */}
-              <Route path="/community" element={<CommunityPage />} />
-              <Route path="/themes" element={<ThemesPage />} />
-            </Route>
+                  </Guarded>
+                }
+              >
+                <Route path="/track/:trackId" element={<TrackPage />} />
+                {/* Case-A course curation page (additive; reuses lesson routes). */}
+                <Route path="/course/:courseId" element={<CourseTrackPage />} />
+                <Route path="/contents" element={<TableOfContentsPage />} />
+                <Route path="/simulations" element={<SimulationsPage />} />
+                <Route path="/games" element={<GamesHubPage />} />
+                {/* Human-verified interview question bank (T9) — a browse surface. */}
+                <Route path="/verified-bank" element={<VerifiedBankPage />} />
+                {/* Community & social-proof layer (T13). */}
+                <Route path="/community" element={<CommunityPage />} />
+                <Route path="/themes" element={<ThemesPage />} />
+              </Route>
 
-            {/* Immersive lesson player (its own full-screen layout) */}
-            <Route
-              path="/track/:trackId/level/:levelId"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Immersive lesson player (its own full-screen layout) */}
+              <Route
+                path="/track/:trackId/level/:levelId"
+                element={
+                  <Guarded>
                     <LessonPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Dedicated Fermi estimation drill (its own full-screen layout,
-                self-contained — see FermiPage). */}
-            <Route
-              path="/fermi"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Dedicated Fermi estimation drill (its own full-screen layout,
+                  self-contained — see FermiPage). */}
+              <Route
+                path="/fermi"
+                element={
+                  <Guarded>
                     <FermiPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Make Me a Market — market-making game (own full-screen layout,
-                self-contained — see MakeMarketPage). Game 1 of QuantGames. */}
-            <Route
-              path="/make-market"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Custom Drill Builder — chatbot-style drill of EXISTING verified
+                  questions (own full-screen layout, self-contained — see
+                  DrillPage). Never writes mastery/unlock/resume. */}
+              <Route
+                path="/drill"
+                element={
+                  <Guarded>
+                    <DrillPage />
+                  </Guarded>
+                }
+              />
+
+              {/* Make Me a Market — market-making game (own full-screen layout,
+                  self-contained — see MakeMarketPage). Game 1 of QuantGames. */}
+              <Route
+                path="/make-market"
+                element={
+                  <Guarded>
                     <MakeMarketPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Probability Betting — odds/edge/Kelly game (own full-screen
-                layout, self-contained). Game 2 of QuantGames. */}
-            <Route
-              path="/probability-betting"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Probability Betting — odds/edge/Kelly game (own full-screen
+                  layout, self-contained). Game 2 of QuantGames. */}
+              <Route
+                path="/probability-betting"
+                element={
+                  <Guarded>
                     <ProbabilityBettingPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Cards Market Making — taker game (own full-screen layout,
-                self-contained). Game 3 of QuantGames. */}
-            <Route
-              path="/cards-market-making"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Cards Market Making — taker game (own full-screen layout,
+                  self-contained). Game 3 of QuantGames. */}
+              <Route
+                path="/cards-market-making"
+                element={
+                  <Guarded>
                     <CardsMarketMakingPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Market of Cards — group/super-day maker game (own full-screen
-                layout, self-contained). Game 4 of QuantGames. */}
-            <Route
-              path="/market-of-cards"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Market of Cards — group/super-day maker game (own full-screen
+                  layout, self-contained). Game 4 of QuantGames. */}
+              <Route
+                path="/market-of-cards"
+                element={
+                  <Guarded>
                     <MarketOfCardsPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Fruit Market — speed mental-math taker game (own full-screen
-                layout, self-contained). Game 5 of QuantGames. */}
-            <Route
-              path="/fruit-market"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Fruit Market — speed mental-math taker game (own full-screen
+                  layout, self-contained). Game 5 of QuantGames. */}
+              <Route
+                path="/fruit-market"
+                element={
+                  <Guarded>
                     <FruitMarketPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Dice & Cards — multiplicative taker game with an SD pre-question
-                (own full-screen layout, self-contained). Game 6 of QuantGames. */}
-            <Route
-              path="/dice-and-cards"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Dice & Cards — multiplicative taker game with an SD pre-question
+                  (own full-screen layout, self-contained). Game 6 of QuantGames. */}
+              <Route
+                path="/dice-and-cards"
+                element={
+                  <Guarded>
                     <DiceAndCardsPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Next Card Betting — card-counting + Kelly bettor game (own
-                full-screen layout, self-contained). Game 9 of QuantGames. */}
-            <Route
-              path="/next-card-betting"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Next Card Betting — card-counting + Kelly bettor game (own
+                  full-screen layout, self-contained). Game 9 of QuantGames. */}
+              <Route
+                path="/next-card-betting"
+                element={
+                  <Guarded>
                     <NextCardBettingPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* The Trading Floor — flagship adversarial make-a-market mock (own
-                full-screen layout, self-contained — see TradingFloorPage). */}
-            <Route
-              path="/trading-floor"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* The Trading Floor — flagship adversarial make-a-market mock (own
+                  full-screen layout, self-contained — see TradingFloorPage). */}
+              <Route
+                path="/trading-floor"
+                element={
+                  <Guarded>
                     <TradingFloorPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* Unified competitive-games leaderboard (own full-screen layout,
-                self-contained — see LeaderboardPage). Local-first, optional AWS. */}
-            <Route
-              path="/leaderboard"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* Unified competitive-games leaderboard (own full-screen layout,
+                  self-contained — see LeaderboardPage). Local-first, optional AWS. */}
+              <Route
+                path="/leaderboard"
+                element={
+                  <Guarded>
                     <LeaderboardPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* EV-under-time decision drill (T4, own full-screen layout). */}
-            <Route
-              path="/ev-timed"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* EV-under-time decision drill (T4, own full-screen layout). */}
+              <Route
+                path="/ev-timed"
+                element={
+                  <Guarded>
                     <EvTimedPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* AI-voice Mock Interview (T10, own full-screen layout). */}
-            <Route
-              path="/mock"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* AI-voice Mock Interview (T10, own full-screen layout). */}
+              <Route
+                path="/mock"
+                element={
+                  <Guarded>
                     <MockPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* No-arbitrage / de-vig reasoning drill (T3, own full-screen layout). */}
-            <Route
-              path="/arbitrage"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* No-arbitrage / de-vig reasoning drill (T3, own full-screen layout). */}
+              <Route
+                path="/arbitrage"
+                element={
+                  <Guarded>
                     <ArbitragePage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            {/* ls-layer routes — phases 3/5/6 append here */}
-            <Route
-              path="/diagnostic"
-              element={
-                <ProtectedRoute>
-                  <DiagnosticPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/arena"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+              {/* ls-layer routes — phases 3/5/6 append here. `/diagnostic` needs
+                  auth only (it IS the diagnostic gate, so RequireDiagnostic would
+                  loop) — so it uses ProtectedRoute directly, not Guarded. */}
+              <Route
+                path="/diagnostic"
+                element={
+                  <ProtectedRoute>
+                    <DiagnosticPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/arena"
+                element={
+                  <Guarded>
                     <SpeedArenaPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
-            {/* Timed interview/OA practice sections (Case B). Its own
-                full-screen layout like the Speed Arena; wall-clock timed +
-                cross-session resumable (see src/lib/oa/*). */}
-            <Route
-              path="/oa"
-              element={
-                <ProtectedRoute>
-                  <RequireDiagnostic>
+                  </Guarded>
+                }
+              />
+              {/* Timed interview/OA practice sections (Case B). Its own
+                  full-screen layout like the Speed Arena; wall-clock timed +
+                  cross-session resumable (see src/lib/oa/*). */}
+              <Route
+                path="/oa"
+                element={
+                  <Guarded>
                     <OaSectionsPage />
-                  </RequireDiagnostic>
-                </ProtectedRoute>
-              }
-            />
+                  </Guarded>
+                }
+              />
 
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Suspense>
         </ProgressProvider>
       </AuthProvider>
     </ThemeProvider>
