@@ -220,7 +220,7 @@ describe("Fading Buyer solver", () => {
     for (let t = 0; t < trials; t++) {
       let payoff = 0;
       // Simulate until accept or collapse.
-      // eslint-disable-next-line no-constant-condition
+       
       while (true) {
         const x = mcUniform(rng, M);
         if (x >= threshold) {

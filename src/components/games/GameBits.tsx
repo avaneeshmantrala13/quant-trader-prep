@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { rankLabel } from "@/lib/games/format";
 
 /**
  * ============================================================================
@@ -21,13 +22,7 @@ export interface CardLike {
   suit: "♠" | "♥" | "♦" | "♣";
 }
 
-export function rankLabel(rank: number): string {
-  if (rank === 14) return "A";
-  if (rank === 13) return "K";
-  if (rank === 12) return "Q";
-  if (rank === 11) return "J";
-  return String(rank);
-}
+export { rankLabel };
 
 const isRed = (suit: string) => suit === "♥" || suit === "♦";
 

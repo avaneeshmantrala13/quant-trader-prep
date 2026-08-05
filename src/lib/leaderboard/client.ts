@@ -97,13 +97,13 @@ async function postBoard(
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      // eslint-disable-next-line no-console
+       
       console.warn(`[leaderboard] endpoint returned ${res.status}; ignoring.`);
       return null;
     }
     return (await res.json()) as Record<string, unknown>;
   } catch (err) {
-    // eslint-disable-next-line no-console
+     
     console.warn("[leaderboard] request failed; ignoring:", err);
     return null;
   }

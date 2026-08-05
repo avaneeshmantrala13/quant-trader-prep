@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
-import { ThemeBackground } from "@/components/visuals/ThemeBackground";
+import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
-import { ChevronLeftIcon, DiceIcon } from "@/components/icons";
+import { DiceIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import { Rng } from "@/lib/rng";
 import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
@@ -15,6 +15,7 @@ import {
   saveGameSession,
 } from "@/lib/leaderboard/gameSession";
 import { PlayingCard, Die, CountUp, RoundPips } from "@/components/games/GameBits";
+import { signedInt as signed } from "@/lib/games/format";
 import {
   freshDeck,
   dealRound,
@@ -184,45 +185,28 @@ export function DiceAndCardsPage() {
   };
 
   return (
-    <div className="relative min-h-[100dvh]">
-      <ThemeBackground />
-
-      <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
-        <div className="mx-auto flex max-w-3xl items-center gap-3 px-4 py-2.5">
-          <button
-            onClick={() => navigate("/games")}
-            className="btn-ghost !min-h-0 !px-2 !py-1.5"
-            aria-label="Back to games"
-          >
-            <ChevronLeftIcon width={18} height={18} />
-          </button>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-display text-sm font-semibold text-primary">
-                Dice &amp; Cards
-              </span>
-              {phase !== "setup" && phase !== "summary" && (
-                <RoundPips total={NUM_ROUNDS} current={roundIdx} />
-              )}
-            </div>
-            {phase !== "setup" && phase !== "summary" && (
-              <div className="mt-1 h-1.5 w-full border border-subtle bg-surface">
-                <div
-                  className="h-full bg-accent transition-all"
-                  style={{ width: `${(roundIdx / NUM_ROUNDS) * 100}%` }}
-                />
-              </div>
-            )}
-          </div>
-          {phase !== "setup" && (
-            <span className="chip border-accent text-accent" title="Points balance">
-              <CountUp value={balance} />
-            </span>
-          )}
-        </div>
-      </header>
-
-      <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
+    <GameChrome
+      title="Dice & Cards"
+      onBack={() => navigate("/games")}
+      backLabel="Back to games"
+      titleExtra={
+        phase !== "setup" && phase !== "summary" ? (
+          <RoundPips total={NUM_ROUNDS} current={roundIdx} />
+        ) : undefined
+      }
+      progress={
+        phase !== "setup" && phase !== "summary"
+          ? roundIdx / NUM_ROUNDS
+          : undefined
+      }
+      headerRight={
+        phase !== "setup" ? (
+          <span className="chip border-accent text-accent" title="Points balance">
+            <CountUp value={balance} />
+          </span>
+        ) : undefined
+      }
+    >
         {phase === "setup" && (
           <Setup config={config} setConfig={setConfig} onStart={startGame} />
         )}
@@ -275,19 +259,13 @@ export function DiceAndCardsPage() {
             }}
           />
         )}
-      </main>
-    </div>
+    </GameChrome>
   );
 }
 
 /* ========================================================================== */
 /*  Helpers + shared bits                                                       */
 /* ========================================================================== */
-
-function signed(n: number): string {
-  const s = n < 0 ? "−" : "+";
-  return `${s}${Math.abs(n).toLocaleString()}`;
-}
 
 // The counting/face value under the active ace mode (ace = 14 high / 1 low).
 function faceOf(card: Card, aceMode: AceMode): number {

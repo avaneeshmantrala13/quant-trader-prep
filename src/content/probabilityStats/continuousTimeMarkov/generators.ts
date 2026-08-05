@@ -84,7 +84,7 @@ export function buildCtmcStationaryInstance(
   difficulty: Difficulty,
 ): { answer: number; numeric: NumericQuestion } {
   const th = rng.pick(CTMC_THEME);
-  let lambda = rng.pick([1, 2, 3, 4]);
+  const lambda = rng.pick([1, 2, 3, 4]);
   let mu = rng.pick([1, 2, 3, 4]);
   while (lambda === mu) mu = rng.pick([1, 2, 3, 5]);
   const value = ctmcTwoStateStationary(lambda, mu); // μ/(λ+μ)

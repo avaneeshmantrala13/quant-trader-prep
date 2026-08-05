@@ -84,12 +84,21 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("gradable brainteaser flashcard — commit-then-reveal", () => {
-  it("gates the reveal, then a CORRECT commit emits exactly one flashcard ItemAttempt", () => {
+  it("gates the reveal, then a CORRECT commit emits exactly one flashcard ItemAttempt", async () => {
     CURRENT = baseProgress();
     const { container } = mount();
 
-    // Enter the deck.
-    fireEvent.click(screen.getByRole("button", { name: /Start Flashcards/i }));
+    // Enter the deck. Routes are code-split (React.lazy in App.tsx), so the page
+    // chunk resolves a microtask after mount — `findByRole` awaits that boundary.
+    fireEvent.click(
+      await screen.findByRole(
+        "button",
+        { name: /Start Flashcards/i },
+        // 5s: first dynamic import() transforms the LessonPage chunk, which can
+        // exceed findBy's 1s default under full-suite parallel load.
+        { timeout: 5000 },
+      ),
+    );
 
     // The first warm-up (bt-ropes, answer 45) is gradable ⇒ commit gates reveal.
     const input = screen.getByLabelText("Your numeric answer");
@@ -116,10 +125,18 @@ describe("gradable brainteaser flashcard — commit-then-reveal", () => {
     expect(container.innerHTML.includes("Light rope A at BOTH ends")).toBe(true);
   });
 
-  it("a WRONG commit records correct: false with the committed value", () => {
+  it("a WRONG commit records correct: false with the committed value", async () => {
     CURRENT = baseProgress();
     mount();
-    fireEvent.click(screen.getByRole("button", { name: /Start Flashcards/i }));
+    fireEvent.click(
+      await screen.findByRole(
+        "button",
+        { name: /Start Flashcards/i },
+        // 5s: first dynamic import() transforms the LessonPage chunk, which can
+        // exceed findBy's 1s default under full-suite parallel load.
+        { timeout: 5000 },
+      ),
+    );
 
     const input = screen.getByLabelText("Your numeric answer");
     fireEvent.change(input, { target: { value: "44" } });
@@ -132,7 +149,7 @@ describe("gradable brainteaser flashcard — commit-then-reveal", () => {
     expect(attempts[0].mode).toBe("flashcard");
   });
 
-  it("a NON-gradable (open-ended) card keeps the pure reveal flow and records NOTHING", () => {
+  it("a NON-gradable (open-ended) card keeps the pure reveal flow and records NOTHING", async () => {
     // Resume directly on bt-switches (index 4, gradable:false) by marking the
     // four earlier warm-ups as already understood.
     const p = baseProgress();
@@ -146,7 +163,15 @@ describe("gradable brainteaser flashcard — commit-then-reveal", () => {
     CURRENT = p;
     const { container } = mount();
 
-    fireEvent.click(screen.getByRole("button", { name: /Start Flashcards/i }));
+    fireEvent.click(
+      await screen.findByRole(
+        "button",
+        { name: /Start Flashcards/i },
+        // 5s: first dynamic import() transforms the LessonPage chunk, which can
+        // exceed findBy's 1s default under full-suite parallel load.
+        { timeout: 5000 },
+      ),
+    );
 
     // Pure reveal flow: a Reveal button exists, no commit input.
     expect(screen.queryByLabelText("Your numeric answer")).toBeNull();

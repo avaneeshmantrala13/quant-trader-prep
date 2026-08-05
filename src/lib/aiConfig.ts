@@ -72,7 +72,7 @@ export function readAiConfig(env: EnvLike): AiConfig | null {
   const endpoint = str(env.VITE_AI_ENDPOINT) || str(env.VITE_API_BASE_URL);
 
   if (!endpoint && !stub) {
-    // eslint-disable-next-line no-console
+     
     console.warn(
       "[ai] VITE_AI_LAYER=on but no VITE_AI_ENDPOINT (or VITE_API_BASE_URL) is set. " +
         "AI features are unavailable (falling back to the parametric backbone).",

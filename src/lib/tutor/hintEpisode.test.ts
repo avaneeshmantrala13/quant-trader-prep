@@ -56,7 +56,7 @@ describe("hintEpisode — re-attempt flow", () => {
   });
 
   it("is idempotent once terminal", () => {
-    let ep = submitAttempt(startEpisode(), true);
+    const ep = submitAttempt(startEpisode(), true);
     const again = submitAttempt(ep, false);
     expect(again).toEqual(ep);
   });

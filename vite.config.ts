@@ -20,8 +20,25 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the React runtime + router into their own long-lived vendor
+        // chunk. These change far less often than app code, so isolating them
+        // lets the browser cache them across app deploys. The per-route page
+        // chunks are produced automatically by the React.lazy() imports in
+        // App.tsx — Rollup emits one chunk per dynamic import.
+        manualChunks: {
+          "react-vendor": ["react", "react-dom", "react-router-dom"],
+        },
+      },
+    },
+  },
   test: {
     environment: "node",
     include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    // Shared setup: stubs matchMedia + canvas-confetti and auto-cleans mounted
+    // trees, so DOM tests don't each re-patch jsdom noise (see src/test/setup.ts).
+    setupFiles: ["./src/test/setup.ts"],
   },
 });

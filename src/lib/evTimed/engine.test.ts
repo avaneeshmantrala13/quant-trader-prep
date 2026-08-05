@@ -253,7 +253,7 @@ describe("answerCurrent + advanceEvTimed", () => {
   });
 
   it("is a no-op once the session is finished", () => {
-    let s = createEvTimedSession({ seed: SEED, nowTs: T0, pool: [] });
+    const s = createEvTimedSession({ seed: SEED, nowTs: T0, pool: [] });
     expect(s.status).toBe("finished");
     const after = answerCurrent(s, 0, T0 + 1_000);
     expect(after).toBe(s);

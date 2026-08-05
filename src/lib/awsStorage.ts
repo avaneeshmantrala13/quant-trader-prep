@@ -471,7 +471,7 @@ export class AwsStorageProvider implements StorageProvider {
   // -------------------------------------------------------------- Google OAuth
   private async beginGoogle(): Promise<void> {
     if (!this.cfg.cognitoDomain || !this.cfg.redirectUri) {
-      // eslint-disable-next-line no-console
+       
       console.warn(
         "[storage] Google sign-in needs VITE_COGNITO_DOMAIN + VITE_COGNITO_REDIRECT_URI.",
       );
@@ -646,7 +646,7 @@ export class AwsStorageProvider implements StorageProvider {
       }
     } catch (e) {
       // Non-fatal: fall back to the local mirror / empty progress.
-      // eslint-disable-next-line no-console
+       
       console.warn("[storage] progress hydrate failed:", errMsg(e, "unknown"));
     }
   }
@@ -689,7 +689,7 @@ export class AwsStorageProvider implements StorageProvider {
         }),
       );
     } catch (e) {
-      // eslint-disable-next-line no-console
+       
       console.warn("[storage] progress save failed:", errMsg(e, "unknown"));
     }
   }
