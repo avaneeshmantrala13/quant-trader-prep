@@ -83,7 +83,7 @@ describe("FinishRemediation component", () => {
   it("always offers an escape to the results (no inescapable loop)", () => {
     const onDone = vi.fn();
     mount(onDone);
-    const skip = screen.getByText(/Skip remediation — see my results/i);
+    const skip = screen.getByText(/Skip remediation: see my results/i);
     fireEvent.click(skip);
     expect(onDone).toHaveBeenCalledTimes(1);
   });

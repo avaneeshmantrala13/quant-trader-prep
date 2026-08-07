@@ -75,4 +75,38 @@ describe("assembleDrill", () => {
     const spec = parseDrillIntent("bayes");
     expect(assembleDrill({ ...spec, count: 0 }, 1)).toEqual([]);
   });
+
+  it("honors a large in-capacity request: '37 questions on markov' → 37 unique", () => {
+    // Regression: the assembler used to cap each level at its lesson-sized
+    // `questionCount` (~5), so it could never reach 37. It now re-materializes
+    // the parametric generators until the request is met. Markov Chains has ample
+    // unique capacity (>200), so 37 must come back exactly, all distinct.
+    const spec = parseDrillIntent("37 questions on markov");
+    expect(spec.count).toBe(37);
+    const qs = assembleDrill(spec, 4242);
+    expect(qs.length).toBe(37);
+    const sigs = qs.map((q) => `${q.prompt}::${q.correctIndex}`);
+    expect(new Set(sigs).size).toBe(37);
+  });
+
+  it("gracefully caps at a topic's true capacity when it can't reach the request", () => {
+    // Moment Generating Functions has a small generator space (~44 unique),
+    // below the max request of 50 — so a 50-ask yields the MAX available, every
+    // item unique, and never a promised-but-undelivered count. This is the
+    // "topic can only make N" path the confirmation reports honestly.
+    const spec: DrillSpec = {
+      topicKeys: [key("Moment Generating Functions")],
+      minOrder: 0,
+      maxOrder: 4,
+      count: 50,
+    };
+    const qs = assembleDrill(spec, 9);
+    expect(qs.length).toBeGreaterThan(0);
+    expect(qs.length).toBeLessThan(50); // genuinely capped below the request
+    const sigs = qs.map((q) => `${q.prompt}::${q.correctIndex}`);
+    expect(new Set(sigs).size).toBe(qs.length); // every delivered item is unique
+    // Deterministic for a fixed (spec, seed).
+    const again = assembleDrill(spec, 9);
+    expect(again.map((q) => q.prompt)).toEqual(qs.map((q) => q.prompt));
+  });
 });

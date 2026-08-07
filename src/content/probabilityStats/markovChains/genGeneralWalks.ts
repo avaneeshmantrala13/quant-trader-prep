@@ -19,15 +19,15 @@ import { MISCONCEPTION } from "@/lib/tutor/misconception";
  * `../coreSolvers`; every distractor is a re-derived, NAMED misconception.
  *
  * Mode per generator (see adapters at the bottom):
- *   • quiz    — genRuin (biased-vs-fair gambler's-ruin trap)
- *   • numeric — genAllForward, genDeuce, genRestart
+ *   • quiz   , genRuin (biased-vs-fair gambler's-ruin trap)
+ *   • numeric, genAllForward, genDeuce, genRestart
  */
 
 /* ========================================================================== */
 /* =============  GAMBLER'S RUIN & RANDOM WALKS (numeric + quiz)  =========== */
 /* ========================================================================== */
 
-/** Ruin per-round win probabilities (biased only — the fair ½ is excluded). */
+/** Ruin per-round win probabilities (biased only, the fair ½ is excluded). */
 const RUIN_P: [number, number][] = ([
   [1, 2],
   [2, 5],
@@ -65,7 +65,7 @@ export function buildRuinInstance(
 
   const correct: Choice = {
     text: decText(value, dp),
-    rationale: `Correct — with an edge you need the biased formula (1−rᵏ)/(1−rᴺ), r = q/p = ${fracText(q.div(p))}: P = ${decText(value, dp)}.`,
+    rationale: `Correct, with an edge you need the biased formula (1−rᵏ)/(1−rᴺ), r = q/p = ${fracText(q.div(p))}: P = ${decText(value, dp)}.`,
   };
   const distractors: Choice[] = [
     {
@@ -74,7 +74,7 @@ export function buildRuinInstance(
     },
     {
       text: decText(inverted, dp),
-      rationale: `You inverted the ratio — that uses r = p/q. The multiplier must be r = q/p (loss-odds over win-odds); flipping it reverses who the edge favours.`,
+      rationale: `You inverted the ratio, that uses r = p/q. The multiplier must be r = q/p (loss-odds over win-odds); flipping it reverses who the edge favours.`,
     },
     {
       text: decText(reversed, dp),
@@ -104,7 +104,7 @@ export function buildRuinInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the biased-ruin family — the PHASE_1/2
+ * FREE-RESPONSE (numeric) form of the biased-ruin family, the PHASE_1/2
  * MCQ→free conversion of `buildRuinInstance`. Same exact solver (1−rᵏ)/(1−rᴺ),
  * r = q/p; the three genuine error modes from the quiz distractors (the FAIR
  * k/N, the inverted odds r = p/q, and the ruin complement) become a parametric
@@ -133,12 +133,12 @@ export function buildRuinNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     symmetric,
-    `k/N = ${k}/${N} is the FAIR-game value. With a per-round edge (win w.p. ${fracText(p)} ≠ ½) that shortcut breaks — which formula uses the odds ratio r = q/p?`,
+    `k/N = ${k}/${N} is the FAIR-game value. With a per-round edge (win w.p. ${fracText(p)} ≠ ½) that shortcut breaks, which formula uses the odds ratio r = q/p?`,
     "ruin_symmetric_fair",
   );
   push(
     inverted,
-    `You inverted the odds ratio (r = p/q instead of q/p). When you raise r to the kᵗʰ and Nᵗʰ powers, which odds belong on top — losing or winning?`,
+    `You inverted the odds ratio (r = p/q instead of q/p). When you raise r to the kᵗʰ and Nᵗʰ powers, which odds belong on top, losing or winning?`,
     "ruin_inverted_odds",
   );
   push(
@@ -202,13 +202,13 @@ export function buildAllForwardInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     Math.pow(0.5, blocks),
-    `(1/2)^${blocks} counts ALL ${blocks} steps as coin flips. The first step is forced forward (free), so only ${steps} flips are random — the "all forward" event is (1/2)^${steps}.`,
+    `(1/2)^${blocks} counts ALL ${blocks} steps as coin flips. The first step is forced forward (free), so only ${steps} flips are random, the "all forward" event is (1/2)^${steps}.`,
   );
   push(
     1 - value.valueOf(),
     askFast
       ? `${decText(F(1).sub(fast), dp)} = 1 − (1/2)^${steps} is P(it does NOT arrive fast), the opposite event.`
-      : `${decText(fast, dp)} = (1/2)^${steps} is P(it arrives fast) — you gave the opposite of what was asked.`,
+      : `${decText(fast, dp)} = (1/2)^${steps} is P(it arrives fast), you gave the opposite of what was asked.`,
   );
   push(
     blocks * 0.5,
@@ -289,7 +289,7 @@ export function buildDeuceInstance(
   );
   push(
     2 * pv * (1 - pv),
-    `2p(1−p) = ${decText(F(2).mul(p).mul(F(1).sub(p)), dp)} is P(the two ${th.point}s SPLIT), which RETURNS you to the tie — it isn't a win at all.`,
+    `2p(1−p) = ${decText(F(2).mul(p).mul(F(1).sub(p)), dp)} is P(the two ${th.point}s SPLIT), which RETURNS you to the tie, it isn't a win at all.`,
   );
 
   const prompt =
@@ -361,7 +361,7 @@ export function buildRestartInstance(
   );
   push(
     other,
-    `${decText(other, dp)} is ${otherName}'s overall win probability — you solved for the wrong player.`,
+    `${decText(other, dp)} is ${otherName}'s overall win probability, you solved for the wrong player.`,
   );
 
   const prompt =
@@ -389,7 +389,7 @@ export function buildRestartInstance(
 }
 
 /* ========================================================================== */
-/*  Named generators (adapters — mode noted per line)                         */
+/*  Named generators (adapters, mode noted per line)                         */
 /* ========================================================================== */
 
 export const genRuin = (rng: Rng): Question => buildRuinInstance(rng, "medium").question; // quiz (kept for tests)

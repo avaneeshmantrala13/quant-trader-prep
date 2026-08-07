@@ -15,6 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { useProgress } from "@/context/ProgressContext";
+import { useAuth } from "@/context/AuthContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { ChevronLeftIcon, CandlestickIcon, BoltIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
@@ -93,6 +94,7 @@ export function TradingFloorPage(): JSX.Element {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
   const { recordCalibrationPair } = useProgress();
+  const { username } = useAuth();
 
   const [screen, setScreen] = useState<Screen>("setup");
   const [packId, setPackId] = useState<string>(SCENARIO_PACKS[0].id);
@@ -136,7 +138,7 @@ export function TradingFloorPage(): JSX.Element {
     finishedRef.current = null;
     seedRef.current = seed;
     movesRef.current = [];
-    clearGameSession(browserSessionStore(), GAME_ID);
+    clearGameSession(browserSessionStore(), GAME_ID, username);
     setResult(null);
     setPbView(null);
     setFloor(fresh);
@@ -184,7 +186,12 @@ export function TradingFloorPage(): JSX.Element {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<FloorSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<FloorSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     const savedPack = SCENARIO_PACKS.find((p) => p.id === s.packId);
@@ -204,7 +211,7 @@ export function TradingFloorPage(): JSX.Element {
     setPbView(null);
     setFloor(rebuilt);
     setScreen("playing");
-  }, []);
+  }, [username]);
 
   // Snapshot the in-progress run after every resolved round / phase change so a
   // navigate-away resumes instead of resetting. The finished state clears the
@@ -224,8 +231,10 @@ export function TradingFloorPage(): JSX.Element {
         resumeQuoting: state.phase === "quoting",
       },
       Date.now(),
+      "active",
+      username,
     );
-  }, [screen, state, packId, configId, coachOn]);
+  }, [screen, state, packId, configId, coachOn, username]);
 
   // Finish once: settle the book, record PB + calibration, celebrate a win.
   useEffect(() => {
@@ -279,9 +288,9 @@ export function TradingFloorPage(): JSX.Element {
     }
 
     // Run finished: drop the durable session so it can't resurrect a done game.
-    clearGameSession(browserSessionStore(), GAME_ID);
+    clearGameSession(browserSessionStore(), GAME_ID, username);
     setScreen("debrief");
-  }, [state, recordCalibrationPair, themeDef.celebration]);
+  }, [state, recordCalibrationPair, themeDef.celebration, username]);
 
   return (
     <div className="relative min-h-[100dvh]">
@@ -334,7 +343,7 @@ export function TradingFloorPage(): JSX.Element {
             isNewBest={pbView?.isNewBest ?? false}
             median7d={pbView?.median7d ?? null}
             onRestart={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setScreen("setup");
             }}
           />
@@ -384,6 +393,23 @@ function PlayingHeader({ state }: { state: FloorState }): JSX.Element {
 /*  Setup                                                                      */
 /* ========================================================================== */
 
+/**
+ * Plain-English, jargon-free one-liners for each scenario pack and difficulty,
+ * shown on the intro. Kept here (not in the pure pack/config data) so the copy
+ * stays first-timer friendly without touching game logic or the pack tests.
+ */
+const PACK_BLURB: Record<string, string> = {
+  "over-under": "Bet whether a dice total finishes over or under a line.",
+  "running-total": "Call the final total of a dice roll as it's revealed.",
+  "fermi-desk": "Estimate a real-world quantity, one clue at a time.",
+};
+
+const DIFF_BLURB: Record<string, string> = {
+  warmup: "Slower clock, forgiving opponents.",
+  interview: "A balanced, realistic challenge.",
+  superday: "Fast clock, sharp opponents.",
+};
+
 function Setup(props: {
   packId: string;
   configId: string;
@@ -395,116 +421,127 @@ function Setup(props: {
 }): JSX.Element {
   const { packId, configId, coachOn, onPack, onConfig, onCoach, onStart } = props;
   return (
-    <div className="animate-print-in space-y-5">
-      <article className="panel-ruled p-6">
-        <div className="flex items-center justify-between">
-          <span className="label text-accent">Make-a-market · live</span>
-          <span className="grid h-9 w-9 place-items-center border border-border-strong text-accent">
-            <CandlestickIcon width={18} height={18} />
-          </span>
-        </div>
-        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
-          Step onto the trading floor.
+    <div className="animate-print-in mx-auto max-w-2xl space-y-8">
+      {/* Heading + one-line explanation */}
+      <header className="space-y-3 text-center">
+        <span className="mx-auto grid h-11 w-11 place-items-center border border-border-strong text-accent">
+          <CandlestickIcon width={22} height={22} />
+        </span>
+        <h2 className="font-display text-2xl font-semibold leading-tight text-primary sm:text-3xl">
+          The Trading Floor
         </h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-secondary">
-          Each round you post a two-sided market on a hidden quantity as it's
-          revealed a step at a time. An{" "}
-          <strong className="text-primary">informed counterparty</strong> only
-          trades when your price is on the wrong side of fair — a pick-off — while{" "}
-          <strong className="text-primary">uninformed flow pays your spread</strong>{" "}
-          when you're competitive. Quote tight where you're sure, wide where you're
-          not, and skew off your inventory. Beat the honest desk on the same flow.
+        <p className="mx-auto max-w-md text-[15px] leading-relaxed text-secondary">
+          Each round, set the price you'd buy and sell a hidden number for. Price
+          it well and you come out ahead.
         </p>
-      </article>
+      </header>
 
-      {/* Scenario pack */}
-      <article className="panel-ruled p-6">
-        <div className="label text-accent">Scenario pack</div>
-        <div className="mt-3 grid gap-3">
+      {/* How it works — condensed, tucked behind a toggle */}
+      <details className="group border border-border-strong bg-surface-muted/40">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-secondary">
+          How it works
+          <span className="text-muted transition-transform group-open:rotate-90">
+            ›
+          </span>
+        </summary>
+        <ul className="space-y-2 px-4 pb-4 text-sm leading-relaxed text-secondary">
+          <li>A hidden number is revealed a little at a time.</li>
+          <li>Post a price you'd buy at and a price you'd sell at.</li>
+          <li>
+            Good prices earn you money; loose ones get traded against. Beat the
+            steady rival desk to win.
+          </li>
+        </ul>
+      </details>
+
+      {/* Primary choice: what to price */}
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted">What do you want to price?</p>
+        <div className="grid gap-3">
           {SCENARIO_PACKS.map((p) => {
-            const selected = p.id === packId;
+            const active = p.id === packId;
             return (
               <button
                 key={p.id}
                 type="button"
                 onClick={() => onPack(p.id)}
-                aria-pressed={selected}
-                className={`border-l-4 px-4 py-3 text-left transition-colors ${
-                  selected
-                    ? "border-l-accent bg-surface-muted"
-                    : "border-l-subtle bg-surface hover:bg-surface-muted"
+                aria-pressed={active}
+                className={`flex items-center gap-4 rounded-sm border-2 px-4 py-3 text-left transition-colors ${
+                  active
+                    ? "border-accent bg-surface-muted"
+                    : "border-border-strong hover:border-accent"
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-base font-semibold text-primary">
+                <span
+                  className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${
+                    active ? "border-accent" : "border-border-strong"
+                  }`}
+                >
+                  {active && <span className="h-2.5 w-2.5 rounded-full bg-accent" />}
+                </span>
+                <span className="flex-1">
+                  <span
+                    className={`font-display text-base font-semibold ${active ? "text-accent" : "text-primary"}`}
+                  >
                     {p.title}
                   </span>
-                  <span
-                    className={`chip ${p.kind === "binary" ? "border-accent text-accent" : "border-accent-2 text-accent-2"}`}
-                  >
-                    {p.kind === "binary" ? "0/1 · calibration" : "quantity"}
+                  <span className="mt-1 block text-sm leading-relaxed text-secondary">
+                    {PACK_BLURB[p.id] ?? p.blurb}
                   </span>
-                </div>
-                <p className="mt-1 text-sm leading-snug text-secondary">{p.blurb}</p>
+                </span>
               </button>
             );
           })}
         </div>
-      </article>
+      </div>
 
       {/* Difficulty */}
-      <article className="panel-ruled p-6">
-        <div className="label text-accent">Difficulty</div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+      <div className="space-y-3">
+        <p className="text-sm font-medium text-muted">Difficulty</p>
+        <div className="grid gap-3 sm:grid-cols-3">
           {FLOOR_CONFIGS.map((c) => {
-            const selected = c.id === configId;
+            const active = c.id === configId;
             return (
               <button
                 key={c.id}
                 type="button"
                 onClick={() => onConfig(c.id)}
-                aria-pressed={selected}
-                className={`border px-3 py-3 text-left transition-colors ${
-                  selected
-                    ? "border-strong bg-surface-muted"
-                    : "border-subtle bg-surface hover:bg-surface-muted"
+                aria-pressed={active}
+                className={`rounded-sm border-2 px-4 py-3 text-left transition-colors ${
+                  active
+                    ? "border-accent bg-surface-muted"
+                    : "border-border-strong hover:border-accent"
                 }`}
               >
-                <div className="font-display text-sm font-semibold text-primary">
+                <div
+                  className={`font-display text-base font-semibold ${active ? "text-accent" : "text-primary"}`}
+                >
                   {c.label}
                 </div>
-                <div className="num mt-1 text-[11px] text-muted">
-                  {Math.round(c.bot.informedProb * 100)}% informed ·{" "}
-                  {clock(c.shotClockMs)} clock
+                <div className="mt-1 text-sm leading-snug text-secondary">
+                  {DIFF_BLURB[c.id] ?? ""}
                 </div>
               </button>
             );
           })}
         </div>
+      </div>
 
-        {/* Coach toggle */}
-        <label className="mt-4 flex items-center justify-between border-l-2 border-accent bg-surface-muted px-3 py-2.5">
-          <span>
-            <span className="label text-accent">Coach</span>
-            <span className="mt-0.5 block text-[13px] leading-snug text-secondary">
-              Show the textbook fair value + posterior sd while you quote.
-            </span>
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={coachOn}
-            onClick={() => onCoach(!coachOn)}
-            className={`chip ${coachOn ? "border-accent text-accent" : "border-subtle text-muted"}`}
-          >
-            {coachOn ? "ON" : "OFF"}
-          </button>
-        </label>
+      {/* Obvious primary action */}
+      <button onClick={onStart} className="btn-primary w-full">
+        Start trading ▸
+      </button>
 
-        <button onClick={onStart} className="btn-primary mt-5 w-full">
-          Open the market →
-        </button>
-      </article>
+      {/* Secondary, tucked-away option */}
+      <label className="flex cursor-pointer items-center justify-center gap-2 text-center text-sm text-secondary">
+        <input
+          type="checkbox"
+          checked={coachOn}
+          onChange={(e) => onCoach(e.target.checked)}
+          className="h-4 w-4 accent-[var(--tw-accent,currentColor)]"
+        />
+        Show a suggested fair price while I quote
+      </label>
     </div>
   );
 }
@@ -600,12 +637,12 @@ function FillCard({
         </p>
       ) : (
         <p className="mt-1 text-base font-semibold text-muted">
-          No trade — you stood aside (or nobody lifted your market).
+          No trade: you stood aside (or nobody lifted your market).
         </p>
       )}
       {traded && !fill.adverse && (
         <p className="mt-1 text-sm text-secondary">
-          Uninformed flow paid your spread — clean edge.
+          Uninformed flow paid your spread: clean edge.
         </p>
       )}
       {traded && fill.adverse && (

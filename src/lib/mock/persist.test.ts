@@ -12,6 +12,7 @@ import {
   clearActiveSession,
   deserializeSession,
   loadActiveSession,
+  mockActiveKey,
   saveActiveSession,
   serializeSession,
   type KeyValueStore,
@@ -84,17 +85,17 @@ describe("save → load round-trip via injected store", () => {
   it("persists under the namespaced key and loads an equal session", () => {
     const store = fakeStore();
     const s = midInterviewSession();
-    saveActiveSession(s, store);
-    expect(store.map.has(MOCK_ACTIVE_KEY)).toBe(true);
-    expect(loadActiveSession(store)).toEqual(s);
+    saveActiveSession(s, "alice", store);
+    expect(store.map.has(mockActiveKey("alice"))).toBe(true);
+    expect(loadActiveSession("alice", store)).toEqual(s);
   });
 
   it("resuming mid-interview restores index, responses, and status", () => {
     const store = fakeStore();
     const s = midInterviewSession();
-    saveActiveSession(s, store);
+    saveActiveSession(s, "alice", store);
 
-    const resumed = loadActiveSession(store)!;
+    const resumed = loadActiveSession("alice", store)!;
     expect(resumed.status).toBe("running");
     expect(resumed.index).toBe(s.index);
     expect(resumed.index).toBe(1); // advanced past the first question
@@ -109,11 +110,60 @@ describe("save → load round-trip via injected store", () => {
 describe("clear removes the persisted session", () => {
   it("wipes the key so a subsequent load returns null", () => {
     const store = fakeStore();
-    saveActiveSession(midInterviewSession(), store);
-    expect(loadActiveSession(store)).not.toBeNull();
-    clearActiveSession(store);
-    expect(store.map.has(MOCK_ACTIVE_KEY)).toBe(false);
-    expect(loadActiveSession(store)).toBeNull();
+    saveActiveSession(midInterviewSession(), "alice", store);
+    expect(loadActiveSession("alice", store)).not.toBeNull();
+    clearActiveSession("alice", store);
+    expect(store.map.has(mockActiveKey("alice"))).toBe(false);
+    expect(loadActiveSession("alice", store)).toBeNull();
+  });
+});
+
+describe("per-user scoping — no cross-account session leak", () => {
+  it("does NOT resume one user's mock session under a different user", () => {
+    const store = fakeStore();
+    const aliceSession = midInterviewSession();
+    saveActiveSession(aliceSession, "alice", store);
+
+    // Bob logs in on the same browser: he must NOT see Alice's in-progress
+    // interview — this is the cross-account leak the scoping fixes.
+    expect(loadActiveSession("bob", store)).toBeNull();
+    // ...and the logged-out / anonymous namespace is separate too.
+    expect(loadActiveSession(null, store)).toBeNull();
+
+    // Alice still resumes her own session on the same device.
+    expect(loadActiveSession("alice", store)).toEqual(aliceSession);
+  });
+
+  it("keeps each account's session independent (switch back and forth)", () => {
+    const store = fakeStore();
+    const alice = midInterviewSession();
+    const bob = midInterviewSession();
+
+    saveActiveSession(alice, "alice", store);
+    saveActiveSession(bob, "bob", store);
+
+    // Each user resumes ONLY their own session; keys don't collide.
+    expect(loadActiveSession("alice", store)).toEqual(alice);
+    expect(loadActiveSession("bob", store)).toEqual(bob);
+
+    // Clearing Bob's session leaves Alice's untouched.
+    clearActiveSession("bob", store);
+    expect(loadActiveSession("bob", store)).toBeNull();
+    expect(loadActiveSession("alice", store)).toEqual(alice);
+  });
+
+  it("treats username casing as the same user (stable scope)", () => {
+    const store = fakeStore();
+    const s = midInterviewSession();
+    saveActiveSession(s, "Alice", store);
+    expect(loadActiveSession("alice", store)).toEqual(s);
+  });
+
+  it("derives the per-user key from the versioned base key", () => {
+    expect(mockActiveKey("alice")).toBe(`${MOCK_ACTIVE_KEY}::alice`);
+    expect(mockActiveKey(null)).toBe(`${MOCK_ACTIVE_KEY}::anon`);
+    // Distinct users get distinct keys (that's what prevents the leak).
+    expect(mockActiveKey("alice")).not.toBe(mockActiveKey("bob"));
   });
 });
 
@@ -149,16 +199,16 @@ describe("malformed / stale blobs are ignored (never throw)", () => {
 
   it("loadActiveSession ignores a corrupt stored blob", () => {
     const store = fakeStore();
-    store.setItem(MOCK_ACTIVE_KEY, "{ corrupt");
-    expect(loadActiveSession(store)).toBeNull();
+    store.setItem(mockActiveKey("alice"), "{ corrupt");
+    expect(loadActiveSession("alice", store)).toBeNull();
   });
 });
 
 describe("SSR / no-storage safety", () => {
   it("all I/O helpers are safe no-ops when no backend is available", () => {
     const s = midInterviewSession();
-    expect(() => saveActiveSession(s, null)).not.toThrow();
-    expect(loadActiveSession(null)).toBeNull();
-    expect(() => clearActiveSession(null)).not.toThrow();
+    expect(() => saveActiveSession(s, "alice", null)).not.toThrow();
+    expect(loadActiveSession("alice", null)).toBeNull();
+    expect(() => clearActiveSession("alice", null)).not.toThrow();
   });
 });

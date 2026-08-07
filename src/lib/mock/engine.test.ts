@@ -39,19 +39,21 @@ describe("buildInterview — deterministic by seed", () => {
     expect(JSON.stringify(a)).not.toBe(JSON.stringify(b));
   });
 
-  it("has the requested counts and fixed math→brainteaser→behavioral order", () => {
+  it("has the requested counts and fixed math→brainteaser→marketMaking→behavioral order", () => {
     const s = buildInterview(CONFIG);
     const kinds = s.steps.map((x) => x.kind);
     expect(kinds.filter((k) => k === "math").length).toBe(3);
     expect(kinds.filter((k) => k === "brainteaser").length).toBe(2);
+    expect(kinds.filter((k) => k === "marketMaking").length).toBe(1);
     expect(kinds.filter((k) => k === "behavioral").length).toBe(2);
-    // Order: all math first, then brainteasers, then behavioral.
+    // Order: math, then brainteasers, then market-making, then behavioral.
     expect(kinds).toEqual([
       "math",
       "math",
       "math",
       "brainteaser",
       "brainteaser",
+      "marketMaking",
       "behavioral",
       "behavioral",
     ]);
@@ -107,6 +109,19 @@ function runToSummary(
         viaSpeech: speechSupported,
         elapsedMs: 8000,
       });
+    } else if (step.kind === "marketMaking") {
+      // Quote a tight, well-centred market each round until it settles.
+      const mid = step.trueValue;
+      let guard = 0;
+      while (guard++ < 20) {
+        s = mockReducer(s, {
+          type: "submitMmQuote",
+          stepId: step.id,
+          quote: { bid: mid - 2, ask: mid + 2, bidSize: 2, askSize: 2 },
+        });
+        const mm = s.responses.find((r) => r.stepId === step.id)?.mm;
+        if (mm?.done) break;
+      }
     } else {
       s = mockReducer(s, {
         type: "recordReflect",

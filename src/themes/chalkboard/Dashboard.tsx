@@ -1,9 +1,12 @@
 import { Link } from "react-router-dom";
 import type { CSSProperties } from "react";
 import { MASTERY_BAR } from "@/lib/mastery/config";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+} from "@/lib/calibration/reliability";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import type {
   DashboardTopicEntry,
   DashboardViewProps,
@@ -194,7 +197,7 @@ function VerdictMark({ state }: { state: MasteryState }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 ${VERDICT_CHIP[state]}`}
-      title={`${VERDICT_LABEL[state]} — calibration-aware verdict`}
+      title={`${VERDICT_LABEL[state]}: calibration-aware verdict`}
     >
       <svg width={22} height={22} viewBox="0 0 22 22" fill="none" aria-hidden="true">
         <path
@@ -471,7 +474,7 @@ function WeaknessRanking({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="font-sans text-sm text-secondary">
-        No graded evidence yet — work a few problems (or run the warm-up) and
+        No graded evidence yet. Work a few problems (or run the warm-up) and
         your weakest spots will be chalked up here, worst-most-certain first.
       </p>
     );
@@ -616,12 +619,13 @@ function ReliabilityChalkPlot({
           </div>
           <div className="label text-muted">Reliability diagram</div>
           <p className="mt-2 font-sans text-sm leading-relaxed text-secondary">
-            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches your accuracy.
+            This diagram only records work where you STATE a confidence. Just two
+            do that: {ELICITED_ACTIVITIES_SENTENCE}. Regular lessons and quizzes
+            don't count toward it.
           </p>
           <p className="mt-3 font-display text-base font-bold text-primary">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            {elicitedPairsNeeded(data.count, data.minPairs)} more of those to go.
           </p>
           <div className="mx-auto mt-2 h-2.5 w-full max-w-[15rem] overflow-hidden rounded-full border border-border-strong/40 bg-surface">
             <div
@@ -778,6 +782,11 @@ function ReliabilityChalkPlot({
             <span className="text-muted">(n = {data.headline.count})</span>.
           </p>
         )}
+        {data.sourceNote && (
+          <p className="font-sans text-xs leading-relaxed text-muted">
+            {data.sourceNote}
+          </p>
+        )}
         {cal && (
           <p className="font-sans text-[15px] font-semibold leading-relaxed text-primary">
             {cal.label}
@@ -843,7 +852,6 @@ export function ChalkboardDashboard({
               Progress Report
             </span>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2.5 !py-1.5 font-display !text-base !normal-case !tracking-normal"
@@ -870,7 +878,7 @@ export function ChalkboardDashboard({
           </h1>
           <ChalkUnderline className="mt-1 h-3 w-80 max-w-[85%]" />
           <p className="mt-3 max-w-2xl font-sans text-[15px] leading-relaxed text-secondary">
-            Your hand-graded progress across the syllabus — where the chalk marks
+            Your hand-graded progress across the syllabus: where the chalk marks
             are confident, where they're shaky, and what to practice next.
           </p>
 
@@ -883,7 +891,7 @@ export function ChalkboardDashboard({
                 <span className="font-semibold text-primary">
                   Teacher's note:
                 </span>{" "}
-                you haven't run the calibration warm-up yet — it tunes where your
+                you haven't run the calibration warm-up yet; it tunes where your
                 practice starts.{" "}
                 <Link
                   to={diagnosticHref}
@@ -925,7 +933,7 @@ export function ChalkboardDashboard({
                 </>
               ) : (
                 <p className="mt-1 font-sans text-sm leading-relaxed text-secondary">
-                  No clear weak spot yet — pick a fresh topic to explore, or run
+                  No clear weak spot yet. Pick a fresh topic to explore, or run
                   the warm-up to seed your starting point.
                 </p>
               )}
@@ -1021,7 +1029,7 @@ export function ChalkboardDashboard({
             <p className="max-w-md font-sans text-sm leading-relaxed text-secondary">
               {diagnosticDone
                 ? "Confidence drifting? Re-run the calibration warm-up any time to re-tune where practice begins."
-                : "Run the calibration warm-up to tune where your practice starts — it only takes a few minutes."}
+                : "Run the calibration warm-up to tune where your practice starts; it only takes a few minutes."}
             </p>
             <div className="flex shrink-0 flex-wrap gap-2">
               <Link

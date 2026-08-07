@@ -63,7 +63,7 @@ export function expCdf(lambda: number, t: number): number {
 }
 
 /**
- * Memorylessness: P(X > s + t | X > s) = P(X > t) = e^{−λt} — independent of s
+ * Memorylessness: P(X > s + t | X > s) = P(X > t) = e^{−λt}, independent of s
  * (the defining property of the exponential). Float.
  */
 export function expMemoryless(lambda: number, t: number): number {
@@ -100,7 +100,7 @@ export function normalBetween(mu: number, sigma: number, a: number, b: number): 
   return normalCdf(zScore(mu, sigma, b)) - normalCdf(zScore(mu, sigma, a));
 }
 
-/** P(μ − kσ ≤ X ≤ μ + kσ) = 2Φ(k) − 1 — the symmetric-interval mass. Float. */
+/** P(μ − kσ ≤ X ≤ μ + kσ) = 2Φ(k) − 1, the symmetric-interval mass. Float. */
 export function normalSymmetric(k: number): number {
   return 2 * normalCdf(k) - 1;
 }

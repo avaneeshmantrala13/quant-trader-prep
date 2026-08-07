@@ -36,7 +36,7 @@ const PMF_THEME = [
 
 /**
  * P(X = k) for X ~ Poisson(λ). Traps: dropping the e^{−λ} normaliser (λ^k/k!),
- * and off-by-one in k (reporting P(X=k−1) or P(X=k+1) — a very common slip).
+ * and off-by-one in k (reporting P(X=k−1) or P(X=k+1), a very common slip).
  */
 export function buildPoissonPmfInstance(
   rng: Rng,
@@ -180,7 +180,7 @@ export function buildPoissonVarianceInstance(
     `Suppose ${th.unit} follow a Poisson distribution with mean λ = ${lambda}. ` +
     `What is the VARIANCE of the count? (Whole number.)`;
   const explanation =
-    `A Poisson distribution has Var(X) = λ = ${lambda} — its variance equals its mean. ` +
+    `A Poisson distribution has Var(X) = λ = ${lambda}, its variance equals its mean. ` +
     `(The standard deviation is √λ = ${Math.sqrt(lambda).toFixed(2)}.)`;
 
   return {
@@ -379,7 +379,7 @@ export function buildPoissonSuperInstance(
 
 /**
  * "Which stream first": for two independent Poisson streams (rates r1, r2) the
- * next event is from stream 1 w.p. r1/(r1+r2) — exact rational. Traps: r1/r2
+ * next event is from stream 1 w.p. r1/(r1+r2), exact rational. Traps: r1/r2
  * (odds not probability), r2/(r1+r2) (the other stream), ½ (ignoring the rates).
  */
 export function buildPoissonFirstStreamInstance(
@@ -523,7 +523,7 @@ export function buildNoEventProbInstance(
     `What is the probability that the FIRST ${th.ev.replace(/s$/, "")} arrives only AFTER ${t} ${th.t} (i.e. no ${th.ev} in the first ${t} ${th.t})? (Round to ${dp} decimals.)`;
   const explanation =
     `P(first arrival > t) = P(0 events in [0,t]) = e^{−λt} = e^{−${rate}·${t}} = e^{−${m}} = ${decText(value, dp)}. ` +
-    `(Equivalently, the first interarrival — an Exp(λ) — exceeds t.)`;
+    `(Equivalently, the first interarrival, an Exp(λ), exceeds t.)`;
 
   return {
     answer,

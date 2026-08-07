@@ -49,11 +49,14 @@ export function roundScore(correct: number, total: number): number {
  * "Best X%" and the Summary "Mastery %"), and it is DISTINCT from the binary
  * `roundScore` above.
  *
- * `roundScore` (fraction of items ULTIMATELY correct, ignoring hints) drives the
- * lenient advance/unlock GATE and remediation so that using hints can never
- * bounce a learner below the pass bar. `creditRoundScore` reflects HOW MUCH help
- * was needed: a question answered correctly after 2 hints earns 0.45 credit, so
- * a 5/5 all-correct-after-2-hints round displays 45% even though the gate is met.
+ * `roundScore` (fraction of items ULTIMATELY correct, ignoring hints) is a raw,
+ * honest tally shown alongside — and it still drives the lenient FORCED
+ * finish-remediation trigger (so a binary-passing round is never bombarded with
+ * an auto-launched descent). `creditRoundScore` reflects HOW MUCH help was
+ * needed: a question answered correctly after 2 hints earns 0.45 credit, so a
+ * 5/5 all-correct-after-2-hints round displays 45%. This credit-weighted score
+ * is the value gated against the mastery bar (see {@link meetsMasteryGate}), so
+ * a hint-heavy round does NOT falsely read "mastered".
  *
  * `credits` is the parallel per-item credit array (each ∈ [0,1] from the rung
  * schedule); non-finite entries are treated as 0. Returns 0 when `total <= 0`.
@@ -78,4 +81,22 @@ export function creditForRung(
   highestRung: HintRungReached,
 ): number {
   return creditForEpisode(correct, highestRung);
+}
+
+/**
+ * THE mastery/pass gate (single source of truth for `recordAttempt`): a level is
+ * mastered ⇔ its CREDIT-WEIGHTED visible mastery clears the bar.
+ *
+ * Pass the SAME credit-weighted score the learner sees ({@link creditRoundScore},
+ * which for hint-free MCQ rounds equals {@link roundScore}) — NOT the lenient
+ * binary "ultimately correct" fraction. This is the fix for the settlement bug
+ * where a 4/5 round answered only after the final hint (≈22% credit) was stamped
+ * "Mastered" because the gate read the raw 80% score instead of the 22% mastery.
+ * A clean few/no-hint round keeps near-full credit and still clears the bar.
+ */
+export function meetsMasteryGate(
+  creditWeightedScore: number,
+  masteryThreshold: number,
+): boolean {
+  return creditWeightedScore >= masteryThreshold;
 }

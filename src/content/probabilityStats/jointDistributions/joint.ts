@@ -3,7 +3,7 @@ import { F } from "../coreSolvers";
 
 /**
  * Exact solvers for **jointly continuous random variables** and transformations
- * (the `probability::Joint Distributions` topic; UT M362K chs. 6–7 — academic
+ * (the `probability::Joint Distributions` topic; UT M362K chs. 6–7, academic
  * for interviews). All exact rationals.
  *
  *   • Normalising a joint density f(x,y)=c·xy on [0,A]×[0,B]:

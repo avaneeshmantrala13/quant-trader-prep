@@ -298,7 +298,7 @@ export function buildJointMarginalInstance(
   );
   push(
     marginalY(w, row),
-    `${fracText(marginalY(w, row))} is P(Y=${yVals[row]}) — the wrong variable's marginal. Sum along the X=${xVals[row]} ROW, not the column.`,
+    `${fracText(marginalY(w, row))} is P(Y=${yVals[row]}), the wrong variable's marginal. Sum along the X=${xVals[row]} ROW, not the column.`,
   );
   push(
     condProbXgivenY(w, row, 0),
@@ -353,7 +353,7 @@ export function buildJointConditionalInstance(
   );
   push(
     condProbXgivenY(w, 1 - row, col),
-    `${fracText(condProbXgivenY(w, 1 - row, col))} is P(X=${xVals[1 - row]}|Y=${yVals[col]}) — the other X value in the same column.`,
+    `${fracText(condProbXgivenY(w, 1 - row, col))} is P(X=${xVals[1 - row]}|Y=${yVals[col]}), the other X value in the same column.`,
   );
 
   const prompt =
@@ -395,7 +395,7 @@ export function buildJointIndependenceInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(w[row][col], total),
-    `${fracText(F(w[row][col], total))} is the ACTUAL joint P(X=${xVals[row]}, Y=${yVals[col]}); the question asks what it WOULD be under independence — the product of the marginals.`,
+    `${fracText(F(w[row][col], total))} is the ACTUAL joint P(X=${xVals[row]}, Y=${yVals[col]}); the question asks what it WOULD be under independence, the product of the marginals.`,
   );
   push(
     marginalX(w, row),

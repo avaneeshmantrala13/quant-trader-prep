@@ -52,6 +52,10 @@ const PLAN_HYPER: AttackPlan =
 const PLAN_POKER: AttackPlan =
   "Let's make a plan. (1) What exact card pattern defines the hand you're counting — which ranks and suits must line up? (2) Step by step, how many independent choices build one such hand, and does order among those choices matter? (3) Setting favorable hands against every possible hand, what single count or chance is the question really asking for?";
 
+/** Arithmetic-series / growth totals: name the rule → the range → the total. */
+const PLAN_SERIES: AttackPlan =
+  "Let's make a plan. (1) What rule generates the terms — do they step by a fixed amount, grow by a fixed factor, or follow a divisibility rule? (2) Within the range the question specifies, what are the first and last terms and how many terms are there? (3) What single total or count are you assembling once the rule and the range are pinned down?";
+
 /* -------------------------------------------------------------------------- */
 /*  Family → plan (most specific)                                             */
 /* -------------------------------------------------------------------------- */
@@ -66,6 +70,17 @@ function planForFamily(family: string): AttackPlan | null {
   }
 
   switch (family) {
+    // Arithmetic-series / growth families in the "Number Theory & Counting"
+    // section. They must win BEFORE the "counting" section keyword below, which
+    // otherwise hands "sum of the odd integers" / "sum of a range" / "doubling
+    // backward by periods" the ordered-vs-unordered SELECTION plan (D5). The
+    // genuine selection families (cold-storage, grid-rectangles, round-robin,
+    // arrangements, count-multiples) keep PLAN_COUNTING / PLAN_ARRANGEMENTS.
+    case "genSumOddsRangeNumeric":
+    case "genSumRangeNumeric":
+    case "genDoublingCoverageNumeric":
+      return PLAN_SERIES;
+
     case "genExpectedValue":
     case "genExpectedValueNumeric":
     case "genFairValueNumeric":

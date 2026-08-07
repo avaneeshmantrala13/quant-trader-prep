@@ -123,8 +123,14 @@ const SIM_BY_MISCONCEPTION: Record<string, string> = {
   [MISCONCEPTION.conjunctionFallacy]: "two-independent-events",
   // Free-response arithmetic error modes — previously all leaked to coin-flips.
   [MISCONCEPTION.andMeansAdd]: "two-independent-events", // P(A AND B): fixes the reported bug
-  [MISCONCEPTION.orMeansAddNoOverlap]: "venn-two-events",
-  [MISCONCEPTION.complementConfusion]: "venn-two-events",
+  [MISCONCEPTION.orMeansAddNoOverlap]: "venn-two-events", // A∪B inclusion–exclusion: Venn fits
+  // NOTE: `complementConfusion` (reporting p vs 1−p) is DELIBERATELY absent. The
+  // Venn two-events sim only illustrates A∩B / A∪B set relations, NOT a 1−p
+  // complement — pinning it here misrouted gambler's-ruin (`genRuin*`) and
+  // geometric-area (`genGeoArea*`) complement slips to a set-overlap sim. With
+  // no confident tag-level sim, resolution falls through to family/section (e.g.
+  // a geometric-area complement → the dartboard sim, a ruin complement → the
+  // Gambler's-Ruin sim) or, failing that, `null` → the generic elicitation.
   [MISCONCEPTION.atLeastOneNaive]: "two-independent-events",
   [MISCONCEPTION.orderedVsUnordered]: "sample-space",
   [MISCONCEPTION.facesNotObjects]: "dice-rolls",
@@ -160,6 +166,14 @@ const SIM_BY_FAMILY: Record<string, string> = {
   genCltStatement: "clt",
   genLlnStatement: "clt",
   genCltCondition: "clt",
+  // Genuine sample-mean / difference-of-means CLT families that live in the
+  // "Variance, Covariance & the CLT" section. The SECTION itself is now a
+  // no-link (below): covariance/correlation/variance-combination items get NO
+  // sim (the CLT bell-curve sim doesn't illustrate Cov, ρ, or Var(aX+bY)), so
+  // the CLT sim is reachable ONLY for these genuinely-CLT families.
+  genCltTail: "clt",
+  genCltDiffZ: "clt",
+  genCltDiffZNumeric: "clt",
   // Batch-2: Core Probability converted free-response families.
   genUnionNumeric: "venn-two-events",
   genIntersectionIndepNumeric: "two-independent-events",
@@ -173,26 +187,67 @@ const SIM_BY_FAMILY: Record<string, string> = {
   // Batch-2: Interview Games converted EV families.
   genReRollDieNumeric: "expected-value",
   genFairValueNumeric: "expected-value",
-  // Joint-distribution generators (Bucket 2) → the joint-density double-integral.
+  // Joint-distribution generators. The joint-density DOUBLE-INTEGRAL heatmap
+  // ("chance BOTH continuous variables land in the box") fits ONLY the genuine
+  // continuous bivariate families. The "Joint Distributions" SECTION is a
+  // no-link (below) so the following families never inherit the heatmap by
+  // accident:
+  //   • genTransform is a SINGLE-variable Y=X² CDF transform (no joint density);
+  //   • genJointMarginal / genJointConditional / genJointCovariance are DISCRETE
+  //     pmf-table problems the continuous heatmap never illustrates.
+  // Those four resolve to `null` → the generic elicitation instead.
   genJointNorm: "joint-density-integral",
-  genJointMean: "expected-value",
   genJointSum: "joint-density-integral",
-  genTransform: "joint-density-integral",
-  genJointMarginal: "joint-density-integral",
-  genJointConditional: "joint-density-integral",
-  genJointIndependence: "two-independent-events",
-  genJointCovariance: "joint-density-integral",
   genSumDensityRect: "joint-density-integral",
+  genJointIndependence: "two-independent-events",
+  genJointMean: "expected-value",
+  // --- Stochastic random-walk / gambler's-ruin / hitting-time families -------
+  // Previously EVERY Markov item pinned to the stationary-distribution sim
+  // (`SECTION_SIM_OVERRIDES["Markov Chains"]`), so the purpose-built Gambler's-
+  // Ruin / Random-Walk sim was NEVER surfaced. These absorbing-walk / ruin /
+  // hitting-time / pattern-wait families are illustrated by the random-walk sim,
+  // NOT by a stationary distribution. Stationary families keep `markov-chain`.
+  genRuin: "gamblers-ruin",
+  genRuinNumeric: "gamblers-ruin",
+  genRuinReach: "gamblers-ruin",
+  genRuinReachNumeric: "gamblers-ruin",
+  genBoldPlay: "gamblers-ruin",
+  genBoldPlayNumeric: "gamblers-ruin",
+  genLineWalk: "gamblers-ruin",
+  genCubeWalk: "gamblers-ruin",
+  genPolygonWalk: "gamblers-ruin",
+  genGridWalk: "gamblers-ruin",
+  genRunHeads: "gamblers-ruin",
+  genTwoInARow: "gamblers-ruin",
+  genResetChain: "gamblers-ruin",
+  genPatternRace: "gamblers-ruin",
+  genPatternRaceNumeric: "gamblers-ruin",
+  genPatternWaitNumeric: "gamblers-ruin",
+  // Stationary-distribution families keep the stationary sim (pinned explicitly
+  // so a catalog reorder can't steal them).
+  genTwoStateStationary: "markov-chain",
+  genThreeStateStationary: "markov-chain",
+  genStationaryReward: "markov-chain",
+  // --- Game theory: only the explicit 2×2 mixed-strategy VALUE families fit ---
+  // the mixed-strategy matrix sim. Dominant-strategy (PD), sequential (entry),
+  // spatial (Hotelling), threshold (beauty), volunteer, spread and agent-
+  // optimization games do NOT — so the "Game Theory & Puzzles" SECTION is a
+  // no-link (below) and only these families reach the matrix sim.
+  genValue2x2: "game-theory-matrix",
+  genValue3x2: "game-theory-matrix",
 };
 
 /**
  * Sections claimed by MULTIPLE sims (via their `topics`) resolve ambiguously
- * under plain inversion, so we pick the single best default here. The other
+ * under plain inversion, so we pick the single best default here. Some other
  * claimants stay reachable through the misconception/family maps (e.g.
  * Conditional Probability defaults to `bayes-natural-frequency`, while
- * `monty-hall` / `venn-two-events` / `poker-pot-odds` remain reachable). A few
- * unambiguous sections are listed too, purely to pin the choice against future
- * catalog reordering.
+ * `venn-two-events` / `two-independent-events` remain reachable via family maps
+ * for the Core-Probability set families). NOTE: `monty-hall` and
+ * `poker-pot-odds` have no family/misconception mapping and are therefore NOT
+ * currently reachable through the ladder — they are surfaced only in the
+ * Simulations gallery. A few unambiguous sections are listed too, purely to pin
+ * the choice against future catalog reordering.
  */
 const SECTION_SIM_OVERRIDES: Record<string, string> = {
   "Core Probability": "coin-flips",
@@ -225,6 +280,28 @@ const EXPLICIT_NO_LINK_SECTIONS = new Set<string>([
   "Continuous Distributions",
   "Poisson Distribution & Process",
   "Branching Processes",
+  // Sections with NO confident SECTION-level sim: the section spans several
+  // sub-topics whose only fitting sims are per-FAMILY (wired in SIM_BY_FAMILY),
+  // so pinning a single section default would misroute the rest. At section
+  // granularity these return `null` → the generic elicitation, and the right
+  // sim is surfaced only when the family/misconception resolves it.
+  //  • Variance/Cov/CLT: CLT sim fits genCltTail/genCltDiffZ only, NOT the
+  //    covariance/correlation/variance-combination families (Cov, ρ, Var(aX+bY),
+  //    Markov's inequality) which have no sim.
+  //  • Joint Distributions: the double-integral heatmap fits only the genuine
+  //    continuous bivariate families, NOT the discrete pmf tables or the single-
+  //    variable Y=X² transform.
+  //  • Game Theory & Puzzles: the 2×2 mixed-strategy matrix fits only gt-4's
+  //    value families, NOT PD/entry/Hotelling/beauty/volunteer/spread/agents.
+  //  • Number Theory & Counting: genuine counting families keep the sample-space
+  //    sim via SIM_BY_FAMILY; arithmetic-series / growth items have no sim.
+  //  • Continuous-Time Markov Chains: the discrete stationary sim is a category
+  //    error for CTMC holding-times / M/M/1 queues (no CTMC sim exists).
+  "Variance, Covariance & the CLT",
+  "Joint Distributions",
+  "Game Theory & Puzzles",
+  "Number Theory & Counting",
+  "Continuous-Time Markov Chains",
 ]);
 
 /**

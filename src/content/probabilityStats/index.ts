@@ -14,7 +14,7 @@ import { varianceCovarianceCltLevels } from "./varianceCovarianceClt/levels";
 import { poissonLevels } from "./poisson/levels"; // Bucket 1
 import { continuousDistributionsLevels } from "./continuousDistributions/levels"; // Bucket 1
 import { brownianMotionLevels } from "./brownianMotion/levels"; // Bucket 1
-// Bucket 2 — seven FIRST-CLASS course-completeness topics (each its own section
+// Bucket 2, seven FIRST-CLASS course-completeness topics (each its own section
 // / mastery bucket / skill-graph node / remediation-DAG node), formerly folded
 // into a single "Extra Relevant Knowledge" bucket.
 import { mgfLevels } from "./mgf/levels"; // → "Moment Generating Functions"
@@ -26,7 +26,7 @@ import { limitTheoremsLevels } from "./limitTheorems/levels"; // → "Limit Theo
 import { markovStructureLevels } from "./markovStructure/levels"; // → "Markov Chain Structure"
 
 /**
- * Probability & Statistics — subcategory aggregator.
+ * Probability & Statistics, subcategory aggregator.
  *
  * Taxonomy: Category → Subcategory → Schema.
  *   Category    = "Probability & Statistics" (rides the Probability/Math track)
@@ -36,8 +36,8 @@ import { markovStructureLevels } from "./markovStructure/levels"; // → "Markov
  * DIFFICULTY ORDER: the subcategory blocks below are concatenated in
  * EASIEST → HARDEST order so the Probability/Math track's section dividers ramp
  * up difficulty (Core Probability, defined in `../probability/levels.ts`, is
- * always prepended at the front as the foundation). The order — and the
- * rationale for each topic — is documented in `CONTENT_NOTES.md`. A downstream
+ * always prepended at the front as the foundation). The order, and the
+ * rationale for each topic, is documented in `CONTENT_NOTES.md`. A downstream
  * topic-selector reads section order directly from this level array, so the
  * export order below is the source of truth for "Level 1 … Level N".
  *
@@ -48,8 +48,8 @@ import { markovStructureLevels } from "./markovStructure/levels"; // → "Markov
  * solvers live in `./coreSolvers.ts` and generator scaffolding in
  * `./coreScaffold.ts`.
  *
- * SECTION CONSOLIDATION: the two small "game"-flavoured families — Game Theory
- * (strategic equilibria) and Game Puzzle (betting/odds puzzles) — are merged
+ * SECTION CONSOLIDATION: the two small "game"-flavoured families. Game Theory
+ * (strategic equilibria) and Game Puzzle (betting/odds puzzles), are merged
  * into ONE labeled segment, `section: "Game Theory & Puzzles"` (retagged in
  * their own `levels.ts`). Because a section divider renders wherever `section`
  * changes, the merged levels must be CONTIGUOUS and ramp Easy→Hard. The two
@@ -72,10 +72,10 @@ const gameTheoryAndPuzzleLevels: Level[] = [
 ];
 
 /**
- * Bucket 2 — **course-completeness topics**: UT M362K/M362M material that no
+ * Bucket 2, **course-completeness topics**: UT M362K/M362M material that no
  * surveyed firm tests (per FIRM_TIMED_ASSESSMENTS), appended at the very END so
  * the trader-prep spine stays uncluttered while the course is complete. These
- * are now SEVEN FIRST-CLASS topics — each block carries its OWN `section`
+ * are now SEVEN FIRST-CLASS topics, each block carries its OWN `section`
  * (`Moment Generating Functions`, `Gamma Distribution`, `Joint Distributions`,
  * `Branching Processes`, `Continuous-Time Markov Chains`, `Limit Theorems`,
  * `Markov Chain Structure`), so each is an independent mastery bucket /
@@ -98,26 +98,26 @@ const courseCompletionLevels: Level[] = [
  * Probability (the parametric on-ramp + hard interview problems) is prepended
  * separately in `../probability/levels.ts`.
  *
- *   1. Combinatorial Analysis         — elementary counting; low concept load.
- *   2. Geometric Probability          — a single idea (favourable measure ÷ total).
- *   3. Conditional Probability        — conditioning / Bayes; computationally light.
- *   4. Expected Value                 — the broad EV toolkit; builds on the above.
- *   4b. Conditional Expectation       — E[X|Y], tower rule, random sums (M362M). [ADD]
- *   5. Poisson Distribution & Process — discrete rare-event counts (uses E[X]=λ). [Bucket 1]
- *   6. Betting & Sizing               — Kelly: a focused application of EV + odds.
- *   7. Order Statistics               — continuous order stats (min, 1/n!, median).
- *   8. Continuous Distributions       — density integration, Uniform/Exp/Normal. [Bucket 1]
- *   9. Variance, Covariance & the CLT — second moments, CLT tails, concentration.
- *  10. Markov Chains                  — state recursions, ruin, stationary (πP=π). [+Bucket 1]
- *  11. Brownian Motion                — drift + √t variance scaling (advanced). [Bucket 1]
- *  12. Game Theory & Puzzles          — equilibria, mixed strategies, market making.
- *  13. Moment Generating Functions     — course completeness (M362K). [Bucket 2]
- *  14. Gamma Distribution              — course completeness (M362K). [Bucket 2]
- *  15. Joint Distributions             — course completeness (M362K). [Bucket 2]
- *  16. Branching Processes             — course completeness (M362M). [Bucket 2]
- *  17. Continuous-Time Markov Chains   — course completeness (M362M). [Bucket 2]
- *  18. Limit Theorems                  — course completeness (M362K). [Bucket 2]
- *  19. Markov Chain Structure          — course completeness (M362M). [Bucket 2]
+ *   1. Combinatorial Analysis        , elementary counting; low concept load.
+ *   2. Geometric Probability         , a single idea (favourable measure ÷ total).
+ *   3. Conditional Probability       , conditioning / Bayes; computationally light.
+ *   4. Expected Value                , the broad EV toolkit; builds on the above.
+ *   4b. Conditional Expectation      . E[X|Y], tower rule, random sums (M362M). [ADD]
+ *   5. Poisson Distribution & Process, discrete rare-event counts (uses E[X]=λ). [Bucket 1]
+ *   6. Betting & Sizing              . Kelly: a focused application of EV + odds.
+ *   7. Order Statistics              , continuous order stats (min, 1/n!, median).
+ *   8. Continuous Distributions      , density integration, Uniform/Exp/Normal. [Bucket 1]
+ *   9. Variance, Covariance & the CLT, second moments, CLT tails, concentration.
+ *  10. Markov Chains                 , state recursions, ruin, stationary (πP=π). [+Bucket 1]
+ *  11. Brownian Motion               , drift + √t variance scaling (advanced). [Bucket 1]
+ *  12. Game Theory & Puzzles         , equilibria, mixed strategies, market making.
+ *  13. Moment Generating Functions    , course completeness (M362K). [Bucket 2]
+ *  14. Gamma Distribution             , course completeness (M362K). [Bucket 2]
+ *  15. Joint Distributions            , course completeness (M362K). [Bucket 2]
+ *  16. Branching Processes            , course completeness (M362M). [Bucket 2]
+ *  17. Continuous-Time Markov Chains  , course completeness (M362M). [Bucket 2]
+ *  18. Limit Theorems                 , course completeness (M362K). [Bucket 2]
+ *  19. Markov Chain Structure         , course completeness (M362M). [Bucket 2]
  *
  * Placement rationale (UT_TOPICS_BUILD_PLAN.md): Poisson follows Expected Value
  * (it uses E[X]=λ); Continuous Distributions precedes Variance/CLT so the Normal

@@ -9,7 +9,7 @@ import {
 } from "./generators";
 
 /**
- * Probability & Statistics — **Conditional Expectation & the Tower Rule** (UT
+ * Probability & Statistics, **Conditional Expectation & the Tower Rule** (UT
  * M362M ch. 1; also M362K expectation). The genuinely-missing E[X|Y] / law-of-
  * total-expectation unit: conditional means from a joint table, the mixture form
  * of iterated expectation, Wald's random-sum identity, and the law of total
@@ -17,7 +17,7 @@ import {
  * after Expected Value (they extend E[X] by conditioning). Exact rational solvers
  * in `./condExp.ts`; generators + distractor taxonomy in `./generators.ts`.
  *
- * topicKey/section: `probability::Conditional Expectation` — maps to UT **M362M**
+ * topicKey/section: `probability::Conditional Expectation`, maps to UT **M362M**
  * (shared with the M362K expectation chapter) for the Case-A course projection.
  */
 const SECTION = "Conditional Expectation";
@@ -38,7 +38,7 @@ export const conditionalExpectationLevels: Level[] = [
     lesson: {
       paragraphs: [
         "A conditional expectation E[X|Y=y] is just an ordinary mean computed in the REDUCED world where Y=y. From a joint table you keep only that column and RENORMALISE by its probability P(Y=y): E[X|Y=y] = Σ_x x·P(X=x,Y=y) / P(Y=y). The two classic slips are forgetting to renormalise (dividing by the grand total instead of the column total) and ignoring the mass entirely (averaging the x-values).",
-        "The law of total expectation (the tower rule) rebuilds the unconditional mean by AVERAGING the conditional means, each weighted by how likely its condition is: E[X] = Σ_y P(Y=y)·E[X|Y=y]. Its most useful shape is the random sum: if you add up a random number N of independent pieces each of mean E[X], then E[S] = E[N]·E[X] — you MULTIPLY, never add.",
+        "The law of total expectation (the tower rule) rebuilds the unconditional mean by AVERAGING the conditional means, each weighted by how likely its condition is: E[X] = Σ_y P(Y=y)·E[X|Y=y]. Its most useful shape is the random sum: if you add up a random number N of independent pieces each of mean E[X], then E[S] = E[N]·E[X], you MULTIPLY, never add.",
       ],
       keyIdea:
         "E[X|Y=y] renormalises to the column; E[X]=Σ_y P(Y=y)E[X|Y=y]; a random sum has E[S]=E[N]E[X].",
@@ -80,8 +80,8 @@ export const conditionalExpectationLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "Iterated expectation, E[X] = E[E[X|Y]], says you can always compute a mean by first conditioning on a helper variable Y and then averaging the results. Concretely, E[X] = Σ_y P(Y=y)·E[X|Y=y]: the tower rule weights each conditional mean by the probability of its condition — NOT by an equal split. Getting the weights wrong (or reporting a single conditional mean) is the recurring error.",
-        "Variance decomposes the same way, but with TWO sources of spread. For a random sum S = X₁+…+X_N with N independent of the iid pieces, the law of total variance gives Var(S) = E[N]·Var(X) + Var(N)·E[X]². The first term is the within-batch spread; the second is the extra variability from the count N itself being random — and E[X] is SQUARED there. Dropping the second term, or forgetting to square E[X], are the two signature mistakes.",
+        "Iterated expectation, E[X] = E[E[X|Y]], says you can always compute a mean by first conditioning on a helper variable Y and then averaging the results. Concretely, E[X] = Σ_y P(Y=y)·E[X|Y=y]: the tower rule weights each conditional mean by the probability of its condition. NOT by an equal split. Getting the weights wrong (or reporting a single conditional mean) is the recurring error.",
+        "Variance decomposes the same way, but with TWO sources of spread. For a random sum S = X₁+…+X_N with N independent of the iid pieces, the law of total variance gives Var(S) = E[N]·Var(X) + Var(N)·E[X]². The first term is the within-batch spread; the second is the extra variability from the count N itself being random, and E[X] is SQUARED there. Dropping the second term, or forgetting to square E[X], are the two signature mistakes.",
       ],
       keyIdea:
         "E[X]=Σ_y P(Y=y)E[X|Y=y]; Var(S)=E[N]Var(X)+Var(N)E[X]² for a random sum.",

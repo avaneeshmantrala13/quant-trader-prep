@@ -167,8 +167,8 @@ describe("auction quiz generators: correct choice re-derives independently", () 
       const bid = Number(q.prompt.match(/bidding \$(\d+)/)![1]);
       const evWin = signal - bruteExpectedMax(m, n);
       const correct = q.choices[q.correctIndex];
-      if (bid < evWin) expect(correct.startsWith("+EV — even conditional")).toBe(true);
-      else expect(correct.startsWith("−EV — the winner's curse")).toBe(true);
+      if (bid < evWin) expect(correct.startsWith("+EV, even conditional")).toBe(true);
+      else expect(correct.startsWith("−EV, the winner's curse")).toBe(true);
     }
   });
 
@@ -191,8 +191,8 @@ describe("auction quiz generators: correct choice re-derives independently", () 
       const fNum = Number(fm[1]);
       const fDen = Number(fm[2]);
       const correct = q.choices[q.correctIndex];
-      if (fNum > 2 * fDen) expect(correct.startsWith("Yes —")).toBe(true);
-      else expect(correct.startsWith("No —")).toBe(true);
+      if (fNum > 2 * fDen) expect(correct.startsWith("Yes,")).toBe(true);
+      else expect(correct.startsWith("No,")).toBe(true);
     }
   });
 });

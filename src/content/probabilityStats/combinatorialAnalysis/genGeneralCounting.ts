@@ -31,12 +31,12 @@ import { cap, numericErrors } from "../coreScaffold";
  * re-derived, NAMED misconception, guaranteed distinct and ≠ the answer at the
  * grading precision (`numericErrors` dedupes and drops non-finite values).
  *
- * NONE of the source-dataset questions are user-facing — every playable item is
+ * NONE of the source-dataset questions are user-facing, every playable item is
  * freshly themed with different objects, stories, and numbers.
  */
 
 /* ========================================================================== */
-/* =================  1 — BRACKET FINAL: #1 vs #3 (numeric)  =============== */
+/* =================  1. BRACKET FINAL: #1 vs #3 (numeric)  =============== */
 /* ========================================================================== */
 
 const BRACKET_THEME = [
@@ -71,7 +71,7 @@ export function buildBracketFinalInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     oppOnly,
-    `That's only P(#3 on the opposite half) = (size/2)/(size−1) = ${fracText(oppOnly)}. You forgot that #2 must be on #1's half — otherwise #2 knocks #3 out before the final.`,
+    `That's only P(#3 on the opposite half) = (size/2)/(size−1) = ${fracText(oppOnly)}. You forgot that #2 must be on #1's half, otherwise #2 knocks #3 out before the final.`,
   );
   push(
     round1,
@@ -86,8 +86,8 @@ export function buildBracketFinalInstance(
     `A ${size}-competitor knockout draw is randomised, and the stronger seed always advances (seed i beats seed j whenever i < j). ` +
     `How probable is it that the top seed and the third seed avoid each other until the ${th.event}? (Round to ${dp} decimals.)`;
   const explanation =
-    `For the #1 and #3 seeds to meet in the final, #3 must be on the opposite half from #1 — probability (size/2)/(size−1) = ${half}/${size - 1} = ${fracText(oppOnly)}. ` +
-    `Given that, #2 (the only seed that beats #3) must land on #1's half so it can't reach #3 early — probability (size/2−1)/(size−2) = ${half - 1}/${size - 2} = ${fracText(F(half - 1, size - 2))}. ` +
+    `For the #1 and #3 seeds to meet in the final, #3 must be on the opposite half from #1, probability (size/2)/(size−1) = ${half}/${size - 1} = ${fracText(oppOnly)}. ` +
+    `Given that, #2 (the only seed that beats #3) must land on #1's half so it can't reach #3 early, probability (size/2−1)/(size−2) = ${half - 1}/${size - 2} = ${fracText(F(half - 1, size - 2))}. ` +
     `Multiplying: P = ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
@@ -108,7 +108,7 @@ export function buildBracketFinalInstance(
 }
 
 /* ========================================================================== */
-/* =================  2 — ROUND-1 OPPONENTS (numeric)  ===================== */
+/* =================  2. ROUND-1 OPPONENTS (numeric)  ===================== */
 /* ========================================================================== */
 
 const ROUND1_THEME = [
@@ -173,7 +173,7 @@ export function buildRound1Instance(
 }
 
 /* ========================================================================== */
-/* =================  3 — COMMON SEMICIRCLE (numeric)  ===================== */
+/* =================  3. COMMON SEMICIRCLE (numeric)  ===================== */
 /* ========================================================================== */
 
 const SEMICIRCLE_THEME = [
@@ -210,7 +210,7 @@ export function buildSemicircleInstance(
   );
   push(
     wrongExp1,
-    `(1/2)^n = ${fracText(wrongExp1)} is off by one in the exponent — there are only n−1 = ${n - 1} OTHER points to fall in the half-plane.`,
+    `(1/2)^n = ${fracText(wrongExp1)} is off by one in the exponent, there are only n−1 = ${n - 1} OTHER points to fall in the half-plane.`,
   );
   push(
     wrongExp2,
@@ -221,7 +221,7 @@ export function buildSemicircleInstance(
     `${n} ${th.obj} independently land at uniformly random points around ${th.place}. ` +
     `What is the probability that one half of the ring (some 180° arc) contains all ${n} of them at once? (Round to ${dp} decimals.)`;
   const explanation =
-    `Condition on which point is the clockwise-most of the group. For a fixed anchor, the other ${n - 1} points must all fall in the 180° arc clockwise from it — probability (1/2)^{${n}−1} = ${fracText(oneAnchor)}. ` +
+    `Condition on which point is the clockwise-most of the group. For a fixed anchor, the other ${n - 1} points must all fall in the 180° arc clockwise from it, probability (1/2)^{${n}−1} = ${fracText(oneAnchor)}. ` +
     `These ${n} anchor events are mutually exclusive, so P = n·(1/2)^{n−1} = ${n}·${fracText(oneAnchor)} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
@@ -242,7 +242,7 @@ export function buildSemicircleInstance(
 }
 
 /* ========================================================================== */
-/* =================  4 — POLYGON WALKERS: NO COLLISION (numeric)  ========= */
+/* =================  4. POLYGON WALKERS: NO COLLISION (numeric)  ========= */
 /* ========================================================================== */
 
 const POLYGON_THEME = [
@@ -253,7 +253,7 @@ const POLYGON_THEME = [
 
 /**
  * `n` agents, one per vertex of a regular n-gon, each steps to a uniformly
- * random adjacent vertex by a fair coin. P(no two collide) = 2/2^n — only the
+ * random adjacent vertex by a fair coin. P(no two collide) = 2/2^n, only the
  * all-clockwise and all-counter-clockwise outcomes avoid collisions. Traps:
  * counting only ONE all-same-direction outcome, 2/n, and a wrong permutation count.
  */
@@ -307,7 +307,7 @@ export function buildPolygonAntsInstance(
 }
 
 /* ========================================================================== */
-/* =================  5 — COUPON COLLECTOR (numeric)  ====================== */
+/* =================  5. COUPON COLLECTOR (numeric)  ====================== */
 /* ========================================================================== */
 
 const COUPON_THEME = [
@@ -371,7 +371,7 @@ export function buildCouponInstance(
 }
 
 /* ========================================================================== */
-/* =================  6 — LINEARITY: EXPECTED WORDS (numeric int)  ========= */
+/* =================  6. LINEARITY: EXPECTED WORDS (numeric int)  ========= */
 /* ========================================================================== */
 
 const WORDS_THEME = [
@@ -448,7 +448,7 @@ export function buildLinearityWordsInstance(
 }
 
 /* ========================================================================== */
-/* =================  7 — TWO WINS IN A ROW (numeric)  ===================== */
+/* =================  7. TWO WINS IN A ROW (numeric)  ===================== */
 /* ========================================================================== */
 
 const SCHEDULE_THEME = [
@@ -469,7 +469,7 @@ const WIN_SCHEDULES: [number, number, number][] = [
 
 /**
  * P(at least two CONSECUTIVE wins) across a fixed 3-match schedule with per-match
- * win probs. Traps: P(win all three) — one of several patterns; the sum of
+ * win probs. Traps: P(win all three), one of several patterns; the sum of
  * adjacent-pair win products (double-counts the all-win case); and P(≥1 win),
  * which is at-least-one, not two-in-a-row.
  */
@@ -494,7 +494,7 @@ export function buildTwoInRowScheduleInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     winAll,
-    `${fracText(winAll)} is P(win EVERY match) — only one of several patterns (WWW) that contain two in a row; WWL and LWW also count.`,
+    `${fracText(winAll)} is P(win EVERY match), only one of several patterns (WWW) that contain two in a row; WWL and LWW also count.`,
   );
   push(
     adjSum,
@@ -532,7 +532,7 @@ export function buildTwoInRowScheduleInstance(
 }
 
 /* ========================================================================== */
-/* =================  8 — RUN OF CONSECUTIVE SYMBOLS (numeric)  ============ */
+/* =================  8. RUN OF CONSECUTIVE SYMBOLS (numeric)  ============ */
 /* ========================================================================== */
 
 const RUN_THEME = [
@@ -576,7 +576,7 @@ export function buildConsecutiveRunInstance(
   );
   push(
     allTarget,
-    `p^spins = ${fracText(allTarget)} requires ALL ${spins} ${th.trial}s to be ${th.symbol}s — far stronger than a run of ${run}.`,
+    `p^spins = ${fracText(allTarget)} requires ALL ${spins} ${th.trial}s to be ${th.symbol}s, far stronger than a run of ${run}.`,
   );
 
   const prompt =
@@ -605,7 +605,7 @@ export function buildConsecutiveRunInstance(
 }
 
 /* ========================================================================== */
-/* =================  9 — FIRST CARD STRICTLY HIGHER (numeric)  ============ */
+/* =================  9. FIRST CARD STRICTLY HIGHER (numeric)  ============ */
 /* ========================================================================== */
 
 const HIGHER_THEME = [
@@ -614,7 +614,7 @@ const HIGHER_THEME = [
   { actor: "two contestants", act: "reveal" },
 ];
 
-/** Deck parameterisations [ranks, suits] — reduced decks only (never a full 13×4). */
+/** Deck parameterisations [ranks, suits], reduced decks only (never a full 13×4). */
 const DECK_PARAMS: [number, number][] = [
   [10, 4],
   [6, 4],
@@ -659,7 +659,7 @@ export function buildHigherCardInstance(
 
   const total = ranks * suits;
   const prompt =
-    `A custom deck has ${total} cards — ${ranks} ranks, ${suits} of each. ${cap(th.actor)} ${th.act} the top two cards in turn (no card is returned). ` +
+    `A custom deck has ${total} cards, ${ranks} ranks, ${suits} of each. ${cap(th.actor)} ${th.act} the top two cards in turn (no card is returned). ` +
     `How likely is the earlier card to outrank the later one (strictly higher rank)? (Round to ${dp} decimals.)`;
   const explanation =
     `Condition on the first card's rank: if it has j ranks below it, it beats suits·j of the remaining ${total - 1} cards. Averaging over the uniform first rank gives suits·(ranks−1)/(2·(ranks·suits−1)) = ${suits}·${ranks - 1}/(2·${total - 1}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
@@ -683,7 +683,7 @@ export function buildHigherCardInstance(
 }
 
 /* ========================================================================== */
-/* =================  10 — DE MORGAN: P(not A or not B) (numeric)  ========= */
+/* =================  10. DE MORGAN: P(not A or not B) (numeric)  ========= */
 /* ========================================================================== */
 
 const INCLEXCL_THEME = [

@@ -1,5 +1,12 @@
-import type { Level, NumericQuestion, Question, Track } from "@/types/content";
-import { genFairValueNumeric, genReRollDieNumeric, mixEVNumeric } from "./generators";
+import type { Level, Question, Track } from "@/types/content";
+import {
+  genCoinBetEvNumeric,
+  genDiceSumModeNumeric,
+  genExpMaxDiceNumeric,
+  genFairValueNumeric,
+  genReRollDieNumeric,
+  mixEVNumeric,
+} from "./generators";
 import {
   FERMI_FLASHCARDS,
   TRADING_NUMERIC_GENERATORS,
@@ -12,7 +19,7 @@ const N = TRADING_NUMERIC_GENERATORS;
 const Q = TRADING_QUIZ_GENERATORS;
 
 /**
- * Interview Games — EV, optimal stopping, and market making, the
+ * Interview Games. EV, optimal stopping, and market making, the
  * SIG / Citadel / Jane Street "decision game" genres. Levels blend exact EV
  * generators with hand-authored market-making scenarios.
  *
@@ -23,116 +30,16 @@ const Q = TRADING_QUIZ_GENERATORS;
  */
 
 /**
- * FREE-RESPONSE (numeric) conversion of the former `evBasics` MCQ pool (ig-1).
- * Every item is genuinely numeric (a fair-value EV, a distribution mode, an
- * expected maximum), so the whole level flips to `mode: "numeric"`. These are
- * STATIC, non-parametric items: rung 1 = the per-item `commonErrors` coaching
- * below (mined from each wrong MCQ choice's distractorRationale, tagged with a
- * machine-readable misconception and a leading question that WITHHOLDS the
- * answer); rung 5 = the existing verified `explanation`. There is no generator
- * family, so the rung-3 diff-numbers sibling does not render (accepted static
- * limitation). Coaching never states the answer.
+ * ig-1 "Pricing Fair Value" was a hand-authored STATIC pool of three numeric
+ * items (a coin-bet EV, the mode of a two-dice sum, and the expected MAXIMUM of
+ * dice). Those are now three exact parametric families in `./generators`
+ * (`genCoinBetEvNumeric`, `genDiceSumModeNumeric`, `genExpMaxDiceNumeric`) mixed
+ * into the level's `numericGenerator` below, so every item is freshly generated
+ * with a worked step-by-step `explanation`. This lets the tutor's rung-3
+ * worked-sibling builder render a real, different-numbers sibling for each item
+ * — notably the expected-maximum order-statistic item, which previously fell
+ * back to the generic caption because it had no generator.
  */
-const evBasicsNumeric: NumericQuestion[] = [
-  {
-    id: "ig-coinbet",
-    prompt:
-      "A fair coin is flipped once. You win $10 on heads and lose $6 on tails. What is the expected value of playing? (Enter a fraction or decimal.)",
-    answer: 2,
-    unit: "",
-    explanation:
-      "EV = 0.5·(+10) + 0.5·(−6) = 5 − 3 = $2. Positive EV, so you should take this bet (sizing aside).",
-    difficulty: "easy",
-    concept: "Expected value of a bet",
-    commonErrors: [
-      {
-        value: 4,
-        feedback:
-          "You netted the payoffs (10 − 6) but never weighted them by how often each happens. On a fair coin, what chance does each side carry, and how should that scale each payoff?",
-        misconception: "summed_payouts_no_weight",
-      },
-      {
-        value: 8,
-        feedback:
-          "You averaged (10 + 6) over the two sides, but tails LOSES six dollars. What sign should the losing payoff carry before you average?",
-        misconception: "dropped_loss_sign",
-      },
-      {
-        value: 16,
-        feedback:
-          "That adds the raw sizes 10 and 6 with no probabilities and no loss sign. Every expected-value term needs both a chance and a signed payoff — which did you drop?",
-        misconception: "summed_magnitudes",
-      },
-    ],
-    source: "EV of a coin bet",
-  },
-  {
-    id: "ig-dice-sum",
-    prompt:
-      "Two fair six-sided dice are rolled and summed. Which total is the single MOST likely? (Enter a fraction or decimal.)",
-    answer: 7,
-    unit: "",
-    explanation:
-      "7 has the most combinations (1-6, 2-5, 3-4, and reverses = 6 ways out of 36). Totals fall off symmetrically from 7.",
-    difficulty: "easy",
-    concept: "Discrete distribution mode",
-    commonErrors: [
-      {
-        value: 6,
-        feedback:
-          "Six is close, but count its combinations (1-5, 2-4, 3-3 and reverses) — that's just short of the peak. Which single total has the most combinations of all?",
-        misconception: "near_peak_not_mode",
-      },
-      {
-        value: 8,
-        feedback:
-          "Eight mirrors six and shares its count — one shy of the top. On which central sum do the dice combinations pile up the most?",
-        misconception: "near_peak_not_mode",
-      },
-      {
-        value: 2,
-        feedback:
-          "That total occurs only one way (1-1) — it's the LEAST likely, not the most. Re-read the prompt: which sum should the combinations favor most?",
-        misconception: "min_not_mode",
-      },
-    ],
-    source: "Sum of two dice",
-  },
-  {
-    id: "ig-max-dice",
-    prompt:
-      "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)? (Enter a fraction or decimal.)",
-    answer: 4.47,
-    decimals: 2,
-    unit: "",
-    explanation:
-      "P(max = k) = (2k − 1)/36. E[max] = Σ k·(2k−1)/36 = 161/36 ≈ 4.47. (Higher than a single die's 3.5, as expected for a maximum.)",
-    difficulty: "hard",
-    concept: "Order statistics / expected maximum",
-    commonErrors: [
-      {
-        value: 3.5,
-        feedback:
-          "That's the mean of a SINGLE die, but the maximum of two rolls is pulled upward. Should the average of the larger of two dice sit above or below one die's mean?",
-        misconception: "single_die_mean",
-      },
-      {
-        value: 4.0,
-        feedback:
-          "That looks like a round-number guess, not a computed expectation. Use P(max = k) = (2k − 1)/36 and sum k·P(max = k) — what value falls out?",
-        misconception: "guessed_midpoint",
-      },
-      {
-        value: 6,
-        feedback:
-          "Six is the LARGEST value the max can reach, not its average. The two dice rarely both hit the top — so where should the probability-weighted mean land?",
-        misconception: "max_not_mean",
-      },
-    ],
-    needsVerification: true,
-    source: "Expected maximum of two dice (order statistics)",
-  },
-];
 
 const stopping: Question[] = [
   {
@@ -147,14 +54,14 @@ const stopping: Question[] = [
     ],
     correctIndex: 0,
     explanation:
-      "EV = Σ P(first tails on flip k)·2ᵏ = Σ (1/2ᵏ)·2ᵏ = Σ 1 = ∞. This is the St. Petersburg paradox — the EV is infinite even though nobody would pay much to play (utility, not EV, governs the real decision).",
+      "EV = Σ P(first tails on flip k)·2ᵏ = Σ (1/2ᵏ)·2ᵏ = Σ 1 = ∞. This is the St. Petersburg paradox, the EV is infinite even though nobody would pay much to play (utility, not EV, governs the real decision).",
     difficulty: "expert",
     concept: "St. Petersburg paradox / divergent EV",
     distractorRationale: [
-      "Correct — each term contributes 1, so the sum diverges.",
+      "Correct, each term contributes 1, so the sum diverges.",
       "Only the first term's contribution.",
-      "A partial sum.",
-      "A partial sum.",
+      "That's only a partial sum of the payout series, not its full total.",
+      "That's only a partial sum of the payout series, not its full total.",
     ],
     needsVerification: true,
     source: "St. Petersburg paradox",
@@ -170,10 +77,10 @@ const stopping: Question[] = [
     difficulty: "expert",
     concept: "Optimal stopping (secretary problem)",
     distractorRationale: [
-      "Correct — 1/e ≈ 0.368.",
+      "Correct, 1/e ≈ 0.368.",
       "The intuitive coin-flip guess.",
-      "Underestimate.",
-      "Underestimate.",
+      "That underestimates the optimal-stopping success rate.",
+      "That underestimates the optimal-stopping success rate.",
     ],
     needsVerification: true,
     source: "Secretary problem / optimal stopping",
@@ -192,8 +99,8 @@ const marketMaking: Question[] = [
     difficulty: "expert",
     concept: "Adverse selection / market-making P&L",
     distractorRationale: [
-      "Correct — −12/10 = −$1.20.",
-      "Assumes a symmetric market breaks even — but you only get filled by the informed side.",
+      "Correct, −12/10 = −$1.20.",
+      "Assumes a symmetric market breaks even, but you only get filled by the informed side.",
       "Sign error (you lose, not gain).",
       "Forgot to divide by the 10 outcomes.",
     ],
@@ -216,7 +123,7 @@ const marketMaking: Question[] = [
     difficulty: "hard",
     concept: "Spread as a function of uncertainty",
     distractorRationale: [
-      "Correct — spread should scale with uncertainty.",
+      "Correct, spread should scale with uncertainty.",
       "Tightening into rising uncertainty invites being picked off.",
       "Increasing size magnifies the adverse-selection loss.",
       "Shifting both quotes changes your fair-value view, not your risk buffer.",
@@ -239,8 +146,8 @@ const marketMaking: Question[] = [
     difficulty: "hard",
     concept: "Inventory management / quote skew",
     distractorRationale: [
-      "Correct — skew quotes down to offload a long.",
-      "Backwards — that would attract even more buying.",
+      "Correct, skew quotes down to offload a long.",
+      "Backwards, that would attract even more buying.",
       "Widening manages adverse selection, not inventory imbalance.",
       "Inventory risk absolutely should shift your quotes.",
     ],
@@ -258,11 +165,16 @@ const levels: Level[] = [
     difficulty: "medium",
     mode: "numeric",
     masteryThreshold: 0.8,
-    numericQuestions: evBasicsNumeric,
+    numericGenerator: mixEVNumeric([
+      genCoinBetEvNumeric,
+      genDiceSumModeNumeric,
+      genExpMaxDiceNumeric,
+    ]),
+    questionCount: 5,
     lesson: {
       paragraphs: [
         "Every trade is a bet; its fair price is its expected value, E = Σ p·x. A market maker's 'mid' should sit at the EV of the underlying value, and any bet with positive EV is worth taking (before worrying about sizing).",
-        "Watch two traps: forgetting to weight payoffs by probability, and confusing a distribution's most-likely value (mode) with its average (mean) — for a maximum or a skewed payoff they differ.",
+        "Watch two traps: forgetting to weight payoffs by probability, and confusing a distribution's most-likely value (mode) with its average (mean), for a maximum or a skewed payoff they differ.",
       ],
       keyIdea: "Fair value = expected value; weight every payoff by its probability.",
       whyInterviewers:
@@ -278,7 +190,7 @@ const levels: Level[] = [
         ],
         pitfalls: [
           "Averaging the payoffs without weighting them by their probabilities.",
-          "Quoting the most likely outcome (the mode) as if it were the average (the mean) — for skewed or extreme-valued payoffs they differ.",
+          "Quoting the most likely outcome (the mode) as if it were the average (the mean), for skewed or extreme-valued payoffs they differ.",
           "Dropping the sign on losing outcomes, so a loss gets added instead of subtracted.",
         ],
       },
@@ -289,7 +201,7 @@ const levels: Level[] = [
     title: "Basket & ETF Pricing",
     subtitle: "NAV as a weighted sum",
     blurb:
-      "Price a basket (ETF or fruit stand) as the weighted sum of its components — the NAV behind every ETF/Fruit market-making game.",
+      "Price a basket (ETF or fruit stand) as the weighted sum of its components, the NAV behind every ETF/Fruit market-making game.",
     difficulty: "medium",
     mode: "numeric",
     masteryThreshold: 0.8,
@@ -297,7 +209,7 @@ const levels: Level[] = [
     questionCount: 5,
     lesson: {
       paragraphs: [
-        "A basket's fair value is the weighted SUM of its parts: NAV = Σ qtyᵢ · priceᵢ. This is how you price an ETF from its holdings, or a fruit basket from unit prices — the core of the ETF Challenge and Fruit games.",
+        "A basket's fair value is the weighted SUM of its parts: NAV = Σ qtyᵢ · priceᵢ. This is how you price an ETF from its holdings, or a fruit basket from unit prices, the core of the ETF Challenge and Fruit games.",
         "The classic slips: adding prices without multiplying by quantity, or averaging the legs instead of summing them. A basket is a total, not a mean.",
       ],
       keyIdea: "Basket / ETF fair value = Σ (quantity × price).",
@@ -315,7 +227,7 @@ const levels: Level[] = [
         pitfalls: [
           "Adding the component prices while forgetting to multiply by the quantities held.",
           "Summing the share counts instead of the dollar values.",
-          "Averaging the legs instead of summing them — a basket is a total, not a mean.",
+          "Averaging the legs instead of summing them, a basket is a total, not a mean.",
         ],
       },
     },
@@ -325,7 +237,7 @@ const levels: Level[] = [
     title: "Fermi Estimation",
     subtitle: "Guesstimates by decomposition",
     blurb:
-      "Order-of-magnitude estimation by decomposition — piano tuners, golf balls in a 747, and why a market's width should scale with uncertainty.",
+      "Order-of-magnitude estimation by decomposition, piano tuners, golf balls in a 747, and why a market's width should scale with uncertainty.",
     difficulty: "medium",
     mode: "flashcard",
     masteryThreshold: 0.8,
@@ -337,7 +249,7 @@ const levels: Level[] = [
       ],
       keyIdea: "Decompose → multiply → check the order of magnitude; width ∝ uncertainty.",
       whyInterviewers:
-        "Guesstimate markets test structured estimation under pressure — a daily trading skill.",
+        "Guesstimate markets test structured estimation under pressure, a daily trading skill.",
       deepDive: {
         whyItWorks:
           "You can pin an unknown to the right order of magnitude by breaking it into factors you can each bound, since independent over- and under-estimates tend to partly cancel in a product. The target is the correct power of ten, not a precise figure.",
@@ -362,13 +274,13 @@ const levels: Level[] = [
     title: "Optimal Stopping",
     subtitle: "Re-roll games, secretary, divergent EV",
     blurb:
-      "Valuing the option to continue — the die re-roll game, the secretary problem's 37% rule, and the St. Petersburg paradox.",
+      "Valuing the option to continue, the die re-roll game, the secretary problem's 37% rule, and the St. Petersburg paradox.",
     difficulty: "hard",
     masteryThreshold: 0.75,
     questions: stopping,
     lesson: {
       paragraphs: [
-        "When you may act now or wait, the option to continue has value. The die-with-re-roll game is the canonical example: keep a roll only if it beats the EV of rolling again — for a fair d6 that means keeping 4–6 and re-rolling 1–3, giving EV 4.25.",
+        "When you may act now or wait, the option to continue has value. The die-with-re-roll game is the canonical example: keep a roll only if it beats the EV of rolling again, for a fair d6 that means keeping 4–6 and re-rolling 1–3, giving EV 4.25.",
         "Optimal stopping recurs everywhere: the secretary problem (reject ~37%, then take the next best) and the St. Petersburg paradox (infinite EV, finite willingness to pay) both hinge on valuing the choice to continue.",
       ],
       keyIdea: "Continue iff the current option is worse than E[future]; option value is real.",
@@ -386,7 +298,7 @@ const levels: Level[] = [
         pitfalls: [
           "Ignoring the option to continue and grabbing the first outcome offered.",
           "Comparing the current offer to the best possible outcome instead of the expected continuation value.",
-          "Assuming a game with infinite expected value is worth paying an unbounded amount — willingness to pay is governed by utility and risk, not raw EV.",
+          "Assuming a game with infinite expected value is worth paying an unbounded amount, willingness to pay is governed by utility and risk, not raw EV.",
         ],
       },
     },
@@ -405,7 +317,7 @@ const levels: Level[] = [
     lesson: {
       paragraphs: [
         "Now practice the re-roll game and fair-value pricing on fresh numbers. For an N-sided die with one re-roll, the EV is (1/N)·Σ max(x, (N+1)/2): keep any roll at or above the mean of a fresh roll.",
-        "Fair value of a uniform draw on 1..N is (N+1)/2 — the price a maker quotes around. Watch the off-by-one: the average of 1..N is not N/2.",
+        "Fair value of a uniform draw on 1..N is (N+1)/2, the price a maker quotes around. Watch the off-by-one: the average of 1..N is not N/2.",
       ],
       keyIdea: "Re-roll EV = (1/N)Σ max(x, mean); uniform fair value = (N+1)/2.",
       whyInterviewers: "Speed AND correctness on option-value math.",
@@ -413,7 +325,7 @@ const levels: Level[] = [
         whyItWorks:
           "A single re-roll is worth taking only when your current roll is below the average of a fresh roll, so the optimal rule keeps anything at or above that mean. The fair value of a uniform draw is just the midpoint of its inclusive range.",
         approach: [
-          "Compute the expected value of a fresh draw — your fallback if you re-roll.",
+          "Compute the expected value of a fresh draw, your fallback if you re-roll.",
           "Keep the current result whenever it is at least that fallback, otherwise re-roll.",
           "Average the kept-or-re-rolled outcome over all first-roll possibilities.",
           "For a plain uniform draw, take the midpoint of the smallest and largest values.",
@@ -421,7 +333,7 @@ const levels: Level[] = [
         pitfalls: [
           "Re-rolling only the single worst value instead of everything below the mean.",
           "Averaging only the outcomes you would keep, as if you never land in the re-roll region.",
-          "Using half the top value for a range that starts at one — that drops the endpoint correction.",
+          "Using half the top value for a range that starts at one, that drops the endpoint correction.",
         ],
       },
     },
@@ -440,7 +352,7 @@ const levels: Level[] = [
     lesson: {
       paragraphs: [
         "As cards leave a deck the fair probability UPDATES: with r reds of r+b cards left, P(next red) = r/(r+b), not the original ½. This card-counting update is the Next-Card betting game.",
-        "Quoted decimal odds imply probabilities 1/o that sum to more than 1 — the overround (vig). Strip it by normalizing: fair pᵢ = (1/oᵢ) / Σ(1/oⱼ). If the booksum is below 1, there is a Dutch-book arbitrage.",
+        "Quoted decimal odds imply probabilities 1/o that sum to more than 1, the overround (vig). Strip it by normalizing: fair pᵢ = (1/oᵢ) / Σ(1/oⱼ). If the booksum is below 1, there is a Dutch-book arbitrage.",
       ],
       keyIdea: "P(next) = favorable/remaining; fair odds = implied ÷ booksum.",
       whyInterviewers:
@@ -459,7 +371,7 @@ const levels: Level[] = [
           "Using the full-deck probability instead of re-conditioning on the cards already gone.",
           "Treating raw implied probabilities as fair without stripping the overround.",
           "Normalizing by the sum of the odds rather than the sum of the implied probabilities.",
-          "Reading the booksum backwards — an arbitrage needs it below one, a bookmaker edge is above one.",
+          "Reading the booksum backwards, an arbitrage needs it below one, a bookmaker edge is above one.",
         ],
       },
     },
@@ -476,11 +388,11 @@ const levels: Level[] = [
     lesson: {
       paragraphs: [
         "Market making adds adverse selection: you get filled precisely when an informed trader profits, so you only trade when it's slightly bad for you. The job is to price that risk.",
-        "Two levers: (1) set your spread proportional to your uncertainty about fair value, and (2) skew both quotes to manage inventory — shift down when you're too long to encourage selling your excess.",
+        "Two levers: (1) set your spread proportional to your uncertainty about fair value, and (2) skew both quotes to manage inventory, shift down when you're too long to encourage selling your excess.",
       ],
       keyIdea: "Spread ∝ uncertainty; skew quotes to flatten inventory.",
       whyInterviewers:
-        "This IS the job — quoting, sizing, and managing risk on live flow.",
+        "This IS the job, quoting, sizing, and managing risk on live flow.",
       deepDive: {
         whyItWorks:
           "A market maker earns the spread but suffers adverse selection: informed counterparties trade with you precisely when your price is wrong, so a symmetric quote loses in expectation. You defend by widening the spread as your uncertainty grows and skewing quotes to shed unwanted inventory.",
@@ -494,7 +406,7 @@ const levels: Level[] = [
           "Assuming a symmetric two-sided quote breaks even against informed flow.",
           "Tightening the spread into rising uncertainty, inviting a pick-off.",
           "Skewing the wrong way, so an over-long position attracts even more buying.",
-          "Believing inventory doesn't affect optimal quotes — carrying risk should shift them.",
+          "Believing inventory doesn't affect optimal quotes, carrying risk should shift them.",
         ],
       },
     },
@@ -520,12 +432,12 @@ const levels: Level[] = [
         "Every trading game reduces to a decision under a computed edge: is the ETF rich or cheap versus NAV, does a book admit an arbitrage, is a ticket +EV to buy, and what does adverse selection do to a naive two-sided quote?",
         "The recurring traps: trading the wrong side of a mispricing, reading a booksum backwards, comparing to ½ instead of the conditional fair value, and assuming a symmetric market breaks even against informed flow.",
       ],
-      keyIdea: "Compute the edge, then act on it — and price in adverse selection.",
+      keyIdea: "Compute the edge, then act on it, and price in adverse selection.",
       whyInterviewers:
-        "This is the desk in miniature: quote, price the edge, and decide — fast and correctly.",
+        "This is the desk in miniature: quote, price the edge, and decide, fast and correctly.",
       deepDive: {
         whyItWorks:
-          "Every trading decision reduces to computing an edge — the gap between fair value and the quoted price — then acting on its sign, while pricing in adverse selection. Fair value comes from the same toolkit throughout: expected value, NAV, conditional probability, and de-vigging.",
+          "Every trading decision reduces to computing an edge, the gap between fair value and the quoted price, then acting on its sign, while pricing in adverse selection. Fair value comes from the same toolkit throughout: expected value, NAV, conditional probability, and de-vigging.",
         approach: [
           "Compute fair value with the tool the situation calls for (EV, NAV, conditional probability, de-vig).",
           "Compare fair value to the quoted price to find the size and sign of the edge.",

@@ -35,7 +35,7 @@ export function SolutionList({
   if (ranked.length === 0) {
     return (
       <p className="label text-muted">
-        No solutions submitted yet — add yours.
+        No solutions submitted yet. Add yours.
       </p>
     );
   }

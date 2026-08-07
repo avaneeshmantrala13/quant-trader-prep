@@ -27,9 +27,11 @@ import { TutorController } from "@/components/tutor/TutorController";
 import { REMEDIATION_MODE } from "@/lib/remediation/config";
 import {
   remediationStep,
+  type RemediationAction,
   type RemediationInput,
 } from "@/lib/remediation/policy";
 import { planFinishRemediation } from "@/lib/remediation/finish";
+import type { TopicMastery } from "@/types/mastery";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { ChevronLeftIcon } from "@/components/icons";
 import {
@@ -42,6 +44,7 @@ import {
   FinishRemediation,
   QuizPractice,
 } from "@/pages/lesson/remediation";
+import { LevelFinishGuidance } from "@/pages/lesson/LevelFinishGuidance";
 import { type Phase, initialPhase } from "@/pages/lesson/phase";
 
 export function QuizLevel({ track, level }: { track: Track; level: Level }) {
@@ -57,7 +60,6 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
     getTopicMastery,
     getTopicVerdict,
     setReviewSchedule,
-    recordCalibrationPair,
   } = useProgress();
   const { themeDef } = useTheme();
 
@@ -73,12 +75,15 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
 
   const unlocked = useMemo(() => {
     const idx = track.levels.findIndex((l) => l.id === level.id);
-    return isLevelUnlockedBySection(
-      track.levels,
-      idx,
-      (id) => !!getLevelProgress(id)?.mastered,
+    // Also honor a diagnostic-seeded low-confidence unlock of this topic (Part B).
+    return (
+      isLevelUnlockedBySection(
+        track.levels,
+        idx,
+        (id) => !!getLevelProgress(id)?.mastered,
+      ) || isTopicUnlocked(mastery)
     );
-  }, [track, level, getLevelProgress]);
+  }, [track, level, getLevelProgress, mastery]);
 
   const [phase, setPhase] = useState<Phase>("lesson");
   const [seed, setSeed] = useState(0);
@@ -212,17 +217,7 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
     if (q) {
       const correct = choice === q.correctIndex;
       const responseMs = Date.now() - questionShownAtRef.current;
-      // Phase 5 calibration: log (predictedProbability, outcome) for the
-      // reliability diagram. The prediction is the guessing-corrected
-      // predictSuccess computed from the PRE-answer mastery snapshot (`theta`
-      // this render) + the current tier difficulty. PRIMARY answers only —
-      // never bonus practice (COORDINATION §2 / PHASE_5 §5).
-      const tierD =
-        progress.tierDifficulty?.[tierDifficultyKey(topicKey, level.difficulty)] ??
-        seedTierDifficulty(level.difficulty);
-      const predicted = predictSuccess(theta, tierD, q.choices.length);
-      recordCalibrationPair(topicKey, predicted, correct ? 1 : 0);
-      recordItemAttempt({
+      const { mastery: nextMastery, relock } = recordItemAttempt({
         topicKey,
         tier: level.difficulty,
         correct,
@@ -239,7 +234,37 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
       maybeTriggerRemediation(correct, responseMs, () =>
         misconceptionTagOf(resolveQuizTag(q, choice)),
       );
+      // Part B: if this fold RE-LOCKED a low-confidence unlock, `recordItemAttempt`
+      // planned the ~0.85 prerequisite probe — surface it through the SAME
+      // mid-lesson remediation UI (a confirmed gap descends on the first miss,
+      // before the Kapur retry-in-place path would otherwise ease in place).
+      surfaceRelockRemediation(relock, nextMastery);
     }
+  };
+
+  // Route a planned Part-B relock action into the existing mid-lesson
+  // `RemediationFlow` by arming a forceDescend origin (its internal
+  // `remediationStep` reproduces the planned ~0.85 prereq descent). Marks the
+  // topic remediated so the finish-time trigger does not double-fire.
+  const surfaceRelockRemediation = (
+    relock: RemediationAction | null,
+    nextMastery: TopicMastery | undefined,
+  ) => {
+    if (!relock || remediation) return;
+    remediatedTopicsRef.current.add(topicKey);
+    setRemediation({
+      topicKey,
+      theta: nextMastery?.theta ?? 0,
+      alpha: nextMastery?.alpha ?? 1,
+      beta: nextMastery?.beta ?? 1,
+      n: nextMastery?.n ?? 0,
+      consecutiveMisses: 2,
+      atFloorTier: false,
+      misconceptionTag: lastMissTagRef.current,
+      responseFast: false,
+      depthThisSession: 0,
+      forceDescend: true,
+    });
   };
 
   // Update the per-topic miss streak and, if `remediationStep` decides to
@@ -297,16 +322,13 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
 
   const finish = () => {
     // MCQ has no hint re-attempt, so partial credit does not exist: the visible
-    // (display) score equals the binary gate. Pass gate == display so behavior
-    // is unchanged while adopting the new split `recordAttempt` signature.
+    // (credit-weighted) mastery equals the binary correct/total. So the mastery
+    // gate reads the same value it always did here — MCQ mastery behavior is
+    // unchanged by the credit-weighted gate fix (which only bites hint-bearing
+    // numeric rounds).
     const gateScore = roundScore(correctCount, questions.length);
     const score = gateScore;
-    const r = recordAttempt(
-      level.id,
-      gateScore,
-      level.masteryThreshold,
-      gateScore,
-    );
+    const r = recordAttempt(level.id, gateScore, level.masteryThreshold);
     clearResume(level.id);
     // Seam 1: persist the SM-2 spaced-review schedule for this topic. The pure
     // `planRoundReview` uses the canonical (Phase-4) `scheduleReview`: a cleared
@@ -473,17 +495,24 @@ export function QuizLevel({ track, level }: { track: Track; level: Level }) {
         )}
 
         {phase === "summary" && result && (
-          <Summary
-            correct={correctCount}
-            total={questions.length}
-            threshold={level.masteryThreshold}
-            mastered={result.mastered}
-            xpGained={result.xpGained}
-            questions={questions}
-            answers={answers}
-            onRetry={retry}
-            onDone={() => navigate(`/track/${track.id}`)}
-          />
+          <div className="space-y-5">
+            <LevelFinishGuidance
+              topicKey={topicKey}
+              mastered={result.mastered}
+              misconceptionTag={lastMissTagRef.current}
+            />
+            <Summary
+              correct={correctCount}
+              total={questions.length}
+              threshold={level.masteryThreshold}
+              mastered={result.mastered}
+              xpGained={result.xpGained}
+              questions={questions}
+              answers={answers}
+              onRetry={retry}
+              onDone={() => navigate(`/track/${track.id}`)}
+            />
+          </div>
         )}
       </main>
     </div>

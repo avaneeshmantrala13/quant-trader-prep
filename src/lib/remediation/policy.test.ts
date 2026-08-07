@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import {
   CONDITIONAL,
+  CONDITIONAL_EXPECTATION,
   COUNTING,
   EXPECTED_VALUE,
   L0_ARITHMETIC,
   L1_MEANING,
+  MARKOV,
   PREREQ_DAG,
 } from "@/content/remediation/prereqDAG";
 import {
@@ -109,6 +111,29 @@ describe("remediationStep — decision cascade", () => {
     const a = remediationStep(bottomed("no::such-topic"));
     expect(a.kind).toBe("exit");
     if (a.kind === "exit") expect(a.reason).toBe("no-gap");
+  });
+
+  it("medium-only topic descends even when the caller's atFloorTier is false (defect D1)", () => {
+    // Conditional Expectation has NO intro/easy level, so a caller computing
+    // `atFloorTier = order<=1` never sets it true. The policy compares against the
+    // topic's OWN minimum tier (medium) and still bottoms out ⇒ descends.
+    const a = remediationStep(
+      bottomed(CONDITIONAL_EXPECTATION, { atFloorTier: false }),
+    );
+    expect(a.kind).toBe("descend");
+    if (a.kind === "descend") expect(a.toTopicKey).toBe(CONDITIONAL);
+  });
+
+  it("with a mastery snapshot, descent picks the WEAKEST prereq, not prereqs[0] (defect D3)", () => {
+    // Markov's prereqs[0] is Conditional Probability, but Conditional Expectation
+    // is the weakest here ⇒ chooseDescentEdge (wired into the policy) selects it.
+    const masteryOf = (k: string) =>
+      k === CONDITIONAL_EXPECTATION
+        ? { mean: 0.2, theta: -1.5 }
+        : { mean: 0.85, theta: 1.2 };
+    const a = remediationStep(bottomed(MARKOV, { masteryOf }));
+    expect(a.kind).toBe("descend");
+    if (a.kind === "descend") expect(a.toTopicKey).toBe(CONDITIONAL_EXPECTATION);
   });
 });
 

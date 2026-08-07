@@ -19,12 +19,33 @@
  */
 import type { MockSession, SessionStatus } from "./engine";
 import type { MockScript, MockStep } from "./types";
+import { userScopedKey } from "@/lib/userScope";
 
-/** Namespaced, versioned key for the single resumable in-progress session. */
-export const MOCK_ACTIVE_KEY = "qtp.mock.active.v1";
+/**
+ * Namespaced, versioned BASE key for the resumable in-progress session. The
+ * actual storage key is per-user (see {@link mockActiveKey}) so two accounts on
+ * the same browser never share — and therefore never leak — a mock session.
+ */
+export const MOCK_ACTIVE_KEY = "qtp.mock.active.v3";
 
-/** Current on-disk schema version. Bump when the persisted shape changes. */
-export const MOCK_PERSIST_VERSION = 1 as const;
+/**
+ * The per-user storage key for the in-progress session: the versioned base
+ * scoped by the current user id (falls back to an anonymous namespace when
+ * logged out). Keying by user is what stops account B from resuming account A's
+ * half-finished interview on a shared browser.
+ */
+export function mockActiveKey(userId: string | null | undefined): string {
+  return userScopedKey(MOCK_ACTIVE_KEY, userId);
+}
+
+/**
+ * Current on-disk schema version. Bumped to 4 for the clarifying-follow-up
+ * overhaul: responses/follow-ups can now carry a `clarify` state and follow-up
+ * scores a three-way `verdict` (correct/missed/clarify), so resuming restores
+ * exactly which clarify step you were on. Older v1–v3 blobs are ignored (a fresh
+ * interview starts) rather than half-restored.
+ */
+export const MOCK_PERSIST_VERSION = 4 as const;
 
 /** The tiny slice of `Storage` we depend on (so tests can inject a fake map). */
 export interface KeyValueStore {
@@ -134,43 +155,52 @@ function defaultStore(): KeyValueStore | null {
 }
 
 /**
- * Persist the in-progress session under the namespaced key. Safe no-op when no
- * storage backend exists or the write fails. `store` is injectable for tests.
+ * Persist the in-progress session under the CURRENT user's namespaced key. Safe
+ * no-op when no storage backend exists or the write fails. `userId` scopes the
+ * key (logged-out → anonymous namespace); `store` is injectable for tests.
  */
 export function saveActiveSession(
   session: MockSession,
+  userId: string | null | undefined,
   store: KeyValueStore | null = defaultStore(),
 ): void {
   if (!store) return;
   try {
-    store.setItem(MOCK_ACTIVE_KEY, serializeSession(session));
+    store.setItem(mockActiveKey(userId), serializeSession(session));
   } catch {
     /* best-effort: quota / privacy-mode failures must never surface */
   }
 }
 
 /**
- * Load the persisted in-progress session, or `null` if absent/malformed/stale.
- * Callers decide whether to resume (typically only when `status === "running"`).
+ * Load the CURRENT user's persisted in-progress session, or `null` if
+ * absent/malformed/stale. Because the key is user-scoped, one account can never
+ * load another account's saved session. Callers decide whether to resume
+ * (typically only when `status === "running"`).
  */
 export function loadActiveSession(
+  userId: string | null | undefined,
   store: KeyValueStore | null = defaultStore(),
 ): MockSession | null {
   if (!store) return null;
   try {
-    return deserializeSession(store.getItem(MOCK_ACTIVE_KEY));
+    return deserializeSession(store.getItem(mockActiveKey(userId)));
   } catch {
     return null;
   }
 }
 
-/** Remove any persisted in-progress session. Safe no-op without a backend. */
+/**
+ * Remove the CURRENT user's persisted in-progress session. Safe no-op without a
+ * backend.
+ */
 export function clearActiveSession(
+  userId: string | null | undefined,
   store: KeyValueStore | null = defaultStore(),
 ): void {
   if (!store) return;
   try {
-    store.removeItem(MOCK_ACTIVE_KEY);
+    store.removeItem(mockActiveKey(userId));
   } catch {
     /* ignore */
   }

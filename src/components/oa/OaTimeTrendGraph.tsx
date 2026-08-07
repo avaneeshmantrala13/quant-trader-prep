@@ -55,7 +55,7 @@ export function OaTimeTrendGraph({ points }: { points: OaAvgTimePoint[] }) {
         <div>
           <div className="label text-muted">Average time per question</div>
           <p className="mt-2 max-w-sm text-sm text-secondary">
-            No timed sessions yet — finish a timed section and your average time
+            No timed sessions yet. Finish a timed section and your average time
             per question will start charting here.
           </p>
         </div>

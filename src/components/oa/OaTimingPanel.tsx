@@ -61,7 +61,7 @@ export function OaTimingPanelView({
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-primary">Timed Sections</h2>
         <p className="mt-1 text-sm text-secondary">
-          Your interview-style timed practice — accuracy under the clock and how
+          Your interview-style timed practice: accuracy under the clock and how
           your speed is trending.
         </p>
       </div>

@@ -32,18 +32,18 @@ import {
  *  10. Multiplication principle (independent choices, incl–excl, secret-sharing)
  *  + the coin-grab value-threshold count.
  *
- * NONE of the 51 source questions are user-facing — they live only in
+ * NONE of the 51 source questions are user-facing, they live only in
  * `./combinatorialAnalysis.test.ts` as hidden fixtures; every playable item is a
  * freshly generated instance built from these solvers.
  */
 
 /* ========================================================================== */
-/*  FAMILY 1 — Choose-k ratios (favorable / total combinations)                */
+/*  FAMILY 1. Choose-k ratios (favorable / total combinations)                */
 /* ========================================================================== */
 
 /**
  * P(a draw of `draw` from an urn with the given color `counts` (no replacement)
- * contains exactly ONE of each color) — requires `draw === counts.length`.
+ * contains exactly ONE of each color), requires `draw === counts.length`.
  * Favorable = ∏ C(cᵢ, 1) = ∏ cᵢ; total = C(Σcᵢ, draw). (CA1: [10,10,10],3 → 0.2463)
  */
 export function oneOfEachColorProb(counts: number[], draw: number): Fraction {
@@ -85,7 +85,7 @@ export function exactlyTwoColorsProb(counts: number[], draw: number): Fraction {
 }
 
 /**
- * P(a draw of `k` from `n` items — exactly ONE of which is "special/even" —
+ * P(a draw of `k` from `n` items, exactly ONE of which is "special/even" —
  * AVOIDS the special item), = C(n−1, k) / C(n, k). For the prime-sum problem
  * (CA41) k is even so the k chosen odds sum even ⟺ the lone even prime is avoided.
  * (CA41: n=16, k=4 → 3/4)
@@ -148,8 +148,8 @@ export function firstAllThreeOnDrawFourProb(counts: number[]): Fraction {
 /**
  * P(three chips drawn one at a time (no replacement) come out in NON-DECREASING
  * value order), for a jar with `distinctValues` values and `copiesPer` copies of
- * each. Split by handful type — all-different (fraction 1/6), one repeated value
- * (1/3), all three equal (1) — over C(v·c, 3). (CA32: v=5, c=3 → 22/91 ≈ 0.242)
+ * each. Split by handful type, all-different (fraction 1/6), one repeated value
+ * (1/3), all three equal (1), over C(v·c, 3). (CA32: v=5, c=3 → 22/91 ≈ 0.242)
  */
 export function nonDecreasingThreeDrawProb(distinctValues: number, copiesPer: number): Fraction {
   const v = distinctValues;
@@ -166,7 +166,7 @@ export function nonDecreasingThreeDrawProb(distinctValues: number, copiesPer: nu
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — Hypergeometric draws                                             */
+/*  FAMILY 2. Hypergeometric draws                                             */
 /* ========================================================================== */
 
 /**
@@ -193,7 +193,7 @@ export function hyperAtLeastProb(N: number, m: number, k: number, j: number): Fr
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — Poker hands (five-card draw)                                     */
+/*  FAMILY 3. Poker hands (five-card draw)                                     */
 /* ========================================================================== */
 
 export type PokerHand =
@@ -228,13 +228,13 @@ export function pokerHandProb(hand: PokerHand): Fraction {
   return fracBig(pokerHandCount(hand), chooseBig(52, 5));
 }
 
-/** Same probability expressed as a PERCENT (value in [0,100]) — the dataset's poker convention. */
+/** Same probability expressed as a PERCENT (value in [0,100]), the dataset's poker convention. */
 export function pokerHandPercent(hand: PokerHand): Fraction {
   return pokerHandProb(hand).mul(100);
 }
 
 /* ========================================================================== */
-/*  FAMILY 4 — Binomial coin/dice sequence counting                            */
+/*  FAMILY 4. Binomial coin/dice sequence counting                            */
 /* ========================================================================== */
 
 export { binomTailLE, binomTailGE };
@@ -270,7 +270,7 @@ export function latticeMeetingProb(n: number): Fraction {
 
 /**
  * P(a race to `target` points, one point per fair flip, lasts the MAXIMUM
- * 2·target−1 flips — i.e. reaches target−target then the decider) =
+ * 2·target−1 flips, i.e. reaches target−target then the decider) =
  * C(2·target−2, target−1) / 2^{2·target−2}. (CA14: target=4 → 20/64 = 5/16)
  */
 export function maxLengthRaceProb(target: number): Fraction {
@@ -315,7 +315,7 @@ export function raceConditionalWinProb(target: number, totalFlips: number): Frac
 
 /**
  * P(the trailing side wins a first-to-`target` fair-flip race, GIVEN the first
- * flip already went to the other side) — the "Heads wins the race" conditioning:
+ * flip already went to the other side), the "Heads wins the race" conditioning:
  * with `rem = 2·target−1` flips remaining (dataset uses target=5, first flip
  * Tails ⇒ Heads wins unless total tails ≤ target−1). Returned as P(Heads wins).
  * (CA9: target=5, first flip Tails → Σ_{k=0}^{3} C(9,k)/2⁹ ≈ 0.254 is P(tails lose))
@@ -327,7 +327,7 @@ export function coinRaceHeadsWinProb(totalFlips: number, targetTailsToLose: numb
 }
 
 /* ========================================================================== */
-/*  FAMILY 5 — Dice sum / order counting (stars & bars + inclusion–exclusion)   */
+/*  FAMILY 5. Dice sum / order counting (stars & bars + inclusion–exclusion)   */
 /* ========================================================================== */
 
 /** Distribution of the sum of `dice` d-`faces` dice, as a count Map (exact). */
@@ -346,7 +346,7 @@ export function diceSumDistribution(dice: number, faces: number): Map<number, bi
 }
 
 /**
- * P(the sum of `dice` d-`faces` dice equals `target`) — stars & bars capped by
+ * P(the sum of `dice` d-`faces` dice equals `target`), stars & bars capped by
  * inclusion–exclusion on the ≤faces constraint, computed here by exact
  * convolution. (CA42: 4 d6, target 17 → 104/1296 = 13/162 ≈ 0.0802)
  */
@@ -467,7 +467,7 @@ export function divisibleByModProb(faces: number, mod: number, t: number): Fract
 }
 
 /* ========================================================================== */
-/*  FAMILY 6 — Without-replacement sequences / chain rule                       */
+/*  FAMILY 6. Without-replacement sequences / chain rule                       */
 /* ========================================================================== */
 
 /**
@@ -562,7 +562,7 @@ export function multiDeckStraightProb(decks: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 7 — Balance-scale symmetry                                           */
+/*  FAMILY 7. Balance-scale symmetry                                           */
 /* ========================================================================== */
 
 /**
@@ -589,7 +589,7 @@ export function heavierPanProb(weights: number[]): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 8 — Grid / lattice-path & line counting                             */
+/*  FAMILY 8. Grid / lattice-path & line counting                             */
 /* ========================================================================== */
 
 /**
@@ -662,7 +662,7 @@ export function alternatingStepPathsCount(
 }
 
 /* ========================================================================== */
-/*  FAMILY 9 — Circular / arrangement counting                                 */
+/*  FAMILY 9. Circular / arrangement counting                                 */
 /* ========================================================================== */
 
 /**
@@ -676,7 +676,7 @@ export function circularAscendingProb(n: number): Fraction {
 
 /**
  * P(a distinguished item keeps BOTH its neighbors when `fillers` are placed into
- * distinct gaps around a circle of `anchors` items) — its two flanking gaps must
+ * distinct gaps around a circle of `anchors` items), its two flanking gaps must
  * stay empty: C(anchors−2, fillers) / C(anchors, fillers).
  * (CA34: 15 knights, 9 jesters → 715/5005 = 1/7 ≈ 0.143)
  */
@@ -687,7 +687,7 @@ export function keepBothNeighborsProb(anchors: number, fillers: number): Fractio
 /**
  * P(three cards (ranks 1..`ranks`, 4 suits) drawn have all three values pairwise
  * differing by ≥ 2). Sorted-gap model: #value-triples with both gaps ≥2 =
- * C(ranks−4+... ) — computed here as the number of triples a<b<c with b−a≥2,
+ * C(ranks−4+... ), computed here as the number of triples a<b<c with b−a≥2,
  * c−b≥2 (exact), ×4³ suit choices / C(4·ranks, 3). (CA46: ranks=13 → 528/1105 ≈ 0.478)
  */
 export function threeValuesGapProb(ranks: number): Fraction {
@@ -702,7 +702,7 @@ export function threeValuesGapProb(ranks: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 10 — Multiplication principle                                        */
+/*  FAMILY 10. Multiplication principle                                        */
 /* ========================================================================== */
 
 /** Number of ways to give each of `n` elements one of `options` independent states = options^n. (CA38: 3⁵ = 243) */
@@ -800,7 +800,7 @@ export function expectedPairsDealt(ranks: number, copies: number, deal: number):
 }
 
 /* ========================================================================== */
-/*  Big binomial tail (high precision float) — overbooked flight                */
+/*  Big binomial tail (high precision float), overbooked flight                */
 /* ========================================================================== */
 
 /**

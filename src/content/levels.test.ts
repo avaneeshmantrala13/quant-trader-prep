@@ -101,7 +101,9 @@ describe("every level is well-formed under its play mode", () => {
           for (const q of qs) {
             expect(ids.has(q.id)).toBe(false);
             ids.add(q.id);
-            expect(q.choices.length).toBeGreaterThanOrEqual(2);
+            // Every choice-based question must offer at least 4 options (see
+            // `mcqOptionCount.test.ts` for the exhaustive multi-seed audit).
+            expect(q.choices.length).toBeGreaterThanOrEqual(4);
             expect(new Set(q.choices).size).toBe(q.choices.length); // no dup options
             expect(q.correctIndex).toBeGreaterThanOrEqual(0);
             expect(q.correctIndex).toBeLessThan(q.choices.length);

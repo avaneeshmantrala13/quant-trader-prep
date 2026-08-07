@@ -7,7 +7,7 @@ import type { FermiFactor } from "@/lib/fermi/grader";
  * Each item is a canonical decomposition: an ordered list of named factors whose
  * product (computed in code by `@/lib/fermi/grader`) IS the reference answer the
  * learner's single estimate is graded against by log-distance. Every item also
- * carries an explicit `reference` — the author-intended magnitude — which the
+ * carries an explicit `reference`, the author-intended magnitude, which the
  * test suite asserts equals the coded product, so the whole content set stays
  * numerically self-consistent (a typo'd factor fails CI).
  *
@@ -123,7 +123,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 4900,
     takeaway:
-      "Revenue = throughput × time × ticket size. Market-sizing a single storefront is the same skeleton as sizing a whole segment — just at one location.",
+      "Revenue = throughput × time × ticket size. Market-sizing a single storefront is the same skeleton as sizing a whole segment, just at one location.",
     source: "Market-sizing (single-store revenue)",
   },
   {
@@ -247,7 +247,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 6_600_000,
     takeaway:
-      "Even a two-factor decomposition (population × daily-adoption rate) pins the order of magnitude — the number of factors matters less than each one being defensible.",
+      "Even a two-factor decomposition (population × daily-adoption rate) pins the order of magnitude, the number of factors matters less than each one being defensible.",
     source: "Adoption-rate sizing (daily trips)",
   },
   {
@@ -283,7 +283,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 48_000_000_000_000,
     takeaway:
-      "Count × average size gives the aggregate. The 'average' is mega-cap-skewed, so anchoring it (~$10–15B) is the crux — the total (~$50T) follows.",
+      "Count × average size gives the aggregate. The 'average' is mega-cap-skewed, so anchoring it (~$10–15B) is the crux, the total (~$50T) follows.",
     source: "Markets sizing (aggregate market cap)",
   },
   {
@@ -307,7 +307,7 @@ export const FERMI_ITEMS: FermiItem[] = [
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Markets & Trading — aggregate market activity                          */
+  /*  Markets & Trading, aggregate market activity                          */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-spx-emini-contracts-per-day",
@@ -377,12 +377,12 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 60_000_000_000,
     takeaway:
-      "Users × per-user throughput sizes a venue's flow the same way it sizes app usage — the trick is being honest about how few accounts are actually active on a normal day.",
+      "Users × per-user throughput sizes a venue's flow the same way it sizes app usage, the trick is being honest about how few accounts are actually active on a normal day.",
     source: "Markets sizing (participant throughput)",
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Market Microstructure — messages, ticks, order flow                    */
+  /*  Market Microstructure, messages, ticks, order flow                    */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-market-data-messages-per-sec",
@@ -432,7 +432,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 200,
     takeaway:
-      "An average is one aggregate ÷ another. Shares ÷ trades reveals how small modern prints are (~200 shares) — a direct consequence of algorithmic order-slicing.",
+      "An average is one aggregate ÷ another. Shares ÷ trades reveals how small modern prints are (~200 shares), a direct consequence of algorithmic order-slicing.",
     source: "Microstructure (average fill size)",
   },
   {
@@ -454,7 +454,7 @@ export const FERMI_ITEMS: FermiItem[] = [
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Exchange & Liquidity — venues, notional, infrastructure                */
+  /*  Exchange & Liquidity, venues, notional, infrastructure                */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-adr-daily-notional",
@@ -471,7 +471,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 300_000_000,
     takeaway:
-      "Notional = share volume × price — the same volume×price move used for the whole market, applied to one name. It's the number a desk quotes when sizing a position vs. daily liquidity.",
+      "Notional = share volume × price, the same volume×price move used for the whole market, applied to one name. It's the number a desk quotes when sizing a position vs. daily liquidity.",
     source: "Liquidity sizing (single-name notional)",
   },
   {
@@ -489,7 +489,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 24_000_000_000,
     takeaway:
-      "Take a known aggregate and slice it by a structural share. A few percent of the day concentrates into the closing auction — which is why the close is the single most liquid moment.",
+      "Take a known aggregate and slice it by a structural share. A few percent of the day concentrates into the closing auction, which is why the close is the single most liquid moment.",
     source: "Liquidity sizing (auction share of volume)",
   },
   {
@@ -506,7 +506,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 4_000,
     takeaway:
-      "Container ÷ per-unit footprint — the volume-packing move applied to floorspace. Amortizing aisles and cooling into the per-rack area keeps the estimate honest.",
+      "Container ÷ per-unit footprint, the volume-packing move applied to floorspace. Amortizing aisles and cooling into the per-rack area keeps the estimate honest.",
     source: "Infrastructure sizing (colocation)",
   },
   {
@@ -540,12 +540,12 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 378_000_000_000,
     takeaway:
-      "Daily throughput × ~252 trading days annualizes any market quantity. Note the 252, not 365 — markets are closed on weekends and holidays.",
+      "Daily throughput × ~252 trading days annualizes any market quantity. Note the 252, not 365, markets are closed on weekends and holidays.",
     source: "Liquidity sizing (annualized volume)",
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Derivatives & Risk — options, futures, funding                         */
+  /*  Derivatives & Risk, options, futures, funding                         */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-options-contracts-per-day",
@@ -561,7 +561,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 45_000_000,
     takeaway:
-      "Trades × contracts-per-trade. Options print small clips too, so contract volume is only modestly above trade count — not the 100× a novice might guess.",
+      "Trades × contracts-per-trade. Options print small clips too, so contract volume is only modestly above trade count, not the 100× a novice might guess.",
     source: "Derivatives sizing (contract volume)",
   },
   {
@@ -579,7 +579,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 500_000,
     takeaway:
-      "Notional = underlying level × contract multiplier. One index-point move is $100, so a single SPX contract controls a half-million dollars of exposure — the crux of position sizing.",
+      "Notional = underlying level × contract multiplier. One index-point move is $100, so a single SPX contract controls a half-million dollars of exposure, the crux of position sizing.",
     source: "Derivatives sizing (contract notional)",
   },
   {
@@ -636,7 +636,7 @@ export const FERMI_ITEMS: FermiItem[] = [
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Market Sizing — asset pools & industry AUM                             */
+  /*  Market Sizing, asset pools & industry AUM                             */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-us-401k-assets",
@@ -694,7 +694,7 @@ export const FERMI_ITEMS: FermiItem[] = [
   },
 
   /* ---------------------------------------------------------------------- */
-  /*  Durable classics — logistics, volume, throughput, frequency, scale     */
+  /*  Durable classics, logistics, volume, throughput, frequency, scale     */
   /* ---------------------------------------------------------------------- */
   {
     id: "fermi-barbershops-us",
@@ -780,7 +780,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 5_000_000,
     takeaway:
-      "When units already match (liters ÷ liters), counting-by-volume is a single clean division — no packing haircut needed for a fluid.",
+      "When units already match (liters ÷ liters), counting-by-volume is a single clean division, no packing haircut needed for a fluid.",
     source: "Counting by volume (fluid)",
   },
   {
@@ -831,7 +831,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 3_600_000,
     takeaway:
-      "Population × an activity rate below 1. Not everyone rides, and riders average two trips — so a ~0.45 blended per-capita rate captures the daily total.",
+      "Population × an activity rate below 1. Not everyone rides, and riders average two trips, so a ~0.45 blended per-capita rate captures the daily total.",
     source: "Adoption-rate sizing (transit)",
   },
   {
@@ -886,7 +886,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 5_850_000,
     takeaway:
-      "Fleet size × trips-per-unit × ticket size — the storefront revenue skeleton, applied to a moving fleet. Each factor is independently checkable.",
+      "Fleet size × trips-per-unit × ticket size, the storefront revenue skeleton, applied to a moving fleet. Each factor is independently checkable.",
     source: "Revenue sizing (fleet throughput)",
   },
   {
@@ -905,7 +905,7 @@ export const FERMI_ITEMS: FermiItem[] = [
     ],
     reference: 306_600_000,
     takeaway:
-      "Unit-chaining a rate to a lifetime total. The reading-minutes-per-day factor is the soft one — bound it deliberately and the powers of ten follow.",
+      "Unit-chaining a rate to a lifetime total. The reading-minutes-per-day factor is the soft one, bound it deliberately and the powers of ten follow.",
     source: "Unit-chaining estimation (human scale)",
   },
   {

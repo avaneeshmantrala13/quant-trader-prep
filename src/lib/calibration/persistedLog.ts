@@ -1,5 +1,9 @@
 import type { PersistedCalibrationPair } from "@/types/progress";
 import type { CalibrationPair } from "@/lib/mastery/reliability";
+import {
+  ELICITED_CONFIDENCE_SOURCES,
+  isElicitedConfidenceTopic,
+} from "./reliability";
 
 /**
  * Cross-session persisted calibration log (WS-CAL). The session-only ring buffer
@@ -29,6 +33,47 @@ export function toCalibrationPairs(
   log: PersistedCalibrationPair[] | undefined,
 ): CalibrationPair[] {
   return (log ?? []).map((p) => ({ pred: p.pred, outcome: p.outcome }));
+}
+
+/**
+ * The pooled pairs the calibration panel is ALLOWED to show: ONLY those from
+ * surfaces where the learner genuinely stated a confidence
+ * (`ELICITED_CONFIDENCE_SOURCES`). Model-predicted quiz/numeric pairs are dropped
+ * so the panel never presents the mastery model's self-estimate as the learner's
+ * confidence (FIX 2). Order-preserving; strips topic keys like `toCalibrationPairs`.
+ */
+export function elicitedConfidencePairs(
+  log: PersistedCalibrationPair[] | undefined,
+): CalibrationPair[] {
+  return (log ?? [])
+    .filter((p) => isElicitedConfidenceTopic(p.topicKey))
+    .map((p) => ({ pred: p.pred, outcome: p.outcome }));
+}
+
+/**
+ * A plain-language provenance line for the calibration panel, naming the drills
+ * that actually elicited confidence (and how many pairs each contributed).
+ * Returns `undefined` when NO elicited-confidence data exists, so the caller can
+ * gate the panel off entirely rather than explain an empty source. FIX 2.
+ */
+export function elicitedConfidenceSourceNote(
+  log: PersistedCalibrationPair[] | undefined,
+): string | undefined {
+  const counts = new Map<string, number>();
+  for (const p of log ?? []) {
+    if (isElicitedConfidenceTopic(p.topicKey)) {
+      counts.set(p.topicKey, (counts.get(p.topicKey) ?? 0) + 1);
+    }
+  }
+  const total = [...counts.values()].reduce((s, n) => s + n, 0);
+  if (total === 0) return undefined;
+  const names = [...counts.keys()].map((k) => ELICITED_CONFIDENCE_SOURCES[k]);
+  const sources =
+    names.length === 1
+      ? names[0]
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  const times = total === 1 ? "1 time" : `${total} times`;
+  return `Based on the ${times} you gave an explicit confidence estimate — in ${sources}.`;
 }
 
 /** Pairs for a single topic (for a per-topic reliability read). */

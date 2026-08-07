@@ -3,13 +3,8 @@ import { HintLadder, type SiblingWorked } from "@/components/tutor/HintLadder";
 import { WhyThisQuestion } from "@/components/tutor/WhyThisQuestion";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import type { TopicVerdict } from "@/lib/mastery/verdict";
-import {
-  freshPracticeSeed,
-  generateFreshQuestion,
-  generateFreshNumericQuestion,
-} from "@/lib/regenerate";
-import { deriveWorkedSteps } from "@/lib/tutor/faded";
 import { buildHintLadder } from "@/lib/tutor/hintLadder";
+import { buildWorkedSibling } from "@/lib/tutor/workedSibling";
 import { resolveQuizTag, resolveNumericTag } from "@/lib/tutor/misconception";
 import {
   gradeNumeric,
@@ -95,23 +90,13 @@ export function QuizCard({
     [answered, isCorrect, selected, hintLevel, question],
   );
   // Regenerate a same-family worked sibling for the ladder's rung 3 (completion).
-  const sibling = useMemo<SiblingWorked | null>(() => {
-    if (!ladder || !hintLevel) return null;
-    const sib = generateFreshQuestion(
-      hintLevel,
-      freshPracticeSeed(),
-      question.family,
-      question,
-      true,
-      question,
-    );
-    if (!sib) return null;
-    return {
-      prompt: sib.prompt,
-      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
-    };
-     
-  }, [ladder, hintLevel, question]);
+  const sibling = useMemo<SiblingWorked | null>(
+    () =>
+      ladder && hintLevel
+        ? buildWorkedSibling({ level: hintLevel, question })
+        : null,
+    [ladder, hintLevel, question],
+  );
 
   return (
     <div className="animate-print-in space-y-4">
@@ -183,7 +168,7 @@ export function QuizCard({
             }`}
           >
             <span className="font-mono text-xs font-semibold uppercase tracking-label">
-              {isCorrect ? "● Filled — Correct" : "● Rejected — Incorrect"}
+              {isCorrect ? "● Filled: Correct" : "● Rejected: Incorrect"}
             </span>
             <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
               Trade Ticket
@@ -411,23 +396,13 @@ export function NumericCard({
         : null,
     [answered, isCorrect, entered, hintLevel, question],
   );
-  const sibling = useMemo<SiblingWorked | null>(() => {
-    if (!ladder || !hintLevel) return null;
-    const sib = generateFreshNumericQuestion(
-      hintLevel,
-      freshPracticeSeed(),
-      question.family,
-      question,
-      true,
-      question,
-    );
-    if (!sib) return null;
-    return {
-      prompt: sib.prompt,
-      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
-    };
-     
-  }, [ladder, hintLevel, question]);
+  const sibling = useMemo<SiblingWorked | null>(
+    () =>
+      ladder && hintLevel
+        ? buildWorkedSibling({ level: hintLevel, question })
+        : null,
+    [ladder, hintLevel, question],
+  );
 
   const handleSubmit = () => {
     if (answered) return;
@@ -524,7 +499,7 @@ export function NumericCard({
             }`}
           >
             <span className="font-mono text-xs font-semibold uppercase tracking-label">
-              {isCorrect ? "● Filled — Correct" : "● Rejected — Incorrect"}
+              {isCorrect ? "● Filled: Correct" : "● Rejected: Incorrect"}
             </span>
             <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
               Trade Ticket
@@ -655,23 +630,11 @@ export function FreeResponseCard({
     [question, lastWrong, hintLevel],
   );
   const hasLadder = ladder !== null;
-  const sibling = useMemo<SiblingWorked | null>(() => {
-    if (!hasLadder) return null;
-    const sib = generateFreshNumericQuestion(
-      hintLevel,
-      freshPracticeSeed(),
-      question.family,
-      question,
-      true,
-      question,
-    );
-    if (!sib) return null;
-    return {
-      prompt: sib.prompt,
-      steps: deriveWorkedSteps(sib.explanation).map((s) => s.text),
-    };
-     
-  }, [hasLadder, hintLevel, question]);
+  const sibling = useMemo<SiblingWorked | null>(
+    () =>
+      hasLadder ? buildWorkedSibling({ level: hintLevel, question }) : null,
+    [hasLadder, hintLevel, question],
+  );
 
   const handleSubmit = () => {
     if (resolved) return;
@@ -775,7 +738,7 @@ export function FreeResponseCard({
         )}
         {!resolved && episode.revealed > 0 && (
           <p className="mt-2 text-xs text-muted">
-            Not quite — read the coaching below, then re-enter your answer above.
+            Not quite. Read the coaching below, then re-enter your answer above.
           </p>
         )}
       </div>
@@ -803,9 +766,9 @@ export function FreeResponseCard({
             <span className="font-mono text-xs font-semibold uppercase tracking-label">
               {isCorrect
                 ? episode.highestRung === 0
-                  ? "● Filled — Correct"
-                  : `● Filled — Correct after ${episode.highestRung} hint${episode.highestRung > 1 ? "s" : ""}`
-                : "● Rejected — Incorrect"}
+                  ? "● Filled: Correct"
+                  : `● Filled: Correct after ${episode.highestRung} hint${episode.highestRung > 1 ? "s" : ""}`
+                : "● Rejected: Incorrect"}
             </span>
             <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
               Trade Ticket

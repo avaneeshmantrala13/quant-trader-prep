@@ -4,6 +4,8 @@ import { useDashboardData } from "@/components/dashboard/useDashboardData";
 import { buildDashboardViewProps } from "@/components/dashboard/dashboardView";
 import { BaseDashboard } from "@/themes/BaseDashboard";
 import { OaTimingPanel } from "@/components/oa/OaTimingPanel";
+import { SrsReviewPanel } from "@/components/dashboard/SrsReviewPanel";
+import { RemediationGuidancePanel } from "@/components/dashboard/RemediationGuidancePanel";
 
 /**
  * `/dashboard` — the Phase-5 mastery + calibration dashboard (PHASE_5 §6), now a
@@ -37,6 +39,8 @@ export function DashboardPage() {
   return (
     <>
       <ThemeDashboard {...props} />
+      <RemediationGuidancePanel />
+      <SrsReviewPanel />
       <OaTimingPanel />
     </>
   );

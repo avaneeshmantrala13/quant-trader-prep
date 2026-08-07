@@ -62,7 +62,7 @@ export function buildPnEntryInstance(
     `A Markov chain has transition matrix rows ${rows} (states 1,2,3). ` +
     `What is the 2-step probability P(X₂ = ${j + 1} | X₀ = ${i + 1}), i.e. (P²)_{${i + 1}${j + 1}}? (Round to ${dp} decimals.)`;
   const explanation =
-    `By Chapman–Kolmogorov, (P²)_{${i + 1}${j + 1}} = Σ_k P_{${i + 1}k}·P_{k${j + 1}} = ${fracText(value)} ≈ ${decText(value, dp)} — sum over the intermediate state k of "step to k, then to ${j + 1}".`;
+    `By Chapman–Kolmogorov, (P²)_{${i + 1}${j + 1}} = Σ_k P_{${i + 1}k}·P_{k${j + 1}} = ${fracText(value)} ≈ ${decText(value, dp)}, sum over the intermediate state k of "step to k, then to ${j + 1}".`;
 
   return {
     answer,
@@ -95,7 +95,7 @@ const CLASS_ITEMS: ClassItem[] = [
     concept: "Periodicity (self-loop ⇒ aperiodic)",
     correct: {
       text: "1 (aperiodic)",
-      rationale: "A self-loop lets you return in 1 step, so gcd of return times is 1 — the state is aperiodic.",
+      rationale: "A self-loop lets you return in 1 step, so gcd of return times is 1, the state is aperiodic.",
     },
     distractors: [
       { text: "2", rationale: "Period 2 would require all returns at even times; a self-loop allows a return at time 1, breaking that." },
@@ -109,7 +109,7 @@ const CLASS_ITEMS: ClassItem[] = [
     concept: "Finite irreducible ⇒ all recurrent",
     correct: {
       text: "Recurrent",
-      rationale: "A finite irreducible chain cannot 'leak' probability, so every state is (positive) recurrent — revisited infinitely often.",
+      rationale: "A finite irreducible chain cannot 'leak' probability, so every state is (positive) recurrent, revisited infinitely often.",
     },
     distractors: [
       { text: "Transient", rationale: "Transience needs escaping mass; impossible when finitely many communicating states trap it." },
@@ -127,7 +127,7 @@ const CLASS_ITEMS: ClassItem[] = [
     distractors: [
       { text: "They have the same stationary probability", rationale: "Equal π is unrelated to communication; communication is about reachability." },
       { text: "They are directly connected in one step", rationale: "Reachability may take several steps; one-step adjacency isn't required." },
-      { text: "One of them is absorbing", rationale: "An absorbing state communicates with no other state — the opposite of communicating." },
+      { text: "One of them is absorbing", rationale: "An absorbing state communicates with no other state, the opposite of communicating." },
     ],
   },
   {
@@ -139,7 +139,7 @@ const CLASS_ITEMS: ClassItem[] = [
       rationale: "Transient = the chain returns with probability < 1, so it is visited only finitely often.",
     },
     distractors: [
-      { text: "Recurrent", rationale: "Recurrent means return with probability exactly 1 — the opposite." },
+      { text: "Recurrent", rationale: "Recurrent means return with probability exactly 1, the opposite." },
       { text: "Absorbing", rationale: "Absorbing means you can never leave; here you can leave." },
       { text: "Aperiodic", rationale: "Aperiodicity is about return TIMING, not whether you return at all." },
     ],

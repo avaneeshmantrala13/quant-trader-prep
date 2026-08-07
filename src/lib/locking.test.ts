@@ -105,6 +105,46 @@ describe("per-section unlock rule", () => {
   });
 });
 
+describe("diagnostic-seeded low-confidence unlock predicate (Part B)", () => {
+  it("opens a whole topic's later levels ahead of mastery, without leaking to others", () => {
+    // Topic A is diagnostic-unlocked; a2/a3 open even though a1 isn't mastered.
+    const seedUnlocked = (id: string) => id.startsWith("a");
+    expect(isLevelUnlockedBySection(LABELED, 1, mastered(), seedUnlocked)).toBe(
+      true,
+    ); // a2
+    expect(isLevelUnlockedBySection(LABELED, 2, mastered(), seedUnlocked)).toBe(
+      true,
+    ); // a3
+    // Topic B is NOT seed-unlocked ⇒ b2 stays locked behind b1.
+    expect(isLevelUnlockedBySection(LABELED, 4, mastered(), seedUnlocked)).toBe(
+      false,
+    ); // b2
+  });
+
+  it("re-locks automatically once the predicate flips false (the swing)", () => {
+    const before = computeLockStates(LABELED, mastered(), (id) =>
+      id.startsWith("a"),
+    );
+    expect(before.slice(0, 3)).toEqual(["unlocked", "unlocked", "unlocked"]);
+    // The topic swung back under the bar ⇒ predicate now false ⇒ a2/a3 re-lock.
+    const after = computeLockStates(LABELED, mastered(), () => false);
+    expect(after.slice(0, 3)).toEqual(["unlocked", "locked", "locked"]);
+  });
+
+  it("defaults to no seed unlocks (existing mastery-only gating unchanged)", () => {
+    expect(isLevelUnlockedBySection(LABELED, 1, mastered())).toBe(false); // a2
+    expect(computeLockStates(LABELED, mastered())).toEqual([
+      "unlocked",
+      "locked",
+      "locked",
+      "unlocked",
+      "locked",
+      "unlocked",
+      "locked",
+    ]);
+  });
+});
+
 describe("unlabeled tracks behave sequentially with first unlocked", () => {
   it("first level open, the rest gate on the immediately-previous level", () => {
     const seq: LockLevel[] = [{ id: "x1" }, { id: "x2" }, { id: "x3" }];

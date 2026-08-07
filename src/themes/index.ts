@@ -29,7 +29,7 @@ export const THEMES: Theme[] = [
   casinoTheme,
 ];
 
-export const DEFAULT_THEME_ID = "broadsheet";
+export const DEFAULT_THEME_ID = "minimalist";
 
 export function getTheme(id: string | null | undefined): Theme {
   return THEMES.find((t) => t.id === id) ?? broadsheetTheme;

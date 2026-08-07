@@ -95,4 +95,72 @@ describe("planOfAttack — rung-2 guided plan of attack", () => {
     );
     expect(planOfAttack({ section: "Markov Chains" })).not.toBe(GENERIC_PLAN);
   });
+
+  // ---- RC2: rung-2 plan mis-routing regressions -----------------------------
+  describe("RC2 no-cross-topic-mis-pin", () => {
+    it("`Core Puzzles` no longer gets the game-theory plan (the bare `puzzle` substring)", () => {
+      const corePuzzles = planOfAttack({ section: "Core Puzzles" });
+      const gameTheory = planOfAttack({ section: "Game Theory & Puzzles" });
+      expect(corePuzzles).not.toBe(GENERIC_PLAN);
+      expect(corePuzzles).not.toBe(gameTheory);
+      // Both brainteaser tracks share the same (puzzle) plan.
+      expect(corePuzzles).toBe(planOfAttack({ section: "Techniques Toolkit" }));
+    });
+
+    it("geometric/arithmetic SEQUENCES get the sequence plan, not the geometric-PROBABILITY plan", () => {
+      const geometricNext = planOfAttack({ family: "geometricNext" });
+      const arithmeticNext = planOfAttack({ family: "arithmeticNext" });
+      const geometricProb = planOfAttack({ section: "Geometric Probability" });
+      const mentalMath = planOfAttack({ section: "Mental Math" });
+      expect(geometricNext).toBe(arithmeticNext); // same sequence plan
+      expect(geometricNext).not.toBe(geometricProb);
+      expect(geometricNext).not.toBe(mentalMath);
+      expect(geometricNext).not.toBe(GENERIC_PLAN);
+      expect(planOfAttack({ section: "Sequences & Pattern Recognition" })).toBe(
+        geometricNext,
+      );
+    });
+
+    it("rates / algebra / word-problem and geometry-derivation sections no longer fall through to GENERIC", () => {
+      const rates = planOfAttack({ section: "Rates, Algebra & Word Problems" });
+      const geomDeriv = planOfAttack({ section: "Geometry & Derivations" });
+      expect(rates).not.toBe(GENERIC_PLAN);
+      expect(geomDeriv).not.toBe(GENERIC_PLAN);
+      // Geometry DERIVATIONS (plain geometry) must not get the geometric-
+      // PROBABILITY favourable-measure plan.
+      expect(geomDeriv).not.toBe(planOfAttack({ section: "Geometric Probability" }));
+    });
+
+    it("number-theory series families get the series plan, not the counting/selection plan", () => {
+      const series = planOfAttack({ family: "genSumOddsRangeNumeric" });
+      const counting = planOfAttack({ family: "genCombinations" });
+      expect(series).not.toBe(counting);
+      expect(series).not.toBe(GENERIC_PLAN);
+      expect(planOfAttack({ family: "genSumRangeNumeric" })).toBe(series);
+      expect(planOfAttack({ family: "genDoublingCoverageNumeric" })).toBe(series);
+    });
+
+    it("Markov's INEQUALITY gets the concentration plan, not the Markov-CHAIN plan", () => {
+      const markovBound = planOfAttack({
+        family: "genMarkovBound",
+        section: "Variance, Covariance & the CLT",
+      });
+      const markovChain = planOfAttack({ section: "Markov Chains" });
+      const stationary = planOfAttack({ family: "genTwoStateStationary" });
+      expect(markovBound).not.toBe(markovChain);
+      expect(markovBound).not.toBe(stationary);
+      expect(markovBound).not.toBe(GENERIC_PLAN);
+    });
+
+    it("covariance / variance families get the spread plan, genuine CLT families get the CLT plan (no CLT over-pin)", () => {
+      const covariance = planOfAttack({
+        family: "genCovariance",
+        section: "Variance, Covariance & the CLT",
+      });
+      const cltFamily = planOfAttack({ family: "genCltTail" });
+      expect(covariance).not.toBe(cltFamily);
+      expect(covariance).not.toBe(GENERIC_PLAN);
+      expect(cltFamily).not.toBe(GENERIC_PLAN);
+    });
+  });
 });

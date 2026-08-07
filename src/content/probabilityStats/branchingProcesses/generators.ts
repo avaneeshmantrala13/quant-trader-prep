@@ -92,7 +92,7 @@ export function buildExtinctionInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(a, D),
-    `p₀ = ${fracText(F(a, D))} is the chance ONE individual has no children — not the eventual extinction probability, which is the smallest root of s=G(s): p₀/p₂.`,
+    `p₀ = ${fracText(F(a, D))} is the chance ONE individual has no children, not the eventual extinction probability, which is the smallest root of s=G(s): p₀/p₂.`,
   );
   push(
     F(1).div(mu),

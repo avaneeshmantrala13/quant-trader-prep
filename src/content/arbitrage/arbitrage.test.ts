@@ -172,7 +172,7 @@ describe("arbitrage quiz generators: correct choice re-derives independently", (
       const bs = odds.reduce((s, o) => s + 1 / Number(o), 0);
       const correct = q.choices[q.correctIndex];
       if (Math.abs(bs - 1) < 1e-9) expect(correct).toContain("Fair book");
-      else if (bs < 1) expect(correct).toContain("Arbitrage — back all outcomes");
+      else if (bs < 1) expect(correct).toContain("Arbitrage, back all outcomes");
       else expect(correct).toContain("Overround");
     }
   });
@@ -180,7 +180,7 @@ describe("arbitrage quiz generators: correct choice re-derives independently", (
   it("genValueLeg: correct = argmax p·o and that leg beats break-even", () => {
     for (const seed of SEEDS) {
       const q = ARBITRAGE_QUIZ_GENERATORS.genValueLeg(new Rng(seed));
-      const legs = [...q.prompt.matchAll(/([ABC]) — true (\d+)%, odds (\d+\.\d+)/g)];
+      const legs = [...q.prompt.matchAll(/([ABC]), true (\d+)%, odds (\d+\.\d+)/g)];
       expect(legs).toHaveLength(3);
       let bestName = "";
       let bestEV = -Infinity;

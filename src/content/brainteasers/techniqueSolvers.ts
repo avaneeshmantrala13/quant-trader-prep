@@ -13,7 +13,7 @@ import { F } from "./solvers";
  * `./techniques.test.ts`.
  *
  * The shipped flashcards (see `./techniqueGenerators.ts` + `./levels.ts`) NEVER
- * reuse a dataset puzzle verbatim — the parametric families draw fresh
+ * reuse a dataset puzzle verbatim, the parametric families draw fresh
  * parameters and the hand-authored one-offs are new framings of the same
  * technique. These solvers exist so the parametric cards can be produced
  * infinitely AND verified, and so the arithmetic behind the static cards is
@@ -130,7 +130,7 @@ export function maxSubsetNoMultiple(N: number, d: number): number {
 }
 
 /* ========================================================================== */
-/*  Number theory (dataset 7 — parametric)                                     */
+/*  Number theory (dataset 7, parametric)                                     */
 /* ========================================================================== */
 
 /**
@@ -231,7 +231,7 @@ export function lastCogDirection(n: number): "clockwise" | "counterclockwise" {
 }
 
 /* ========================================================================== */
-/*  Modular checksum — prisoners' hats (dataset 3)                             */
+/*  Modular checksum, prisoners' hats (dataset 3)                             */
 /* ========================================================================== */
 
 /**
@@ -239,8 +239,8 @@ export function lastCogDirection(n: number): "clockwise" | "counterclockwise" {
  * prisoner announces the modular checksum (Σ of the colors he sees, mod
  * `colors`) as a color; every prisoner ahead then subtracts what they see and
  * what has already been said to recover their own color with CERTAINTY. So
- * n − 1 are saved for sure, and the rearmost prisoner — who sacrifices himself
- * to broadcast one shared checksum symbol — guesses his own hat correctly with
+ * n − 1 are saved for sure, and the rearmost prisoner, who sacrifices himself
+ * to broadcast one shared checksum symbol, guesses his own hat correctly with
  * probability exactly 1/colors. Exact (integer + rational).
  */
 export function modularHats(

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ARBITRAGE_STORAGE_KEY,
+  arbitrageRunKey,
   clearArbitrageRun,
   loadArbitrageRun,
   saveArbitrageRun,
@@ -35,14 +36,14 @@ describe("arbitrage/persist", () => {
     const store = memStore();
     const run = sampleRun();
 
-    saveArbitrageRun(run, store);
-    const loaded = loadArbitrageRun(store);
+    saveArbitrageRun(run, "alice", store);
+    const loaded = loadArbitrageRun("alice", store);
 
     expect(loaded).toEqual(run);
     // The seed re-materializes the identical battery, so responses line up.
     expect(loaded?.seed).toBe(run.seed);
     expect(loaded?.responses).toEqual(run.responses);
-    expect(store.map.has(ARBITRAGE_STORAGE_KEY)).toBe(true);
+    expect(store.map.has(arbitrageRunKey("alice"))).toBe(true);
   });
 
   it("preserves a committed current item's chosen index + typed entry", () => {
@@ -53,27 +54,47 @@ describe("arbitrage/persist", () => {
       chosen: 2,
       typed: "0.42",
     };
-    saveArbitrageRun(run, store);
-    expect(loadArbitrageRun(store)).toEqual(run);
+    saveArbitrageRun(run, "alice", store);
+    expect(loadArbitrageRun("alice", store)).toEqual(run);
   });
 
   it("returns undefined when nothing is persisted", () => {
-    expect(loadArbitrageRun(memStore())).toBeUndefined();
+    expect(loadArbitrageRun("alice", memStore())).toBeUndefined();
   });
 
   it("clear removes the persisted run so re-entry starts fresh", () => {
     const store = memStore();
-    saveArbitrageRun(sampleRun(), store);
-    clearArbitrageRun(store);
-    expect(loadArbitrageRun(store)).toBeUndefined();
+    saveArbitrageRun(sampleRun(), "alice", store);
+    clearArbitrageRun("alice", store);
+    expect(loadArbitrageRun("alice", store)).toBeUndefined();
   });
 
   it("treats a corrupt / malformed blob as no-resume", () => {
     const store = memStore();
-    store.setItem(ARBITRAGE_STORAGE_KEY, "not-json");
-    expect(loadArbitrageRun(store)).toBeUndefined();
+    store.setItem(arbitrageRunKey("alice"), "not-json");
+    expect(loadArbitrageRun("alice", store)).toBeUndefined();
 
-    store.setItem(ARBITRAGE_STORAGE_KEY, JSON.stringify({ version: 1 }));
-    expect(loadArbitrageRun(store)).toBeUndefined();
+    store.setItem(arbitrageRunKey("alice"), JSON.stringify({ version: 1 }));
+    expect(loadArbitrageRun("alice", store)).toBeUndefined();
+  });
+
+  it("does NOT leak a run across different users (per-user scoping)", () => {
+    const store = memStore();
+    const aliceRun = sampleRun();
+    saveArbitrageRun(aliceRun, "alice", store);
+
+    // Bob (a different account on the same browser) starts fresh.
+    expect(loadArbitrageRun("bob", store)).toBeUndefined();
+    expect(loadArbitrageRun(null, store)).toBeUndefined();
+    // Alice still resumes her own run.
+    expect(loadArbitrageRun("alice", store)).toEqual(aliceRun);
+    // Clearing Bob's (empty) run never touches Alice's.
+    clearArbitrageRun("bob", store);
+    expect(loadArbitrageRun("alice", store)).toEqual(aliceRun);
+  });
+
+  it("derives per-user keys from the base key", () => {
+    expect(arbitrageRunKey("alice")).toBe(`${ARBITRAGE_STORAGE_KEY}::alice`);
+    expect(arbitrageRunKey(null)).toBe(`${ARBITRAGE_STORAGE_KEY}::anon`);
   });
 });

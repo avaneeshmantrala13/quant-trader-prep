@@ -15,7 +15,7 @@ import { mixNumericGenerators, mixQuestionGenerators } from "../../mixFamilies";
  * consistent.
  *
  * Every distractor produced through these helpers must be a re-derived, NAMED
- * misconception — guaranteed distinct and ≠ the answer (asserted in the tests).
+ * misconception, guaranteed distinct and ≠ the answer (asserted in the tests).
  */
 
 export interface Choice {

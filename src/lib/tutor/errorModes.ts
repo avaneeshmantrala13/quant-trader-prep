@@ -355,3 +355,90 @@ export function arithmeticSlipCoaching(): string {
     "sure every step's number is right."
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*  Context classifiers (rung-4 elicitation flavour + arithmetic-slip gate)     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * True when the item is a DETERMINISTIC arithmetic / logic / construction /
+ * number-theory / sequence problem rather than a probability one. Used to pick
+ * the rung-4 generic elicitation: a probability confront ("run trials, count how
+ * often the event happens") is a category error for "615 + 621 = ?", "sum of the
+ * odd integers", a burning-rope timing puzzle, or an invariant/parity proof.
+ * Matched case-insensitively against `${section} ${family}`.
+ */
+export function isDeterministicContext(opts: {
+  section?: string;
+  family?: string;
+}): boolean {
+  const hay = `${opts.section ?? ""} ${opts.family ?? ""}`.toLowerCase();
+  if (!hay.trim()) return false;
+  // Deterministic sections (speed-arithmetic, word problems, geometry
+  // derivations, number theory, sequences, brainteaser tracks).
+  if (
+    /rates, algebra|geometry & derivations|number theory|sequences|pattern recognition|core puzzles|techniques toolkit|mental\s*math/.test(
+      hay,
+    )
+  ) {
+    return true;
+  }
+  // Deterministic family ids (mental-math + math-questions + brainteaser +
+  // number-series generators). These are pure arithmetic / logic constructions.
+  if (
+    /addition|subtraction|multiply|division|fractiontodecimal|percent|oddstoprob|sumrange|sumodds|doublingcoverage|countmultiples|coldstorage|gridrectangles|wordarrangements|roundrobin|pigeonhole|trailingzeros|digitproduct|binaryweights|houseofcards|twoballs|modularhats|subtractiongame|wythoff|analogy|oddoneout|arithmeticnext|geometricnext/.test(
+      hay,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * True when the item is a LOGIC / CONSTRUCTION / conceptual puzzle (brainteaser,
+ * game-theory, sequence-rule) rather than a genuine numeric-arithmetic problem.
+ * The rung-1 "your logic is spot on — just re-check the arithmetic" nudge is
+ * ACTIVELY MISLEADING for these (the error is conceptual, not a slipped digit),
+ * so the hint ladder gates the arithmetic-slip branch off for them. Matched
+ * case-insensitively against `${section} ${family}`.
+ */
+export function isLogicOrConstructionContext(opts: {
+  section?: string;
+  family?: string;
+  /**
+   * The item's `concept` string, folded into the classification. STATIC pooled
+   * items (e.g. the Interview-Games EV pool) carry no `section`/`family`, so the
+   * concept is the ONLY signal that a close-but-wrong entry sits on a derivation
+   * problem (order statistics, optimal stopping) rather than a plain arithmetic
+   * slip — where "your logic is spot on" over-claims and misleads.
+   */
+  concept?: string;
+}): boolean {
+  const hay = `${opts.section ?? ""} ${opts.family ?? ""} ${opts.concept ?? ""}`.toLowerCase();
+  if (!hay.trim()) return false;
+  if (
+    /core puzzles|techniques toolkit|game theory|puzzle|sequences|pattern recognition/.test(
+      hay,
+    )
+  ) {
+    return true;
+  }
+  // Derivation-heavy conceptual families where a near-miss reflects a setup /
+  // formula error, not a slipped digit (matched via section/family OR concept).
+  if (
+    /order statistic|expected maximum|expected max\b|optimal stopping|secretary problem/.test(
+      hay,
+    )
+  ) {
+    return true;
+  }
+  if (
+    /pigeonhole|trailingzeros|digitproduct|binaryweights|houseofcards|twoballs|modularhats|subtractiongame|wythoff|analogy|oddoneout|arithmeticnext|geometricnext|backupdealer|adjacentcross|walkofferdown|fadingbuyer|roundtrip|inventorycap|genpd|genentry|genhotelling|genbeauty|genvolunteer|genvalue2x2|genvalue3x2|genoptim/.test(
+      hay,
+    )
+  ) {
+    return true;
+  }
+  return false;
+}

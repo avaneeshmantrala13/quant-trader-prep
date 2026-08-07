@@ -45,12 +45,12 @@ export function CiElicitation({
     const lo = parseFermiInput(loRaw);
     const hi = parseFermiInput(hiRaw);
     if (lo === null || lo <= 0) {
-      setError("Enter a positive lower bound — e.g. 300000, 300k, or 3e5.");
+      setError("Enter a positive lower bound, e.g. 300000, 300k, or 3e5.");
       loRef.current?.focus();
       return;
     }
     if (hi === null || hi <= 0) {
-      setError("Enter a positive upper bound — e.g. 3m, 3e6, or 3,000,000.");
+      setError("Enter a positive upper bound, e.g. 3m, 3e6, or 3,000,000.");
       hiRef.current?.focus();
       return;
     }
@@ -84,7 +84,7 @@ export function CiElicitation({
         <p className="mt-1 text-xs text-muted">
           Pick a range you're{" "}
           <span className="font-semibold text-primary">90% sure</span> contains
-          the truth — wide enough to be right ~9 times in 10, tight enough to
+          the truth: wide enough to be right ~9 times in 10, tight enough to
           still say something.
         </p>
 

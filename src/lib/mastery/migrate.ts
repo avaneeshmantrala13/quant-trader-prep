@@ -1,12 +1,12 @@
 import { emptyProgress, type UserProgress } from "@/types/progress";
 
 /**
- * Non-destructive v1 → v2 → v3 progress migration (COORDINATION §2.2 / §3.3;
- * T12 adaptive engine).
+ * Non-destructive v1 → v2 → v3 → v4 → v5 progress migration (COORDINATION §2.2 /
+ * §3.3; T12 adaptive engine; T14 retention/SRS; ZPD repeated-mistake tally).
  *
  * Any older (or partial) saved blob is upgraded to the CURRENT schema version
- * (now 3): missing mastery fields are filled with empty maps and `version` is
- * set to 3, while EVERY existing field is preserved untouched — `levelProgress`
+ * (now 5): missing mastery fields are filled with empty maps and `version` is
+ * set to 5, while EVERY existing field is preserved untouched — `levelProgress`
  * / `resume` / `xp` / `streak` / `createdAt`, the Phase-1 mastery state (θ/α/β
  * via `topicMastery`, `tierDifficulty`), the diagnostic/goal/calibration/OA
  * add-ons, etc. Existing level mastery — the unlock gate — is NEVER lost, and
@@ -19,6 +19,16 @@ import { emptyProgress, type UserProgress } from "@/types/progress";
  * and is likewise preserved-if-present / absent-otherwise — no field is
  * re-derived or reset here. Fully pure; safe (idempotent) to run on every load.
  * Runs inside ProgressContext right after `storage.loadProgress`.
+ *
+ * The v3 → v4 step is likewise purely ADDITIVE: it introduces the optional T14
+ * Spaced-Repetition store (`srs`) and leaves it ABSENT unless the saved blob
+ * already carried it. It never re-derives or resets any card state.
+ *
+ * The v4 → v5 step is likewise purely ADDITIVE: it introduces the optional ZPD
+ * per-topic RAW misconception tally (`misconceptionsByTopic`) and leaves it
+ * ABSENT unless the saved blob already carried it. It never re-derives it from
+ * the mastery misconception flags (those are decayed, mastery-facing); the tally
+ * simply starts accumulating from the next graded item.
  */
 export function migrateProgress(raw: unknown): UserProgress {
   const fallback = emptyProgress();
@@ -26,7 +36,7 @@ export function migrateProgress(raw: unknown): UserProgress {
 
   const r = raw as Partial<UserProgress>;
   return {
-    version: 3,
+    version: 5,
     levelProgress: r.levelProgress ?? {},
     resume: r.resume ?? {},
     xp: typeof r.xp === "number" ? r.xp : 0,
@@ -57,5 +67,14 @@ export function migrateProgress(raw: unknown): UserProgress {
     // else leave it ABSENT. Purely additive parallel signal — never gates
     // content or affects scoring / mastery / unlock.
     glickoDifficulty: r.glickoDifficulty,
+    // T14 (v3 → v4): preserve the optional Spaced-Repetition store if present,
+    // else leave it ABSENT. Its own lane — never gates content or affects
+    // scoring / mastery / unlock / relock / the adaptive-engine fold.
+    srs: r.srs,
+    // ZPD (v4 → v5): preserve the optional per-topic RAW misconception tally if
+    // present, else leave it ABSENT. Its own lane — drives only the
+    // repeated-mistake feedback + targeted (unscored) re-prep; never gates
+    // content or affects scoring / mastery / unlock / relock / the fold.
+    misconceptionsByTopic: r.misconceptionsByTopic,
   };
 }

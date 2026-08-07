@@ -32,9 +32,11 @@ import { TutorController } from "@/components/tutor/TutorController";
 import { REMEDIATION_MODE } from "@/lib/remediation/config";
 import {
   remediationStep,
+  type RemediationAction,
   type RemediationInput,
 } from "@/lib/remediation/policy";
 import { planFinishRemediation } from "@/lib/remediation/finish";
+import type { TopicMastery } from "@/types/mastery";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
 import { ChevronLeftIcon } from "@/components/icons";
 import {
@@ -47,6 +49,7 @@ import {
   FinishRemediation,
   NumericPractice,
 } from "@/pages/lesson/remediation";
+import { LevelFinishGuidance } from "@/pages/lesson/LevelFinishGuidance";
 import { type Phase, initialPhase } from "@/pages/lesson/phase";
 
 /* -------------------------------------------------------------------------- */
@@ -68,7 +71,6 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
     getTopicMastery,
     getTopicVerdict,
     setReviewSchedule,
-    recordCalibrationPair,
   } = useProgress();
   const { themeDef } = useTheme();
 
@@ -83,12 +85,15 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
 
   const unlocked = useMemo(() => {
     const idx = track.levels.findIndex((l) => l.id === level.id);
-    return isLevelUnlockedBySection(
-      track.levels,
-      idx,
-      (id) => !!getLevelProgress(id)?.mastered,
+    // Also honor a diagnostic-seeded low-confidence unlock of this topic (Part B).
+    return (
+      isLevelUnlockedBySection(
+        track.levels,
+        idx,
+        (id) => !!getLevelProgress(id)?.mastered,
+      ) || isTopicUnlocked(mastery)
     );
-  }, [track, level, getLevelProgress]);
+  }, [track, level, getLevelProgress, mastery]);
 
   const [phase, setPhase] = useState<Phase>("lesson");
   const [seed, setSeed] = useState(0);
@@ -238,15 +243,6 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
     // per primary question; NEVER called from `NumericPractice`.
     if (q) {
       const responseMs = Date.now() - questionShownAtRef.current;
-      // Phase 5 calibration: the honest, UNAIDED signal is whether they got it
-      // right FIRST try (no hint). A hinted recovery counts as an outcome of 0
-      // for the reliability diagram even though it earns partial mastery credit.
-      const unaidedCorrect = r.correct && r.highestRung === 0;
-      const tierD =
-        progress.tierDifficulty?.[tierDifficultyKey(topicKey, level.difficulty)] ??
-        seedTierDifficulty(level.difficulty);
-      const predicted = predictSuccess(theta, tierD);
-      recordCalibrationPair(topicKey, predicted, unaidedCorrect ? 1 : 0);
       // Bump the misconception the learner tripped on their FIRST wrong attempt
       // (help was used ⇒ credit < 1 ⇒ the mastery fold records it); a clean
       // first-try solve has no firstWrongValue and decays stale flags.
@@ -254,7 +250,7 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
         r.firstWrongValue != null
           ? resolveNumericMisconceptionKeys(topicKey, q, r.firstWrongValue)
           : [];
-      recordItemAttempt({
+      const { mastery: nextMastery, relock } = recordItemAttempt({
         topicKey,
         tier: level.difficulty,
         correct: r.correct,
@@ -271,7 +267,33 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
           resolveNumericTag(q, r.firstWrongValue ?? r.finalValue),
         ),
       );
+      // Part B: surface a RE-LOCK (low-confidence unlock failed) through the same
+      // mid-lesson remediation UI — routes to the ~0.85 prerequisite probe.
+      surfaceRelockRemediation(relock, nextMastery);
     }
+  };
+
+  // Route a planned Part-B relock action into the existing mid-lesson
+  // `RemediationFlow` by arming a forceDescend origin (mirrors QuizLevel).
+  const surfaceRelockRemediation = (
+    relock: RemediationAction | null,
+    nextMastery: TopicMastery | undefined,
+  ) => {
+    if (!relock || remediation) return;
+    remediatedTopicsRef.current.add(topicKey);
+    setRemediation({
+      topicKey,
+      theta: nextMastery?.theta ?? 0,
+      alpha: nextMastery?.alpha ?? 1,
+      beta: nextMastery?.beta ?? 1,
+      n: nextMastery?.n ?? 0,
+      consecutiveMisses: 2,
+      atFloorTier: false,
+      misconceptionTag: lastMissTagRef.current,
+      responseFast: false,
+      depthThisSession: 0,
+      forceDescend: true,
+    });
   };
 
   // See QuizLevel: arm the DAG remediation branch on a REPEATED miss only.
@@ -323,19 +345,19 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
 
   const finish = () => {
     // Two scores from one round:
-    //  • gateScore  — binary fraction ULTIMATELY correct (ignores hints); drives
-    //    the lenient advance/unlock gate + remediation, so hint use can never
-    //    bounce a learner below the pass bar. UNCHANGED behavior.
     //  • displayScore — credit-weighted mean of per-item hint-credit; the VISIBLE
-    //    mastery % (map "Best X%" + summary), so answering after hints shows < 100%.
+    //    mastery % (map "Best X%" + summary). This is THE value the mastery/unlock
+    //    gate reads (see recordAttempt), so a hint-heavy round (answers only after
+    //    the final hint ⇒ low credit) correctly reads NOT mastered even though
+    //    most items were eventually correct — instead of a false "Mastered" stamp.
+    //  • gateScore  — binary fraction ULTIMATELY correct (ignores hints). NO LONGER
+    //    the mastery gate; it only feeds the lenient FORCED finish-remediation
+    //    trigger below, so a binary-passing round is not bombarded with an
+    //    auto-launched descent (the failed-topic ZPD *suggestion* still surfaces
+    //    on the summary whenever the credit-weighted gate fails).
     const gateScore = roundScore(correctCount, questions.length);
     const displayScore = creditRoundScore(credits, questions.length);
-    const r = recordAttempt(
-      level.id,
-      displayScore,
-      level.masteryThreshold,
-      gateScore,
-    );
+    const r = recordAttempt(level.id, displayScore, level.masteryThreshold);
     clearResume(level.id);
     // Seam 1: persist the SM-2 spaced-review schedule (see QuizLevel.finish).
     const plan = planRoundReview(getTopicMastery(topicKey), new Date().toISOString());
@@ -496,18 +518,25 @@ export function NumericLevel({ track, level }: { track: Track; level: Level }) {
         )}
 
         {phase === "summary" && result && (
-          <NumericSummary
-            correct={correctCount}
-            total={questions.length}
-            displayScore={result.displayScore}
-            threshold={level.masteryThreshold}
-            mastered={result.mastered}
-            xpGained={result.xpGained}
-            questions={questions}
-            answers={answers}
-            onRetry={retry}
-            onDone={() => navigate(`/track/${track.id}`)}
-          />
+          <div className="space-y-5">
+            <LevelFinishGuidance
+              topicKey={topicKey}
+              mastered={result.mastered}
+              misconceptionTag={lastMissTagRef.current}
+            />
+            <NumericSummary
+              correct={correctCount}
+              total={questions.length}
+              displayScore={result.displayScore}
+              threshold={level.masteryThreshold}
+              mastered={result.mastered}
+              xpGained={result.xpGained}
+              questions={questions}
+              answers={answers}
+              onRetry={retry}
+              onDone={() => navigate(`/track/${track.id}`)}
+            />
+          </div>
         )}
       </main>
     </div>

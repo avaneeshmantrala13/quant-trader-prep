@@ -63,7 +63,7 @@ function CoinFlips(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="The jagged line is your observed share of heads; the dashed line is the true P(heads) you set. More flips ⇒ the observed proportion settles ever closer to that line — the Law of Large Numbers."
+      howToRead="The jagged line is your observed share of heads; the dashed line is the true P(heads) you set. More flips ⇒ the observed proportion settles ever closer to that line: the Law of Large Numbers."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">
@@ -290,7 +290,7 @@ function SampleSpace(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="The 6×6 grid is every equally-likely (die A, die B) outcome. Highlighted cells are the ones your event counts, so its probability = highlighted ÷ 36. The bar chart below is the distribution of the two-dice sum — it peaks at 7 because 7 has the most cell combinations."
+      howToRead="The 6×6 grid is every equally-likely (die A, die B) outcome. Highlighted cells are the ones your event counts, so its probability = highlighted ÷ 36. The bar chart below is the distribution of the two-dice sum; it peaks at 7 because 7 has the most cell combinations."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">

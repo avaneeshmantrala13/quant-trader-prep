@@ -42,6 +42,7 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$HERE/.." && pwd)"
 TEMPLATE="$HERE/cloudformation/quant-trader-prep-ai.yaml"
 LAMBDA_DIR="$HERE/lambda/ai-flavor"
+LAMBDA_TTS_DIR="$HERE/lambda/ai-tts"
 
 MAIN_STACK_NAME="${MAIN_STACK_NAME:-quant-trader-prep}"
 STACK_NAME="${STACK_NAME:-quant-trader-prep-ai}"
@@ -119,17 +120,27 @@ get_ai_out() {
 }
 AI_ENDPOINT="$(get_ai_out AiEndpoint)"
 AI_FUNCTION="$(get_ai_out AiFunctionName)"
+AI_TTS_FUNCTION="$(get_ai_out AiTtsFunctionName)"
 
-echo "==> Uploading real Lambda code from $LAMBDA_DIR"
-TMP_ZIP="$(mktemp -t qtp-ai.XXXXXX.zip)"
-rm -f "$TMP_ZIP"   # mktemp pre-creates a 0-byte file; macOS `zip` refuses it, so remove it first
-( cd "$LAMBDA_DIR" && zip -q -r "$TMP_ZIP" index.mjs )
-aws lambda update-function-code \
-  --region "$AWS_REGION" \
-  --function-name "$AI_FUNCTION" \
-  --zip-file "fileb://$TMP_ZIP" >/dev/null
-rm -f "$TMP_ZIP"
-echo "    Uploaded to $AI_FUNCTION"
+# Package + upload a single-file .mjs handler to a Lambda function.
+upload_lambda() {
+  local dir="$1" fn="$2"
+  echo "==> Uploading real Lambda code from $dir"
+  local zip
+  zip="$(mktemp -t qtp-ai.XXXXXX.zip)"
+  rm -f "$zip"   # mktemp pre-creates a 0-byte file; macOS `zip` refuses it, so remove it first
+  ( cd "$dir" && zip -q -r "$zip" index.mjs )
+  aws lambda update-function-code \
+    --region "$AWS_REGION" \
+    --function-name "$fn" \
+    --zip-file "fileb://$zip" >/dev/null
+  rm -f "$zip"
+  echo "    Uploaded to $fn"
+}
+
+upload_lambda "$LAMBDA_DIR" "$AI_FUNCTION"
+# The neural-voice (TTS) Lambda serves the AI Mock Interview's human voice.
+upload_lambda "$LAMBDA_TTS_DIR" "$AI_TTS_FUNCTION"
 
 echo "==> Appending AI env vars to $ENV_OUT"
 # Remove any prior AI_* lines, then append fresh ones (idempotent).
@@ -147,5 +158,6 @@ EOF
 
 echo ""
 echo "==> Done."
-echo "    AI endpoint: $AI_ENDPOINT   (client POSTs to \${endpoint}/ai)"
+echo "    AI endpoint:  $AI_ENDPOINT   (client POSTs to \${endpoint}/ai)"
+echo "    TTS endpoint: $AI_ENDPOINT/tts   (AI Mock Interview neural voice)"
 echo "    Restart the dev server (npm run dev) to pick up the new env."

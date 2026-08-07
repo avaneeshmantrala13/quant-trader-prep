@@ -34,13 +34,13 @@ import { cap, numericErrors } from "./_shared";
  * re-derived, NAMED misconception, computed the way a student making that exact
  * mistake would, then deduped and range-checked by `numericErrors`.
  *
- * NONE of the source-dataset questions are user-facing — every playable item is
+ * NONE of the source-dataset questions are user-facing, every playable item is
  * freshly themed with different objects, stories, and numbers, and is fully
  * reproducible from its seed.
  */
 
 /* ========================================================================== */
-/* =================  1 — ONE OF EACH COLOR (numeric)  ==================== */
+/* =================  1. ONE OF EACH COLOR (numeric)  ==================== */
 /* ========================================================================== */
 
 const ONE_OF_EACH_THEME = [
@@ -91,7 +91,7 @@ export function genOneOfEach(rng: Rng): NumericQuestion {
   );
   push(
     withRepl,
-    `3!·∏(cᵢ/total) = ${fracText(withRepl)} treats the three draws as WITH replacement (independent), but the draw is without replacement — use C(${total},3) in the denominator.`,
+    `3!·∏(cᵢ/total) = ${fracText(withRepl)} treats the three draws as WITH replacement (independent), but the draw is without replacement, use C(${total},3) in the denominator.`,
   );
   push(
     dropColor,
@@ -121,7 +121,7 @@ export function genOneOfEach(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — ALL SAME COLOR (numeric)  ====================== */
+/* =================  2. ALL SAME COLOR (numeric)  ====================== */
 /* ========================================================================== */
 
 const ALL_SAME_THEME = [
@@ -175,7 +175,7 @@ export function genAllSameColor(rng: Rng): NumericQuestion {
   );
   push(
     perms,
-    `Σ cᵢ(cᵢ−1)(cᵢ−2) / C(${total},3) = ${fracText(perms)} counts ORDERED same-color triples over an unordered denominator — divide the numerator by 3! as well (that gives C(cᵢ,3)).`,
+    `Σ cᵢ(cᵢ−1)(cᵢ−2) / C(${total},3) = ${fracText(perms)} counts ORDERED same-color triples over an unordered denominator, divide the numerator by 3! as well (that gives C(cᵢ,3)).`,
   );
 
   const prompt =
@@ -200,7 +200,7 @@ export function genAllSameColor(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — EXACTLY TWO COLORS (numeric)  ================== */
+/* =================  3. EXACTLY TWO COLORS (numeric)  ================== */
 /* ========================================================================== */
 
 const TWO_COLOR_THEME = [
@@ -257,14 +257,14 @@ export function genExactlyTwoColors(rng: Rng): NumericQuestion {
   );
   push(
     oneEach,
-    `${fracText(oneEach)} is P(one of EACH color) — all three colors present, the opposite of exactly two colors appearing.`,
+    `${fracText(oneEach)} is P(one of EACH color), all three colors present, the opposite of exactly two colors appearing.`,
   );
 
   const prompt =
     `${cap(th.place)} holds ${counts[0]} ${th.colors[0]} ${th.obj}s, ${counts[1]} ${th.colors[1]} ${th.obj}s, and ${counts[2]} ${th.colors[2]} ${th.obj}s. ` +
     `You draw 3 ${th.obj}s at random (without replacement). What is the probability the draw shows exactly two of the three colors? (Round to ${dp} decimals.)`;
   const explanation =
-    `For each color pair, draw all 3 from those two colors — C(cᵢ+cⱼ,3) — then subtract the all-one-color triples C(cᵢ,3)+C(cⱼ,3) so at least one of each of the pair appears. ` +
+    `For each color pair, draw all 3 from those two colors. C(cᵢ+cⱼ,3), then subtract the all-one-color triples C(cᵢ,3)+C(cⱼ,3) so at least one of each of the pair appears. ` +
     `Summing over the 3 pairs and dividing by C(${total},3) = ${choose(total, 3)} gives P = ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
@@ -282,7 +282,7 @@ export function genExactlyTwoColors(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  4 — AVOID THE LONE EVEN TILE (numeric)  ============= */
+/* =================  4. AVOID THE LONE EVEN TILE (numeric)  ============= */
 /* ========================================================================== */
 
 const AVOID_SPECIAL_THEME = [
@@ -318,7 +318,7 @@ export function genAvoidSpecialSum(rng: Rng): NumericQuestion {
   );
   push(
     complement,
-    `4/${n} = ${fracText(complement)} is P(the even ${th.obj} IS among the 4 chosen) — the complement, which gives an ODD sum, not an even one.`,
+    `4/${n} = ${fracText(complement)} is P(the even ${th.obj} IS among the 4 chosen), the complement, which gives an ODD sum, not an even one.`,
   );
   push(
     withRepl,
@@ -347,7 +347,7 @@ export function genAvoidSpecialSum(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  5 — PAIR SUM AT LEAST THRESHOLD (numeric)  ========= */
+/* =================  5. PAIR SUM AT LEAST THRESHOLD (numeric)  ========= */
 /* ========================================================================== */
 
 const PAIR_SUM_THEME = [
@@ -394,7 +394,7 @@ export function genPairSumThreshold(rng: Rng): NumericQuestion {
   );
   push(
     ordered,
-    `${2 * favCount}/${totalPairs} = ${fracText(ordered)} counts each unordered pair twice (ordered draws) over the C(${m},2) unordered denominator — a factor-of-2 mismatch.`,
+    `${2 * favCount}/${totalPairs} = ${fracText(ordered)} counts each unordered pair twice (ordered draws) over the C(${m},2) unordered denominator, a factor-of-2 mismatch.`,
   );
   push(
     selfIncluded,
@@ -423,7 +423,7 @@ export function genPairSumThreshold(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  6 — ONE CORRECT ASSIGNMENT (numeric)  ============== */
+/* =================  6. ONE CORRECT ASSIGNMENT (numeric)  ============== */
 /* ========================================================================== */
 
 const ASSIGNMENT_THEME = [
@@ -456,7 +456,7 @@ export function genOneAssignment(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, dp);
   push(
     invFact,
-    `1/${n}! = ${fracText(invFact)} divides by every ordering of all ${n} people, but only WHICH ${k} are chosen matters (unordered) — that is C(${n},${k}), not ${n}!.`,
+    `1/${n}! = ${fracText(invFact)} divides by every ordering of all ${n} people, but only WHICH ${k} are chosen matters (unordered), that is C(${n},${k}), not ${n}!.`,
   );
   push(
     invPow,
@@ -489,7 +489,7 @@ export function genOneAssignment(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  7 — EACH HAND GETS ONE SPECIAL (numeric)  ========== */
+/* =================  7. EACH HAND GETS ONE SPECIAL (numeric)  ========== */
 /* ========================================================================== */
 
 const EACH_SPECIAL_THEME = [

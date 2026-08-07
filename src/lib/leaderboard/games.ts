@@ -107,6 +107,46 @@ export const LEADERBOARD_GAMES: LeaderboardGame[] = [
     scoreUnit: "pts",
     ranking: "Higher run score ranks first; ties go to the earlier run.",
   },
+  {
+    id: "numberlogic",
+    title: "NumberLogic",
+    to: "/numberlogic",
+    scoreLabel: "Tier-weighted score across the 26-item sequence paper.",
+    scoreUnit: "pts",
+    ranking: "Higher weighted score ranks first; ties go to the earlier run.",
+  },
+  {
+    id: "beat-the-odds",
+    title: "Beat the Odds",
+    to: "/beat-the-odds",
+    scoreLabel: "Speed-weighted probability/EV score (tier-weighted).",
+    scoreUnit: "pts",
+    ranking: "Higher speed-weighted score ranks first; ties by earlier run.",
+  },
+  {
+    id: "stockmaster",
+    title: "Stockmaster",
+    to: "/stockmaster",
+    scoreLabel: "Attention score: fast hits minus false buys and misses.",
+    scoreUnit: "pts",
+    ranking: "Higher attention score ranks first; ties go to the earlier run.",
+  },
+  {
+    id: "number-box",
+    title: "Number Box",
+    to: "/number-box",
+    scoreLabel: "Net modular-math score (+1 correct, −1 wrong).",
+    scoreUnit: "pts",
+    ranking: "Higher net score ranks first; ties go to the earlier run.",
+  },
+  {
+    id: "shape-shift",
+    title: "Shape Shift",
+    to: "/shape-shift",
+    scoreLabel: "Tier-weighted mental-rotation score.",
+    scoreUnit: "pts",
+    ranking: "Higher weighted score ranks first; ties go to the earlier run.",
+  },
 ];
 
 /** Fast lookup of a leaderboard game by its board id. */

@@ -5,6 +5,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { TRACKS } from "@/content";
 import { DIFFICULTY_META, totalQuestions } from "@/types/content";
 import { levelLockState } from "@/lib/locking";
+import { seedUnlockedLevelIds } from "@/lib/mastery/unlockGraph";
 import { BaseTableOfContents } from "@/themes/BaseTableOfContents";
 import type {
   TocComingSoonTrack,
@@ -39,11 +40,11 @@ function lessonHref(trackId: string, lessonId: string): string {
  * `TocViewProps.intro`, styling only the slot — never the copy.
  */
 const TOC_INTRO =
-  "Browse every lesson across all four tracks. The first lesson of every topic is open right away — start any topic you like. Within a topic, each later lesson unlocks the moment you master the one before it.";
+  "Browse every lesson across all four tracks. The first lesson of every topic is open right away, so start any topic you like. Within a topic, each later lesson unlocks the moment you master the one before it.";
 
 export function TableOfContentsPage() {
   const navigate = useNavigate();
-  const { getLevelProgress } = useProgress();
+  const { getLevelProgress, getTopicMastery } = useProgress();
   const { themeDef } = useTheme();
 
   const isMastered = useCallback(
@@ -67,15 +68,26 @@ export function TableOfContentsPage() {
         continue;
       }
 
+      // Diagnostic low-confidence unlocks for this track (Part B): open a whole
+      // topic ahead of mastery when its Beta mean clears the unlock bar.
+      const seedUnlockedSet = seedUnlockedLevelIds(
+        track.levels,
+        track.id,
+        getTopicMastery,
+      );
+      const isSeedUnlocked = (id: string) => seedUnlockedSet.has(id);
+
       let masteredCount = 0;
       const lessons: TocLessonItem[] = track.levels.map((level, i) => {
         // SAME per-section unlock + mastery logic as the progression map: a
-        // lesson is unlocked when it is the first of its section, or the
-        // previous lesson within that section is mastered (see `@/lib/locking`).
+        // lesson is unlocked when it is the first of its section, the previous
+        // lesson within that section is mastered, or the diagnostic seeded a
+        // low-confidence unlock for the lesson's topic (see `@/lib/locking`).
         const state: TocLessonState = levelLockState(
           track.levels,
           i,
           isMastered,
+          isSeedUnlocked,
         );
         if (state === "mastered") masteredCount += 1;
         return {
@@ -106,7 +118,7 @@ export function TableOfContentsPage() {
     }
 
     return { tracks: playable, comingSoon: soon };
-  }, [isMastered]);
+  }, [isMastered, getTopicMastery]);
 
   const onSelectLesson = useCallback(
     (trackId: string, lessonId: string) => {

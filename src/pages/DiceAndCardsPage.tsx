@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { DiceIcon } from "@/components/icons";
@@ -76,6 +77,7 @@ interface DiceCardsSession {
 export function DiceAndCardsPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("setup");
   const [config, setConfig] = useState<GameConfig>({ numCards: 1, numDice: 1, aceMode: "high" });
@@ -118,7 +120,12 @@ export function DiceAndCardsPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<DiceCardsSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<DiceCardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     // Fresh Rng + deck power future deals; the in-progress round is preserved.
@@ -134,7 +141,7 @@ export function DiceAndCardsPage() {
     setPnlGuess(s.pnlGuess);
     setCurrent(s.current);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (phase === "setup" || phase === "summary") return;
@@ -143,8 +150,10 @@ export function DiceAndCardsPage() {
       GAME_ID,
       { config, phase, roundIdx, balance, log, round, action, size, pnlGuess, current },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, roundIdx, balance, log, round, action, size, pnlGuess, current, config]);
+  }, [phase, roundIdx, balance, log, round, action, size, pnlGuess, current, config, username]);
 
   const submitTrade = (a: Action, n: number) => {
     setAction(a);
@@ -180,7 +189,7 @@ export function DiceAndCardsPage() {
     // optional server board, and clear the durable session.
     submitLocalScore(browserBoardStore(), GAME_ID, { score: balance, atMs: Date.now() });
     void submitGameScore(GAME_ID, balance);
-    clearGameSession(browserSessionStore(), GAME_ID);
+    clearGameSession(browserSessionStore(), GAME_ID, username);
     if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
 
@@ -254,7 +263,7 @@ export function DiceAndCardsPage() {
             log={log}
             balance={balance}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -305,7 +314,7 @@ function Setup({
           The table value is the <span className="font-semibold text-primary">product</span> of every
           card and die on it. Each round you first answer the{" "}
           <span className="font-semibold text-primary">standard-deviation</span> question, then read
-          the computer's quote, size your trade, and — once the table hides — state your P&amp;L from
+          the computer's quote, size your trade, and, once the table hides, state your P&amp;L from
           memory. A loss you fail to recognise is scored{" "}
           <span className="text-bear">double</span>.
         </p>
@@ -430,7 +439,7 @@ function SdScreen({
           {config.numCards} card{config.numCards > 1 ? "s" : ""} × {config.numDice} di
           {config.numDice > 1 ? "ce" : "e"}, ace{" "}
           {config.aceMode === "high" ? "high (14)" : "low (1)"}. SD comes from the full joint
-          distribution of the product — enter it to 2 decimals.
+          distribution of the product; enter it to 2 decimals.
         </p>
 
         <div className="mt-4 flex gap-2">
@@ -500,7 +509,7 @@ function TradeScreen({
           ))}
         </div>
         <p className="mt-3 text-[13px] text-muted">
-          Value = product of every face. Compute it now — it hides once you trade.
+          Value = product of every face. Compute it now; it hides once you trade.
         </p>
       </article>
 
@@ -586,7 +595,7 @@ function RevealScreen({
         </div>
         <p className="mt-4 text-sm text-secondary">
           You traded at the quote. Next you'll state your P&amp;L{" "}
-          <span className="font-semibold text-primary">from memory</span> — the table hides.
+          <span className="font-semibold text-primary">from memory</span>; the table hides.
         </p>
         <button onClick={onDone} className="btn-primary mx-auto mt-5 w-full max-w-xs">
           Hide the table →
@@ -700,10 +709,10 @@ function ScoreScreen({
         <p className="mt-3 border-l-2 border-accent bg-surface-muted px-3 py-2 text-[13px] text-secondary">
           {guessCorrect
             ? loss
-              ? "You recognised the loss — scored once."
+              ? "You recognised the loss: scored once."
               : "Correct profit, scored in full."
             : loss
-              ? "You missed a loss — it's scored DOUBLE."
+              ? "You missed a loss: it's scored DOUBLE."
               : "A profit you couldn't verify scores zero."}
         </p>
         <div className="mt-3 flex items-center justify-between border border-subtle bg-surface px-3 py-2">

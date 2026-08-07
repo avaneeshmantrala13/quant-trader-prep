@@ -1,16 +1,17 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { emptyProgress, type UserProgress } from "@/types/progress";
 
 /**
- * Runtime servability of the Goal-Mode surfaces (WS0–WS4): the dashboard renders
- * in BOTH modes, the course page renders, and the diagnostic's mandatory first
- * screen renders — none crash. Plus the two hard invariants: Case B (interview)
- * keeps today's dashboard, and toggling A↔B preserves all progress (mode reads
- * none of the topicKey-keyed mastery store).
+ * Runtime servability of the Goal-Mode surfaces. Course remediation is now
+ * BACKEND-ONLY: the still-present course code (the `BaseDashboard` course-mode
+ * view + the `CourseTrackPage`) must keep rendering when driven directly, but the
+ * FRONTEND is quant-only — the diagnostic goes STRAIGHT into the quant
+ * assessment with no "course vs interview" pre-question, and there is no mode
+ * toggle.
  */
 
 const SEED: UserProgress = {
@@ -48,17 +49,13 @@ import { ThemeProvider } from "@/context/ThemeContext";
 // eslint-disable-next-line import/first
 import { AuthProvider } from "@/context/AuthContext";
 // eslint-disable-next-line import/first
-import { ProgressProvider, useProgress } from "@/context/ProgressContext";
+import { ProgressProvider } from "@/context/ProgressContext";
 // eslint-disable-next-line import/first
 import { BaseDashboard } from "@/themes/BaseDashboard";
 // eslint-disable-next-line import/first
 import { CourseTrackPage } from "@/pages/CourseTrackPage";
 // eslint-disable-next-line import/first
 import { DiagnosticPage } from "@/pages/DiagnosticPage";
-// eslint-disable-next-line import/first
-import { ModeToggle } from "@/components/mode/ModeToggle";
-// eslint-disable-next-line import/first
-import { resolveGoalMode } from "@/lib/mode/goalMode";
 // eslint-disable-next-line import/first
 import type { DashboardViewProps } from "@/themes/types";
 
@@ -164,50 +161,15 @@ describe("course page renders", () => {
   });
 });
 
-describe("diagnostic mandatory first screen", () => {
-  it("renders the mode-select first, offering both focuses", () => {
+describe("diagnostic goes straight into the quant assessment", () => {
+  it("renders the warm-up intro with no 'course vs interview' pre-question", () => {
     wrap(createElement(DiagnosticPage));
-    expect(screen.getByText(/What are you here to do\?/i)).toBeTruthy();
-    expect(screen.getByText(/Master my probability courses/i)).toBeTruthy();
-    expect(
-      screen.getByText(/Prep for quant trading interviews/i),
-    ).toBeTruthy();
-  });
-});
-
-describe("toggling A↔B preserves all progress (mode reads no mastery)", () => {
-  function Probe() {
-    const { progress } = useProgress();
-    return createElement(
-      "div",
-      null,
-      createElement("span", { "data-testid": "mode" }, resolveGoalMode(progress)),
-      createElement(
-        "span",
-        { "data-testid": "mastered" },
-        String(progress.levelProgress["ev-1"]?.mastered),
-      ),
-      createElement(
-        "span",
-        { "data-testid": "theta" },
-        String(progress.topicMastery?.["probability::Expected Value"]?.theta),
-      ),
-      createElement(ModeToggle, { size: "sm" }),
-    );
-  }
-
-  it("switching to Course mastery keeps level mastery + topic mastery intact", () => {
-    wrap(createElement(Probe));
-    // Defaults to interview (SEED has no goalMode).
-    expect(screen.getByTestId("mode").textContent).toBe("interview");
-    expect(screen.getByTestId("mastered").textContent).toBe("true");
-    expect(screen.getByTestId("theta").textContent).toBe("0.5");
-
-    fireEvent.click(screen.getByText("Course mastery"));
-
-    expect(screen.getByTestId("mode").textContent).toBe("course");
-    // Progress is UNTOUCHED by the mode switch.
-    expect(screen.getByTestId("mastered").textContent).toBe("true");
-    expect(screen.getByTestId("theta").textContent).toBe("0.5");
+    // The intro (first screen) renders directly — both lanes are offered.
+    expect(screen.getByText(/calibrate your starting point/i)).toBeTruthy();
+    expect(screen.getAllByText(/Full warm-up/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/self-report/i).length).toBeGreaterThan(0);
+    // The removed mode-select pre-question never appears on the frontend.
+    expect(screen.queryByText(/What are you here to do\?/i)).toBeNull();
+    expect(screen.queryByText(/Master my probability courses/i)).toBeNull();
   });
 });

@@ -104,7 +104,7 @@ export function SimulationsPage() {
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-secondary">
               Set the parameters, run the trials, and watch probability come to
               life. Every graph shows the empirical result against the true
-              theoretical value — drag the trials slider and see the law of large
+              theoretical value; drag the trials slider and see the law of large
               numbers pull them together.
             </p>
           </div>

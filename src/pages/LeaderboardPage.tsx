@@ -121,7 +121,7 @@ export function LeaderboardPage() {
             className={`chip ${enabled ? "border-accent text-accent" : "border-subtle text-muted"}`}
             title={
               enabled
-                ? "Server leagues are enabled — league rows merge on top."
+                ? "Server leagues are enabled: league rows merge on top."
                 : "Local rankings on this device (server leagues are off in this build)."
             }
           >
@@ -190,14 +190,14 @@ export function LeaderboardPage() {
               <BoardTable
                 rows={rows}
                 scoreUnit={game.scoreUnit}
-                emptyHint={`No ${game.title} scores yet on this device — play a run to set the first.`}
+                emptyHint={`No ${game.title} scores yet on this device. Play a run to set the first.`}
               />
             </div>
           </article>
 
           {!enabled && (
             <p className="text-xs text-muted">
-              Global leagues are off in this build — rankings are saved locally
+              Global leagues are off in this build; rankings are saved locally
               on this device. Set <span className="num">VITE_LEADERBOARD=on</span>{" "}
               with an endpoint to merge server-ranked play.
             </p>

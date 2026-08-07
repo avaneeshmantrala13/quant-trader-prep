@@ -80,7 +80,7 @@ export const mixNumeric = (
 const uniqueInts = (a: number[]): boolean => new Set(a).size === a.length;
 
 /* ========================================================================== */
-/*  FAMILY 1 — Prisoner's Dilemma / dominant strategy  (quiz)                 */
+/*  FAMILY 1. Prisoner's Dilemma / dominant strategy  (quiz)                 */
 /* ========================================================================== */
 
 const PD_SCENARIOS: {
@@ -155,25 +155,25 @@ export function buildPdInstance(rng: Rng, difficulty: Difficulty): PdInstance {
       `${sc.defect} strictly dominates: it beats ${sc.coop} whether they ${sc.coop} ` +
       `(${T} > ${R}) or ${sc.defect} (${P} > ${S}). By symmetry both ${sc.defect}, so the unique ` +
       `Nash equilibrium is (${sc.defect}, ${sc.defect}) paying ${P} each. Both-${sc.coop} pays ${R} ` +
-      `(better for both!) but is unstable — either side deviates to ${sc.defect} for ${T}. ` +
+      `(better for both!) but is unstable, either side deviates to ${sc.defect} for ${T}. ` +
       `That trap is the Prisoner's Dilemma. ${sc.story}`;
 
     const correct: Choice = {
       text: String(P),
-      rationale: `Correct — (${sc.defect}, ${sc.defect}) is the unique NE; the dominant strategy yields the punishment payoff ${P}.`,
+      rationale: `Correct, (${sc.defect}, ${sc.defect}) is the unique NE; the dominant strategy yields the punishment payoff ${P}.`,
     };
     const distractors: Choice[] = [
       {
         text: String(R),
-        rationale: `The cooperative payoff (both ${sc.coop}). It's Pareto-better but NOT an equilibrium — each side can deviate to ${sc.defect} and gain.`,
+        rationale: `The cooperative payoff (both ${sc.coop}). It's Pareto-better but NOT an equilibrium, each side can deviate to ${sc.defect} and gain.`,
       },
       {
         text: String(T),
-        rationale: `The temptation payoff — what you'd get defecting while they cooperate. But a rational opponent also defects, so this isn't sustained.`,
+        rationale: `The temptation payoff, what you'd get defecting while they cooperate. But a rational opponent also defects, so this isn't sustained.`,
       },
       {
         text: String(S),
-        rationale: `The sucker payoff — you'd only earn this by cooperating while they defect, which no rational player accepts.`,
+        rationale: `The sucker payoff, you'd only earn this by cooperating while they defect, which no rational player accepts.`,
       },
     ];
 
@@ -196,7 +196,7 @@ export function buildPdInstance(rng: Rng, difficulty: Difficulty): PdInstance {
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — Sequential / backward induction  (quiz)                        */
+/*  FAMILY 2. Sequential / backward induction  (quiz)                        */
 /* ========================================================================== */
 
 const ENTRY_SCENARIOS: {
@@ -273,27 +273,27 @@ export function buildEntryInstance(
 
     const explanation =
       `Backward induction. Last move: ${sc.challenger} Expands (${cExpand} > ${cHold}). ` +
-      `Knowing that, ${sc.incumbent} Accommodates (${iExpand} > ${iFight}) — Fighting pays only ${iFight}. ` +
+      `Knowing that, ${sc.incumbent} Accommodates (${iExpand} > ${iFight}). Fighting pays only ${iFight}. ` +
       `So ${sc.challenger} Enters (${cExpand} > ${cOut} from staying out). Path: Enter → Accommodate → Expand, ` +
       `challenger earns ${cExpand}. The "I'll fight a price war" threat is NON-CREDIBLE: once entry happens, ` +
       `fighting (${iFight}) is worse for the incumbent than accommodating (${iExpand}), so a rational incumbent never fights.`;
 
     const correct: Choice = {
       text: String(cExpand),
-      rationale: `Correct — Enter → Accommodate → Expand pays the challenger ${cExpand}.`,
+      rationale: `Correct. Enter → Accommodate → Expand pays the challenger ${cExpand}.`,
     };
     const distractors: Choice[] = [
       {
         text: String(cHold),
-        rationale: `Assumes the challenger politely Holds after being accommodated. But Expand (${cExpand}) beats Hold (${cHold}) — anticipate the opponent's ACTUAL last move.`,
+        rationale: `Assumes the challenger politely Holds after being accommodated. But Expand (${cExpand}) beats Hold (${cHold}), anticipate the opponent's ACTUAL last move.`,
       },
       {
         text: String(cOut),
-        rationale: `The stay-out payoff — correct only if the challenger believed the non-credible "fight" threat and never entered.`,
+        rationale: `The stay-out payoff, correct only if the challenger believed the non-credible "fight" threat and never entered.`,
       },
       {
         text: String(cFight),
-        rationale: `The price-war payoff — what happens only if the incumbent actually Fights, which it never rationally does (${iExpand} > ${iFight}).`,
+        rationale: `The price-war payoff, what happens only if the incumbent actually Fights, which it never rationally does (${iExpand} > ${iFight}).`,
       },
     ];
 
@@ -315,7 +315,7 @@ export function buildEntryInstance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — Spatial competition / Hotelling  (quiz)                        */
+/*  FAMILY 3. Spatial competition / Hotelling  (quiz)                        */
 /* ========================================================================== */
 
 // NOTE: deliberately avoids the source GT6 "Beach Carts" framing (beach /
@@ -354,28 +354,28 @@ export function buildHotellingInstance(
     `(ties split evenly). In the unique Nash equilibrium, how many of the ${customers} ${sc.buyers} do YOU serve?`;
 
   const explanation =
-    `Best response is to crowd just beside the rival on the larger side, grabbing more than half — so any ` +
+    `Best response is to crowd just beside the rival on the larger side, grabbing more than half, so any ` +
     `off-centre pair is unstable. The only equilibrium is BOTH carts at the median (the centre), splitting the ` +
     `market: you serve ${customers}/2 = ${answer}. This is the median-voter / minimum-differentiation result. ` +
-    `Note 25%/75% positions (${quarter} and ${threeQuarter}) would minimise walking but are NOT an equilibrium — ` +
+    `Note 25%/75% positions (${quarter} and ${threeQuarter}) would minimise walking but are NOT an equilibrium, ` +
     `either vendor jumps beside the other to seize the bigger side.`;
 
   const correct: Choice = {
     text: String(answer),
-    rationale: `Correct — both locate at the median and split evenly, so you serve ${customers}/2 = ${answer}.`,
+    rationale: `Correct, both locate at the median and split evenly, so you serve ${customers}/2 = ${answer}.`,
   };
   const distractors: Choice[] = [
     {
       text: String(whole),
-      rationale: `That's the whole market. You only capture everyone if the rival abandons the beach — against a rational rival you split it.`,
+      rationale: `That's the whole market. You only capture everyone if the rival abandons the beach, against a rational rival you split it.`,
     },
     {
       text: String(threeQuarter),
-      rationale: `Assumes you grab the larger side against a rival stuck at the quarter point — but the rival won't sit there; both converge to the centre.`,
+      rationale: `Assumes you grab the larger side against a rival stuck at the quarter point, but the rival won't sit there; both converge to the centre.`,
     },
     {
       text: String(quarter),
-      rationale: `The socially-efficient 25%/75% spread. It minimises total walking but isn't stable — so it isn't the equilibrium share.`,
+      rationale: `The socially-efficient 25%/75% spread. It minimises total walking but isn't stable, so it isn't the equilibrium share.`,
     },
   ];
 
@@ -395,7 +395,7 @@ export function buildHotellingInstance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 4 — Beauty contest / iterated dominance  (quiz)                    */
+/*  FAMILY 4. Beauty contest / iterated dominance  (quiz)                    */
 /* ========================================================================== */
 
 export interface BeautyInstance {
@@ -429,7 +429,7 @@ export function buildBeautyInstance(
   const thirdRationale =
     thirdText === targetOfMax
       ? `${targetLabel} of the MAXIMUM (${max}), not of the average. The target is a fraction of the average, which keeps shrinking to 0.`
-      : `The level-2 guess. Deeper than L1 but still not the equilibrium — iterated dominance runs all the way to 0.`;
+      : `The level-2 guess. Deeper than L1 but still not the equilibrium, iterated dominance runs all the way to 0.`;
 
   const prompt =
     `Many analysts each secretly write a whole number from 0 to ${max}. The winner is whoever is closest to ` +
@@ -438,18 +438,18 @@ export function buildBeautyInstance(
 
   const explanation =
     `Iterated elimination of dominated strategies: ${targetLabel} of an average ≤ ${max} can't exceed ${targetOfMax}, ` +
-    `so any guess above that is dominated; delete it, the ceiling falls again, and again — the only number surviving ` +
-    `is 0. So the unique Nash equilibrium is 0. (Winning MONEY is different: real rooms play level-k — L0 ≈ ${L0}, ` +
-    `L1 ≈ ${L1} — so the winning guess is small but positive, "one level deeper than the room.")`;
+    `so any guess above that is dominated; delete it, the ceiling falls again, and again, the only number surviving ` +
+    `is 0. So the unique Nash equilibrium is 0. (Winning MONEY is different: real rooms play level-k. L0 ≈ ${L0}, ` +
+    `L1 ≈ ${L1}, so the winning guess is small but positive, "one level deeper than the room.")`;
 
   const correct: Choice = {
     text: "0",
-    rationale: `Correct — iterated dominance collapses the game to the unique equilibrium 0.`,
+    rationale: `Correct, iterated dominance collapses the game to the unique equilibrium 0.`,
   };
   const distractors: Choice[] = [
     {
       text: String(L0),
-      rationale: `The level-0 "midpoint" guess (${max}/2). It anchors the ladder but is not an equilibrium — best-respond and go lower.`,
+      rationale: `The level-0 "midpoint" guess (${max}/2). It anchors the ladder but is not an equilibrium, best-respond and go lower.`,
     },
     {
       text: String(L1),
@@ -478,7 +478,7 @@ export function buildBeautyInstance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 5 — Zero-sum 2×2 mixed strategy VALUE  (numeric)                    */
+/*  FAMILY 5. Zero-sum 2×2 mixed strategy VALUE  (numeric)                    */
 /* ========================================================================== */
 
 const VALUE_DP = 2; // dataset convention: "round to 2 decimals"
@@ -504,15 +504,15 @@ function zeroSum2x2Errors(
   const minimax = Math.min(Math.max(m.a, m.c), Math.max(m.b, m.d));
   push(
     maximin,
-    "You played the safe pure row (maximin). Committing to one row only guarantees the maximin, which is strictly below the game's mixed value — randomising buys the edge.",
+    "You played the safe pure row (maximin). Committing to one row only guarantees the maximin, which is strictly below the game's mixed value, randomising buys the edge.",
   );
   push(
     minimax,
-    "That's the pure minimax ceiling — what the opponent could hold you to if they picked one column and you read it. Optimal mixing lands strictly below it, at the value.",
+    "That's the pure minimax ceiling, what the opponent could hold you to if they picked one column and you read it. Optimal mixing lands strictly below it, at the value.",
   );
   push(
     (m.a + m.b + m.c + m.d) / 4,
-    "You averaged all four cells. The value is NOT the flat matrix average — it comes from the indifference mix, which weights rows/columns unequally.",
+    "You averaged all four cells. The value is NOT the flat matrix average, it comes from the indifference mix, which weights rows/columns unequally.",
   );
   // Naive 50/50 row mix, opponent best-responds to the weaker column.
   const half = Math.min((m.a + m.c) / 2, (m.b + m.d) / 2);
@@ -584,7 +584,7 @@ export function buildZeroSum2x2Instance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 6 — Zero-sum 3×2 (dominated row + mix) VALUE  (numeric)             */
+/*  FAMILY 6. Zero-sum 3×2 (dominated row + mix) VALUE  (numeric)             */
 /* ========================================================================== */
 
 export interface Dominance3x2Instance {
@@ -664,7 +664,7 @@ export function buildZeroSum3x2Instance(
     // Kept the dominated row and (wrongly) played it against the optimal opponent mix.
     push(
       dom.deletedRowValue.valueOf(),
-      "You kept the dominated Middle row. Against the opponent's optimal mix it pays strictly less than the value — that's exactly why a rational player deletes it first.",
+      "You kept the dominated Middle row. Against the opponent's optimal mix it pays strictly less than the value, that's exactly why a rational player deletes it first.",
     );
     // Deleted the WRONG row (kept Middle + Bottom instead of Top + Bottom).
     try {
@@ -677,7 +677,7 @@ export function buildZeroSum3x2Instance(
       if (saddleValue2x2(wrong) === null) {
         push(
           solveMixed2x2(wrong).value.valueOf(),
-          "You deleted the wrong row and mixed over Middle + Bottom. Middle is strictly dominated by Top, so it should be removed — mix over Top + Bottom.",
+          "You deleted the wrong row and mixed over Middle + Bottom. Middle is strictly dominated by Top, so it should be removed, mix over Top + Bottom.",
         );
       }
     } catch {
@@ -724,7 +724,7 @@ export function buildZeroSum3x2Instance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 7 — Volunteer's Dilemma probability  (numeric)                     */
+/*  FAMILY 7. Volunteer's Dilemma probability  (numeric)                     */
 /* ========================================================================== */
 
 /** Smallest decimal places d (≤ cap) making f·10^d an exact integer. */
@@ -790,11 +790,11 @@ export function buildVolunteerInstance(
   };
   push(
     sol.ratio.valueOf(),
-    `That's (1−p)^(N−1) = c/b, the probability the OTHER ${N - 1} stay silent — the indifference condition itself. P(nobody) raises it to the full exponent N (include yourself).`,
+    `That's (1−p)^(N−1) = c/b, the probability the OTHER ${N - 1} stay silent, the indifference condition itself. P(nobody) raises it to the full exponent N (include yourself).`,
   );
   push(
     sol.p.pow(N).valueOf(),
-    "That's P(everyone volunteers) = p^N — the opposite tail. You want P(all N stay silent) = (1−p)^N.",
+    "That's P(everyone volunteers) = p^N, the opposite tail. You want P(all N stay silent) = (1−p)^N.",
   );
   push(
     F(1, m).valueOf(),
@@ -802,7 +802,7 @@ export function buildVolunteerInstance(
   );
 
   const prompt =
-    `${N} ${sc.actors} each independently decide whether to ${sc.action}. If anyone does, ${sc.good} — worth ${b} to everyone — ` +
+    `${N} ${sc.actors} each independently decide whether to ${sc.action}. If anyone does, ${sc.good}, worth ${b} to everyone, ` +
     `but the volunteer pays a cost ${c} (net ${net}); if nobody acts, everyone gets 0. In the symmetric mixed equilibrium ` +
     `where each volunteers with the same probability, what is the probability that NOBODY volunteers? (Round to ${dp} decimals.)`;
 
@@ -810,7 +810,7 @@ export function buildVolunteerInstance(
     `Indifference: volunteering pays a sure net ${net}; waiting pays ${b} if at least one of the other ${N - 1} volunteers. ` +
     `Set ${net} = ${b}·(1 − (1−p)^${N - 1}) ⟹ (1−p)^${N - 1} = c/b = ${fracText(sol.ratio)} ⟹ 1−p = ${fracText(F(1, m))}, ` +
     `so p = ${fracText(sol.p)}. P(nobody volunteers) = (1−p)^${N} = ${fracText(sol.pNobody)} ≈ ${decText(sol.pNobody, dp)}. ` +
-    `(Counterintuitively, more potential volunteers makes collective failure MORE likely — diffusion of responsibility.)`;
+    `(Counterintuitively, more potential volunteers makes collective failure MORE likely, diffusion of responsibility.)`;
 
   return {
     N,
@@ -853,7 +853,7 @@ export const genVolunteer = (rng: Rng): NumericQuestion =>
   buildVolunteerInstance(rng, "hard").numeric;
 
 /* ========================================================================== */
-/*  FAMILIES 8–10 — Reasoning-only (flashcards)                                */
+/*  FAMILIES 8–10. Reasoning-only (flashcards)                                */
 /*  Coordination / stag hunt · non-credible threat · repeated game / folk      */
 /* ========================================================================== */
 
@@ -863,7 +863,7 @@ export const genVolunteer = (rng: Rng): NumericQuestion =>
  * freshly-framed scenario, a strong revealed explanation, self-assessment.
  * Where a scalar IS exact (the stag-hunt mixing probability, the folk-theorem
  * discount threshold δ*), the reveal states it precisely so the card is still
- * exact-verified — but there is no forced numeric answer.
+ * exact-verified, but there is no forced numeric answer.
  */
 
 export const gameTheoryFlashcards: Flashcard[] = [
@@ -873,9 +873,9 @@ export const gameTheoryFlashcards: Flashcard[] = [
     prompt:
       "Two venture funds independently decide whether to Anchor a new co-investment (commit lead capital) or Pass. If BOTH anchor, the deal closes and each earns 8; a lone anchor is left stranded and earns 0; a fund that Passes keeps a safe 5 either way. You can't communicate. What do you do, and why is there no single forced answer?",
     answer:
-      "A stag hunt: two pure Nash equilibria — (Anchor, Anchor)=8 (payoff-dominant) and (Pass, Pass)=5 (risk-dominant) — plus a mixed NE where each Anchors with probability m = 5/8. No dominant strategy; the outcome depends on trust / a focal point.",
+      "A stag hunt: two pure Nash equilibria, (Anchor, Anchor)=8 (payoff-dominant) and (Pass, Pass)=5 (risk-dominant), plus a mixed NE where each Anchors with probability m = 5/8. No dominant strategy; the outcome depends on trust / a focal point.",
     explanation:
-      "Best-response is to MATCH the rival (Anchor if they Anchor, Pass if they don't), so both matched profiles are equilibria. (Anchor,Anchor) is better for both (8 > 5) — payoff dominance — but anchoring alone collapses to 0, while Pass guarantees 5 regardless. Against a coin-flip rival, Anchor averages ½·8+½·0 = 4 < 5, so Pass is RISK-dominant. The mixed NE makes the rival indifferent: 8m = 5 ⟹ m = 5/8. Nothing in the matrix selects among them: a focal point (reputation, convention, a public commitment signal) is what tips players to the good equilibrium. That's why the honest answer is 'it depends on trust,' not a number.",
+      "Best-response is to MATCH the rival (Anchor if they Anchor, Pass if they don't), so both matched profiles are equilibria. (Anchor,Anchor) is better for both (8 > 5), payoff dominance, but anchoring alone collapses to 0, while Pass guarantees 5 regardless. Against a coin-flip rival, Anchor averages ½·8+½·0 = 4 < 5, so Pass is RISK-dominant. The mixed NE makes the rival indifferent: 8m = 5 ⟹ m = 5/8. Nothing in the matrix selects among them: a focal point (reputation, convention, a public commitment signal) is what tips players to the good equilibrium. That's why the honest answer is 'it depends on trust,' not a number.",
     difficulty: "medium",
     concept: "Coordination / stag hunt (payoff- vs risk-dominance)",
     source: "Game Theory · coordination (reasoning-only)",
@@ -887,7 +887,7 @@ export const gameTheoryFlashcards: Flashcard[] = [
     answer:
       "No. This is a coordination game with two pure equilibria (New,New)=10 and (Old,Old)=7. New is payoff-dominant, Old is risk-dominant (guarantees 7 vs. a risky 0). The 'right' move depends on beliefs about the other firm, not on dominance.",
     explanation:
-      "There is no dominant strategy: your best reply is whatever you expect the rival to do. (New,New) Pareto-dominates (Old,Old) — 10 > 7 — but adopting New alone yields 0, whereas Old guarantees 7. Measuring risk against a 50/50 rival: New gives ½·10+½·0 = 5 < 7, so Old is risk-dominant. Real coordination is solved by a focal point (an announced industry standard, first-mover signalling, a dominant player's lead). The interviewer wants you to (1) find both equilibria, (2) distinguish payoff- vs risk-dominance, and (3) note that resolution requires information outside the matrix.",
+      "There is no dominant strategy: your best reply is whatever you expect the rival to do. (New,New) Pareto-dominates (Old,Old), 10 > 7, but adopting New alone yields 0, whereas Old guarantees 7. Measuring risk against a 50/50 rival: New gives ½·10+½·0 = 5 < 7, so Old is risk-dominant. Real coordination is solved by a focal point (an announced industry standard, first-mover signalling, a dominant player's lead). The interviewer wants you to (1) find both equilibria, (2) distinguish payoff- vs risk-dominance, and (3) note that resolution requires information outside the matrix.",
     difficulty: "medium",
     concept: "Coordination / stag hunt (payoff- vs risk-dominance)",
     source: "Game Theory · coordination (reasoning-only)",
@@ -896,9 +896,9 @@ export const gameTheoryFlashcards: Flashcard[] = [
   {
     id: "gt-fc-threat-1",
     prompt:
-      "A manager tells a star analyst: 'Ask for a raise and I'll fire you on the spot.' Firing the analyst would cost the desk far more than the raise. The analyst asks anyway. Treat this as a sequential game — is the threat credible, and what would make it credible?",
+      "A manager tells a star analyst: 'Ask for a raise and I'll fire you on the spot.' Firing the analyst would cost the desk far more than the raise. The analyst asks anyway. Treat this as a sequential game, is the threat credible, and what would make it credible?",
     answer:
-      "The threat is NON-CREDIBLE. By backward induction, once the analyst has asked, firing hurts the manager more than granting the raise, so a rational manager won't fire — the analyst foresees this and asks. Credibility needs a commitment device, reputation, or a punishment that's actually cheap to execute.",
+      "The threat is NON-CREDIBLE. By backward induction, once the analyst has asked, firing hurts the manager more than granting the raise, so a rational manager won't fire, the analyst foresees this and asks. Credibility needs a commitment device, reputation, or a punishment that's actually cheap to execute.",
     explanation:
       "Solve from the last move: at the moment of decision, carrying out the threat (firing a valuable analyst) is strictly worse for the manager than backing down (granting the raise). Backward induction strips out threats you'd never want to execute, so the bare words change nothing. To make a threat bite you must alter the game so following through becomes your genuine best response: (1) a commitment device that removes your ability to back down (a public, binding policy); (2) reputation across repeated interactions, where following through once deters everyone later; (3) choosing a punishment that's cheap for YOU to carry out; or (4) emotion/precommitment that guarantees you won't coolly optimise your way out. Naming the non-credibility AND the fixes is the whole answer.",
     difficulty: "medium",
@@ -908,11 +908,11 @@ export const gameTheoryFlashcards: Flashcard[] = [
   {
     id: "gt-fc-threat-2",
     prompt:
-      "A country announces: 'Any tariff on our goods and we cut off ALL trade' — but cutting off all trade would devastate its own economy too. A partner imposes a small tariff. Using backward induction, is the retaliation threat credible, and how could the country make it credible?",
+      "A country announces: 'Any tariff on our goods and we cut off ALL trade', but cutting off all trade would devastate its own economy too. A partner imposes a small tariff. Using backward induction, is the retaliation threat credible, and how could the country make it credible?",
     answer:
       "Non-credible: total cut-off is self-harming, so at the decision node the country won't follow through, and the partner (anticipating this) tariffs anyway. Make it credible via a commitment device (a law auto-triggering retaliation), reputation, or a proportionate response that's genuinely cheap to impose.",
     explanation:
-      "At the final decision node, executing 'cut off all trade' costs the threatener more than tolerating a small tariff, so backward induction predicts they won't do it — the grand threat is empty. Fixes are the classic commitment toolkit: pass legislation that AUTOMATICALLY retaliates (burning your bridges so you can't back down), build a reputation for following through across repeated disputes, or pre-commit to a measured, low-cost counter-tariff that you'd actually be willing to levy. The lesson mirrors the parenting 'we'll turn the car around' bluff: a threat works only if carrying it out is in your interest when the time comes.",
+      "At the final decision node, executing 'cut off all trade' costs the threatener more than tolerating a small tariff, so backward induction predicts they won't do it, the grand threat is empty. Fixes are the classic commitment toolkit: pass legislation that AUTOMATICALLY retaliates (burning your bridges so you can't back down), build a reputation for following through across repeated disputes, or pre-commit to a measured, low-cost counter-tariff that you'd actually be willing to levy. The lesson mirrors the parenting 'we'll turn the car around' bluff: a threat works only if carrying it out is in your interest when the time comes.",
     difficulty: "hard",
     concept: "Non-credible threat / commitment device",
     source: "Game Theory · sequential commitment (reasoning-only)",
@@ -923,9 +923,9 @@ export const gameTheoryFlashcards: Flashcard[] = [
     prompt:
       "Two airlines fly the same route every season, indefinitely. Each season: both keep fares High (Cooperate) = 9 each; one Discounts while the other holds High = 14 (discounter) / 3; both Discount = 5 each. A profit t seasons out is worth δᵗ. Can they sustain cooperation, and with what strategy?",
     answer:
-      "One-shot, Discount dominates → both grind to 5. With indefinite repetition and a grim-trigger strategy, cooperation is sustainable when δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. It's an equilibrium, not the ONLY one (folk theorem) — perpetual discounting is also an equilibrium.",
+      "One-shot, Discount dominates → both grind to 5. With indefinite repetition and a grim-trigger strategy, cooperation is sustainable when δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. It's an equilibrium, not the ONLY one (folk theorem), perpetual discounting is also an equilibrium.",
     explanation:
-      "A single season is a Prisoner's Dilemma (14>9 and 5>3, so Discount dominates; both earn 5). Repetition lets you punish: grim trigger = 'hold High until they Discount, then Discount forever.' One-shot-deviation check: cooperating forever earns R/(1−δ); deviating earns T + δP/(1−δ). Cooperation survives when R/(1−δ) ≥ T + δP/(1−δ) ⟹ δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. So if each values next season at least ~56% as much as this one, the high-fare truce holds. Caveats the interviewer wants: (1) the folk theorem — many equilibria exist, so cooperation isn't guaranteed; (2) a KNOWN end date unravels it by backward induction; (3) in a noisy market, forgiving tit-for-tat survives mistakes better than unforgiving grim trigger.",
+      "A single season is a Prisoner's Dilemma (14>9 and 5>3, so Discount dominates; both earn 5). Repetition lets you punish: grim trigger = 'hold High until they Discount, then Discount forever.' One-shot-deviation check: cooperating forever earns R/(1−δ); deviating earns T + δP/(1−δ). Cooperation survives when R/(1−δ) ≥ T + δP/(1−δ) ⟹ δ ≥ (T−R)/(T−P) = (14−9)/(14−5) = 5/9 ≈ 0.56. So if each values next season at least ~56% as much as this one, the high-fare truce holds. Caveats the interviewer wants: (1) the folk theorem, many equilibria exist, so cooperation isn't guaranteed; (2) a KNOWN end date unravels it by backward induction; (3) in a noisy market, forgiving tit-for-tat survives mistakes better than unforgiving grim trigger.",
     difficulty: "hard",
     concept: "Repeated game / folk theorem / grim trigger",
     source: "Game Theory · repeated game (reasoning-only)",

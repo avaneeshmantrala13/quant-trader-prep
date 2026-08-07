@@ -94,7 +94,7 @@ export function PostRunReport({
           </div>
           {nextBudgetMs != null && nextBudgetMs < speed.budgetMs && (
             <p className="text-sm text-primary">
-              Accuracy is holding — tightening next run's budget to{" "}
+              Accuracy is holding, so tightening next run's budget to{" "}
               <span className="num font-semibold">
                 {(nextBudgetMs / 1000).toFixed(1)}s/q
               </span>
@@ -128,7 +128,7 @@ export function PostRunReport({
         <div className="panel border-danger bg-danger-soft p-3 text-sm text-primary">
           <strong>Careless / rushing signal.</strong> A large share of your
           errors came in unusually fast for you. Slow down slightly on the ones
-          you're unsure about — accuracy beats raw speed here.
+          you're unsure about; accuracy beats raw speed here.
         </div>
       )}
 

@@ -90,6 +90,16 @@ export interface SkillNode {
   weight: number;
   /** Short academic/canon justification for placement. */
   source: string;
+  /**
+   * EXTERNAL timed-drill / game topic (Speed Arena, Sequences, No-Arbitrage,
+   * Fermi, EV-under-time, Auctions) whose `Level`s are authored but NOT yet
+   * registered into a playable track. Mirrored here so the remediation prereq
+   * DAG (a strict subset of this graph) can route a bombed drill to a real
+   * prerequisite. Its `firstLevelId` points at the authored content level for the
+   * future integrator, but does not resolve via `getLevel` until wired in — so
+   * the "references a REAL first level" invariant skips external nodes.
+   */
+  external?: boolean;
 }
 
 /* -- Topic key constants (all resolve to REAL mastery buckets + levels) ----- */
@@ -127,6 +137,14 @@ const INTERVIEW_GAMES = topicKeyOf("interview-games");
 const GAME_THEORY = topicKeyOf("probability", "Game Theory & Puzzles");
 const BT_CORE = topicKeyOf("brainteasers", "Core Puzzles");
 const BT_TECHNIQUES = topicKeyOf("brainteasers", "Techniques Toolkit");
+// External timed-drill / game topics (authored but not registered into a track;
+// mirrored from the remediation DAG so its edges stay a subset of this graph).
+const SEQUENCES = topicKeyOf("sequences", "Sequences & Pattern Recognition");
+const ARBITRAGE = topicKeyOf("arbitrage", "No-Arbitrage");
+const FERMI = topicKeyOf("fermi");
+const EV_TIMED = topicKeyOf("ev-timed");
+const ARENA = topicKeyOf("arena");
+const AUCTIONS = topicKeyOf("auctions");
 
 /**
  * The pathway, in curriculum order. Order within a tier is easiest→hardest and
@@ -143,7 +161,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     prereqs: [],
     weight: 3,
     source:
-      "Quant canon: timed arithmetic (Optiver 80-in-8, Jane Street 60-in-8, Zetamac) is the first screen most firms gate on. Also the remediation DAG's L0 arithmetic floor.",
+      "Quant canon: timed mental-arithmetic sprints (Zetamac-style) are the first screen most firms gate on. Also the remediation DAG's L0 arithmetic floor.",
   },
   {
     topicKey: RATES,
@@ -460,6 +478,83 @@ export const SKILL_GRAPH: SkillNode[] = [
     weight: 1,
     source:
       "M362M: the n-step Pⁿ / Chapman–Kolmogorov formalism and state classification (recurrence, transience, periodicity, communication) — the structural theory of Markov chains.",
+  },
+  // --- External timed-drill / game topics (authored but not yet registered into
+  // a playable track). Placed LAST so they never clutter the interview spine, and
+  // marked `external` so the "resolves to a real first level" invariant skips
+  // them. Their prereqs are all real, earlier nodes, so the DAG-order invariant
+  // (prereqs precede dependents) still holds and remediation descent resolves. ---
+  {
+    topicKey: SEQUENCES,
+    label: "Sequences & Pattern Recognition",
+    trackId: "sequences",
+    firstLevelId: "seq-quiz-foundations",
+    tier: "foundations",
+    prereqs: [NUMBER_THEORY],
+    weight: 1,
+    external: true,
+    source:
+      "OA abstract-reasoning: recover a generating rule (arithmetic/geometric/quadratic differences, series & growth) — structural counting on top of Number Theory.",
+  },
+  {
+    topicKey: ARENA,
+    label: "Speed Arena",
+    trackId: "arena",
+    firstLevelId: "arena-1",
+    tier: "foundations",
+    prereqs: [MENTAL],
+    weight: 1,
+    external: true,
+    source:
+      "Timed mental-arithmetic sprint (Zetamac-style) — a pure speed application of the mental-arithmetic floor.",
+  },
+  {
+    topicKey: FERMI,
+    label: "Fermi / Order-of-Magnitude Estimation",
+    trackId: "fermi",
+    firstLevelId: "fermi-gas-stations-us",
+    tier: "processes",
+    prereqs: [RATES],
+    weight: 1,
+    external: true,
+    source:
+      "Decompose-and-multiply estimation (gas stations, daily volume) — rests on rates/word-problem algebra.",
+  },
+  {
+    topicKey: EV_TIMED,
+    label: "EV Under Time",
+    trackId: "ev-timed",
+    firstLevelId: "ev-timed-1",
+    tier: "processes",
+    prereqs: [EXPECTED_VALUE],
+    weight: 1,
+    external: true,
+    source:
+      "Speeded +EV/−EV decisions under a per-question budget — a timed application of Expected Value.",
+  },
+  {
+    topicKey: ARBITRAGE,
+    label: "No-Arbitrage & De-Vig",
+    trackId: "arbitrage",
+    firstLevelId: "arb-implied-prob",
+    tier: "processes",
+    prereqs: [CORE_PROB, EXPECTED_VALUE],
+    weight: 1,
+    external: true,
+    source:
+      "Odds→implied probability, stripping the vig, Dutch-book detection, basket NAV — the meaning of probability (axioms/normalisation) plus probability-weighted sums.",
+  },
+  {
+    topicKey: AUCTIONS,
+    label: "Winner's-Curse / Common-Value Auctions",
+    trackId: "auctions",
+    firstLevelId: "auc-1",
+    tier: "processes",
+    prereqs: [CONDITIONAL, EXPECTED_VALUE, ORDER_STATS],
+    weight: 1,
+    external: true,
+    source:
+      "‘Winning is bad news’: E[V|win] conditioning, the exact shade E[max of n signals] (order statistics), and the +EV/−EV bid decision.",
   },
 ];
 

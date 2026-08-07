@@ -24,8 +24,11 @@ export type GameIconKey =
   | "brain"
   | "bolt";
 
-/** The trader's seat in each game — the single most orienting fact. */
-export type GameRole = "Maker" | "Taker" | "Bettor" | "Estimator";
+/** The trader's seat in each game — the single most orienting fact. The
+ * `Cognitive` role tags the Optiver-style assessment drills (sequences,
+ * modular math, attention, spatial rotation) that train aptitude rather than a
+ * trading seat. */
+export type GameRole = "Maker" | "Taker" | "Bettor" | "Estimator" | "Cognitive";
 
 export type GameDifficulty = "Warm-up" | "Core" | "Advanced";
 
@@ -54,7 +57,7 @@ export const GAMES: GameMeta[] = [
     to: "/make-market",
     title: "Make Me a Market",
     tagline:
-      "Quote a two-sided market and defend it against an informed counterparty.",
+      "Set a fair buy and sell price, then trade and defend it.",
     skill: "Market making",
     role: "Maker",
     difficulty: "Core",
@@ -70,7 +73,7 @@ export const GAMES: GameMeta[] = [
     id: "probability-betting",
     to: "/probability-betting",
     title: "Probability Betting",
-    tagline: "Turn stated odds into implied probability, find the edge, size with Kelly.",
+    tagline: "Turn odds into a real chance, spot good bets, and size them.",
     skill: "Odds · edge · Kelly",
     role: "Bettor",
     difficulty: "Core",
@@ -86,7 +89,7 @@ export const GAMES: GameMeta[] = [
     id: "cards-market-making",
     to: "/cards-market-making",
     title: "Cards Market Making",
-    tagline: "Price a hidden card sum as the taker — and pay only for information worth it.",
+    tagline: "Guess a hidden card total and pay for a peek only when it's worth it.",
     skill: "EV · value of info",
     role: "Taker",
     difficulty: "Core",
@@ -102,7 +105,7 @@ export const GAMES: GameMeta[] = [
     id: "market-of-cards",
     to: "/market-of-cards",
     title: "Market of Cards",
-    tagline: "Be the maker at a full table — quote both sides against adaptive bots.",
+    tagline: "Set buy and sell prices at a busy table against smart bots.",
     skill: "Group market making",
     role: "Maker",
     difficulty: "Advanced",
@@ -118,7 +121,7 @@ export const GAMES: GameMeta[] = [
     id: "fruit-market",
     to: "/fruit-market",
     title: "Fruit Market",
-    tagline: "Speed mental math — value the basket and beat the clock before the quote moves.",
+    tagline: "Do fast mental math to value a basket before time runs out.",
     skill: "Speed arithmetic",
     role: "Taker",
     difficulty: "Warm-up",
@@ -134,7 +137,7 @@ export const GAMES: GameMeta[] = [
     id: "dice-and-cards",
     to: "/dice-and-cards",
     title: "Dice & Cards",
-    tagline: "Price a product of cards and dice — and know its standard deviation cold.",
+    tagline: "Price a mix of dice and cards, and judge how much it can swing.",
     skill: "Products · variance",
     role: "Taker",
     difficulty: "Advanced",
@@ -150,7 +153,7 @@ export const GAMES: GameMeta[] = [
     id: "next-card-betting",
     to: "/next-card-betting",
     title: "Next Card Betting",
-    tagline: "Count the deck, compute the true probability, stake the Kelly fraction.",
+    tagline: "Track the deck and bet on what the next card will be.",
     skill: "Counting · Kelly",
     role: "Bettor",
     difficulty: "Core",
@@ -166,7 +169,7 @@ export const GAMES: GameMeta[] = [
     id: "fermi",
     to: "/fermi",
     title: "Fermi Drill",
-    tagline: "Order-of-magnitude estimation — decompose, anchor, and defend a number.",
+    tagline: "Estimate a huge number by breaking it into smaller guesses.",
     skill: "Estimation",
     role: "Estimator",
     difficulty: "Warm-up",
@@ -182,7 +185,7 @@ export const GAMES: GameMeta[] = [
     id: "arbitrage",
     to: "/arbitrage",
     title: "Arbitrage & De-vig",
-    tagline: "Strip the vig, spot the Dutch book, and call the no-arbitrage direction.",
+    tagline: "Find the risk-free win hidden inside a set of betting odds.",
     skill: "No-arbitrage · de-vig",
     role: "Bettor",
     difficulty: "Core",
@@ -198,7 +201,7 @@ export const GAMES: GameMeta[] = [
     id: "ev-timed",
     to: "/ev-timed",
     title: "EV Under Time",
-    tagline: "Make the +EV call before a per-question clock runs out.",
+    tagline: "Pick the smarter bet before the clock runs out.",
     skill: "EV · fair value",
     role: "Bettor",
     difficulty: "Core",
@@ -208,6 +211,89 @@ export const GAMES: GameMeta[] = [
       "Decide fair value / optimal-stopping under a countdown",
       "Speed adds points — but only when you're right",
       "Every item is exact-verified from the EV generators",
+    ],
+  },
+  /* ---- Optiver-style Assessment cluster (Zap-N / NumberLogic / Beat the
+     Odds). Cognitive-aptitude drills that mimic Optiver's 2026 online
+     assessment sections rather than a trading seat. ------------------------- */
+  {
+    id: "numberlogic",
+    to: "/numberlogic",
+    title: "NumberLogic",
+    tagline: "Find the next number in the pattern, puzzle after puzzle.",
+    skill: "Sequence patterns",
+    role: "Cognitive",
+    difficulty: "Core",
+    icon: "sigma",
+    gameNo: 11,
+    highlights: [
+      "Find the next term as the rule escalates in difficulty",
+      "Ratio+offset, second-difference, interleaved & Fibonacci traps",
+      "Harder items are worth more — check differences, then ratios",
+    ],
+  },
+  {
+    id: "beat-the-odds",
+    to: "/beat-the-odds",
+    title: "Beat the Odds",
+    tagline: "Answer quick chance-and-odds questions fast, and beat the clock.",
+    skill: "Probability · EV",
+    role: "Cognitive",
+    difficulty: "Core",
+    icon: "gauge",
+    gameNo: 12,
+    highlights: [
+      "~20 questions, five options, strictly no going back",
+      "Dice/coin/card odds up to conditional probability & expectations",
+      "A correct answer scores a speed bonus that decays with the clock",
+    ],
+  },
+  {
+    id: "stockmaster",
+    to: "/stockmaster",
+    title: "Stockmaster",
+    tagline: "Watch the signals and buy at the exact right moment.",
+    skill: "Attention · reflex",
+    role: "Cognitive",
+    difficulty: "Warm-up",
+    icon: "bolt",
+    gameNo: 13,
+    highlights: [
+      "Go/no-go: buy only on arrow-up AND green-light ticks",
+      "Fast hits score most; false buys and misses cost you",
+      "A sustained-attention and impulse-control test",
+    ],
+  },
+  {
+    id: "number-box",
+    to: "/number-box",
+    title: "Number Box",
+    tagline: "Solve quick number puzzles against a two-minute clock.",
+    skill: "Modular math",
+    role: "Cognitive",
+    difficulty: "Warm-up",
+    icon: "brain",
+    gameNo: 14,
+    highlights: [
+      "Compute residues mod m — add, subtract, multiply, square",
+      "Fill-the-box congruences as difficulty ramps",
+      "Optiver-style scoring: +1 correct, −1 wrong",
+    ],
+  },
+  {
+    id: "shape-shift",
+    to: "/shape-shift",
+    title: "Shape Shift",
+    tagline: "Rotate a shape in your head and pick the one that matches.",
+    skill: "Spatial rotation",
+    role: "Cognitive",
+    difficulty: "Warm-up",
+    icon: "dice",
+    gameNo: 15,
+    highlights: [
+      "Rotate 90°/180°, mirror, or a combination — in your head",
+      "Distractors are the shape's other orientations, so no eliminating",
+      "Fast rounds against the clock, escalating transforms",
     ],
   },
 ];

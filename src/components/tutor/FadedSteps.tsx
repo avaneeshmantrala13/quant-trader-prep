@@ -24,7 +24,7 @@ export function FadedSteps({
   selfExplain,
   illustration,
   onContinue,
-  continueLabel = "Ready — start practice ▸",
+  continueLabel = "Ready: start practice ▸",
   deepDive,
   detailLabel = "Explain in more detail ▾",
 }: {
@@ -64,7 +64,7 @@ export function FadedSteps({
                   ______
                 </span>
                 <span className="ml-2 text-xs italic text-muted">
-                  (your step — explain the reasoning)
+                  (your step: explain the reasoning)
                 </span>
               </li>
             ) : (

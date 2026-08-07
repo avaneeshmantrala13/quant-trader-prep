@@ -3,6 +3,7 @@ import { Rng } from "@/lib/rng";
 import type { NumericQuestion } from "@/types/content";
 import { gradeFreeResponse } from "@/lib/numeric";
 import {
+  EV_BASICS_NUMERIC_GENERATORS,
   EV_GENERATORS,
   EV_NUMERIC_GENERATORS,
   genFairValueNumeric,
@@ -10,6 +11,7 @@ import {
   mixEVNumeric,
 } from "./generators";
 import { interviewGamesTrack } from "./levels";
+import { materializeNumericLevel } from "@/content/materialize";
 
 /**
  * Round-trip coverage for the ig-3 MCQ→free-response conversion. Asserts that
@@ -97,68 +99,85 @@ describe("interview-games numeric EV generators: free-response round-trip", () =
 });
 
 /* ========================================================================== */
-/*  STATIC-pool conversion: ig-1 "Pricing Fair Value" (evBasicsNumeric).        */
-/*  ig-1 was a hand-authored MCQ pool whose every item is genuinely numeric     */
-/*  (a coin-bet EV, the mode of a two-dice sum, an expected maximum), so the     */
-/*  whole level flips to `mode: "numeric"`. This block asserts the converted     */
-/*  pool is well-formed and that its per-item error modes grade + tag correctly. */
+/*  ig-1 "Pricing Fair Value" — STATIC pool → PARAMETRIC numeric generators.    */
+/*  The three former hand-authored items (a coin-bet EV, the mode of a two-dice */
+/*  sum, and the expected MAXIMUM of dice) are now exact parametric families    */
+/*  mixed into the level's `numericGenerator`, so each item is freshly          */
+/*  generated with a worked step-by-step explanation — enabling the rung-3      */
+/*  worked-sibling. This block asserts every generated instance is well-formed  */
+/*  and its per-item error modes grade + tag correctly.                         */
 /* ========================================================================== */
 
-describe("interview-games ig-1 static pool converted to numeric free-response", () => {
-  const ig1 = interviewGamesTrack.levels.find((l) => l.id === "ig-1")!;
+describe("interview-games ig-1 numeric generators (coin-bet EV, dice mode, expected max)", () => {
+  for (const [name, gen] of Object.entries(EV_BASICS_NUMERIC_GENERATORS)) {
+    it(`${name}: answer grades correct; error modes distinct + tagged`, () => {
+      for (const seed of SEEDS) {
+        const q: NumericQuestion = gen(new Rng(seed));
+        expect(q.prompt.length).toBeGreaterThan(10);
+        expect(q.prompt).toContain("Enter a fraction or decimal");
+        expect(q.explanation.length).toBeGreaterThan(40);
+        // A worked, multi-step explanation the sibling builder can split.
+        expect(q.explanation.split(/(?<=[.!?])\s+/).filter((s) => s.trim()).length)
+          .toBeGreaterThanOrEqual(2);
+        expect(q.unit).toBe("");
+        expect(Number.isFinite(q.answer)).toBe(true);
+        expect(q.decimals).toBeGreaterThanOrEqual(0);
 
-  it("ig-1 is a numeric level backed by a static numericQuestions pool", () => {
+        // The exact answer round-trips through the free-response grader.
+        expect(gradeFreeResponse(q, String(q.answer)).correct).toBe(true);
+
+        const errs = q.commonErrors ?? [];
+        expect(errs.length).toBeGreaterThanOrEqual(1);
+        const f = 10 ** (q.decimals ?? 0);
+        const keys = new Set<number>();
+        for (const ce of errs) {
+          expect(Number.isFinite(ce.value)).toBe(true);
+          const k = Math.round(ce.value * f);
+          expect(k).not.toBe(Math.round(q.answer * f));
+          expect(keys.has(k)).toBe(false);
+          keys.add(k);
+          expect(ce.feedback.length).toBeGreaterThan(10);
+          expect(ce.misconception).toBeTruthy();
+          expect(ce.feedback).not.toContain(String(q.answer));
+          const g = gradeFreeResponse(q, String(ce.value));
+          expect(g.correct).toBe(false);
+          expect(g.matchedError?.misconception).toBe(ce.misconception);
+        }
+      }
+    });
+  }
+
+  it("the expected-maximum family computes E[max of k d-sided dice] exactly", () => {
+    for (const seed of SEEDS) {
+      const q = EV_BASICS_NUMERIC_GENERATORS.genExpMaxDiceNumeric(new Rng(seed));
+      const m = q.prompt.match(/(two|three) fair (\d+)-sided dice/i);
+      expect(m).not.toBeNull();
+      const k = m![1].toLowerCase() === "two" ? 2 : 3;
+      const d = Number(m![2]);
+      // Brute-force E[max] = (1/dᵏ)·Σ_{m} m·(mᵏ − (m−1)ᵏ).
+      let num = 0;
+      for (let x = 1; x <= d; x++) num += x * (x ** k - (x - 1) ** k);
+      expect(q.answer).toBeCloseTo(num / d ** k, q.decimals ?? 4);
+      // Always strictly above one die's mean (a maximum is pulled up).
+      expect(q.answer).toBeGreaterThan((d + 1) / 2);
+    }
+  });
+
+  it("ig-1 is now a parametric numeric level (generator-backed, not a static pool)", () => {
+    const ig1 = interviewGamesTrack.levels.find((l) => l.id === "ig-1")!;
     expect(ig1).toBeDefined();
     expect(ig1.mode).toBe("numeric");
     expect(ig1.questions).toBeUndefined();
-    expect(ig1.generator).toBeUndefined();
-    expect(ig1.numericQuestions?.length).toBe(3);
-  });
+    expect(ig1.numericQuestions).toBeUndefined();
+    expect(typeof ig1.numericGenerator).toBe("function");
 
-  it("every item: numeric answer grades correct; error modes distinct + tagged + graded wrong", () => {
-    const qs: NumericQuestion[] = ig1.numericQuestions ?? [];
-    const ids = new Set<string>();
-    for (const q of qs) {
-      // Unique id, non-empty prompt with the free-response cue, unit "".
-      expect(ids.has(q.id)).toBe(false);
-      ids.add(q.id);
-      expect(q.prompt.length).toBeGreaterThan(10);
-      expect(q.prompt).toContain("Enter a fraction or decimal");
-      expect(q.unit).toBe("");
-      expect(q.explanation.length).toBeGreaterThan(40);
-
-      // Finite answer: positive integer when decimals omitted, else finite ≥ 0.
-      expect(Number.isFinite(q.answer)).toBe(true);
-      if (q.decimals == null) {
-        expect(Number.isInteger(q.answer)).toBe(true);
-        expect(q.answer).toBeGreaterThan(0);
-      } else {
-        expect(q.decimals).toBeGreaterThanOrEqual(0);
-        expect(q.answer).toBeGreaterThanOrEqual(0);
-      }
-
-      // The exact answer round-trips through the free-response grader.
-      expect(gradeFreeResponse(q, String(q.answer)).correct).toBe(true);
-
-      const errs = q.commonErrors ?? [];
-      expect(errs.length).toBeGreaterThanOrEqual(1);
-      const f = 10 ** (q.decimals ?? 0);
-      const seen = new Set<number>();
-      for (const ce of errs) {
-        expect(Number.isFinite(ce.value)).toBe(true);
-        // Never equal to the key at grading precision, and distinct per item.
-        const k = Math.round(ce.value * f);
-        expect(k).not.toBe(Math.round(q.answer * f));
-        expect(seen.has(k)).toBe(false);
-        seen.add(k);
-        // Tagged, substantive, and never leaks the answer.
-        expect(ce.misconception).toBeTruthy();
-        expect(ce.feedback.length).toBeGreaterThan(10);
-        expect(ce.feedback).not.toContain(String(q.answer));
-        // A wrong entry matching the mode grades wrong AND surfaces its tag.
-        const g = gradeFreeResponse(q, String(ce.value));
-        expect(g.correct).toBe(false);
-        expect(g.matchedError?.misconception).toBe(ce.misconception);
+    // Every materialized instance round-trips and stamps a family for regen.
+    for (const seed of [1, 2, 3, 17, 99]) {
+      const qs = materializeNumericLevel(ig1, seed);
+      expect(qs.length).toBeGreaterThan(0);
+      for (const q of qs) {
+        expect(q.family).toBeTruthy();
+        expect(gradeFreeResponse(q, String(q.answer)).correct).toBe(true);
       }
     }
   });

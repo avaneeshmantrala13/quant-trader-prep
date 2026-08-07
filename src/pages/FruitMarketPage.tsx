@@ -58,8 +58,8 @@ const EVENT_HINT: Record<FruitEvent, string> = {
   "apple-inflation": "Double the apple total BEFORE you multiply.",
   "orange-inflation": "Double the orange total BEFORE you multiply.",
   "orange-deflation": "Halve the orange total and round UP first.",
-  "no-fruit-a": "Bag A contributes nothing — use Bag B only.",
-  "no-fruit-b": "Bag B contributes nothing — use Bag A only.",
+  "no-fruit-a": "Bag A contributes nothing; use Bag B only.",
+  "no-fruit-b": "Bag B contributes nothing; use Bag A only.",
 };
 
 export function FruitMarketPage() {
@@ -251,7 +251,7 @@ function Setup({
           <span className="text-bull">buy</span> below the ask,{" "}
           <span className="text-bear">sell</span> above the bid, or skip. Each
           window lasts 15 seconds and the earlier you commit, the more edge you
-          bank — but a wrong-direction trade costs you the full edge.
+          bank, but a wrong-direction trade costs you the full edge.
         </p>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-3">
@@ -262,7 +262,7 @@ function Setup({
             Apply the market event to the counts BEFORE you multiply.
           </Rule>
           <Rule icon={<GaugeIcon width={16} height={16} />} title="First click counts">
-            Your first decision in each window is scored — calculate, then commit.
+            Your first decision in each window is scored: calculate, then commit.
           </Rule>
         </div>
       </article>
@@ -406,14 +406,14 @@ function PlayView({
       <article className="panel-ruled p-5">
         <div className="flex items-center justify-around gap-4">
           <div className="text-center">
-            <div className="label text-bull">Bid — you sell</div>
+            <div className="label text-bull">Bid: you sell</div>
             <div className="num mt-1 font-display text-3xl font-black text-bull">
               {fmt(market.quote.bid)}
             </div>
           </div>
           <div className="h-12 w-px bg-subtle" />
           <div className="text-center">
-            <div className="label text-bear">Ask — you buy</div>
+            <div className="label text-bear">Ask: you buy</div>
             <div className="num mt-1 font-display text-3xl font-black text-bear">
               {fmt(market.quote.ask)}
             </div>
@@ -477,13 +477,10 @@ function ResolvedPanel({
         }`}
       >
         <p className={`font-display text-base font-semibold ${right ? "text-bull" : "text-bear"}`}>
-          {right ? "Correct" : "Wrong direction"} — you {action === "skip" ? "skipped" : action + "ed"}
+          {right ? "Correct" : "Wrong direction"}: you {action === "skip" ? "skipped" : action + "ed"}
         </p>
         <p className="num mt-1 text-sm text-secondary">
           True value <span className="font-semibold text-primary">{fmt(market.trueValue)}</span>{" "}
-          {market.rawValue !== market.trueValue && (
-            <span className="text-muted">(raw {fmt(market.rawValue)}, rounded to 10)</span>
-          )}{" "}
           · correct action{" "}
           <span className="font-semibold text-primary">{correct.toUpperCase()}</span>
           {correct !== "skip" && <> · edge {fmt(fullEdge)}</>}

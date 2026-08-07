@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Rng } from "@/lib/rng";
 import {
   breakEven,
+  parseBreakEvenPrice,
   markToTrue,
   netPosition,
   validateQuote,
@@ -93,6 +94,38 @@ describe("break-even — precise multi-lot algorithm (doc worked scenarios)", ()
     expect(r.net).toBe(0);
     expect(r.price).toBeNull();
     expect(r.possible).toBe(true);
+  });
+});
+
+describe("parseBreakEvenPrice — lenient price extraction", () => {
+  it("extracts the price after '@' when the whole trade is typed", () => {
+    // The bug: a correct "SELL 2 @ 600" was graded on the size (2), not 600.
+    expect(parseBreakEvenPrice("2 @ 600")).toBe(600);
+    expect(parseBreakEvenPrice("2@600")).toBe(600);
+    expect(parseBreakEvenPrice("@ 600")).toBe(600);
+    expect(parseBreakEvenPrice("@600")).toBe(600);
+  });
+
+  it("parses a bare price directly", () => {
+    expect(parseBreakEvenPrice("600")).toBe(600);
+    expect(parseBreakEvenPrice("600.5")).toBe(600.5);
+  });
+
+  it("strips currency symbols and thousands commas", () => {
+    expect(parseBreakEvenPrice("$600")).toBe(600);
+    expect(parseBreakEvenPrice("$1,200.50")).toBe(1200.5);
+    expect(parseBreakEvenPrice("2 @ $1,600")).toBe(1600);
+  });
+
+  it("takes the LAST number when several appear and there is no '@'", () => {
+    expect(parseBreakEvenPrice("sell 2 600")).toBe(600);
+  });
+
+  it("returns NaN for empty / unparseable input", () => {
+    expect(Number.isNaN(parseBreakEvenPrice(""))).toBe(true);
+    expect(Number.isNaN(parseBreakEvenPrice("   "))).toBe(true);
+    expect(Number.isNaN(parseBreakEvenPrice("@"))).toBe(true);
+    expect(Number.isNaN(parseBreakEvenPrice("price"))).toBe(true);
   });
 });
 

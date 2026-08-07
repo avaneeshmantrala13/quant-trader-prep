@@ -22,6 +22,7 @@
  *    game), so a stale "active" envelope can never resurrect a completed run.
  */
 import type { KeyValueStore } from "./localBoard";
+import { userScopedKey } from "@/lib/userScope";
 
 /** Bump if the envelope shape changes; old envelopes are then ignored. */
 export const SESSION_VERSION = 1;
@@ -39,9 +40,18 @@ export interface GameSessionEnvelope<T> {
 
 const PREFIX = "qtp.gamesession.";
 
-/** localStorage key for a game's durable session: `qtp.gamesession.<gameId>`. */
-export function sessionKey(gameId: string): string {
-  return `${PREFIX}${gameId}`;
+/**
+ * Per-user localStorage key for a game's durable session:
+ * `qtp.gamesession.<gameId>::<scope>`. Scoping by the current user id (falling
+ * back to an anonymous namespace when logged out) is what stops account B from
+ * resuming account A's half-played game on a shared browser. Same user → same
+ * key (resume-after-reload still works); different user → different key.
+ */
+export function sessionKey(
+  gameId: string,
+  userId?: string | null,
+): string {
+  return userScopedKey(`${PREFIX}${gameId}`, userId);
 }
 
 /** Build a fresh envelope around `snapshot`. Pure — no I/O, never mutates. */
@@ -89,9 +99,10 @@ export function saveGameSession<T>(
   snapshot: T,
   savedAtMs: number,
   status: "active" | "finished" = "active",
+  userId?: string | null,
 ): GameSessionEnvelope<T> {
   const env = makeSessionEnvelope(gameId, snapshot, savedAtMs, status);
-  store.setItem(sessionKey(gameId), JSON.stringify(env));
+  store.setItem(sessionKey(gameId, userId), JSON.stringify(env));
   return env;
 }
 
@@ -104,8 +115,12 @@ export function loadGameSession<T>(
   store: KeyValueStore,
   gameId: string,
   opts?: { maxAgeMs?: number; nowMs?: number },
+  userId?: string | null,
 ): GameSessionEnvelope<T> | null {
-  const env = parseSessionEnvelope<T>(store.getItem(sessionKey(gameId)), gameId);
+  const env = parseSessionEnvelope<T>(
+    store.getItem(sessionKey(gameId, userId)),
+    gameId,
+  );
   if (!env) return null;
   if (opts?.maxAgeMs != null) {
     const now = opts.nowMs ?? Date.now();
@@ -119,14 +134,19 @@ export function hasActiveGameSession(
   store: KeyValueStore,
   gameId: string,
   opts?: { maxAgeMs?: number; nowMs?: number },
+  userId?: string | null,
 ): boolean {
-  return loadGameSession(store, gameId, opts)?.status === "active";
+  return loadGameSession(store, gameId, opts, userId)?.status === "active";
 }
 
 /** Clear any saved session for `gameId` (called on finish / new game). */
-export function clearGameSession(store: KeyValueStore, gameId: string): void {
+export function clearGameSession(
+  store: KeyValueStore,
+  gameId: string,
+  userId?: string | null,
+): void {
   try {
-    store.setItem(sessionKey(gameId), "");
+    store.setItem(sessionKey(gameId, userId), "");
   } catch {
     /* ignore */
   }

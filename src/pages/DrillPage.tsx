@@ -18,15 +18,17 @@ import { requestDrillIntent } from "@/lib/drill/aiIntent";
  * Custom Drill Builder (`/drill`).
  *
  * A chatbot-style entry: the learner types what they want to practice ("bayes
- * and EV, medium, 12 questions") and the app assembles a drill from EXISTING,
- * exact-verified questions matching that intent. SELF-CONTAINED, exactly like
+ * and EV, medium, 12 questions") and the app assembles a drill from freshly
+ * generated, exact-solver-checked questions matching that intent — the same
+ * question engine the lessons use (there is no static "verified bank"). It is
+ * SELF-CONTAINED, exactly like
  * the Fermi drill — its own session score, and it NEVER writes to mastery /
  * unlock / resume storage. The deterministic parser (`parseDrillIntent`) is the
  * backbone; an optional LLM parser (`requestDrillIntent`, behind the AI flag)
  * refines the intent but its output is snapped back onto the same vocabulary.
  */
 
-type Phase = "intro" | "drill" | "summary";
+type Phase = "intro" | "confirm" | "drill" | "summary";
 
 const EXAMPLES = [
   "Bayes and EV, medium",
@@ -41,6 +43,9 @@ export function DrillPage() {
   const { themeDef } = useTheme();
 
   const [phase, setPhase] = useState<Phase>("intro");
+  // The learner's raw request, lifted here so an "Edit request" round-trip from
+  // the confirm step returns to the box with the text intact.
+  const [text, setText] = useState("");
   const [spec, setSpec] = useState<DrillSpec | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [index, setIndex] = useState(0);
@@ -50,13 +55,25 @@ export function DrillPage() {
   const q = questions[index];
   const answered = q ? answers[index] != null : false;
 
-  const startDrill = (resolvedSpec: DrillSpec) => {
-    // Fresh seed per run so repeated drills on the same topic vary the items.
+  // The intent has been resolved (LLM if enabled, else deterministic) and
+  // validated/clamped onto the real vocabulary. We ASSEMBLE now (not on Start) so
+  // the confirmation can state the ACTUAL number we can deliver — some topics'
+  // generators cap out below a big request, and we report that honestly rather
+  // than promising a count we can't build.
+  const confirmSpec = (resolvedSpec: DrillSpec) => {
+    // Fresh seed per build so repeated drills on the same topic vary the items.
     const seed = Date.now() % 2_000_000_000;
     const qs = assembleDrill(resolvedSpec, seed);
     setSpec(resolvedSpec);
     setQuestions(qs);
-    setAnswers(new Array(qs.length).fill(null));
+    setPhase("confirm");
+  };
+
+  const startDrill = () => {
+    if (!spec || questions.length === 0) return;
+    // Questions were already assembled for the confirm step; use them verbatim
+    // so the drill matches exactly what the confirmation promised.
+    setAnswers(new Array(questions.length).fill(null));
     setIndex(0);
     setPhase("drill");
   };
@@ -84,11 +101,16 @@ export function DrillPage() {
 
   const restart = () => {
     setSpec(null);
+    setText("");
     setQuestions([]);
     setAnswers([]);
     setIndex(0);
     setPhase("intro");
   };
+
+  // Back to the request box from the confirm step, keeping the typed text and
+  // the resolved spec (so the live preview still shows what was understood).
+  const editRequest = () => setPhase("intro");
 
   return (
     <GameChrome
@@ -107,7 +129,22 @@ export function DrillPage() {
         ) : undefined
       }
     >
-        {phase === "intro" && <DrillIntro onStart={startDrill} />}
+        {phase === "intro" && (
+          <DrillIntro
+            text={text}
+            onTextChange={setText}
+            onResolved={confirmSpec}
+          />
+        )}
+
+        {phase === "confirm" && spec && (
+          <DrillConfirm
+            spec={spec}
+            built={questions.length}
+            onStart={startDrill}
+            onEdit={editRequest}
+          />
+        )}
 
         {phase === "drill" && q && (
           <DrillQuestionCard
@@ -155,10 +192,19 @@ export function DrillPage() {
 /*  Intro — the chatbot-style intent box                                       */
 /* -------------------------------------------------------------------------- */
 
-function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
-  const [text, setText] = useState("");
+function DrillIntro({
+  text,
+  onTextChange,
+  onResolved,
+}: {
+  text: string;
+  onTextChange: (t: string) => void;
+  onResolved: (spec: DrillSpec) => void;
+}) {
   const [busy, setBusy] = useState(false);
-  // Live preview of what the deterministic parser understood.
+  // Live, offline preview of what the deterministic parser understood as the
+  // learner types. The AUTHORITATIVE config (which may be refined by the LLM) is
+  // resolved on Build and shown on the confirm step.
   const preview = useMemo(
     () => (text.trim() ? parseDrillIntent(text) : null),
     [text],
@@ -169,9 +215,11 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
     const trimmed = text.trim();
     if (!trimmed) return;
     setBusy(true);
-    // LLM parser first (if enabled); it returns null when off / on error, and
-    // we fall back to the deterministic parse. Either way the result is a spec
-    // built ONLY from the known vocabulary.
+    // LLM parser first (if enabled); it runs server-side and returns null when
+    // off / on error / invalid JSON, in which case we fall back to the
+    // deterministic parse. Either way the result is a spec built ONLY from — and
+    // validated against — the known vocabulary (unknown topics dropped, orders
+    // and count clamped), so the drill can never be silently misconfigured.
     let spec: DrillSpec | null = null;
     try {
       spec = await requestDrillIntent(trimmed);
@@ -180,7 +228,7 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
     }
     if (!spec) spec = parseDrillIntent(trimmed);
     setBusy(false);
-    onStart(spec);
+    onResolved(spec);
   };
 
   return (
@@ -191,10 +239,11 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
           Tell me what you want to practice
         </h2>
         <p className="mt-3 text-[15px] leading-relaxed text-secondary">
-          Type it like you'd say it — the topics, how hard, and how many. I'll
-          pull a fresh set from the same exact-verified question bank the lessons
-          use. This is practice only: your session score here never touches your
-          mastery or progress.
+          Type it like you'd say it: the topics, how hard, and how many. I'll
+          generate a fresh set from the same question engine the lessons use —
+          each problem is produced and checked by its own exact solver. This is
+          practice only: your session score here never touches your mastery or
+          progress.
         </p>
 
         <div className="mt-5">
@@ -204,7 +253,7 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
           <textarea
             id="drill-intent"
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => onTextChange(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) build();
             }}
@@ -216,7 +265,7 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
             {EXAMPLES.map((ex) => (
               <button
                 key={ex}
-                onClick={() => setText(ex)}
+                onClick={() => onTextChange(ex)}
                 className="chip border-subtle text-secondary hover:text-primary"
               >
                 {ex}
@@ -226,8 +275,8 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
         </div>
 
         {preview && (
-          <div className="mt-4 border-l-2 border-accent bg-surface-muted px-4 py-3">
-            <div className="label text-accent">I'll build</div>
+          <div className="mt-4 border-l-2 border-subtle bg-surface-muted px-4 py-3">
+            <div className="label text-secondary">Preview</div>
             <SpecSummary spec={preview} />
           </div>
         )}
@@ -244,15 +293,77 @@ function DrillIntro({ onStart }: { onStart: (spec: DrillSpec) => void }) {
   );
 }
 
-/** Renders a resolved spec in plain English ("10 medium questions on …"). */
-function SpecSummary({ spec }: { spec: DrillSpec }) {
+/* -------------------------------------------------------------------------- */
+/*  Confirm — the ACTUAL resolved spec (LLM-refined or deterministic)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Shows the resolved, validated {@link DrillSpec} alongside the number we ACTUALLY
+ * assembled (`built`), so the "I'll build: N <level> questions on <topics>" line
+ * the learner confirms is EXACTLY what starts — count, difficulty band, and
+ * topics all reflect the real config (after any LLM refinement + vocabulary
+ * validation/clamping) AND the true generator capacity. When a topic can't reach
+ * the requested count we say so honestly and still offer the smaller drill; when
+ * nothing could be assembled we send them back to edit.
+ */
+function DrillConfirm({
+  spec,
+  built,
+  onStart,
+  onEdit,
+}: {
+  spec: DrillSpec;
+  built: number;
+  onStart: () => void;
+  onEdit: () => void;
+}) {
+  const canStart = built > 0;
+  return (
+    <div className="animate-print-in space-y-5">
+      <article className="panel-ruled p-6">
+        <span className="label text-accent">Confirm Your Drill</span>
+        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
+          Ready when you are
+        </h2>
+        <div className="mt-4 border-l-2 border-accent bg-surface-muted px-4 py-3">
+          <div className="label text-accent">I'll build</div>
+          <SpecSummary spec={spec} built={built} />
+        </div>
+      </article>
+
+      {canStart ? (
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button onClick={onStart} className="btn-primary flex-1">
+            Start Drill ▸
+          </button>
+          <button onClick={onEdit} className="btn-secondary flex-1">
+            Edit request
+          </button>
+        </div>
+      ) : (
+        <button onClick={onEdit} className="btn-primary w-full">
+          Edit request
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Renders a resolved spec in plain English ("10 medium questions on …"). When
+ * `built` is provided it is the source of truth for the count shown (the ACTUAL
+ * number assembled); if it falls short of the requested `spec.count` we add an
+ * honest note, and if it's zero we explain nothing matched. Without `built` (the
+ * live preview while typing) we show the requested count as intent.
+ */
+function SpecSummary({ spec, built }: { spec: DrillSpec; built?: number }) {
   const names = spec.topicKeys
     .map((k) => drillTopicByKey(k)?.label)
     .filter((x): x is string => !!x);
   if (names.length === 0) {
     return (
       <p className="mt-1 text-sm text-secondary">
-        No topics recognized yet — try naming a topic like "bayes", "expected
+        No topics recognized yet. Try naming a topic like "bayes", "expected
         value", or "combinatorics".
       </p>
     );
@@ -263,15 +374,40 @@ function SpecSummary({ spec }: { spec: DrillSpec }) {
       : names.length === 2
         ? `${names[0]} and ${names[1]}`
         : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+
+  const band = bandLabel(spec.minOrder, spec.maxOrder);
+
+  // A confirmed spec whose generators couldn't produce anything in-band.
+  if (typeof built === "number" && built === 0) {
+    return (
+      <p className="mt-1 text-sm text-secondary">
+        No questions available for {topicText} at that difficulty. Try widening
+        the level or picking another topic.
+      </p>
+    );
+  }
+
+  // Count shown is the ACTUAL number we can deliver when known (confirm step),
+  // else the requested count (live preview).
+  const shown = typeof built === "number" ? built : spec.count;
+  const short = typeof built === "number" && built < spec.count;
+
   return (
-    <p className="mt-1 text-sm text-secondary">
-      <span className="num font-semibold text-primary">{spec.count}</span>{" "}
-      <span className="font-semibold text-primary">
-        {bandLabel(spec.minOrder, spec.maxOrder)}
-      </span>{" "}
-      question{spec.count === 1 ? "" : "s"} on{" "}
-      <span className="font-semibold text-primary">{topicText}</span>.
-    </p>
+    <>
+      <p className="mt-1 text-sm text-secondary">
+        <span className="num font-semibold text-primary">{shown}</span>{" "}
+        <span className="font-semibold text-primary">{band}</span>{" "}
+        question{shown === 1 ? "" : "s"} on{" "}
+        <span className="font-semibold text-primary">{topicText}</span>.
+      </p>
+      {short && (
+        <p className="mt-1 text-xs text-muted">
+          Only {built} unique {band === "all levels" ? "" : `${band} `}
+          question{built === 1 ? "" : "s"} available for {topicText} right now —
+          building {built} instead of the {spec.count} you asked for.
+        </p>
+      )}
+    </>
   );
 }
 
@@ -369,7 +505,7 @@ function DrillQuestionCard({
             }`}
           >
             <span className="font-mono text-xs font-semibold uppercase tracking-label">
-              {isCorrect ? "● Filled — Correct" : "● Rejected — Incorrect"}
+              {isCorrect ? "● Filled: Correct" : "● Rejected: Incorrect"}
             </span>
             <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
               Trade Ticket

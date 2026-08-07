@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { CandlestickIcon, BoltIcon, GaugeIcon } from "@/components/icons";
@@ -24,6 +25,7 @@ import {
   markToTrue,
   finalBalance,
   breakEven,
+  parseBreakEvenPrice,
   buildRounds,
   START_BALANCE,
   type Fill,
@@ -68,6 +70,7 @@ interface MakeMarketSession {
 export function MakeMarketPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   /* ---- session state --------------------------------------------------- */
   const [phase, setPhase] = useState<Phase>("setup");
@@ -93,7 +96,12 @@ export function MakeMarketPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<MakeMarketSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<MakeMarketSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
@@ -103,7 +111,7 @@ export function MakeMarketPage() {
     setLog(s.log);
     setCoach(s.coach);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (phase === "setup" || phase === "summary") return;
@@ -112,8 +120,10 @@ export function MakeMarketPage() {
       GAME_ID,
       { phase, scenario, fills, roundIdx, log, coach },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, scenario, fills, roundIdx, log, coach]);
+  }, [phase, scenario, fills, roundIdx, log, coach, username]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   // Deal a fresh, randomized scenario and open the market. The player never
@@ -180,7 +190,7 @@ export function MakeMarketPage() {
     // leaderboard + optional server board, and clear the durable session.
     submitLocalScore(browserBoardStore(), GAME_ID, { score: bal, atMs: Date.now() });
     void submitGameScore(GAME_ID, bal);
-    clearGameSession(browserSessionStore(), GAME_ID);
+    clearGameSession(browserSessionStore(), GAME_ID, username);
     if (bal >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
   };
 
@@ -228,7 +238,7 @@ export function MakeMarketPage() {
             scenario={scenario}
             fills={fills}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -298,7 +308,7 @@ function Setup({ onDeal }: { onDeal: () => void }) {
           You're the <strong className="text-primary">market maker</strong>. First quote a{" "}
           <strong className="text-primary">95% confidence interval</strong>, then tighten into a
           two-sided market under a hard max-spread. Informed traders pick off any price you leave
-          stale, but <strong className="text-primary">uninformed flow pays your spread</strong> — so
+          stale, but <strong className="text-primary">uninformed flow pays your spread</strong>, so
           quote tight and well-centred to earn it, recentre when you get picked off, and manage your
           position to a break-even you can defend.
         </p>
@@ -308,7 +318,7 @@ function Setup({ onDeal }: { onDeal: () => void }) {
             Bid you'll buy at, ask you'll sell at. Keep it tight and centred to earn the spread.
           </Rule>
           <Rule icon={<BoltIcon width={16} height={16} />} title="Read the flow">
-            Picked off repeatedly means your mid is off — recentre first. Add size only once it's right.
+            Picked off repeatedly means your mid is off; recentre first. Add size only once it's right.
           </Rule>
           <Rule icon={<CandlestickIcon width={16} height={16} />} title="Defend break-even">
             End on your net position, max loss, and the exact break-even price.
@@ -319,10 +329,10 @@ function Setup({ onDeal }: { onDeal: () => void }) {
       <article className="panel-ruled p-6 text-center">
         <div className="label text-accent">Blind deal</div>
         <p className="mx-auto mt-3 max-w-md text-[15px] leading-relaxed text-secondary">
-          You don't pick the question — one is <strong className="text-primary">dealt at random</strong>{" "}
+          You don't pick the question: one is <strong className="text-primary">dealt at random</strong>{" "}
           and you price it cold, like a real interview. Estimation questions{" "}
           <strong className="text-primary">re-roll their numbers every deal</strong> (the city size,
-          the ownership rates), so the true value moves and there's nothing to memorize — only the
+          the ownership rates), so the true value moves and there's nothing to memorize; only the
           method transfers.
         </p>
         <button onClick={onDeal} className="btn-primary mx-auto mt-5 w-full max-w-xs">
@@ -467,7 +477,7 @@ function IntervalForm({
   return (
     <div className="mt-5">
       <div className="grid grid-cols-2 gap-3">
-        <Field label={`Bid — lower bound (${unit})`} tone="bull">
+        <Field label={`Bid: lower bound (${unit})`} tone="bull">
           <input
             className="input"
             inputMode="decimal"
@@ -477,7 +487,7 @@ function IntervalForm({
             placeholder="e.g. 150"
           />
         </Field>
-        <Field label={`Ask — upper bound (${unit})`} tone="bear">
+        <Field label={`Ask: upper bound (${unit})`} tone="bear">
           <input
             className="input"
             inputMode="decimal"
@@ -557,7 +567,7 @@ function TightForm({
             onChange={(e) => setAskSize(e.target.value)}
           />
         </Field>
-        <Field label={`Bid — buy at (${unit})`} tone="bull">
+        <Field label={`Bid: buy at (${unit})`} tone="bull">
           <input
             className="input"
             inputMode="decimal"
@@ -566,7 +576,7 @@ function TightForm({
             onChange={(e) => setBid(e.target.value)}
           />
         </Field>
-        <Field label={`Ask — sell at (${unit})`} tone="bear">
+        <Field label={`Ask: sell at (${unit})`} tone="bear">
           <input
             className="input"
             inputMode="decimal"
@@ -677,7 +687,7 @@ function Blotter({ log }: { log: LogEntry[] }) {
 /*  Quiz (position → max loss → break-even)                                    */
 /* ========================================================================== */
 
-function QuizView({ fills, onFinish }: { fills: Fill[]; onFinish: () => void }) {
+export function QuizView({ fills, onFinish }: { fills: Fill[]; onFinish: () => void }) {
   const truth = useMemo(() => breakEven(fills), [fills]);
   const trueNet = netPosition(fills);
 
@@ -693,7 +703,7 @@ function QuizView({ fills, onFinish }: { fills: Fill[]; onFinish: () => void }) 
   const bePriceOk =
     truth.price === null
       ? true
-      : Math.abs(parseFloat(bePriceAns) - truth.price) < 0.5;
+      : Math.abs(parseBreakEvenPrice(bePriceAns) - truth.price) < 0.5;
 
   return (
     <div className="animate-print-in space-y-5">
@@ -730,7 +740,10 @@ function QuizView({ fills, onFinish }: { fills: Fill[]; onFinish: () => void }) 
           {truth.net !== 0 && (
             <div>
               <span className="label mb-1 block text-accent">Break-even trade</span>
-              <div className="flex gap-2">
+              <p className="mb-2 text-xs text-secondary">
+                Side and size are fixed — pick BUY/SELL and enter only the price per lot.
+              </p>
+              <div className="flex items-center gap-2">
                 <div className="flex overflow-hidden rounded-sm border border-border-strong">
                   {(["buy", "sell"] as const).map((s) => (
                     <button
@@ -747,20 +760,24 @@ function QuizView({ fills, onFinish }: { fills: Fill[]; onFinish: () => void }) 
                     </button>
                   ))}
                 </div>
+                <span className="num whitespace-nowrap text-sm text-secondary">
+                  {beSideAns ? `${beSideAns.toUpperCase()} ` : ""}
+                  {Math.abs(truth.net)} @
+                </span>
                 <input
                   className="input flex-1"
                   inputMode="decimal"
                   value={bePriceAns}
                   disabled={checked}
                   onChange={(e) => setBePriceAns(e.target.value)}
-                  placeholder={`${Math.abs(truth.net)} lots @ price`}
+                  placeholder="price per lot"
                 />
               </div>
               {checked && (
                 <p className={`mt-1 text-sm ${beSideOk && bePriceOk ? "text-bull" : "text-bear"}`}>
                   {truth.possible
                     ? `${truth.side?.toUpperCase()} ${Math.abs(truth.net)} @ ${fmtNum(truth.price ?? 0)}`
-                    : `Impossible — the break-even price would be ${fmtNum(truth.price ?? 0)} (negative).`}
+                    : `Impossible: the break-even price would be ${fmtNum(truth.price ?? 0)} (negative).`}
                 </p>
               )}
             </div>

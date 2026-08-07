@@ -17,12 +17,12 @@ import { type Choice, assembleChoices, cap, numDp, numericErrors } from "../core
  * misconception guaranteed ≠ the answer and distinct.
  *
  * Modes:
- *   • numeric — genOptimalSpread (informed-vs-uninformed market-making spread)
+ *   • numeric, genOptimalSpread (informed-vs-uninformed market-making spread)
  *               and genOptimizeAgentsNumeric (PHASE_2 MCQ→free-response
- *               conversion of the participation optimum — p* / maximal
+ *               conversion of the participation optimum, p* / maximal
  *               P(success) is a genuine computed scalar, so the level entry now
  *               grades a free-entry fraction with a tagged error-mode catalog).
- *   • quiz    — genOptimizeAgents (kept exported/unchanged as the MCQ form used
+ *   • quiz   , genOptimizeAgents (kept exported/unchanged as the MCQ form used
  *               by the round-trip test + still available for future levels).
  */
 
@@ -80,12 +80,12 @@ export function buildOptimizeAgentsInstance(
     const badAlgebra = s2.div(s1.mul(2)); // s2/(2s1)
     correct = {
       text: fracText(pStar),
-      rationale: `Correct — maximising P(success)(p) = s₂·p² + 2·s₁·p(1−p) gives p* = s₁/(2s₁ − s₂) = ${fracText(pStar)}.`,
+      rationale: `Correct, maximising P(success)(p) = s₂·p² + 2·s₁·p(1−p) gives p* = s₁/(2s₁ − s₂) = ${fracText(pStar)}.`,
     };
     distractors = [
       {
         text: fracText(F(1)),
-        rationale: `Always participating isn't optimal — with both participating the reward succeeds at only s₂ = ${fracText(s2)} < s₁ = ${fracText(s1)}, so over-participation lowers the success rate.`,
+        rationale: `Always participating isn't optimal, with both participating the reward succeeds at only s₂ = ${fracText(s2)} < s₁ = ${fracText(s1)}, so over-participation lowers the success rate.`,
       },
       {
         text: fracText(F(1, 2)),
@@ -97,7 +97,7 @@ export function buildOptimizeAgentsInstance(
       },
       {
         text: fracText(pSuccess),
-        rationale: `That's the maximal P(success) = ${fracText(pSuccess)}, the VALUE at the optimum — not the participation probability p* that achieves it.`,
+        rationale: `That's the maximal P(success) = ${fracText(pSuccess)}, the VALUE at the optimum, not the participation probability p* that achieves it.`,
       },
     ];
     question =
@@ -108,7 +108,7 @@ export function buildOptimizeAgentsInstance(
   } else {
     correct = {
       text: fracText(pSuccess),
-      rationale: `Correct — at p* = ${fracText(pStar)} the success probability is s₂·p*² + 2·s₁·p*(1−p*) = ${fracText(pSuccess)}.`,
+      rationale: `Correct, at p* = ${fracText(pStar)} the success probability is s₂·p*² + 2·s₁·p*(1−p*) = ${fracText(pSuccess)}.`,
     };
     distractors = [
       {
@@ -157,7 +157,7 @@ export function buildOptimizeAgentsInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the two-agent participation optimum — the
+ * FREE-RESPONSE (numeric) form of the two-agent participation optimum, the
  * PHASE_1/2 MCQ→free conversion of `buildOptimizeAgentsInstance`. Same exact
  * solver (`optimizeTwoAgent`), same coin-flip between asking for the optimal
  * participation probability p* and asking for the maximal P(success), now as a
@@ -167,7 +167,7 @@ export function buildOptimizeAgentsInstance(
  * a fraction or decimal (graded by `gradeFreeResponse`).
  *
  * Error modes (all parametric in s₁, s₂):
- *   ASK p*        — corner p = 1 (over-participate), naive p = ½, the
+ *   ASK p*       , corner p = 1 (over-participate), naive p = ½, the
  *                   s₂/(2s₁) derivative algebra-slip, and reporting the VALUE
  *                   P(success) instead of the maximiser p*.
  *   ASK P(success)— reporting the input rate s₁ or s₂, a naive ½, reporting the
@@ -225,17 +225,17 @@ export function buildOptimizeAgentsNumericInstance(
     );
     push(
       F(1, 2),
-      `That's the naive midpoint p = ½. P(success)(p) = s₂·p² + 2·s₁·p(1−p) is a parabola — where exactly is its peak, and is it really at ½?`,
+      `That's the naive midpoint p = ½. P(success)(p) = s₂·p² + 2·s₁·p(1−p) is a parabola, where exactly is its peak, and is it really at ½?`,
       "naive_participation_half",
     );
     push(
       badAlgebra,
-      `Looks like an algebra slip: s₂/(2s₁) = ${fracText(badAlgebra)} misplaces the terms. Differentiate s₂·p² + 2·s₁·p(1−p) and solve dP/dp = 0 carefully — which of s₁, s₂ ends up in the numerator?`,
+      `Looks like an algebra slip: s₂/(2s₁) = ${fracText(badAlgebra)} misplaces the terms. Differentiate s₂·p² + 2·s₁·p(1−p) and solve dP/dp = 0 carefully, which of s₁, s₂ ends up in the numerator?`,
       "derivative_algebra_slip",
     );
     push(
       pSuccess,
-      `That's the maximal success probability ${fracText(pSuccess)} — the VALUE at the optimum, not the participation probability p that achieves it. Which quantity does the question ask for?`,
+      `That's the maximal success probability ${fracText(pSuccess)}, the VALUE at the optimum, not the participation probability p that achieves it. Which quantity does the question ask for?`,
       "reported_value_not_argmax",
     );
     prompt = `${setup} What participation probability p is optimal? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
@@ -247,22 +247,22 @@ export function buildOptimizeAgentsNumericInstance(
   } else {
     push(
       s1,
-      `That's s₁ = ${fracText(s1)}, the ONE-participant success rate you were given — an input, not the optimised overall chance. Plug the best p back into s₂·p² + 2·s₁·p(1−p): what comes out?`,
+      `That's s₁ = ${fracText(s1)}, the ONE-participant success rate you were given, an input, not the optimised overall chance. Plug the best p back into s₂·p² + 2·s₁·p(1−p): what comes out?`,
       "reported_one_participant_rate",
     );
     push(
       s2,
-      `That's s₂ = ${fracText(s2)}, the BOTH-participate success rate — again an input, not the maximised chance. What does the success parabola evaluate to at its peak?`,
+      `That's s₂ = ${fracText(s2)}, the BOTH-participate success rate, again an input, not the maximised chance. What does the success parabola evaluate to at its peak?`,
       "reported_both_participate_rate",
     );
     push(
       F(1, 2),
-      `A naive ½. The maximum of P(success)(p) = s₂·p² + 2·s₁·p(1−p) is generally not ½ — evaluate it at the optimal p*.`,
+      `A naive ½. The maximum of P(success)(p) = s₂·p² + 2·s₁·p(1−p) is generally not ½, evaluate it at the optimal p*.`,
       "naive_participation_half",
     );
     push(
       pStar,
-      `That's the optimal participation probability p* = ${fracText(pStar)}, not the success probability it produces. You found WHERE the peak is — now how HIGH is it?`,
+      `That's the optimal participation probability p* = ${fracText(pStar)}, not the success probability it produces. You found WHERE the peak is, now how HIGH is it?`,
       "reported_argmax_not_value",
     );
     push(

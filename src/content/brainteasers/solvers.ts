@@ -4,7 +4,7 @@ import Fraction from "fraction.js";
  * EXACT solvers for the six ORIGINAL house brainteasers, so each can be turned
  * into an infinitely-generatable flashcard family (see `./generators.ts`). This
  * mirrors the drill-topic pattern (e.g. `probabilityStats/expectedValue/ev.ts`):
- * every answer is produced by an exact method — rational arithmetic via
+ * every answer is produced by an exact method, rational arithmetic via
  * `fraction.js`, exact backward-induction DP, or an exact rational linear solve —
  * never by floating-point guessing. Each solver is independently re-derived and
  * cross-checked (brute force / Monte-Carlo) in `./brainteasers.test.ts`.
@@ -30,7 +30,7 @@ export function decText(f: Fraction, dp: number): string {
 }
 
 /* ========================================================================== */
-/*  FAMILY 1 — The Backup Dealer (order statistics: min + max cancellation)    */
+/*  FAMILY 1. The Backup Dealer (order statistics: min + max cancellation)    */
 /* ========================================================================== */
 
 /**
@@ -39,7 +39,7 @@ export function decText(f: Fraction, dp: number): string {
  *   = pFill·E[min] + (1 − pFill)·E[max].
  * For Uniform[a, b]: E[min] = a + (b−a)/3, E[max] = a + 2(b−a)/3, so
  *   E[price] = a + (b−a)·(2 − pFill)/3.
- * At pFill = 1/2 this collapses EXACTLY to the midpoint (a+b)/2 — the "aha":
+ * At pFill = 1/2 this collapses EXACTLY to the midpoint (a+b)/2, the "aha":
  * the 50/50 backup cancels the advantage of shopping for the minimum. Exact
  * rational.
  */
@@ -63,7 +63,7 @@ export function uniformPairMax(a: Fraction, b: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — The Adjacent Cross (linearity of expectation)                   */
+/*  FAMILY 2. The Adjacent Cross (linearity of expectation)                   */
 /* ========================================================================== */
 
 /**
@@ -113,7 +113,7 @@ export function adjacentCrossBruteForce(n: number, m: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — Walking the Offer Down (sequential posted pricing)              */
+/*  FAMILY 3. Walking the Offer Down (sequential posted pricing)              */
 /* ========================================================================== */
 
 /**
@@ -123,7 +123,7 @@ export function adjacentCrossBruteForce(n: number, m: number): Fraction {
  * With prices p_0 = M ≥ p_1 > … > p_k, revenue R = Σ_i p_i·(p_{i−1} − p_i).
  * The first-order conditions give an ARITHMETIC schedule p_i = M·(k+1−i)/(k+1),
  * and the optimum revenue is R* = M·k/(2(k+1)). (k = 1 → M/4; k = 2 → M/3 with
- * prices 2M/3, M/3 — the "second lower ask beats a single ask" aha.) The
+ * prices 2M/3, M/3, the "second lower ask beats a single ask" aha.) The
  * schedule/revenue are computed here EXACTLY from that optimization; the test
  * cross-checks against a grid search and Monte-Carlo. Exact rational.
  */
@@ -158,7 +158,7 @@ export function walkOfferRevenueForSchedule(M: Fraction, prices: Fraction[]): Fr
 }
 
 /* ========================================================================== */
-/*  FAMILY 4 — The Fading Buyer (optimal stopping, threshold = continuation)   */
+/*  FAMILY 4. The Fading Buyer (optimal stopping, threshold = continuation)   */
 /* ========================================================================== */
 
 /**
@@ -202,7 +202,7 @@ export function fadingBuyerValueOfThreshold(
 }
 
 /* ========================================================================== */
-/*  FAMILY 5 — The Round-Trip (two-sided optimal stopping, backward induction) */
+/*  FAMILY 5. The Round-Trip (two-sided optimal stopping, backward induction) */
 /* ========================================================================== */
 
 /** E[max(x, c)] for x ~ Uniform[0,1], c clamped to [0,1]: = (1 + c²)/2. */
@@ -269,12 +269,12 @@ export function roundTrip(
 }
 
 /* ========================================================================== */
-/*  FAMILY 6 — The Inventory Cap (stationary distribution via exact linear solve) */
+/*  FAMILY 6. The Inventory Cap (stationary distribution via exact linear solve) */
 /* ========================================================================== */
 
 /**
  * Exact rational Gaussian elimination solving A·x = b for a square rational
- * system. Throws on a singular matrix. Small sizes only (≤ ~10) — used for the
+ * system. Throws on a singular matrix. Small sizes only (≤ ~10), used for the
  * stationary distribution of the inventory chain.
  */
 export function solveLinearExact(A: Fraction[][], b: Fraction[]): Fraction[] {

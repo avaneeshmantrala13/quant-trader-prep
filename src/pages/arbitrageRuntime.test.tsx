@@ -3,6 +3,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { AuthProvider } from "@/context/AuthContext";
 import { ArbitragePage } from "./ArbitragePage";
 
 // jsdom lacks matchMedia; ThemeProvider probes prefers-color-scheme on mount.
@@ -32,11 +33,13 @@ afterEach(cleanup);
 
 function renderPage() {
   return render(
-    <MemoryRouter>
-      <ThemeProvider>
-        <ArbitragePage />
-      </ThemeProvider>
-    </MemoryRouter>,
+    <AuthProvider>
+      <MemoryRouter>
+        <ThemeProvider>
+          <ArbitragePage />
+        </ThemeProvider>
+      </MemoryRouter>
+    </AuthProvider>,
   );
 }
 

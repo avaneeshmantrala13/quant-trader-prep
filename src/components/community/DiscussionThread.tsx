@@ -70,7 +70,7 @@ export function DiscussionThread({
   if (roots.length === 0) {
     return (
       <p className="label text-muted">
-        No discussion yet — start the conversation.
+        No discussion yet. Start the conversation.
       </p>
     );
   }

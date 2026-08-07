@@ -11,6 +11,7 @@ import { getTrack } from "@/content";
 import { DIFFICULTY_META, totalQuestions, type Level } from "@/types/content";
 import { CheckIcon, LockIcon, MOTIF_ICON } from "@/components/icons";
 import { levelLockState, type LockState } from "@/lib/locking";
+import { seedUnlockedLevelIds } from "@/lib/mastery/unlockGraph";
 import { firstIncompleteTopic, groupLevelsIntoTopics } from "@/lib/topics";
 import { TopicSelector } from "@/components/TopicSelector";
 
@@ -27,12 +28,23 @@ export function TrackPage() {
   const { trackId } = useParams();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { getLevelProgress, getResume } = useProgress();
+  const { getLevelProgress, getResume, getTopicMastery } = useProgress();
   const { themeDef } = useTheme();
 
   const track = trackId ? getTrack(trackId) : undefined;
 
   const isMastered = (id: string) => !!getLevelProgress(id)?.mastered;
+
+  // Diagnostic low-confidence unlocks (Part B): open a whole topic ahead of
+  // mastery when its Beta mean is over the unlock bar; re-locks live on a swing.
+  const seedUnlocked = useMemo(() => {
+    const set = track
+      ? seedUnlockedLevelIds(track.levels, track.id, getTopicMastery)
+      : new Set<string>();
+    return (id: string) => set.has(id);
+    // getTopicMastery derives from progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, getTopicMastery]);
 
   // Data-driven topics: maximal contiguous runs of levels sharing a `section`,
   // in data (= difficulty) order. A track with 0/1 topics (Mental Math etc.)
@@ -116,7 +128,7 @@ export function TrackPage() {
   // its section OR the previous level *within the same section* is mastered
   // (see `@/lib/locking`). Locking is scoped per topic, not per whole track.
   const stateFor = (_level: Level, index: number): NodeState =>
-    levelLockState(track.levels, index, isMastered);
+    levelLockState(track.levels, index, isMastered, seedUnlocked);
 
   // Base height plus the extra room reserved for every section divider (the
   // last node sits ROW_H/2 above the bottom, so this stays exact).
@@ -287,7 +299,7 @@ export function TrackPage() {
                       navigate(`/track/${track.id}/level/${level.id}`)
                     }
                     title={state === "locked" ? lockReason : level.title}
-                    aria-label={`${level.title} — ${state}`}
+                    aria-label={`${level.title}: ${state}`}
                     className={[
                       "animate-node-pop relative z-10 grid h-[68px] w-[68px] place-items-center border-2 font-mono text-lg font-semibold transition-transform",
                       state === "mastered"

@@ -5,11 +5,14 @@ import type {
   DashboardViewProps,
 } from "../types";
 import type { MasteryState } from "@/lib/mastery/verdict";
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import { MinimalBackground } from "./Background";
 
 /**
@@ -70,7 +73,6 @@ export function MinimalistDashboard({
             <span className="label leading-none">Contents</span>
           </Link>
           <span className="h-px flex-1 bg-border-strong" />
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="label leading-none text-secondary transition-colors hover:text-accent"
@@ -89,7 +91,7 @@ export function MinimalistDashboard({
               Calibration
             </h1>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-secondary">
-              A read-only instrument panel over your graded evidence — where you
+              A read-only instrument panel over your graded evidence: where you
               are confidently strong, confidently weak, and how well-calibrated
               your confidence actually is.
             </p>
@@ -196,7 +198,7 @@ export function MinimalistDashboard({
             <p className="max-w-md text-sm text-secondary">
               {diagnosticDone
                 ? "Warm-up complete. Retake it any time to re-seed where your practice starts."
-                : "Haven't run the calibration warm-up yet — it tunes where your practice begins."}
+                : "Haven't run the calibration warm-up yet; it tunes where your practice begins."}
             </p>
             <div className="flex items-center gap-5">
               <Link
@@ -293,7 +295,7 @@ function DiagnosticNudge({
       className={`flex flex-col gap-2 border-l-2 border-accent bg-surface py-3 pl-4 pr-3 sm:flex-row sm:items-center sm:justify-between ${className}`}
     >
       <p className="text-sm text-secondary">
-        You haven't run the calibration warm-up yet — it tunes where your
+        You haven't run the calibration warm-up yet; it tunes where your
         practice starts.
       </p>
       <Link
@@ -341,7 +343,7 @@ function VerdictTag({ state }: { state: MasteryState }) {
   return (
     <span
       className={`inline-flex shrink-0 items-center gap-1.5 rounded-sm border bg-surface px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-label ${v.border} ${v.text}`}
-      title={`${v.label} — calibration-aware verdict`}
+      title={`${v.label}: calibration-aware verdict`}
     >
       <span
         aria-hidden="true"
@@ -536,7 +538,7 @@ function WeaknessRanking({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <EmptyState>
-        No graded evidence yet — practice a few items (or run the warm-up) to
+        No graded evidence yet. Practice a few items (or run the warm-up) to
         rank your weak spots.
       </EmptyState>
     );
@@ -592,7 +594,7 @@ function ReviewsDueList({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <EmptyState>
-        Nothing due for review — mastered topics resurface here on their SM-2
+        Nothing due for review. Mastered topics resurface here on their SM-2
         spaced-review schedule.
       </EmptyState>
     );
@@ -645,16 +647,18 @@ function Reliability({ data }: { data: ReliabilityDiagramData }) {
         <div className="max-w-sm">
           <div className="label text-accent">Calibration · warming up</div>
           <p className="mt-2 text-sm leading-relaxed text-secondary">
-            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches your accuracy.
+            This tracks only surfaces where you STATE a confidence. Just two
+            produce a data point: {ELICITED_ACTIVITIES_SENTENCE}. Normal lessons
+            and quizzes don't count toward it.
           </p>
           <p className="mt-3 num text-sm tabular-nums text-primary">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            {elicitedPairsNeeded(data.count, data.minPairs)} more of those to
+            unlock the graph.
           </p>
           <div
             role="img"
-            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} confidence-rated questions`}
+            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} elicited-confidence data points (Fermi 90% intervals and Trading-Floor quotes)`}
             className="mt-2 h-1.5 w-full bg-surface-muted"
           >
             <div
@@ -676,20 +680,20 @@ function Reliability({ data }: { data: ReliabilityDiagramData }) {
           text: "Over-confident",
           cls: "border-bear/50 text-bear",
           caption:
-            "Your curve sits below the dashed diagonal — confidence runs ahead of accuracy.",
+            "Your curve sits below the dashed diagonal: confidence runs ahead of accuracy.",
         }
       : data.calibration.lean === "under"
         ? {
             text: "Under-confident",
             cls: "border-accent/50 text-accent",
             caption:
-              "Your curve sits above the dashed diagonal — accuracy runs ahead of confidence.",
+              "Your curve sits above the dashed diagonal: accuracy runs ahead of confidence.",
           }
         : {
             text: "Well-calibrated",
             cls: "border-bull/50 text-bull",
             caption:
-              "Your curve hugs the dashed diagonal — confidence matches accuracy.",
+              "Your curve hugs the dashed diagonal: confidence matches accuracy.",
           }
     : null;
 
@@ -812,6 +816,12 @@ function Reliability({ data }: { data: ReliabilityDiagramData }) {
               (n={data.headline.count})
             </span>
             .
+          </p>
+        )}
+
+        {data.sourceNote && (
+          <p className="text-xs leading-relaxed text-muted">
+            {data.sourceNote}
           </p>
         )}
 

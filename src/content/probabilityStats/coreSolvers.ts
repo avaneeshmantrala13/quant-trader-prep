@@ -18,7 +18,7 @@ import Fraction from "fraction.js";
  *   • a couple of exponential integrals that happen to be rational anyway (1/3).
  *
  * The file is organised family-by-family. NONE of the 67 source-dataset
- * questions are user-facing — they live only in `./general.test.ts` as hidden
+ * questions are user-facing, they live only in `./general.test.ts` as hidden
  * `SEED_ANSWERS` fixtures, and every solver here is asserted to reproduce the
  * documented answers at the stated precision. All playable content is freshly
  * generated in `./generators.ts` from these solvers.
@@ -48,7 +48,7 @@ export function exactDecimals(f: Fraction, cap = 6): number {
   return cap;
 }
 
-/** Exact binomial coefficient C(n, k) as an integer (n small — ≤ ~60 here). */
+/** Exact binomial coefficient C(n, k) as an integer (n small, ≤ ~60 here). */
 export function choose(n: number, k: number): number {
   if (k < 0 || k > n) return 0;
   k = Math.min(k, n - k);
@@ -207,7 +207,7 @@ export function diskInnerProb(r: number, R: number): Fraction {
   return F(r * r, R * R);
 }
 
-/** P(complement) = 1 − r²/R² — e.g. a central statue staying clean. */
+/** P(complement) = 1 − r²/R², e.g. a central statue staying clean. */
 export function diskOuterProb(r: number, R: number): Fraction {
   return F(1).sub(diskInnerProb(r, R));
 }
@@ -304,7 +304,7 @@ export function diceSumLEProb(dice: number, faces: number, threshold: number): F
   return F(fav, faces ** dice);
 }
 
-/** P(sum of two d-sided dice ∈ set) — for "sum is 2 or 3" style. */
+/** P(sum of two d-sided dice ∈ set), for "sum is 2 or 3" style. */
 export function diceSumInSetProb(faces: number, set: number[]): Fraction {
   const dist = diceSumDistribution(2, faces);
   const want = new Set(set);
@@ -331,7 +331,7 @@ export function diceSumEvenProb(dice: number, faces: number): Fraction {
  * last coin toggles parity, pairing every sequence with a unique opposite-parity
  * partner, so the counts are equal (2^{n−1} each). For small n we verify by exact
  * enumeration; for large n (n ≥ 30) we return the proven closed form ½ (avoids
- * 2^n integer overflow — the pairing argument is a proof, not an approximation).
+ * 2^n integer overflow, the pairing argument is a proof, not an approximation).
  */
 export function evenHeadsProb(n: number): Fraction {
   if (n < 1) return F(1);
@@ -373,7 +373,7 @@ export function gamblerRuinReach(k: number, N: number, p: Fraction): Fraction {
   return F(1).sub(rk).div(F(1).sub(rN));
 }
 
-/** P(go broke) = 1 − P(reach N) — the complementary ruin probability. */
+/** P(go broke) = 1 − P(reach N), the complementary ruin probability. */
 export function gamblerRuinBust(k: number, N: number, p: Fraction): Fraction {
   return F(1).sub(gamblerRuinReach(k, N, p));
 }
@@ -782,7 +782,7 @@ export function ascendingGame(
 
 /**
  * Standard normal CDF Φ(z) via the high-accuracy Zelen & Severo rational
- * approximation (abs error < 7.5e-8) — enough for the dataset's 5-dp targets
+ * approximation (abs error < 7.5e-8), enough for the dataset's 5-dp targets
  * (Φ(3) → 0.998650, so 1−Φ(3) ≈ 0.00135).
  */
 export function normalCdf(z: number): number {

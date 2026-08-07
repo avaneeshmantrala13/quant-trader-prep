@@ -8,12 +8,12 @@ import {
 
 /**
  * Ready-to-slot `Level` definitions for the Sequences & Pattern-Recognition
- * family (T2). These are NOT registered anywhere here — a future integrator
+ * family (T2). These are NOT registered anywhere here, a future integrator
  * (T11 / track owner) can drop them into a track, the diagnostic, or an OA pool.
  * They exercise both play modes:
- *   - `quiz`    — MCQ "what comes next?" across numeric, alphabetic, and
+ *   - `quiz`   . MCQ "what comes next?" across numeric, alphabetic, and
  *                 matrix/odd-one-out/analogy families.
- *   - `numeric` — free-entry "type the next number" across the numeric families.
+ *   - `numeric`, free-entry "type the next number" across the numeric families.
  *
  * The intros are purely CONCEPTUAL; every concrete number rendered in the lesson
  * comes from the generators' own solver output, so the prose can never drift.
@@ -75,7 +75,7 @@ export const sequenceLevels: Level[] = [
     lesson: {
       paragraphs: [
         PATTERN_METHOD,
-        "When the first differences aren't constant, take differences AGAIN — a constant second difference means the sequence is quadratic. When terms zig-zag, suspect two interwoven strands or an alternating operation.",
+        "When the first differences aren't constant, take differences AGAIN, a constant second difference means the sequence is quadratic. When terms zig-zag, suspect two interwoven strands or an alternating operation.",
         TRAP_METHOD,
       ],
       keyIdea:
@@ -137,7 +137,7 @@ export const sequenceLevels: Level[] = [
         "Free entry removes the safety net of multiple choice: you must produce the exact next term, so verifying the rule on every visible gap matters even more.",
         TRAP_METHOD,
       ],
-      keyIdea: "No options to reverse-engineer — commit to the rule and extend.",
+      keyIdea: "No options to reverse-engineer, commit to the rule and extend.",
       whyInterviewers:
         "Free-entry continuation shows you can derive and apply a rule cleanly, not just recognize a plausible option.",
     },

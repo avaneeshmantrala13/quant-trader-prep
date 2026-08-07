@@ -107,7 +107,7 @@ describe("buildDashboardViewProps", () => {
     expect(chip.label).toBe("Confusing P(A|B) with P(B|A)");
   });
 
-  it("degrades an idx: fallback misconception to a topic phrasing", () => {
+  it("degrades an idx: fallback misconception to the topic's concrete sub-skill", () => {
     const key = "probability::Conditional Probability::idx:2";
     const props = buildDashboardViewProps(
       model({
@@ -116,7 +116,9 @@ describe("buildDashboardViewProps", () => {
       LINKS,
     );
     const chip = props.topics[0].misconceptions[0];
-    expect(chip.label).toBe("Recurring mistakes in Conditional Probability & Bayes");
+    // FIX 3: an actionable sub-skill, never the bare "recurring mistakes in X".
+    expect(chip.label).toBe("Conditioning on the right event and applying Bayes' rule");
+    expect(chip.label).not.toMatch(/^Recurring mistakes in/);
     expect(chip.label).not.toContain("idx");
     expect(chip.label).not.toContain("::");
   });

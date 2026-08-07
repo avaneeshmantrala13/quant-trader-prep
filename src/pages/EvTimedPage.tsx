@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { BoltIcon } from "@/components/icons";
@@ -58,6 +59,7 @@ function fmtClock(ms: number): string {
 export function EvTimedPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("intro");
   const [seed, setSeed] = useState(() => Math.floor(Math.random() * 2 ** 31));
@@ -78,15 +80,15 @@ export function EvTimedPage() {
     setSeed(nextSeed);
     setSession(null);
     // Explicit restart discards the resumable run so re-entering starts fresh.
-    clearEvTimedSession();
+    clearEvTimedSession(username);
     setPhase("intro");
-  }, []);
+  }, [username]);
 
   // Resume a persisted in-progress session on mount (leave/reload-proof: the
   // session carries ABSOLUTE per-question deadlines, so an expired question just
   // auto-times-out on return). Runs once; only a still-running session resumes.
   useEffect(() => {
-    const saved = loadEvTimedSession();
+    const saved = loadEvTimedSession(username);
     if (saved && saved.status === "running") {
       setSession(saved);
       setSeed(saved.seed);
@@ -94,15 +96,15 @@ export function EvTimedPage() {
       setPhase("drill");
     }
      
-  }, []);
+  }, [username]);
 
   // Durable persistence: keep the RUNNING session saved so a leave/reload
   // resumes it; a finished session ends the resumable one (mirrors the OA store).
   useEffect(() => {
     if (!session) return;
-    if (session.status === "running") saveEvTimedSession(session);
-    else clearEvTimedSession();
-  }, [session]);
+    if (session.status === "running") saveEvTimedSession(session, username);
+    else clearEvTimedSession(username);
+  }, [session, username]);
 
   // Commit the current answer (a real choice, or null on skip/timeout).
   const commit = useCallback(
@@ -220,14 +222,14 @@ function EvTimedIntro({
           </span>
         </div>
         <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
-          Price the fair value — before the clock
+          Price the fair value, before the clock
         </h2>
         <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-secondary">
           <p>
             <span className="float-left mr-2 font-display text-5xl font-black leading-[0.8] text-primary">
               O
             </span>
-            n a trading desk, knowing the fair value isn't enough — you have to
+            n a trading desk, knowing the fair value isn't enough; you have to
             commit to it under a running clock. Each question is an expected
             value, fair-value pricing, or optimal-stopping problem. Compute the
             EV, then DECIDE before time runs out.
@@ -246,22 +248,22 @@ function EvTimedIntro({
             <li className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 shrink-0 bg-bull" />
               <span className="text-secondary">
-                <span className="font-semibold text-primary">Correct</span> —
+                <span className="font-semibold text-primary">Correct</span>:
                 base {"+"} a within-budget speed bonus (faster is worth more)
               </span>
             </li>
             <li className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 shrink-0 bg-accent" />
               <span className="text-secondary">
-                <span className="font-semibold text-primary">On the clock</span>{" "}
-                — the bonus decays linearly to zero at the budget
+                <span className="font-semibold text-primary">On the clock</span>
+                : the bonus decays linearly to zero at the budget
               </span>
             </li>
             <li className="flex items-center gap-2">
               <span className="inline-block h-2.5 w-2.5 shrink-0 bg-bear" />
               <span className="text-secondary">
-                <span className="font-semibold text-primary">Wrong / timeout</span>{" "}
-                — zero points
+                <span className="font-semibold text-primary">Wrong / timeout</span>
+                : zero points
               </span>
             </li>
           </ul>
@@ -476,8 +478,8 @@ function Reveal({
     : "bg-bear text-bg";
   const verdict = correct
     ? score.withinBudget
-      ? "Correct — in budget"
-      : "Correct — over budget"
+      ? "Correct: in budget"
+      : "Correct: over budget"
     : timedOut
       ? "Time's up"
       : "Incorrect";

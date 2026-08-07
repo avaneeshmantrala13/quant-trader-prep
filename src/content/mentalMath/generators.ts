@@ -9,10 +9,10 @@ import { assemble, assembleDistinct, fmt, fracStr, pct, round } from "../shared"
 import { mixQuestionGenerators } from "../mixFamilies";
 
 /**
- * Mental-math generators in the Zetamac / Optiver "80-in-8" / Jane Street
- * "60-in-8" mold: fast, exact arithmetic. Every answer is computed directly, so
- * it is correct by construction. Distractors are *plausible slips* — place-value
- * (×10) errors, dropped carries/terms, and transpositions — not random numbers.
+ * Mental-math generators in the timed, exact-arithmetic mold many quant firms
+ * screen candidates on: fast, exact arithmetic. Every answer is computed directly, so
+ * it is correct by construction. Distractors are *plausible slips*, place-value
+ * (×10) errors, dropped carries/terms, and transpositions, not random numbers.
  */
 
 const near = (n: number, d: number) => fmt(n + d);
@@ -79,7 +79,7 @@ function genMultiply2x1(rng: Rng): Question {
       [fmt(a * b + b)]: "Added an extra ones-digit product.",
       [fmt(a * (b - 1))]: "Off-by-one in the multiplier.",
     },
-    source: "Optiver-style speed multiplication",
+    source: "Speed multiplication (two-digit)",
   });
 }
 
@@ -103,7 +103,7 @@ function genMultiply2x2(rng: Rng): Question {
       [fmt(c - b)]: "One group of the second factor short.",
       [fmt(c + 100)]: "Place-value carry slip (+100).",
     },
-    source: "Jane Street-style 2×2 multiplication",
+    source: "Two-digit cross-term multiplication",
   });
 }
 
@@ -151,26 +151,41 @@ function genPercent(rng: Rng): Question {
   });
 }
 
+/** Reduce a fraction to lowest terms; returns the numerator/denominator the
+ * learner actually SEES in the prompt (via `fracStr`). All coaching and the
+ * explanation must reference THESE numbers, not the raw draw (audit D3). */
+function reduceFraction(num: number, den: number): { rn: number; rd: number } {
+  let a = Math.abs(num);
+  let b = Math.abs(den);
+  while (b) [a, b] = [b, a % b];
+  const g = a || 1;
+  return { rn: num / g, rd: den / g };
+}
+
 function genFractionToDecimal(rng: Rng): Question {
   const den = rng.pick([4, 5, 8, 10, 16, 20, 25]);
   const num = rng.int(1, den - 1);
   const c = num / den;
+  // The prompt shows the REDUCED fraction (fracStr reduces), so every distractor
+  // rationale and the explanation must speak about the reduced numerator (rn) /
+  // denominator (rd) — never the raw draw (audit D3).
+  const { rn, rd } = reduceFraction(num, den);
   return assemble(rng, {
     id: `mm-frac-${num}-${den}`,
     prompt: `Express ${fracStr(num, den)} as a decimal.`,
     correct: fmt(c, 4),
     distractors: [
-      fmt(round(den / num, 4), 4),
+      fmt(round(rd / rn, 4), 4),
       fmt(round(c * 10, 4), 4),
-      fmt(round(num / (den + 1), 4), 4),
+      fmt(round(rn / (rd + 1), 4), 4),
     ],
-    explanation: `${fracStr(num, den)} = ${num} ÷ ${den} = ${fmt(c, 4)}.`,
+    explanation: `${fracStr(num, den)} = ${rn} ÷ ${rd} = ${fmt(c, 4)}.`,
     difficulty: "medium",
     concept: "Fraction↔decimal",
     distractorRationaleByValue: {
-      [fmt(round(den / num, 4), 4)]: "Inverted the fraction (den ÷ num).",
+      [fmt(round(rd / rn, 4), 4)]: `Inverted the fraction (${rd} ÷ ${rn}).`,
       [fmt(round(c * 10, 4), 4)]: "Decimal-place slip (×10).",
-      [fmt(round(num / (den + 1), 4), 4)]: "Used the wrong denominator.",
+      [fmt(round(rn / (rd + 1), 4), 4)]: `Used ${rd + 1} on the bottom; the denominator is ${rd}.`,
     },
     source: "Odds/decimal conversion drill",
   });
@@ -318,12 +333,12 @@ export function buildAdditionNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     answer - 10,
-    `Close — that's 10 short. Did a carry out of the ones column get dropped? Re-add the tens.`,
+    `Close, that's 10 short. Did a carry out of the ones column get dropped? Re-add the tens.`,
     "off_by_carry",
   );
   push(
     answer + 100,
-    `That's 100 too big — a carry leaked into the hundreds column. Which column actually overflowed?`,
+    `That's 100 too big, a carry leaked into the hundreds column. Which column actually overflowed?`,
     "place_value_slip",
   );
   push(
@@ -361,17 +376,17 @@ export function buildSubtractionNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     answer + 10,
-    `That's 10 too high — a borrow in the tens column went the wrong way. Recheck the tens.`,
+    `That's 10 too high, a borrow in the tens column went the wrong way. Recheck the tens.`,
     "off_by_carry",
   );
   push(
     answer - 100,
-    `That's 100 short — a borrow out of the hundreds column got mishandled. Which column did you borrow from?`,
+    `That's 100 short, a borrow out of the hundreds column got mishandled. Which column did you borrow from?`,
     "place_value_slip",
   );
   push(
     b - a,
-    `Looks like you subtracted the larger number from the smaller — which number is on top?`,
+    `Looks like you subtracted the larger number from the smaller, which number is on top?`,
     "swapped_operands",
   );
 
@@ -409,12 +424,12 @@ export function buildMultiply2x1NumericInstance(
   );
   push(
     answer + a,
-    `That's one extra group of ${a} — are you multiplying by exactly ${b}, not ${b + 1}?`,
+    `That's one extra group of ${a}, are you multiplying by exactly ${b}, not ${b + 1}?`,
     "off_by_one",
   );
   push(
     answer - a,
-    `That's one group of ${a} short — did you multiply by ${b - 1} instead of ${b}?`,
+    `That's one group of ${a} short, did you multiply by ${b - 1} instead of ${b}?`,
     "off_by_one",
   );
 
@@ -429,7 +444,7 @@ export function buildMultiply2x1NumericInstance(
       explanation: `${a} × ${b} = ${fmt(answer)}. Split ${a} into tens and ones: (${Math.floor(a / 10) * 10}×${b}) + (${a % 10}×${b}).`,
       unit: "",
       commonErrors: errors,
-      source: "Optiver-style speed multiplication",
+      source: "Speed multiplication (two-digit)",
     },
   };
 }
@@ -439,26 +454,32 @@ export function buildMultiply2x1NumericInstance(
 export function buildMultiply2x2NumericInstance(
   rng: Rng,
   difficulty: Difficulty,
+  /**
+   * OPTIONAL factor ranges. Omitted → the original 2-digit × 2-digit behaviour
+   * (unchanged for lessons / Speed Arena). The mock arithmetic gate passes a
+   * wider `aRange` to draw genuine 3-digit × 2-digit problems.
+   */
+  opts?: { aRange?: [number, number]; bRange?: [number, number] },
 ): { answer: number; numeric: NumericQuestion } {
-  const a = rng.int(13, 49);
-  const b = rng.int(13, 49);
+  const a = rng.int(opts?.aRange?.[0] ?? 13, opts?.aRange?.[1] ?? 49);
+  const b = rng.int(opts?.bRange?.[0] ?? 13, opts?.bRange?.[1] ?? 49);
   const answer = a * b;
   const missCross = Math.floor(a / 10) * 10 * b + (a % 10) * (b % 10);
 
   const { errors, push } = numericErrors(answer, 0);
   push(
     missCross,
-    `You lost one of the four cross-products in (tens+ones)(tens+ones) — did you include BOTH tens×ones and ones×tens?`,
+    `You lost one of the four cross-products in (tens+ones)(tens+ones), did you include BOTH tens×ones and ones×tens?`,
     "dropped_cross_term",
   );
   push(
     answer + a,
-    `That's one extra group of ${a} — recount the partial products, don't add a spare row.`,
+    `That's one extra group of ${a}, recount the partial products, don't add a spare row.`,
     "off_by_one",
   );
   push(
     answer + 100,
-    `That's 100 too big — a partial product landed one place-value column too high.`,
+    `That's 100 too big, a partial product landed one place-value column too high.`,
     "place_value_slip",
   );
 
@@ -473,7 +494,7 @@ export function buildMultiply2x2NumericInstance(
       explanation: `${a} × ${b} = ${fmt(answer)}. Expand (${Math.floor(a / 10) * 10}+${a % 10})(${b}) = ${Math.floor(a / 10) * 10 * b} + ${(a % 10) * b}.`,
       unit: "",
       commonErrors: errors,
-      source: "Jane Street-style 2×2 multiplication",
+      source: "Two-digit cross-term multiplication",
     },
   };
 }
@@ -483,26 +504,32 @@ export function buildMultiply2x2NumericInstance(
 export function buildDivisionNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
+  /**
+   * OPTIONAL divisor / quotient ranges. Omitted → the original behaviour
+   * (unchanged for lessons / Speed Arena). The mock gate passes a 2-digit
+   * `divisor` range so the dividend is always a genuine 3-digit ÷ 2-digit.
+   */
+  opts?: { divisor?: [number, number]; quotient?: [number, number] },
 ): { answer: number; numeric: NumericQuestion } {
-  const b = rng.int(3, 19);
-  const q = rng.int(11, 89);
+  const b = rng.int(opts?.divisor?.[0] ?? 3, opts?.divisor?.[1] ?? 19);
+  const q = rng.int(opts?.quotient?.[0] ?? 11, opts?.quotient?.[1] ?? 89);
   const a = b * q;
   const answer = q;
 
   const { errors, push } = numericErrors(answer, 0);
   push(
     q + 1,
-    `Overshot by one — does ${b} × your answer land back on ${fmt(a)}?`,
+    `Overshot by one, does ${b} × your answer land back on ${fmt(a)}?`,
     "off_by_one",
   );
   push(
     q + 10,
-    `That's ten too many — check the tens digit of the quotient.`,
+    `That's ten too many, check the tens digit of the quotient.`,
     "place_value_slip",
   );
   push(
     Math.round(a / (b + 1)),
-    `Looks like you divided by ${b + 1} — the divisor is ${b}.`,
+    `Looks like you divided by ${b + 1}, the divisor is ${b}.`,
     "wrong_denominator",
   );
 
@@ -527,8 +554,15 @@ export function buildDivisionNumericInstance(
 export function buildPercentNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
+  /**
+   * OPTIONAL percent multipliers. Omitted → the original set (unchanged for
+   * lessons / Speed Arena). The mock gate passes a set that excludes the
+   * memorised shifts/quarters (5/10/20/25/50) so every gate item is genuinely
+   * computed.
+   */
+  opts?: { ps?: number[] },
 ): { answer: number; numeric: NumericQuestion } {
-  const p = rng.pick([5, 10, 12, 15, 20, 25, 30, 40, 75]);
+  const p = rng.pick(opts?.ps ?? [5, 10, 12, 15, 20, 25, 30, 40, 75]);
   const base = rng.int(4, 40) * 10;
   const value = (p / 100) * base;
   const dp = decimalsNeeded(value, 2);
@@ -537,17 +571,17 @@ export function buildPercentNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     base * p,
-    `You used ${p} as a whole number, but a percent is ${p}/100 — what do you divide by?`,
+    `You used ${p} as a whole number, but a percent is ${p}/100, what do you divide by?`,
     "percent_as_whole",
   );
   push(
     value * 10,
-    `That's ten times too big — recheck where the decimal sits when you take 10% first.`,
+    `That's ten times too big, recheck where the decimal sits when you take 10% first.`,
     "place_value_slip",
   );
   push(
     round(base / p, 2),
-    `You divided ${fmt(base)} by ${p} — but "percent OF" means multiply, not divide.`,
+    `You divided ${fmt(base)} by ${p}, but "percent OF" means multiply, not divide.`,
     "operation_confused",
   );
 
@@ -573,27 +607,39 @@ export function buildPercentNumericInstance(
 export function buildFractionToDecimalNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
+  /**
+   * OPTIONAL denominator set. Omitted → the original set (unchanged for lessons
+   * / Speed Arena, which legitimately teach easy fractions). The mock gate
+   * passes {8,16,20,25} and additionally rejects any draw whose REDUCED form is
+   * trivial, so it never renders a memorised freebie like 1/2 or 1/4.
+   */
+  opts?: { dens?: number[] },
 ): { answer: number; numeric: NumericQuestion } {
-  const den = rng.pick([4, 5, 8, 10, 16, 20, 25]);
+  const den = rng.pick(opts?.dens ?? [4, 5, 8, 10, 16, 20, 25]);
   const num = rng.int(1, den - 1);
   const value = num / den;
   const dp = Math.max(2, decimalsNeeded(value, 4));
   const answer = Number(value.toFixed(dp));
+  // The prompt renders the REDUCED fraction (fracStr reduces), so the coaching
+  // and explanation must cite the reduced numerator (rn) / denominator (rd),
+  // not the raw draw — otherwise "3/5" is coached as "the denominator is 10"
+  // (audit D3).
+  const { rn, rd } = reduceFraction(num, den);
 
   const { errors, push } = numericErrors(answer, dp);
   push(
-    den / num,
-    `You divided ${den} by ${num} — which number is the numerator and which the denominator?`,
+    rd / rn,
+    `You divided ${rd} by ${rn}, which number is the numerator and which the denominator?`,
     "inverted_fraction",
   );
   push(
-    num / (den + 1),
-    `You used ${den + 1} on the bottom — the denominator is ${den}.`,
+    rn / (rd + 1),
+    `You used ${rd + 1} on the bottom, the denominator is ${rd}.`,
     "wrong_denominator",
   );
   push(
     value * 10,
-    `The decimal point is one place off — that answer is ten times too big.`,
+    `The decimal point is one place off, that answer is ten times too big.`,
     "place_value_slip",
   );
 
@@ -606,7 +652,7 @@ export function buildFractionToDecimalNumericInstance(
       decimals: dp,
       difficulty,
       concept: "Fraction↔decimal",
-      explanation: `${fracStr(num, den)} = ${num} ÷ ${den} = ${answer.toFixed(dp)}. Divide the numerator by the denominator to convert the fraction to a decimal.`,
+      explanation: `${fracStr(num, den)} = ${rn} ÷ ${rd} = ${answer.toFixed(dp)}. Divide the numerator by the denominator to convert the fraction to a decimal.`,
       unit: "",
       commonErrors: errors,
       source: "Odds/decimal conversion drill",
@@ -629,17 +675,17 @@ export function buildOddsToProbNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     a / (a + b),
-    `That's the chance the event does NOT happen. Odds ${a}:${b} AGAINST put the ${b} favourable outcomes on top — which count is favourable?`,
+    `That's the chance the event does NOT happen. Odds ${a}:${b} AGAINST put the ${b} favourable outcomes on top, which count is favourable?`,
     "odds_direction_flipped",
   );
   push(
     a < b ? a / b : b / a,
-    `That's the odds ratio itself, not a probability. A probability is favourable ÷ TOTAL — what is the total?`,
+    `That's the odds ratio itself, not a probability. A probability is favourable ÷ TOTAL, what is the total?`,
     "odds_ratio_as_prob",
   );
   push(
     b / (a + b + 1),
-    `You added one too many to the total — the denominator is ${a} + ${b}.`,
+    `You added one too many to the total, the denominator is ${a} + ${b}.`,
     "wrong_denominator",
   );
 

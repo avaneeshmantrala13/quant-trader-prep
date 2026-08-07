@@ -2,7 +2,7 @@ import type { Level } from "@/types/content";
 import { makeKellyGenerator, mixNumeric } from "./generators";
 
 /**
- * Betting & Sizing — the first subcategory of the Probability & Statistics
+ * Betting & Sizing, the first subcategory of the Probability & Statistics
  * category, mode `"numeric"` (free-entry dollar stakes). Powered by the nine
  * parametric Kelly generators (3 probability sources × 3 odds formats). The
  * levels form a Candy-Crush progression: simple single-event positive odds →
@@ -15,7 +15,7 @@ import { makeKellyGenerator, mixNumeric } from "./generators";
  */
 
 const KELLY_METHOD =
-  "The Kelly criterion answers HOW MUCH to bet once you have an edge: f* = (b·p − q)/b, where p is your true win probability, q = 1 − p, and b is the net odds (profit per $1 staked). Your stake is f* × bankroll. If f* ≤ 0 you have no edge — don't bet.";
+  "The Kelly criterion answers HOW MUCH to bet once you have an edge: f* = (b·p − q)/b, where p is your true win probability, q = 1 − p, and b is the net odds (profit per $1 staked). Your stake is f* × bankroll. If f* ≤ 0 you have no edge, don't bet.";
 
 const ODDS_CONVERSIONS =
   "Convert quoted odds to net odds b before sizing. American: +M → b = M/100; −M → b = 100/M. Decimal o → b = o − 1. Fractional m:n → b = m/n. Get true p from the setup: a card event is (winning cards)/52, a coin event is (winning outcomes)/2ⁿ, a dice event is (winning outcomes)/6ⁿ.";
@@ -46,7 +46,7 @@ export const bettingSizingLevels: Level[] = [
       ],
       keyIdea: "f* = (b·p − q)/b; stake = f* × bankroll.",
       whyInterviewers:
-        "Sizing discipline — betting the edge, not the win probability — separates good traders from lucky ones.",
+        "Sizing discipline, betting the edge, not the win probability, separates good traders from lucky ones.",
       deepDive: {
         whyItWorks:
           "Kelly picks the bet fraction that maximises long-run growth (expected log wealth), so you stake more when your edge or payoff is larger and nothing when you have no edge. The fraction (b·p − q)/b compares your true edge against the odds rather than betting the raw win chance.",
@@ -92,7 +92,7 @@ export const bettingSizingLevels: Level[] = [
         "Fast, exact odds↔probability conversion under pressure is a core desk skill.",
       deepDive: {
         whyItWorks:
-          "The Kelly principle is unchanged — bet the edge (b·p − q)/b — but here the win probability comes from counting outcomes (a binomial over fair coins, an enumeration of the dice space). Kelly still needs an exact p and an exact net odds b.",
+          "The Kelly principle is unchanged, bet the edge (b·p − q)/b, but here the win probability comes from counting outcomes (a binomial over fair coins, an enumeration of the dice space). Kelly still needs an exact p and an exact net odds b.",
         approach: [
           "Count the favourable outcomes over the total to get p (binomial coefficients for coins, enumerate the outcome space for dice).",
           "Convert the quoted odds to net odds b (decimal o → o−1; fractional m:n → m/n).",
@@ -126,7 +126,7 @@ export const bettingSizingLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "The traps intensify. On a negative money line −M the net odds are b = 100/M (a favorite pays less than even), NOT M/100 — flipping this is the classic sizing error.",
+        "The traps intensify. On a negative money line −M the net odds are b = 100/M (a favorite pays less than even), NOT M/100, flipping this is the classic sizing error.",
         "Use complements: P(at least one) = 1 − P(none). For 'at least one 6' on two dice that's 1 − (5/6)² = 11/36. Sum events (sum > s, sum ≥ s) need the enumerated count over 36.",
         KELLY_METHOD,
       ],
@@ -155,7 +155,7 @@ export const bettingSizingLevels: Level[] = [
     title: "The Sizing Desk",
     subtitle: "Mixed mastery across all nine schemas",
     blurb:
-      "A mixed set drawing on all nine Kelly schemas (cards/coins/dice × American/decimal/fractional) across every difficulty — prove your sizing.",
+      "A mixed set drawing on all nine Kelly schemas (cards/coins/dice × American/decimal/fractional) across every difficulty, prove your sizing.",
     section: "Betting & Sizing",
     difficulty: "expert",
     mode: "numeric",

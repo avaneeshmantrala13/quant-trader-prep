@@ -30,7 +30,7 @@ import {
  *
  * All choices in a single item share ONE format (all integer strings OR all
  * `fracText` fractions) so the options are directly comparable, mirroring the
- * `general/genDiceGeo.ts` quiz style. Fresh themes throughout — none of the
+ * `general/genDiceGeo.ts` quiz style. Fresh themes throughout, none of the
  * source-dataset titles ("Dice Order", "Rising Chips", "Sum Seventeen", …) or
  * their phrasings appear anywhere.
  */
@@ -39,7 +39,7 @@ const SOURCE = "Combinatorial Analysis · Counting traps";
 const DIFFICULTY = "medium" as const;
 
 /* ========================================================================== */
-/* ===============  1 — PERMUTATIONS vs COMBINATIONS (quiz)  =============== */
+/* ===============  1. PERMUTATIONS vs COMBINATIONS (quiz)  =============== */
 /* ========================================================================== */
 
 /**
@@ -52,20 +52,20 @@ export function genPermVsComb(rng: Rng): Question {
   const n = rng.int(6, 10);
   const k = rng.int(2, 4);
 
-  const comb = choose(n, k); // C(n,k) — the unordered count (correct)
+  const comb = choose(n, k); // C(n,k), the unordered count (correct)
   const perm = chooseBig(n, k) * factorialBig(k); // P(n,k) = n!/(n−k)!
-  const withRepl = powBig(n, k); // nᵏ — ordered, with replacement
-  const naive = n * k; // n·k — naive multiplication
+  const withRepl = powBig(n, k); // nᵏ, ordered, with replacement
+  const naive = n * k; // n·k, naive multiplication
 
   const prompt =
     `A research lab has ${n} distinct candidate experiments and will fund exactly ${k} of them. ` +
-    `Only WHICH ${k} experiments make the cut matters — the funding order is irrelevant. ` +
+    `Only WHICH ${k} experiments make the cut matters, the funding order is irrelevant. ` +
     `How many different groups of ${k} experiments can be funded?`;
 
   const correct: Choice = {
     text: String(comb),
     rationale:
-      `Correct — an unordered selection of ${k} from ${n} is the combination ` +
+      `Correct, an unordered selection of ${k} from ${n} is the combination ` +
       `C(${n},${k}) = ${comb}. Order is irrelevant, so no k! overcount.`,
   };
   const distractors: Choice[] = [
@@ -107,7 +107,7 @@ export function genPermVsComb(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/* =================  2 — WITH vs WITHOUT REPLACEMENT (quiz)  ============== */
+/* =================  2. WITH vs WITHOUT REPLACEMENT (quiz)  ============== */
 /* ========================================================================== */
 
 /**
@@ -120,20 +120,20 @@ export function genReplacementTrap(rng: Rng): Question {
   const n = rng.int(4, 8);
   const k = rng.pick([2, 3]);
 
-  const withReplOrdered = powBig(n, k); // nᵏ — ordered, with replacement (correct)
-  const unordered = chooseBig(n, k); // C(n,k) — unordered, no replacement
-  const orderedNoRepl = chooseBig(n, k) * factorialBig(k); // P(n,k) — ordered, no replacement
-  const unorderedWithRepl = chooseBig(n + k - 1, k); // C(n+k−1,k) — unordered, with replacement
+  const withReplOrdered = powBig(n, k); // nᵏ, ordered, with replacement (correct)
+  const unordered = chooseBig(n, k); // C(n,k), unordered, no replacement
+  const orderedNoRepl = chooseBig(n, k) * factorialBig(k); // P(n,k), ordered, no replacement
+  const unorderedWithRepl = chooseBig(n + k - 1, k); // C(n+k−1,k), unordered, with replacement
 
   const prompt =
     `A ${k}-symbol access code is built from a palette of ${n} distinct symbols. ` +
-    `Each of the ${k} positions is chosen independently — a symbol MAY be reused — and the ORDER of ` +
+    `Each of the ${k} positions is chosen independently, a symbol MAY be reused, and the ORDER of ` +
     `the positions matters. How many distinct codes are possible?`;
 
   const correct: Choice = {
     text: withReplOrdered.toString(),
     rationale:
-      `Correct — with replacement and order mattering, each of the ${k} positions independently has ` +
+      `Correct, with replacement and order mattering, each of the ${k} positions independently has ` +
       `${n} choices, so ${n}^${k} = ${withReplOrdered}.`,
   };
   const distractors: Choice[] = [
@@ -175,15 +175,15 @@ export function genReplacementTrap(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/* ============  3 — STRICTLY INCREASING vs NON-DECREASING (quiz)  ========= */
+/* ============  3. STRICTLY INCREASING vs NON-DECREASING (quiz)  ========= */
 /* ========================================================================== */
 
 /**
  * The strict-vs-non-decreasing TIE trap, in two framings:
- *   • dice — P(three ordered d`faces` rolls are STRICTLY increasing) =
+ *   • dice. P(three ordered d`faces` rolls are STRICTLY increasing) =
  *     strictlyIncreasingProb(3, faces). The key distractor allows ties
- *     (non-decreasing), C(faces+2,3)/faces³ — the exact strict-vs-ties slip.
- *   • jar  — P(three chips drawn without replacement come out NON-DECREASING) =
+ *     (non-decreasing), C(faces+2,3)/faces³, the exact strict-vs-ties slip.
+ *   • jar . P(three chips drawn without replacement come out NON-DECREASING) =
  *     nonDecreasingThreeDrawProb(v, c). The key distractor is the strictly
  *     increasing (all-distinct) value, which forgets that equal ranks still
  *     count as non-decreasing.
@@ -209,7 +209,7 @@ export function genTiesOrder(rng: Rng): Question {
     const correct: Choice = {
       text: fracText(value),
       rationale:
-        `Correct — strictly increasing means 3 DISTINCT faces, each in exactly one increasing order: ` +
+        `Correct, strictly increasing means 3 DISTINCT faces, each in exactly one increasing order: ` +
         `C(${faces},3)/${faces}³ = ${fav}/${denom} = ${fracText(value)}.`,
     };
     const distractors: Choice[] = [
@@ -237,7 +237,7 @@ export function genTiesOrder(rng: Rng): Question {
       `Three ordered rolls give ${faces}³ = ${denom} equally-likely sequences; a strictly increasing one picks ` +
       `3 distinct faces C(${faces},3) = ${fav}, each realizable in exactly ONE increasing order, so ` +
       `P = ${fav}/${denom} = ${fracText(value)}. Allowing ties (NON-decreasing) instead counts ` +
-      `C(${faces}+2,3) sequences = ${fracText(nonDecreasing)} — the classic strict-vs-non-decreasing trap — while ` +
+      `C(${faces}+2,3) sequences = ${fracText(nonDecreasing)}, the classic strict-vs-non-decreasing trap, while ` +
       `the naive 1/6 wrongly assumes every triple is distinct.`;
 
     return {
@@ -268,14 +268,14 @@ export function genTiesOrder(rng: Rng): Question {
   const correct: Choice = {
     text: fracText(value),
     rationale:
-      `Correct — split by handful type (all-different, one repeated rank, all three equal) and weight each by ` +
+      `Correct, split by handful type (all-different, one repeated rank, all three equal) and weight each by ` +
       `its share of non-decreasing orders (1/6, 1/3, 1): ${fracText(value)}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(strictInc),
       rationale:
-        `The strict-vs-ties slip: ${fracText(strictInc)} is P(STRICTLY increasing) — only all-distinct ranks, one ` +
+        `The strict-vs-ties slip: ${fracText(strictInc)} is P(STRICTLY increasing), only all-distinct ranks, one ` +
         `increasing order in 6. It drops the tied handfuls (equal ranks), which still count as non-decreasing.`,
     },
     {
@@ -310,7 +310,7 @@ export function genTiesOrder(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/* ============  4 — STARS & BARS WITH A FACE CAP (quiz)  ================== */
+/* ============  4. STARS & BARS WITH A FACE CAP (quiz)  ================== */
 /* ========================================================================== */
 
 /**
@@ -349,7 +349,7 @@ export function genStarsBarsCap(rng: Rng): Question {
   const correct: Choice = {
     text: String(count),
     rationale:
-      `Correct — stars & bars for a sum of ${target} across ${dice} dice, TRIMMED by inclusion–exclusion for the ` +
+      `Correct, stars & bars for a sum of ${target} across ${dice} dice, TRIMMED by inclusion–exclusion for the ` +
       `≤${faces} face cap, leaves ${count} ordered outcomes.`,
   };
   const distractors: Choice[] = [
@@ -363,7 +363,7 @@ export function genStarsBarsCap(rng: Rng): Question {
       text: noMinimum.toString(),
       rationale:
         `Shift error: C(${target}+${dice}−1,${dice}−1) = ${noMinimum} lets each die be ≥0 instead of ≥1. A real die ` +
-        `shows at least 1, so subtract the minimum first — and the cap still applies, giving ${count}.`,
+        `shows at least 1, so subtract the minimum first, and the cap still applies, giving ${count}.`,
     },
     {
       text: String(nbrCount),
@@ -376,7 +376,7 @@ export function genStarsBarsCap(rng: Rng): Question {
   const explanation =
     `Only ${count} of the ${total} = ${faces}^${dice} ordered rolls of ${dice} d${faces} dice total ${target}, ` +
     `once inclusion–exclusion trims the outcomes that would need a die above ${faces}. Ignoring that cap, plain ` +
-    `stars & bars gives C(${target}−1,${dice}−1) = ${uncapped} compositions — an OVERCOUNT, since it lets a die ` +
+    `stars & bars gives C(${target}−1,${dice}−1) = ${uncapped} compositions, an OVERCOUNT, since it lets a die ` +
     `exceed ${faces}. The correct, capped count is ${count}.`;
 
   return {
@@ -413,7 +413,7 @@ export function buildPermVsCombNumericInstance(
   const n = rng.int(6, 10);
   const k = rng.int(2, 4);
 
-  const comb = choose(n, k); // C(n,k) — the unordered count (correct)
+  const comb = choose(n, k); // C(n,k), the unordered count (correct)
   const answer = comb;
 
   const perm = Number(chooseBig(n, k) * factorialBig(k)); // P(n,k)
@@ -423,23 +423,23 @@ export function buildPermVsCombNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     perm,
-    `You lined the ${k} choices up in a definite order, but the problem says only WHICH ${k} are funded matters. If order is irrelevant, aren't you counting each group several times — by what factor?`,
+    `You lined the ${k} choices up in a definite order, but the problem says only WHICH ${k} are funded matters. If order is irrelevant, aren't you counting each group several times, by what factor?`,
     MISCONCEPTION.orderedVsUnordered,
   );
   push(
     withRepl,
-    `It looks like each of the ${k} slots could be any of the ${n}, reusing an experiment. But can the same experiment be funded twice here — and does the order of the slots even matter?`,
+    `It looks like each of the ${k} slots could be any of the ${n}, reusing an experiment. But can the same experiment be funded twice here, and does the order of the slots even matter?`,
     "counts_with_replacement",
   );
   push(
     naive,
-    `Multiplying the two numbers, ${n}·${k}, is tempting — but choosing a GROUP isn't a single product of ${n} and ${k}. Which counting rule counts unordered selections of ${k} from ${n}?`,
+    `Multiplying the two numbers, ${n}·${k}, is tempting, but choosing a GROUP isn't a single product of ${n} and ${k}. Which counting rule counts unordered selections of ${k} from ${n}?`,
     "naive_product",
   );
 
   const prompt =
     `A research lab has ${n} distinct candidate experiments and will fund exactly ${k} of them. ` +
-    `Only WHICH ${k} experiments make the cut matters — the funding order is irrelevant. ` +
+    `Only WHICH ${k} experiments make the cut matters, the funding order is irrelevant. ` +
     `How many different groups of ${k} experiments can be funded? (Enter a whole number.)`;
   const explanation =
     `Choosing an UNORDERED group of ${k} from ${n} is the combination C(${n},${k}) = ${comb}. ` +
@@ -475,7 +475,7 @@ export function buildReplacementTrapNumericInstance(
   const n = rng.int(4, 8);
   const k = rng.pick([2, 3]);
 
-  const answer = Number(powBig(n, k)); // nᵏ — ordered, with replacement (correct)
+  const answer = Number(powBig(n, k)); // nᵏ, ordered, with replacement (correct)
   const unordered = Number(chooseBig(n, k)); // C(n,k)
   const orderedNoRepl = Number(chooseBig(n, k) * factorialBig(k)); // P(n,k)
   const unorderedWithRepl = Number(chooseBig(n + k - 1, k)); // C(n+k−1,k)
@@ -483,23 +483,23 @@ export function buildReplacementTrapNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     unordered,
-    `C(${n},${k}) counts UNORDERED picks with no reuse. But here each of the ${k} positions is ordered AND a symbol may repeat — does that make the count larger or smaller than C(${n},${k})?`,
+    `C(${n},${k}) counts UNORDERED picks with no reuse. But here each of the ${k} positions is ordered AND a symbol may repeat, does that make the count larger or smaller than C(${n},${k})?`,
     MISCONCEPTION.orderedVsUnordered,
   );
   push(
     orderedNoRepl,
-    `You have order right, but P(${n},${k}) forbids reusing a symbol (each next choice drops one). Here symbols MAY repeat — so should later positions really lose a choice?`,
+    `You have order right, but P(${n},${k}) forbids reusing a symbol (each next choice drops one). Here symbols MAY repeat, so should later positions really lose a choice?`,
     "forgot_replacement",
   );
   push(
     unorderedWithRepl,
-    `You allowed repeats — good — but C(${n}+${k}−1,${k}) treats the ${k} positions as an unordered multiset. Here the ORDER of the positions matters. Does that push the count up?`,
+    `You allowed repeats, good, but C(${n}+${k}−1,${k}) treats the ${k} positions as an unordered multiset. Here the ORDER of the positions matters. Does that push the count up?`,
     "unordered_with_replacement",
   );
 
   const prompt =
     `A ${k}-symbol access code is built from a palette of ${n} distinct symbols. ` +
-    `Each of the ${k} positions is chosen independently — a symbol MAY be reused — and the ORDER of ` +
+    `Each of the ${k} positions is chosen independently, a symbol MAY be reused, and the ORDER of ` +
     `the positions matters. How many distinct codes are possible? (Enter a whole number.)`;
   const explanation =
     `With replacement and order mattering, each of the ${k} positions independently picks one of ${n} ` +
@@ -553,7 +553,7 @@ export function buildTiesOrderNumericInstance(
     );
     push(
       F(1, 6),
-      `The 1/3! = 1/6 guess assumes the three rolls are always different, then picks the one sorted order. But two rolls CAN tie — is every triple guaranteed distinct?`,
+      `The 1/3! = 1/6 guess assumes the three rolls are always different, then picks the one sorted order. But two rolls CAN tie, is every triple guaranteed distinct?`,
       "assume_all_distinct",
     );
     push(
@@ -570,7 +570,7 @@ export function buildTiesOrderNumericInstance(
       `Three ordered rolls give ${faces}³ = ${denom} equally-likely sequences; a strictly increasing one picks ` +
       `3 distinct faces C(${faces},3), each realizable in exactly ONE increasing order, so ` +
       `P = C(${faces},3)/${faces}³ = ${fracText(value)} ≈ ${decText(value, dp)}. Allowing ties (non-decreasing) counts ` +
-      `C(${faces}+2,3) sequences instead — the classic strict-vs-non-decreasing trap.`;
+      `C(${faces}+2,3) sequences instead, the classic strict-vs-non-decreasing trap.`;
 
     return {
       answer,
@@ -603,7 +603,7 @@ export function buildTiesOrderNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     strictInc,
-    `That's the strictly-increasing (all-distinct) share. But NON-decreasing also allows equal ranks in a row — did you drop the tied handfuls that still count?`,
+    `That's the strictly-increasing (all-distinct) share. But NON-decreasing also allows equal ranks in a row, did you drop the tied handfuls that still count?`,
     "strict_vs_nondecreasing",
   );
   push(
@@ -613,7 +613,7 @@ export function buildTiesOrderNumericInstance(
   );
   push(
     allDistinct,
-    `That's just the chance the three ranks are all DIFFERENT. But the question is about the draw ORDER (ties allowed), not whether the ranks are distinct — aren't those different events?`,
+    `That's just the chance the three ranks are all DIFFERENT. But the question is about the draw ORDER (ties allowed), not whether the ranks are distinct, aren't those different events?`,
     "distinct_not_order",
   );
 
@@ -677,12 +677,12 @@ export function buildStarsBarsCapNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     uncapped,
-    `Plain stars & bars, C(${target}−1,${dice}−1), lets a die climb as high as it likes. But a real d${faces} stops at ${faces} — shouldn't you remove the rolls that would need a die above ${faces}?`,
+    `Plain stars & bars, C(${target}−1,${dice}−1), lets a die climb as high as it likes. But a real d${faces} stops at ${faces}, shouldn't you remove the rolls that would need a die above ${faces}?`,
     "forgot_face_cap",
   );
   push(
     noMinimum,
-    `C(${target}+${dice}−1,${dice}−1) lets a die show 0. A die shows at least 1 — did you subtract the minimum of 1 from each die before counting compositions?`,
+    `C(${target}+${dice}−1,${dice}−1) lets a die show 0. A die shows at least 1, did you subtract the minimum of 1 from each die before counting compositions?`,
     "forgot_die_minimum",
   );
   push(
@@ -698,7 +698,7 @@ export function buildStarsBarsCapNumericInstance(
   const explanation =
     `Only ${count} of the ${total} = ${faces}^${dice} ordered rolls total ${target}, once inclusion–exclusion trims the ` +
     `outcomes that would need a die above ${faces}. Ignoring that cap, plain stars & bars gives ` +
-    `C(${target}−1,${dice}−1) = ${uncapped} compositions — an OVERCOUNT. The correct, capped count is ${count}.`;
+    `C(${target}−1,${dice}−1) = ${uncapped} compositions, an OVERCOUNT. The correct, capped count is ${count}.`;
 
   return {
     answer,

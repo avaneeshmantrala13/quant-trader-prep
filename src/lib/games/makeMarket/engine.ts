@@ -136,15 +136,25 @@ export function validateQuote(q: Quote, maxSpread: number): QuoteValidation {
 /* ========================================================================== */
 
 /**
- * Rate at which the INFORMED side acts when the truth sits OUTSIDE your market
- * (i.e. your mid is off by more than half your spread). <1 so a stale price is
- * usually — but not always — punished.
+ * MAX probability the INFORMED side acts when your quote is badly OFFSIDE (the
+ * truth sits well outside your market). The effective rate scales SMOOTHLY with
+ * how far offside you are (see `INFORMED_SPAN`), so a tiny overhang is rarely
+ * punished while a gross mis-price is picked off almost every round. This is
+ * the fairness fix for F1: a competent-but-imperfect valuation (truth just
+ * outside your spread) is no longer picked off 70% of the time.
  */
-const INFORMED_RATE = 0.7;
+const INFORMED_RATE_MAX = 0.85;
+/**
+ * The overhang (how far the truth is outside your market), measured in units of
+ * the max spread, at which the informed pick-off rate reaches its max. A miss
+ * of ~0.6·maxSpread past your quote ⇒ near-certain adverse selection; a sliver
+ * past it ⇒ only an occasional nibble. Small estimation error → ~break-even;
+ * gross mis-pricing → punished hard.
+ */
+const INFORMED_SPAN = 0.6;
 /**
  * Base rate of UNINFORMED "noise" flow crossing a razor-tight market. The
- * effective rate is scaled by how tight your spread is relative to the cap, so
- * a market quoted at the max spread gets essentially no fills.
+ * effective rate is scaled by how tight your spread is relative to the cap.
  */
 const NOISE_BASE = 1.0;
 /** Largest lot count an uninformed order will take (capped by the size you show). */
@@ -152,27 +162,35 @@ const NOISE_MAX_LOTS = 3;
 
 /**
  * The counterparty acts on a TIGHT quote with a REALISTIC mix of flow. This is
- * the fix for the old "informed-only" model that made the game unwinnable:
+ * the fix for the old "informed-only" model that made the game unwinnable, and
+ * for F1 (winnable only in a razor-thin valuation band):
  *
  *   1. INFORMED FLOW (adverse) — the counterparty knows `trueValue`. When the
- *      truth is OUTSIDE your market (ask < true, or bid > true → your mid is off
- *      by more than half your spread) it picks off the good side, pressing more
- *      size the bigger your error. It fires with probability `INFORMED_RATE`.
+ *      truth is OUTSIDE your market (ask < true, or bid > true) it picks off the
+ *      good side, pressing more size the bigger your error. Crucially the rate
+ *      now scales with the OVERHANG (how far outside the truth sits, in max-
+ *      spread units): a quote that's only a touch offside is rarely and lightly
+ *      picked, while a grossly mis-centred quote is adversely selected nearly
+ *      every round. So EV falls smoothly and monotonically as |mid − truth|
+ *      grows — a competent ±10% valuation is roughly break-even, a wild mis-
+ *      price bleeds.
  *
  *   2. UNINFORMED / NOISE FLOW — a trader who just wants to trade crosses your
  *      market on a RANDOM side, paying your edge. Because the side is random it
  *      pays you the HALF-SPREAD on average, which is what lets a tight, well-
- *      centred quote earn money. Its willingness to cross falls linearly as your
- *      spread widens toward the cap, so:
- *        • too WIDE  → almost no noise fills (you earn ~nothing),
- *        • too TIGHT → tiny half-spread (you earn ~nothing),
- *        • a spread near HALF the cap → the sweet spot (maximum expected earn).
+ *      centred quote earn money. Its willingness to cross falls LINEARLY as your
+ *      spread widens toward the cap, so the expected earn (rate·half-spread)
+ *      peaks at a spread near HALF the cap — the sweet spot — and a near-max
+ *      spread gets almost no fills (earns ~0, the "stupid-wide is sterilised,
+ *      never a real earn" outcome).
  *
- * Net effect (the EV logic that makes it winnable):
- *   • A well-centred quote (truth inside your market) never sees informed flow,
- *     so its EV = P(noise)·half-spread·size  > 0.
- *   • A badly-centred quote is picked off by informed flow for size-scaled
- *     losses that swamp the small half-spread it collects → EV < 0.
+ * Net effect (the EV logic that makes it winnable AND fair):
+ *   • A well-centred quote (truth inside) never sees informed flow, so its
+ *     EV = P(noise)·half-spread·size  > 0, maximised near a half-cap spread.
+ *   • A slightly-off quote loses only a little (rare, light pick-offs) → the
+ *     game is winnable for a realistic estimator, not only a perfect one.
+ *   • A badly-centred quote is picked off almost every round for size-scaled
+ *     losses that swamp the half-spread it collects → EV < 0.
  *
  * `aggression` scales how much size the informed side takes when it has edge.
  * All randomness comes from the seeded `rng`, so outcomes stay deterministic.
@@ -189,10 +207,13 @@ export function counterpartyTight(
   const bidEdge = q.bid - trueValue; // >0 → selling to your bid is +EV for them (you long)
   const spread = q.ask - q.bid;
 
-  // 1) INFORMED FLOW — only when the truth is outside your market, fired
-  //    probabilistically. Pick the profitable side (larger positive edge).
-  const hasEdge = askEdge > 0 || bidEdge > 0;
-  if (hasEdge && rng.next() < INFORMED_RATE) {
+  // 1) INFORMED FLOW — only when the truth is outside your market, fired with a
+  //    probability that GROWS with how far offside you are. Pick the profitable
+  //    side (larger positive edge) and press size with the edge.
+  const overhang = Math.max(askEdge, bidEdge, 0);
+  const span = INFORMED_SPAN * Math.max(maxSpread, 1e-9);
+  const pInformed = INFORMED_RATE_MAX * clamp01(overhang / span);
+  if (overhang > 0 && rng.next() < pInformed) {
     if (askEdge >= bidEdge) {
       const size = edgeToSize(askEdge, maxSpread, q.askSize, aggression, rng);
       return {
@@ -210,12 +231,11 @@ export function counterpartyTight(
   }
 
   // 2) UNINFORMED / NOISE FLOW — crosses on a random side, paying your edge.
-  //    Willingness to cross falls with the SQUARE of how wide you quote, so a
-  //    near-max spread gets almost no fills (earns ~0) while the earn peaks at
-  //    roughly a third of the cap. Half-spread grows with width, noise rate
-  //    shrinks with width → a clear interior sweet spot.
+  //    Willingness to cross falls LINEARLY with how wide you quote, so the
+  //    expected earn (rate · half-spread) peaks near a HALF-cap spread and a
+  //    near-max spread gets almost no fills (earns ~0).
   const tightness = maxSpread > 0 ? clamp01(1 - spread / maxSpread) : 0;
-  if (rng.next() < NOISE_BASE * tightness * tightness) {
+  if (rng.next() < NOISE_BASE * tightness) {
     const buysYourAsk = rng.next() < 0.5;
     if (buysYourAsk) {
       const size = noiseSize(q.askSize, rng);
@@ -346,6 +366,35 @@ export function markToTrue(fills: Fill[], trueValue: number): number {
     pnl += per * f.size;
   }
   return round2(pnl);
+}
+
+/**
+ * Parse the intended BREAK-EVEN PRICE out of whatever the player types into the
+ * single price box. The quiz fixes the side (BUY/SELL toggle) and the size, so
+ * the player only needs to enter a price — but this stays lenient so that
+ * typing the WHOLE trade (e.g. "2 @ 600", mirroring the revealed answer format)
+ * still grades on the intended price rather than the size.
+ *
+ * Rules:
+ *   • Strip "$" and thousands commas.
+ *   • If the string contains "@", take the substring AFTER the LAST "@"
+ *     ("2 @ 600" → 600, "@600" → 600).
+ *   • Otherwise parse the LAST number in the string (the price is quoted last).
+ *   • Return NaN when nothing parseable is present.
+ */
+export function parseBreakEvenPrice(input: string): number {
+  if (input == null) return NaN;
+  // Drop currency symbols and thousands separators; keep spaces so distinct
+  // numbers stay separate when there is no "@".
+  const cleaned = input.replace(/[$,]/g, "");
+  if (cleaned.includes("@")) {
+    const after = cleaned.slice(cleaned.lastIndexOf("@") + 1).trim();
+    const n = parseFloat(after);
+    return Number.isNaN(n) ? NaN : n;
+  }
+  const matches = cleaned.match(/-?\d+(?:\.\d+)?/g);
+  if (!matches || matches.length === 0) return NaN;
+  return parseFloat(matches[matches.length - 1]);
 }
 
 /* ========================================================================== */

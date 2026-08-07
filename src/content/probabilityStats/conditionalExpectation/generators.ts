@@ -65,7 +65,7 @@ function renderTable(weights: number[][]): { text: string; total: number } {
 }
 
 /* ========================================================================== */
-/*  Family A — E[X | Y = y] from a joint table (conditioning renormalises)     */
+/*  Family A. E[X | Y = y] from a joint table (conditioning renormalises)     */
 /* ========================================================================== */
 
 export function buildCondMeanInstance(
@@ -83,7 +83,7 @@ export function buildCondMeanInstance(
   const { text, total } = renderTable(weights);
 
   const { errors, push } = numericErrors(answer, dp);
-  // Forgot to condition — reported the unconditional E[X].
+  // Forgot to condition, reported the unconditional E[X].
   push(
     towerMeanFromTable(weights, X_VALS),
     `${decText(towerMeanFromTable(weights, X_VALS), dp)} is the UNCONDITIONAL E[X]. Conditioning on Y=${Y_LABELS[col]} restricts to that column and renormalises by its total.`,
@@ -96,7 +96,7 @@ export function buildCondMeanInstance(
   // Plain unweighted average of the x-values (ignored the pmf entirely).
   push(
     F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length),
-    `${decText(F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length), dp)} is the plain average of 1, 2, 3 — it ignores how the probability mass is spread across the column.`,
+    `${decText(F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length), dp)} is the plain average of 1, 2, 3, it ignores how the probability mass is spread across the column.`,
   );
 
   const prompt =
@@ -124,7 +124,7 @@ export function buildCondMeanInstance(
 }
 
 /* ========================================================================== */
-/*  Family B — Law of total expectation (two-branch mixture)                   */
+/*  Family B. Law of total expectation (two-branch mixture)                   */
 /* ========================================================================== */
 
 const MIX_THEME = [
@@ -183,7 +183,7 @@ export function buildMixtureInstance(
   // Swapped the two weights.
   push(
     mixtureExpectation([p, q], [F(b), F(a)]),
-    `${decText(mixtureExpectation([p, q], [F(b), F(a)]), dp)} swaps the weights — it attaches ${fracText(p)} to the wrong branch mean.`,
+    `${decText(mixtureExpectation([p, q], [F(b), F(a)]), dp)} swaps the weights, it attaches ${fracText(p)} to the wrong branch mean.`,
   );
   // Reported only the first branch's mean.
   push(
@@ -214,7 +214,7 @@ export function buildMixtureInstance(
 }
 
 /* ========================================================================== */
-/*  Family C — Random sum (Wald): E[S] = E[N]·E[X]                             */
+/*  Family C. Random sum (Wald): E[S] = E[N]·E[X]                             */
 /* ========================================================================== */
 
 const SUM_THEME = [
@@ -268,7 +268,7 @@ export function buildRandomSumMeanInstance(
   // Used only the count.
   push(
     F(EN),
-    `${EN} is only E[N] — the expected COUNT. Each of the ${EN} carries E[X]=${fracText(EX)} on average, so multiply.`,
+    `${EN} is only E[N], the expected COUNT. Each of the ${EN} carries E[X]=${fracText(EX)} on average, so multiply.`,
   );
   // Used only the per-item mean.
   push(
@@ -298,7 +298,7 @@ export function buildRandomSumMeanInstance(
 }
 
 /* ========================================================================== */
-/*  Family D — Law of total variance for a random sum                          */
+/*  Family D. Law of total variance for a random sum                          */
 /* ========================================================================== */
 
 export function buildRandomSumVarInstance(
@@ -317,7 +317,7 @@ export function buildRandomSumVarInstance(
   // Forgot the Var(N)·E[X]² term.
   push(
     F(EN * VX),
-    `${EN * VX} = E[N]·Var(X) drops the Var(N)·E[X]² term — the count itself is random, which adds variance.`,
+    `${EN * VX} = E[N]·Var(X) drops the Var(N)·E[X]² term, the count itself is random, which adds variance.`,
   );
   // Forgot the E[N]·Var(X) term.
   push(
@@ -327,7 +327,7 @@ export function buildRandomSumVarInstance(
   // Forgot to SQUARE E[X].
   push(
     F(EN * VX + VN * EX),
-    `${EN * VX + VN * EX} uses Var(N)·E[X] instead of Var(N)·E[X]² — the second term squares the mean.`,
+    `${EN * VX + VN * EX} uses Var(N)·E[X] instead of Var(N)·E[X]², the second term squares the mean.`,
   );
 
   const prompt =
@@ -354,7 +354,7 @@ export function buildRandomSumVarInstance(
 }
 
 /* ========================================================================== */
-/*  Family E — Tower rule: recover E[X] from a joint table                      */
+/*  Family E. Tower rule: recover E[X] from a joint table                      */
 /* ========================================================================== */
 
 export function buildTowerTableInstance(
@@ -386,7 +386,7 @@ export function buildTowerTableInstance(
   // Plain unweighted x-average.
   push(
     F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length),
-    `${decText(F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length), dp)} is the plain average of 1, 2, 3 — it ignores the joint pmf.`,
+    `${decText(F(X_VALS.reduce((a, x) => a + x, 0), X_VALS.length), dp)} is the plain average of 1, 2, 3, it ignores the joint pmf.`,
   );
 
   const prompt =

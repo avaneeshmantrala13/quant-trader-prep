@@ -1,21 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
-import { StampSeal } from "@/components/visuals/StampSeal";
 import { BrainIcon, CheckIcon, CloseIcon } from "@/components/icons";
 import { celebrate } from "@/lib/celebrate";
 import {
   buildInterview,
   createSession,
   currentStep as getCurrentStep,
+  gradeReasoning,
+  buildReasoningClarifyPrompt,
   mockReducer,
-  toPersistableSummary,
   loadActiveSession,
   saveActiveSession,
   clearActiveSession,
-  type MathTier,
-  type MathStep,
+  MOCK_PRESETS,
+  PRESET_ORDER,
+  type MockAction,
+  type PresetId,
   type BrainteaserStep,
   type BehavioralStep,
   type MockSession,
@@ -23,6 +26,11 @@ import {
 } from "@/lib/mock";
 import { useMockSpeech } from "@/components/mock/useMockSpeech";
 import { AnswerField } from "@/components/mock/AnswerField";
+import { MathInterviewCard } from "@/components/mock/MathInterviewCard";
+import { MarketMakingCard } from "@/components/mock/MarketMakingCard";
+import { ReasoningPanel } from "@/components/mock/ReasoningPanel";
+import { ClarifyBlock } from "@/components/mock/ClarifyBlock";
+import { DiagnosisReport } from "@/components/mock/DiagnosisReport";
 
 /**
  * `/mock` — the AI-voice Mock Interview (TASK T10).
@@ -35,10 +43,17 @@ import { AnswerField } from "@/components/mock/AnswerField";
  * No transcript is ever persisted — only the PII-free summary is derived.
  */
 
-const TIER_LABEL: Record<MathTier, string> = {
-  easy: "Warm-up",
-  medium: "Standard",
-  hard: "Optiver pace",
+const DEFAULT_PRESET: PresetId = "optiver";
+
+/**
+ * Plain-English, jargon-free one-liners for each firm style, shown on the intro
+ * cards. Kept here (not in the pure preset data) so the copy stays first-timer
+ * friendly without touching interview logic or the firm-pattern tests.
+ */
+const FIRM_BLURB: Record<PresetId, string> = {
+  optiver: "Spot number patterns and quick odds, racing the clock.",
+  janestreet: "Think out loud through puzzles, then set fair buy and sell prices.",
+  sig: "Weigh the odds and decide how much you'd bet — calculator allowed.",
 };
 
 function randomSeed(): number {
@@ -51,39 +66,50 @@ function randomSeed(): number {
  * otherwise start a fresh intro. A persisted `intro`/`summary` blob is ignored
  * as a resume target — only an in-progress `running` session is resumable.
  */
-function makeInitialSession(speechSupported: boolean): MockSession {
-  const resumed = loadActiveSession();
+function makeInitialSession(
+  speechSupported: boolean,
+  userId: string | null,
+): MockSession {
+  const resumed = loadActiveSession(userId);
   if (resumed && resumed.status === "running") return resumed;
-  return createSession(buildInterview({ seed: randomSeed(), tier: "medium" }), {
-    speechSupported,
-  });
+  return createSession(
+    buildInterview({ seed: randomSeed(), preset: DEFAULT_PRESET }),
+    { speechSupported },
+  );
 }
 
 export function MockPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
   const speech = useMockSpeech();
 
-  // Resolve the initial (possibly resumed) session exactly once per mount.
+  // Resolve the initial (possibly resumed) session exactly once per mount,
+  // scoped to the CURRENT user so we never resume another account's interview.
   const initialRef = useRef<MockSession | null>(null);
   if (initialRef.current === null) {
-    initialRef.current = makeInitialSession(speech.canListen);
+    initialRef.current = makeInitialSession(speech.canListen, username);
   }
 
-  const [tier, setTier] = useState<MathTier>(initialRef.current.script.tier);
+  const [presetId, setPresetId] = useState<PresetId>(
+    initialRef.current.script.presetId ?? DEFAULT_PRESET,
+  );
   const [voiceOn, setVoiceOn] = useState(true);
   const [session, setSession] = useState<MockSession>(initialRef.current);
+  // Which confirmation dialog (if any) is open while an interview is running:
+  // "end" (the header End button) or "back" (the back arrow). `null` = closed.
+  const [confirm, setConfirm] = useState<null | "end" | "back">(null);
 
   // Persist the in-progress session on every change so it survives navigation.
   // Only a `running` session is resumable; on `intro`/`summary` we CLEAR the
   // persisted blob (nothing to resume once you finish or reset to a new one).
   useEffect(() => {
     if (session.status === "running") {
-      saveActiveSession(session);
+      saveActiveSession(session, username);
     } else {
-      clearActiveSession();
+      clearActiveSession(username);
     }
-  }, [session]);
+  }, [session, username]);
 
   const dispatch = (action: Parameters<typeof mockReducer>[1]) =>
     setSession((s) => mockReducer(s, action));
@@ -92,7 +118,7 @@ export function MockPage() {
   const total = session.script.steps.length;
 
   const beginInterview = () => {
-    const script = buildInterview({ seed: randomSeed(), tier });
+    const script = buildInterview({ seed: randomSeed(), preset: presetId });
     setSession(
       mockReducer(
         createSession(script, { speechSupported: speech.canListen }),
@@ -103,8 +129,47 @@ export function MockPage() {
 
   const newInterview = () => {
     speech.cancelSpeech();
-    const script = buildInterview({ seed: randomSeed(), tier });
+    const script = buildInterview({ seed: randomSeed(), preset: presetId });
     setSession(createSession(script, { speechSupported: speech.canListen }));
+  };
+
+  // --- End / exit affordances (only meaningful while `running`) --------------
+
+  // Back arrow: while running, warn instead of silently leaving the saved
+  // session behind (which would force-resume next time). On intro/summary there
+  // is nothing in progress to lose, so leave immediately.
+  const handleBack = () => {
+    if (session.status === "running") {
+      setConfirm("back");
+      return;
+    }
+    speech.cancelSpeech();
+    navigate("/");
+  };
+
+  // "End & start over": discard the in-progress attempt and drop the user back
+  // on the intro so they can pick a preset and start fresh. `clearActiveSession`
+  // removes the user-scoped blob so it can never force-resume.
+  const endAndStartOver = () => {
+    clearActiveSession(username);
+    newInterview();
+    setConfirm(null);
+  };
+
+  // "End interview" from the back dialog: discard AND leave the page.
+  const endAndExit = () => {
+    speech.cancelSpeech();
+    clearActiveSession(username);
+    setConfirm(null);
+    navigate("/");
+  };
+
+  // "Resume later" from the back dialog: keep the saved session and leave; it
+  // resumes on the next visit to `/mock`.
+  const resumeLater = () => {
+    speech.cancelSpeech();
+    setConfirm(null);
+    navigate("/");
   };
 
   // Speak each prompt aloud as it appears (best-effort; silent if unsupported).
@@ -122,10 +187,7 @@ export function MockPage() {
   return (
     <GameChrome
       title="AI Mock Interview"
-      onBack={() => {
-        speech.cancelSpeech();
-        navigate("/");
-      }}
+      onBack={handleBack}
       progress={
         session.status === "running"
           ? (session.index + 1) / total
@@ -133,21 +195,31 @@ export function MockPage() {
       }
       headerRight={
         session.status === "running" ? (
-          <span className="num text-xs text-secondary">
-            {String(session.index + 1).padStart(2, "0")}/{total}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="num text-xs text-secondary">
+              {String(session.index + 1).padStart(2, "0")}/{total}
+            </span>
+            <button
+              type="button"
+              onClick={() => setConfirm("end")}
+              aria-label="End interview"
+              className="flex items-center gap-1 border-2 border-bear px-2 py-1 text-xs font-semibold text-bear transition-colors hover:bg-bear hover:text-bg"
+            >
+              <CloseIcon width={14} height={14} />
+              End
+            </button>
+          </div>
         ) : undefined
       }
     >
         {session.status === "intro" && (
           <MockIntro
-            tier={tier}
-            setTier={setTier}
+            presetId={presetId}
+            setPresetId={setPresetId}
             canSpeak={speech.canSpeak}
             canListen={speech.canListen}
             voiceOn={voiceOn}
             setVoiceOn={setVoiceOn}
-            intro={session.script.intro}
             onStart={beginInterview}
           />
         )}
@@ -157,9 +229,7 @@ export function MockPage() {
             key={step.id}
             session={session}
             speech={speech}
-            onRecordMath={(raw, viaSpeech, elapsedMs) =>
-              dispatch({ type: "recordMath", raw, viaSpeech, elapsedMs })
-            }
+            dispatch={dispatch}
             onRecordReflect={(raw, viaSpeech, selfAssessed) =>
               dispatch({ type: "recordReflect", raw, viaSpeech, selfAssessed })
             }
@@ -171,14 +241,137 @@ export function MockPage() {
         )}
 
         {session.status === "summary" && (
-          <MockSummaryView
+          <DiagnosisReport
             session={session}
             themeCelebration={themeDef.celebration ?? celebrate}
             onRestart={newInterview}
             onDone={() => navigate("/")}
           />
         )}
+
+        {confirm === "end" && (
+          <ConfirmDialog
+            title="End this interview?"
+            body="Real interviews run in a single sitting, so ending early means this attempt won't be completed. You can end now and start a new one."
+            actions={[
+              {
+                label: "End & start over",
+                variant: "danger",
+                onClick: endAndStartOver,
+              },
+              {
+                label: "Keep going",
+                variant: "ghost",
+                onClick: () => setConfirm(null),
+              },
+            ]}
+            onDismiss={() => setConfirm(null)}
+          />
+        )}
+
+        {confirm === "back" && (
+          <ConfirmDialog
+            title="Leave this interview?"
+            body="Real interviews run in a single sitting. You can resume this attempt later, or end it now and nothing will be saved to resume."
+            actions={[
+              {
+                label: "Resume later",
+                variant: "primary",
+                onClick: resumeLater,
+              },
+              {
+                label: "End interview",
+                variant: "danger",
+                onClick: endAndExit,
+              },
+              {
+                label: "Keep going",
+                variant: "ghost",
+                onClick: () => setConfirm(null),
+              },
+            ]}
+            onDismiss={() => setConfirm(null)}
+          />
+        )}
     </GameChrome>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Confirm dialog (themed, inline) — end / leave a running interview          */
+/* -------------------------------------------------------------------------- */
+
+interface ConfirmAction {
+  label: string;
+  onClick: () => void;
+  variant: "primary" | "danger" | "ghost";
+}
+
+/**
+ * A small, self-contained themed confirm dialog. Deliberately inline to this
+ * page (the only caller) rather than a new global component. Escape / scrim
+ * click both dismiss (the safe, no-change action). Buttons stack full-width so
+ * the two- and three-option variants share one layout.
+ */
+function ConfirmDialog({
+  title,
+  body,
+  actions,
+  onDismiss,
+}: {
+  title: string;
+  body: string;
+  actions: ConfirmAction[];
+  onDismiss: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDismiss();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onDismiss]);
+
+  const variantClass = (v: ConfirmAction["variant"]): string => {
+    if (v === "primary") return "btn-primary w-full";
+    if (v === "danger")
+      return "w-full border-2 border-bear px-4 py-3 text-sm font-semibold text-bear transition-colors hover:bg-bear hover:text-bg";
+    return "w-full border-2 border-border-strong px-4 py-3 text-sm font-semibold text-secondary transition-colors hover:border-accent hover:text-primary";
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center p-4">
+      <button
+        type="button"
+        aria-hidden="true"
+        tabIndex={-1}
+        onClick={onDismiss}
+        className="fixed inset-0 cursor-default bg-black/60"
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        className="panel relative z-10 w-full max-w-md p-6 shadow-2xl motion-safe:animate-print-in"
+      >
+        <h2 className="font-display text-lg font-semibold leading-tight text-primary">
+          {title}
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-secondary">{body}</p>
+        <div className="mt-5 space-y-2">
+          {actions.map((a) => (
+            <button
+              key={a.label}
+              type="button"
+              onClick={a.onClick}
+              className={variantClass(a.variant)}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -187,112 +380,115 @@ export function MockPage() {
 /* -------------------------------------------------------------------------- */
 
 function MockIntro({
-  tier,
-  setTier,
+  presetId,
+  setPresetId,
   canSpeak,
   canListen,
   voiceOn,
   setVoiceOn,
-  intro,
   onStart,
 }: {
-  tier: MathTier;
-  setTier: (t: MathTier) => void;
+  presetId: PresetId;
+  setPresetId: (p: PresetId) => void;
   canSpeak: boolean;
   canListen: boolean;
   voiceOn: boolean;
   setVoiceOn: (v: boolean) => void;
-  intro: string;
   onStart: () => void;
 }) {
   const speechAvailable = canSpeak || canListen;
   return (
-    <div className="animate-print-in space-y-5">
-      <article className="panel-ruled p-6">
-        <div className="flex items-center justify-between">
-          <span className="label text-accent">Mock Interview</span>
-          <span className="grid h-9 w-9 place-items-center border border-border-strong text-accent">
-            <BrainIcon width={20} height={20} />
-          </span>
-        </div>
-        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
-          Sit across from an AI interviewer
+    <div className="animate-print-in mx-auto max-w-2xl space-y-8">
+      {/* Heading + one-line explanation */}
+      <header className="space-y-3 text-center">
+        <span className="mx-auto grid h-11 w-11 place-items-center border border-border-strong text-accent">
+          <BrainIcon width={22} height={22} />
+        </span>
+        <h2 className="font-display text-2xl font-semibold leading-tight text-primary sm:text-3xl">
+          Practice a real quant interview
         </h2>
-        <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-secondary">
-          <p>{intro}</p>
-          <p>
-            Three parts:{" "}
-            <span className="font-semibold text-primary">mental math</span> out
-            loud (scored, with follow-ups),{" "}
-            <span className="font-semibold text-primary">brainteasers</span>{" "}
-            under time (think aloud, then reveal), and{" "}
-            <span className="font-semibold text-primary">behavioral</span>{" "}
-            questions (reflect-only — nothing judged).
-          </p>
-        </div>
+        <p className="mx-auto max-w-md text-[15px] leading-relaxed text-secondary">
+          An AI interviewer asks questions, listens to your answers, and grades
+          you — then hands back an honest report.
+        </p>
+      </header>
 
-        {/* Difficulty */}
-        <div className="mt-5">
-          <div className="label text-accent">Mental-math pace</div>
-          <div className="mt-2 grid grid-cols-3 gap-2">
-            {(["easy", "medium", "hard"] as MathTier[]).map((t) => (
+      {/* Primary choice: pick a firm style */}
+      <div className="space-y-3">
+        <p className="text-center text-sm font-medium text-muted">
+          Pick a style to practice
+        </p>
+        <div className="grid gap-3">
+          {PRESET_ORDER.map((id) => {
+            const p = MOCK_PRESETS[id];
+            const active = presetId === id;
+            return (
               <button
-                key={t}
-                onClick={() => setTier(t)}
-                aria-pressed={tier === t}
-                className={`border-2 px-3 py-2 text-sm font-semibold transition-colors ${
-                  tier === t
-                    ? "border-accent bg-accent text-accent-contrast"
-                    : "border-border-strong text-secondary hover:border-accent"
+                key={id}
+                onClick={() => setPresetId(id)}
+                aria-pressed={active}
+                className={`flex items-center gap-4 rounded-sm border-2 px-4 py-3 text-left transition-colors ${
+                  active
+                    ? "border-accent bg-surface-muted"
+                    : "border-border-strong hover:border-accent"
                 }`}
               >
-                {TIER_LABEL[t]}
+                <span
+                  className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${
+                    active ? "border-accent" : "border-border-strong"
+                  }`}
+                >
+                  {active && (
+                    <span className="h-2.5 w-2.5 rounded-full bg-accent" />
+                  )}
+                </span>
+                <span className="flex-1">
+                  <span className="flex items-baseline justify-between gap-3">
+                    <span
+                      className={`font-display text-base font-semibold ${active ? "text-accent" : "text-primary"}`}
+                    >
+                      {p.name}
+                    </span>
+                    <span className="num shrink-0 text-xs text-muted">
+                      {p.items.length} questions
+                    </span>
+                  </span>
+                  <span className="mt-1 block text-sm leading-relaxed text-secondary">
+                    {FIRM_BLURB[id]}
+                  </span>
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
+      </div>
 
-        {/* Voice status + toggle */}
-        <div className="mt-5 border-l-2 border-accent bg-surface-muted px-4 py-3">
-          <div className="label text-accent">Voice</div>
-          {speechAvailable ? (
-            <div className="mt-1 space-y-2">
-              <p className="text-sm leading-relaxed text-secondary">
-                Your browser supports speech. {canSpeak && "The interviewer can read questions aloud"}
-                {canSpeak && canListen && " and "}
-                {canListen && "you can dictate answers with the mic"}. You can
-                always type instead.
-              </p>
-              {canSpeak && (
-                <label className="flex cursor-pointer items-center gap-2 text-sm text-primary">
-                  <input
-                    type="checkbox"
-                    checked={voiceOn}
-                    onChange={(e) => setVoiceOn(e.target.checked)}
-                    className="h-4 w-4 accent-[var(--tw-accent,currentColor)]"
-                  />
-                  Read questions aloud
-                </label>
-              )}
-            </div>
-          ) : (
-            <p className="mt-1 text-sm leading-relaxed text-secondary">
-              Speech isn't available in this browser, so this runs as a fully
-              typed interview — every question and answer works exactly the same.
-            </p>
-          )}
-        </div>
-
-        <p className="mt-4 border-t border-subtle pt-3 font-mono text-xs uppercase tracking-wider text-muted">
-          Privacy · Your in-progress interview is saved on THIS device only so
-          you can resume where you left off — nothing is sent anywhere, and it's
-          cleared automatically when you finish or start a new interview.
-        </p>
-      </article>
-
+      {/* Obvious primary action */}
       <button onClick={onStart} className="btn-primary w-full">
         Start Interview ▸
       </button>
+
+      {/* Secondary, tucked-away details */}
+      <div className="space-y-2 text-center text-xs leading-relaxed text-muted">
+        {speechAvailable && canSpeak && (
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-secondary">
+            <input
+              type="checkbox"
+              checked={voiceOn}
+              onChange={(e) => setVoiceOn(e.target.checked)}
+              className="h-4 w-4 accent-[var(--tw-accent,currentColor)]"
+            />
+            Read questions aloud
+          </label>
+        )}
+        {!speechAvailable && (
+          <p>Speech isn't available here, so you'll type your answers.</p>
+        )}
+        <p>
+          Saved on this device only so you can resume — nothing is sent
+          anywhere, and it clears when you finish.
+        </p>
+      </div>
     </div>
   );
 }
@@ -306,13 +502,13 @@ type SpeechApi = ReturnType<typeof useMockSpeech>;
 function StepView({
   session,
   speech,
-  onRecordMath,
+  dispatch,
   onRecordReflect,
   onNext,
 }: {
   session: MockSession;
   speech: SpeechApi;
-  onRecordMath: (raw: string, viaSpeech: boolean, elapsedMs: number) => void;
+  dispatch: (a: MockAction) => void;
   onRecordReflect: (
     raw: string,
     viaSpeech: boolean,
@@ -326,12 +522,12 @@ function StepView({
 
   if (step.kind === "math") {
     return (
-      <MathCard
+      <MathInterviewCard
         step={step}
         response={response}
         speech={speech}
         isLast={isLast}
-        onRecord={onRecordMath}
+        dispatch={dispatch}
         onNext={onNext}
       />
     );
@@ -343,7 +539,19 @@ function StepView({
         response={response}
         speech={speech}
         isLast={isLast}
+        dispatch={dispatch}
         onRecord={onRecordReflect}
+        onNext={onNext}
+      />
+    );
+  }
+  if (step.kind === "marketMaking") {
+    return (
+      <MarketMakingCard
+        step={step}
+        response={response}
+        isLast={isLast}
+        dispatch={dispatch}
         onNext={onNext}
       />
     );
@@ -351,7 +559,6 @@ function StepView({
   return (
     <BehavioralCard
       step={step}
-      response={response}
       speech={speech}
       isLast={isLast}
       onRecord={onRecordReflect}
@@ -365,118 +572,7 @@ function StageBadge({ label }: { label: string }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Math card (scored)                                                         */
-/* -------------------------------------------------------------------------- */
-
-function MathCard({
-  step,
-  response,
-  speech,
-  isLast,
-  onRecord,
-  onNext,
-}: {
-  step: MathStep;
-  response: MockResponse | null;
-  speech: SpeechApi;
-  isLast: boolean;
-  onRecord: (raw: string, viaSpeech: boolean, elapsedMs: number) => void;
-  onNext: () => void;
-}) {
-  const [raw, setRaw] = useState("");
-  const startRef = useRef<number>(Date.now());
-  const answered = response !== null;
-  const score = response?.score;
-
-  const submit = () => {
-    if (answered || raw.trim() === "") return;
-    const elapsedMs = Date.now() - startRef.current;
-    onRecord(raw, speech.listening || speech.interim !== "", elapsedMs);
-    speech.stopListening();
-  };
-
-  return (
-    <div className="animate-print-in space-y-4">
-      <div className="panel p-5">
-        <div className="flex items-center justify-between border-b border-subtle pb-2">
-          <span className="label text-accent">Mental Math · Out loud</span>
-          <StageBadge label={step.concept ?? "Arithmetic"} />
-        </div>
-        <p className="mt-3 font-display text-xl font-semibold leading-relaxed text-primary">
-          {step.prompt}
-        </p>
-      </div>
-
-      <div className="panel p-5">
-        <label className="label text-accent">Your answer</label>
-        <div className="mt-2">
-          <AnswerField
-            value={raw}
-            onChange={setRaw}
-            onSubmit={submit}
-            speech={speech}
-            disabled={answered}
-            inputMode="decimal"
-            placeholder="Say or type a number — e.g. 144, 0.25, 3/8"
-            ariaLabel={`Your answer to: ${step.prompt}`}
-            submitLabel="Answer ▸"
-          />
-        </div>
-        {!answered && (
-          <p className="mt-2 text-xs text-muted">
-            Target ~{Math.round(step.targetMs / 1000)}s. Speak or type; equivalent
-            forms (fractions, %, decimals) all count.
-          </p>
-        )}
-      </div>
-
-      {answered && score && (
-        <div className="animate-print-in space-y-4">
-          <div className="border border-subtle">
-            <div
-              className={`flex items-center justify-between px-4 py-2 ${
-                score.correct ? "bg-bull text-bg" : "bg-bear text-bg"
-              }`}
-            >
-              <span className="font-mono text-xs font-semibold uppercase tracking-label">
-                {score.correct ? "● Correct" : "● Not quite"}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-label opacity-90">
-                {score.timing === "fast"
-                  ? "Fast"
-                  : score.timing === "ok"
-                    ? "On pace"
-                    : "Slow"}{" "}
-                · {(score.elapsedMs / 1000).toFixed(1)}s
-              </span>
-            </div>
-            <div className="space-y-1 bg-surface p-4 text-sm text-primary">
-              <p>
-                <span className="label text-secondary">You said · </span>
-                <span className="num font-semibold">
-                  {score.parsed ?? "(unparsed)"}
-                </span>
-              </p>
-              {!score.correct && score.matchedError && (
-                <p className="text-secondary">{score.matchedError.feedback}</p>
-              )}
-              <p className="text-secondary">{step.explanation}</p>
-            </div>
-          </div>
-
-          <FollowUps title="Interviewer follow-ups" items={step.followUps} />
-
-          <button onClick={onNext} className="btn-primary w-full">
-            {isLast ? "See Results ▸" : "Next Question ▸"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  Brainteaser card (timed, reflect + self-assess)                            */
+/*  Brainteaser card (timed, reflect + self-assess + reasoning grade)          */
 /* -------------------------------------------------------------------------- */
 
 function BrainteaserCard({
@@ -484,6 +580,7 @@ function BrainteaserCard({
   response,
   speech,
   isLast,
+  dispatch,
   onRecord,
   onNext,
 }: {
@@ -491,6 +588,7 @@ function BrainteaserCard({
   response: MockResponse | null;
   speech: SpeechApi;
   isLast: boolean;
+  dispatch: (a: MockAction) => void;
   onRecord: (
     raw: string,
     viaSpeech: boolean,
@@ -499,8 +597,13 @@ function BrainteaserCard({
   onNext: () => void;
 }) {
   const [raw, setRaw] = useState("");
+  const [clarifyVal, setClarifyVal] = useState("");
   const [remaining, setRemaining] = useState(step.timeLimitSec);
   const revealed = response !== null;
+  const selfAssessed = response?.selfAssessed;
+  const grade = response?.reasoningGrade ?? null;
+  const clarify = response?.clarify ?? null;
+  const clarifyStartRef = useRef<number>(0);
 
   useEffect(() => {
     if (revealed) return;
@@ -508,8 +611,77 @@ function BrainteaserCard({
     return () => clearInterval(id);
   }, [revealed]);
 
-  const reveal = (selfAssessed?: "got" | "missed") => {
-    onRecord(raw, false, selfAssessed);
+  // Once the candidate self-assesses, grade their reasoning quality (AI or
+  // deterministic). Correctness (got/missed) is theirs — the LLM only judges
+  // how they reasoned, never flips the verdict.
+  const gradingRef = useRef(false);
+  useEffect(() => {
+    if (selfAssessed === undefined || grade || gradingRef.current) return;
+    gradingRef.current = true;
+    let cancelled = false;
+    gradeReasoning(
+      {
+        prompt: step.prompt,
+        correctAnswer: step.answer,
+        correct: selfAssessed === "got",
+        reasoning: response?.reasoningRaw ?? "",
+        isMentalMath: false,
+      },
+      { concept: step.concept },
+    ).then((g) => {
+      if (!cancelled) dispatch({ type: "applyReasoningGrade", stepId: step.id, grade: g });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selfAssessed, grade]);
+
+  // When the brainteaser reasoning is MIXED / contradictory / hedged, force ONE
+  // clarifying commit before advancing (same rock-solid gate as the math card).
+  const clarifyAskedRef = useRef(false);
+  useEffect(() => {
+    if (!grade || grade.quality !== "ambiguous") return;
+    if (clarify || clarifyAskedRef.current) return;
+    clarifyAskedRef.current = true;
+    clarifyStartRef.current = Date.now();
+    dispatch({
+      type: "askClarify",
+      stepId: step.id,
+      target: "main",
+      prompt:
+        grade.clarifyPrompt ??
+        buildReasoningClarifyPrompt({
+          prompt: step.prompt,
+          correctAnswer: step.answer,
+          correct: selfAssessed === "got",
+          reasoning: response?.reasoningRaw ?? "",
+          isMentalMath: false,
+        }),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grade, clarify]);
+
+  const reasoningResolved =
+    grade != null &&
+    (grade.quality !== "ambiguous" || (clarify?.graded ?? false));
+
+  const submitClarify = () => {
+    if (clarifyVal.trim() === "" || clarify?.graded) return;
+    const elapsedMs = Date.now() - (clarifyStartRef.current || Date.now());
+    dispatch({
+      type: "recordClarify",
+      stepId: step.id,
+      target: "main",
+      raw: clarifyVal,
+      viaSpeech: false,
+      elapsedMs,
+    });
+    speech.stopListening();
+  };
+
+  const reveal = (sa?: "got" | "missed") => {
+    onRecord(raw, false, sa);
     speech.stopListening();
   };
 
@@ -539,7 +711,7 @@ function BrainteaserCard({
       {!revealed && (
         <div className="panel p-5">
           <label className="label text-accent">
-            Think out loud — jot your reasoning (optional)
+            Think out loud: jot your reasoning (optional)
           </label>
           <div className="mt-2">
             <AnswerField
@@ -554,7 +726,7 @@ function BrainteaserCard({
             />
           </div>
           <p className="mt-2 text-xs text-muted">
-            This is reflect-only — nothing here is scored. Reveal when ready (or
+            This is reflect-only: nothing here is scored. Reveal when ready (or
             when time's up).
           </p>
         </div>
@@ -577,7 +749,7 @@ function BrainteaserCard({
 
           <FollowUps title="Probing follow-ups" items={step.probes} />
 
-          {response?.selfAssessed === undefined ? (
+          {selfAssessed === undefined ? (
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => reveal("got")}
@@ -593,9 +765,23 @@ function BrainteaserCard({
               </button>
             </div>
           ) : (
-            <button onClick={onNext} className="btn-primary w-full">
-              {isLast ? "See Results ▸" : "Next Question ▸"}
-            </button>
+            <div className="space-y-4">
+              <ReasoningPanel grade={grade} loading={!grade} />
+              {clarify && (
+                <ClarifyBlock
+                  clarify={clarify}
+                  value={clarifyVal}
+                  onChange={setClarifyVal}
+                  onSubmit={submitClarify}
+                  speech={speech}
+                />
+              )}
+              {reasoningResolved && (
+                <button onClick={onNext} className="btn-primary w-full">
+                  {isLast ? "See Results ▸" : "Next Question ▸"}
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -609,33 +795,42 @@ function BrainteaserCard({
 
 function BehavioralCard({
   step,
-  response,
   speech,
   isLast,
   onRecord,
   onNext,
 }: {
   step: BehavioralStep;
-  response: MockResponse | null;
   speech: SpeechApi;
   isLast: boolean;
   onRecord: (raw: string, viaSpeech: boolean) => void;
   onNext: () => void;
 }) {
   const [raw, setRaw] = useState("");
-  const answered = response !== null;
 
-  const submit = () => {
+  // Behavioral prompts are UNSCORED prep flashcards presented at the very end:
+  // record any reflection transiently (for resume) but never gate the flow on it.
+  const advance = () => {
     onRecord(raw, false);
     speech.stopListening();
+    onNext();
   };
 
   return (
     <div className="animate-print-in space-y-4">
+      <div className="border-l-2 border-accent bg-surface-muted px-4 py-3">
+        <div className="label text-accent">Prep flashcard · NOT scored</div>
+        <p className="mt-1 text-sm leading-relaxed text-secondary">
+          Behavioral questions do not factor into your mock score — they're
+          practice prompts. Rehearse an answer out loud, then check it against
+          what a strong response covers.
+        </p>
+      </div>
+
       <div className="panel p-5">
         <div className="flex items-center justify-between border-b border-subtle pb-2">
           <span className="label text-accent">Behavioral · Fit</span>
-          <StageBadge label="Reflect-only" />
+          <StageBadge label="Unscored" />
         </div>
         <p className="mt-3 font-display text-lg font-semibold leading-relaxed text-primary">
           {step.prompt}
@@ -647,49 +842,44 @@ function BehavioralCard({
         )}
       </div>
 
-      {!answered && (
-        <div className="panel p-5">
-          <label className="label text-accent">Your response</label>
-          <div className="mt-2">
-            <AnswerField
-              value={raw}
-              onChange={setRaw}
-              onSubmit={submit}
-              speech={speech}
-              multiline
-              placeholder="Speak or type your answer — this is for your own review"
-              ariaLabel="Your behavioral response"
-              submitLabel="Done ▸"
-            />
-          </div>
-          <p className="mt-2 text-xs text-muted">
-            Nothing here is scored. Your draft is kept only on this device to let
-            you resume, and is cleared when you finish. Answer as you would live,
-            then self-review against the hints.
-          </p>
-        </div>
-      )}
+      <div className="panel p-5">
+        <span className="label text-accent">
+          What a strong answer covers
+        </span>
+        <ul className="mt-2 space-y-1.5 text-sm text-secondary">
+          {step.reflectionHints.map((h, i) => (
+            <li key={i} className="flex items-start gap-2">
+              <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 bg-accent" />
+              <span>{h}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
 
-      {answered && (
-        <div className="animate-print-in space-y-4">
-          <div className="panel p-5">
-            <span className="label text-accent">
-              What a strong answer tends to cover
-            </span>
-            <ul className="mt-2 space-y-1.5 text-sm text-secondary">
-              {step.reflectionHints.map((h, i) => (
-                <li key={i} className="flex items-start gap-2">
-                  <span className="mt-1.5 inline-block h-1.5 w-1.5 shrink-0 bg-accent" />
-                  <span>{h}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-          <button onClick={onNext} className="btn-primary w-full">
-            {isLast ? "See Results ▸" : "Next Question ▸"}
-          </button>
+      <div className="panel p-5">
+        <label className="label text-accent">
+          Rehearse a response (optional, for your own review)
+        </label>
+        <div className="mt-2">
+          <AnswerField
+            value={raw}
+            onChange={setRaw}
+            onSubmit={advance}
+            speech={speech}
+            multiline
+            placeholder="Speak or type — nothing here is scored"
+            ariaLabel="Your behavioral rehearsal"
+            submitLabel={isLast ? "See Results ▸" : "Next ▸"}
+          />
         </div>
-      )}
+        <p className="mt-2 text-xs text-muted">
+          Kept only on this device to let you resume; cleared when you finish.
+        </p>
+      </div>
+
+      <button onClick={advance} className="btn-primary w-full">
+        {isLast ? "See Results ▸" : "Next Flashcard ▸"}
+      </button>
     </div>
   );
 }
@@ -717,139 +907,3 @@ function FollowUps({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Summary                                                                    */
-/* -------------------------------------------------------------------------- */
-
-function MockSummaryView({
-  session,
-  themeCelebration,
-  onRestart,
-  onDone,
-}: {
-  session: MockSession;
-  themeCelebration: () => void;
-  onRestart: () => void;
-  onDone: () => void;
-}) {
-  const summary = useMemo(() => toPersistableSummary(session), [session]);
-  const pct =
-    summary.mathTotal > 0
-      ? Math.round((summary.mathCorrect / summary.mathTotal) * 100)
-      : 0;
-  const strong = pct >= 70;
-
-  useEffect(() => {
-    if (strong) setTimeout(themeCelebration, 260);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return (
-    <div className="animate-print-in space-y-5">
-      <div className="panel-ruled p-6 text-center">
-        <span className="label">Debrief</span>
-        <div className="relative mt-4 flex justify-center">
-          <StampSeal
-            label={strong ? "Sharp" : "Keep Reps Up"}
-            sub={strong ? "Math Held Up" : "Tighten the Arithmetic"}
-            tone={strong ? "bull" : "accent"}
-          />
-        </div>
-
-        <div className="mx-auto mt-6 grid max-w-md grid-cols-3 divide-x divide-subtle border-y border-subtle">
-          <div className="px-2 py-3">
-            <div className="label text-[9px]">Math</div>
-            <div className="num mt-1 text-xl font-semibold text-primary">
-              {summary.mathCorrect}/{summary.mathTotal}
-            </div>
-          </div>
-          <div className="px-2 py-3">
-            <div className="label text-[9px]">Avg time</div>
-            <div className="num mt-1 text-xl font-semibold text-secondary">
-              {summary.mathAvgElapsedMs != null
-                ? `${(summary.mathAvgElapsedMs / 1000).toFixed(1)}s`
-                : "—"}
-            </div>
-          </div>
-          <div className="px-2 py-3">
-            <div className="label text-[9px]">Teasers</div>
-            <div className="num mt-1 text-xl font-semibold text-secondary">
-              {summary.brainteaserGotIt}/{summary.brainteaserSeen}
-            </div>
-          </div>
-        </div>
-
-        <p className="mx-auto mt-4 max-w-md text-sm leading-relaxed text-secondary">
-          Behavioral answers are yours alone — reflect on them against the hints.
-          Now that you've finished, this session's saved draft has been cleared
-          from this device, and nothing was ever sent anywhere.
-        </p>
-
-        <div className="mt-5 flex flex-col gap-2 sm:flex-row">
-          <button onClick={onRestart} className="btn-primary flex-1">
-            New Interview
-          </button>
-          <button onClick={onDone} className="btn-secondary flex-1">
-            Back Home
-          </button>
-        </div>
-      </div>
-
-      {/* Per-question blotter */}
-      <div className="panel">
-        <div className="border-b-[3px] border-border-strong px-4 py-2.5">
-          <span className="label">Blotter · Review</span>
-        </div>
-        <ul>
-          {session.script.steps.map((s) => {
-            const r = session.responses.find((x) => x.stepId === s.id);
-            const verdict =
-              s.kind === "math"
-                ? r?.score?.correct
-                  ? "correct"
-                  : "wrong"
-                : s.kind === "brainteaser"
-                  ? r?.selfAssessed === "got"
-                    ? "correct"
-                    : r?.selfAssessed === "missed"
-                      ? "wrong"
-                      : "reflect"
-                  : "reflect";
-            const tone =
-              verdict === "correct"
-                ? "bg-bull text-bg"
-                : verdict === "wrong"
-                  ? "bg-bear text-bg"
-                  : "bg-surface-muted text-muted";
-            const glyph =
-              verdict === "correct" ? "✓" : verdict === "wrong" ? "✕" : "·";
-            const label =
-              s.kind === "math"
-                ? "Mental math"
-                : s.kind === "brainteaser"
-                  ? "Brainteaser"
-                  : "Behavioral";
-            return (
-              <li
-                key={s.id}
-                className="flex items-start gap-3 border-b border-subtle p-4 last:border-b-0"
-              >
-                <span
-                  className={`num mt-0.5 grid h-6 w-6 shrink-0 place-items-center text-xs font-semibold ${tone}`}
-                >
-                  {glyph}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="label text-[9px] text-muted">{label}</div>
-                  <div className="mt-0.5 truncate text-sm text-primary">
-                    {s.prompt}
-                  </div>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-}

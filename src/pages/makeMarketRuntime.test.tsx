@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { MakeMarketPage } from "./MakeMarketPage";
 import { Rng } from "@/lib/rng";
@@ -22,11 +23,13 @@ import {
 
 function renderPage() {
   return render(
-    <ThemeProvider>
-      <MemoryRouter>
-        <MakeMarketPage />
-      </MemoryRouter>
-    </ThemeProvider>,
+    <AuthProvider>
+      <ThemeProvider>
+        <MemoryRouter>
+          <MakeMarketPage />
+        </MemoryRouter>
+      </ThemeProvider>
+    </AuthProvider>,
   );
 }
 

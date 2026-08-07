@@ -15,9 +15,10 @@
  *   • orange-deflation (0.5×) — halve the orange total, ROUNDED UP (11 → 6).
  *   • no-fruit-a       — bag A's apples AND oranges become 0.
  *   • no-fruit-b       — bag B's apples AND oranges become 0.
- * After the event and the multiply, the product is rounded to the nearest 10
- * to give the `trueValue` used for every trade decision; the pre-round product
- * is exposed as `rawValue` for display.
+ * After the event and the multiply, the EXACT product is the `trueValue` used
+ * for every trade decision (no rounding — rounding the decision value would let
+ * a value inside the quote fall outside it and mis-grade a correct skip). The
+ * same product is also exposed as `rawValue`, so `rawValue === trueValue`.
  *
  * Scoring rewards speed and accuracy: a correct profitable trade captures more
  * of its edge the more of the 15s window is left (early-bird bonus, floor of
@@ -58,9 +59,9 @@ export interface FruitMarket {
   bagB: Bag;
   event: FruitEvent;
   quote: Quote;
-  /** The multiplied integer product BEFORE rounding to the nearest 10. */
+  /** The exact multiplied integer product (kept for display; == `trueValue`). */
   rawValue: number;
-  /** `rawValue` rounded to the nearest 10 — used for ALL trade decisions. */
+  /** The exact product `applesTotal × orangesTotal` — used for ALL trade decisions. */
   trueValue: number;
 }
 
@@ -109,15 +110,13 @@ export function orangesTotal(bagA: Bag, bagB: Bag, event: FruitEvent): number {
   return total;
 }
 
-/** Round to the nearest 10 (ties round up): 544 → 540, 545 → 550, 11 → 10. */
-export function roundTo10(n: number): number {
-  return Math.round(n / 10) * 10;
-}
-
 /**
- * Full value pipeline: apply the event to the counts, multiply, and round.
+ * Full value pipeline: apply the event to the counts and multiply. The EXACT
+ * product is the trade-decision value — it is NOT rounded, so a value that sits
+ * inside the quote is never nudged outside it (which previously mis-graded a
+ * correct skip).
  *   rawValue  = applesTotal × orangesTotal (integer)
- *   trueValue = rawValue rounded to the nearest 10
+ *   trueValue = rawValue (the exact product, no rounding)
  */
 export function computeValue(
   bagA: Bag,
@@ -125,7 +124,7 @@ export function computeValue(
   event: FruitEvent,
 ): { rawValue: number; trueValue: number } {
   const rawValue = applesTotal(bagA, bagB, event) * orangesTotal(bagA, bagB, event);
-  return { rawValue, trueValue: roundTo10(rawValue) };
+  return { rawValue, trueValue: rawValue };
 }
 
 /* ========================================================================== */

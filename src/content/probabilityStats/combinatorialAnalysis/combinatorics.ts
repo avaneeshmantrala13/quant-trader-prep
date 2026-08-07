@@ -68,7 +68,7 @@ export function factorialBig(n: number): bigint {
 
 /**
  * Exact binomial coefficient C(n, k) as a bigint. Safe for the large values this
- * subcategory needs — C(52,10) ≈ 1.6e10, C(260,3), C(310,k), etc. — with no
+ * subcategory needs. C(52,10) ≈ 1.6e10, C(260,3), C(310,k), etc., with no
  * intermediate overflow (the running product divides exactly at every step).
  */
 export function chooseBig(n: number, k: number): bigint {
@@ -89,7 +89,7 @@ export function choose(n: number, k: number): number {
 }
 
 /**
- * Exact multinomial coefficient (Σparts)! / ∏(partᵢ!) as a bigint — the number
+ * Exact multinomial coefficient (Σparts)! / ∏(partᵢ!) as a bigint, the number
  * of distinct arrangements of a multiset (e.g. lattice paths in 3-D: E/N/U moves).
  */
 export function multinomialBig(parts: number[]): bigint {
@@ -158,7 +158,7 @@ export function binomTailLEFloat(n: number, p: number, k: number): number {
   return sum;
 }
 
-/** Lanczos log-gamma (abs error < 1e-10) — for the log-space binomial tail. */
+/** Lanczos log-gamma (abs error < 1e-10), for the log-space binomial tail. */
 export function logGamma(x: number): number {
   const g = 7;
   const c = [

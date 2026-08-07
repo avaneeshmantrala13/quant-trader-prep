@@ -40,26 +40,26 @@ import {
 } from "./generators";
 
 /**
- * Expected Value — the fourth (and largest) Probability & Statistics
+ * Expected Value, the fourth (and largest) Probability & Statistics
  * subcategory. Unlike Kelly (one formula) or even Game Theory, Expected Value
  * spans ~25 distinct solution-method FAMILIES, so the ~85-question dataset is
  * clustered into 8 Candy-Crush levels ramping Easy → Hard, each grouping
  * related families and using the mode that best teaches them:
  *
- *   • `quiz`      — where NAMING the misconception is the lesson (the 1/36
+ *   • `quiz`     , where NAMING the misconception is the lesson (the 1/36
  *                   dice-match trap, CLT variance addition, Wald's wrong count,
  *                   walk duration i·N vs i(N−i), martingale fair-game EV = 0).
- *   • `numeric`   — where a clean exact scalar is the point (optimal-stopping
+ *   • `numeric`  , where a clean exact scalar is the point (optimal-stopping
  *                   game values, geometric/recursion waits, indicator counts,
  *                   conditional expectation & geometric-probability areas).
- *   • `flashcard` — the special cases that must NOT be graded as a scalar:
+ *   • `flashcard`, the special cases that must NOT be graded as a scalar:
  *                   divergent-EV sentinels ("infinite / diverges") and the
  *                   coin-simulation procedures/formulas.
  *
  * Every level sets `section: "Expected Value"` so the map / Table of Contents
  * render a labeled segment. Exact solvers live in `./ev.ts`; generators + the
  * per-family distractor taxonomy in `./generators.ts`. NONE of the 85 source
- * questions are user-facing — they live only in `./expectedValue.test.ts`.
+ * questions are user-facing, they live only in `./expectedValue.test.ts`.
  */
 const SECTION = "Expected Value";
 
@@ -84,15 +84,15 @@ export const expectedValueLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "Expected value starts with counting outcomes correctly. The most famous slip: rolling one die twice and asking P(the second matches the first). The first roll is FREE — only the second must match — so the answer is 1/N, not the 1/N² you'd get by fixing both dice to a specific value.",
-        "For a payoff game, always WEIGHT each outcome by its probability, not by how memorable it is. Rolling three dice, 'exactly two the same' happens 90/216 of the time and dominates the rare 'all three same' (6/216). Enumerate, weight, sum — and never forget the outcomes that LOSE money.",
+        "Expected value starts with counting outcomes correctly. The most famous slip: rolling one die twice and asking P(the second matches the first). The first roll is FREE, only the second must match, so the answer is 1/N, not the 1/N² you'd get by fixing both dice to a specific value.",
+        "For a payoff game, always WEIGHT each outcome by its probability, not by how memorable it is. Rolling three dice, 'exactly two the same' happens 90/216 of the time and dominates the rare 'all three same' (6/216). Enumerate, weight, sum, and never forget the outcomes that LOSE money.",
       ],
       keyIdea: "P(match) = 1/N (not 1/N²); EV weights every outcome by its probability.",
       whyInterviewers:
-        "Miscounting the sample space is the #1 way candidates blow an easy EV question — desks want the count right cold.",
+        "Miscounting the sample space is the #1 way candidates blow an easy EV question, desks want the count right cold.",
       deepDive: {
         whyItWorks:
-          "Expected value is the sum of each outcome's value times its probability, so it rests entirely on counting the sample space correctly and weighting every outcome — winners and losers alike — by its true chance.",
+          "Expected value is the sum of each outcome's value times its probability, so it rests entirely on counting the sample space correctly and weighting every outcome, winners and losers alike, by its true chance.",
         approach: [
           "Enumerate the outcomes and their probabilities, fixing only what the problem actually fixes.",
           "Assign each outcome its payoff or value.",
@@ -112,7 +112,7 @@ export const expectedValueLevels: Level[] = [
     title: "Stop or Roll Again",
     subtitle: "Optimal stopping & the value of the option",
     blurb:
-      "Price reroll games: keep a good first roll, take the fallback on a bad one — for both discrete dice and a continuous voucher.",
+      "Price reroll games: keep a good first roll, take the fallback on a bad one, for both discrete dice and a continuous voucher.",
     section: SECTION,
     difficulty: "easy",
     mode: "numeric",
@@ -130,12 +130,12 @@ export const expectedValueLevels: Level[] = [
       ],
       keyIdea: "Keep iff roll ≥ continuation value; the option lifts EV above the mean.",
       whyInterviewers:
-        "Pricing the option to act later — and not overpaying for it — is the core of trading a resettable position.",
+        "Pricing the option to act later, and not overpaying for it, is the core of trading a resettable position.",
       deepDive: {
         whyItWorks:
           "Optimal stopping compares your current value against the expected value of continuing; the freedom to stop when you are ahead makes the game worth strictly more than a single draw's mean.",
         approach: [
-          "Compute the continuation value — the expected result of choosing to go on, minus any fee.",
+          "Compute the continuation value, the expected result of choosing to go on, minus any fee.",
           "Keep the current outcome only if it is at least the continuation value.",
           "For each possible current outcome, take the better of keeping versus continuing.",
           "Average that best-of over all equally-likely current outcomes.",
@@ -170,7 +170,7 @@ export const expectedValueLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "A single success with per-try probability p takes 1/p tries on average (geometric); the r-th success takes r/p (negative binomial). Memorylessness is the classic trap: after m failures the REMAINING wait is still 1/p, so the total from the start is m + 1/p — you must add the m already spent.",
+        "A single success with per-try probability p takes 1/p tries on average (geometric); the r-th success takes r/p (negative binomial). Memorylessness is the classic trap: after m failures the REMAINING wait is still 1/p, so the total from the start is m + 1/p, you must add the m already spent.",
         "First-step recursion handles patterns and running sums: for the same face twice in a row the wait is (1+p)/p² (longer than a fixed pair's 1/p² because a mismatch restarts you), and a stop-and-sum game pays E[#rolls]·E[value] by Wald's identity.",
       ],
       keyIdea: "Geometric 1/p; r-th success r/p; two-in-a-row (1+p)/p²; total wait m + 1/p.",
@@ -178,7 +178,7 @@ export const expectedValueLevels: Level[] = [
         "Expected waiting times underlie fill times, queueing, and 'how long until X' risk questions on every desk.",
       deepDive: {
         whyItWorks:
-          "Expected waits come from geometric reasoning — each independent trial succeeds with probability p, so the mean wait is 1/p — plus first-step recursion for patterns. Memorylessness means past failures never shorten what remains.",
+          "Expected waits come from geometric reasoning, each independent trial succeeds with probability p, so the mean wait is 1/p, plus first-step recursion for patterns. Memorylessness means past failures never shorten what remains.",
         approach: [
           "Identify the per-trial success probability p.",
           "For a single success use 1/p; for the r-th success add independent waits to r/p.",
@@ -186,7 +186,7 @@ export const expectedValueLevels: Level[] = [
           "Add any trials already spent on top of the remaining expected wait.",
         ],
         pitfalls: [
-          "Thinking elapsed failures reduce the remaining wait — it stays 1/p, so add the elapsed trials.",
+          "Thinking elapsed failures reduce the remaining wait, it stays 1/p, so add the elapsed trials.",
           "Treating a 'same face twice in a row' wait like a fixed target pair, when a mismatch restarts you.",
           "Confusing the count of trials with the value accumulated (use Wald: expected count × expected term).",
         ],
@@ -214,15 +214,15 @@ export const expectedValueLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "Linearity of expectation is the most powerful trick in EV: write a count as a sum of 0/1 indicators, use E[indicator] = P(event), and add — it works EVEN when the indicators are dependent, so you never need the joint distribution. Coupon collector (n·H_n), distinct colors after m draws, empty boxes, and record counts (H_n) all fall to it instantly.",
+        "Linearity of expectation is the most powerful trick in EV: write a count as a sum of 0/1 indicators, use E[indicator] = P(event), and add, it works EVEN when the indicators are dependent, so you never need the joint distribution. Coupon collector (n·H_n), distinct colors after m draws, empty boxes, and record counts (H_n) all fall to it instantly.",
         "The same idea inverts: if the expected number of events is E = (#windows)·p, you can solve for an unknown parameter n. The recurring slips are dropping the hardest final coupon's 1/1 term and miscounting the number of windows or gaps.",
       ],
-      keyIdea: "E[count] = Σ P(each event) — linearity holds even under dependence.",
+      keyIdea: "E[count] = Σ P(each event), linearity holds even under dependence.",
       whyInterviewers:
         "Turning a scary joint-distribution count into a sum of easy probabilities is exactly the decomposition desks prize.",
       deepDive: {
         whyItWorks:
-          "Linearity of expectation lets you write any count as a sum of 0/1 indicators and add their individual probabilities — and it holds even when the indicators are dependent, so you never need the joint distribution.",
+          "Linearity of expectation lets you write any count as a sum of 0/1 indicators and add their individual probabilities, and it holds even when the indicators are dependent, so you never need the joint distribution.",
         approach: [
           "Express the quantity as a count of simple yes/no events.",
           "Define a 0/1 indicator for each event.",
@@ -230,7 +230,7 @@ export const expectedValueLevels: Level[] = [
           "Sum those probabilities to get the expected count.",
         ],
         pitfalls: [
-          "Thinking linearity requires independence — it does not.",
+          "Thinking linearity requires independence, it does not.",
           "Miscounting the number of events, windows, or gaps being summed.",
           "Dropping a boundary term, such as the last and hardest coupon's contribution.",
         ],
@@ -258,18 +258,18 @@ export const expectedValueLevels: Level[] = [
     lesson: {
       paragraphs: [
         "Second moments trip people up: E[X²] = Var(X) + (E[X])² is strictly larger than (E[X])², and E[H·T] ≠ E[H]·E[T] when H and T are dependent (T = n − H), so the head×tail product is n(n−1)/4, not n²/4. For an exponential, E[X²] = 2/λ² (the mean squared, times two).",
-        "For sums of independent variables, MEANS add (E[sum of k uniforms] = k·L/2) and, crucially, VARIANCES add — even for a difference D − H, Var(D − H) = Var(D) + Var(H). Forgetting to add the variances (or wrongly subtracting them) is the number-one CLT mistake.",
+        "For sums of independent variables, MEANS add (E[sum of k uniforms] = k·L/2) and, crucially, VARIANCES add, even for a difference D − H, Var(D − H) = Var(D) + Var(H). Forgetting to add the variances (or wrongly subtracting them) is the number-one CLT mistake.",
       ],
       keyIdea: "E[X²] = Var + mean²; variance ADDS for independent sums and differences.",
       whyInterviewers:
-        "Aggregating independent risks means adding variances — mishandle it and every portfolio/CLT estimate is wrong.",
+        "Aggregating independent risks means adding variances, mishandle it and every portfolio/CLT estimate is wrong.",
       deepDive: {
         whyItWorks:
-          "The second moment obeys E[X²] = Var(X) + (E[X])², so it always exceeds the mean squared; and for independent variables both means and variances add — variances add even for a difference.",
+          "The second moment obeys E[X²] = Var(X) + (E[X])², so it always exceeds the mean squared; and for independent variables both means and variances add, variances add even for a difference.",
         approach: [
           "Separate first moments (means) from second moments and variance.",
           "Use E[X²] = Var + mean² rather than assuming E[X²] equals the mean squared.",
-          "For a product of dependent variables, do not split the expectation — account for the dependence.",
+          "For a product of dependent variables, do not split the expectation, account for the dependence.",
           "For sums or differences of independent variables, combine the means with sign but ADD the variances.",
         ],
         pitfalls: [
@@ -300,7 +300,7 @@ export const expectedValueLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "Conditioning changes the answer: winning a geometric race shortens your expected count below the plain 1/p (E[A | A < B] = 1/(1 − q²)). And when two uniform times must fall close together, it's a 2-D AREA question — the meeting/overlap probability is 1 minus the corner triangles on a square, never a 1-D ratio like t/L.",
+        "Conditioning changes the answer: winning a geometric race shortens your expected count below the plain 1/p (E[A | A < B] = 1/(1 − q²)). And when two uniform times must fall close together, it's a 2-D AREA question, the meeting/overlap probability is 1 minus the corner triangles on a square, never a 1-D ratio like t/L.",
         "Order statistics are clean by symmetry: n uniform points split [0,1] into n+1 equal expected gaps, so the k-th smallest sits at k/(n+1); and E[max of several dice] comes from the tail sum Σ P(max ≥ k). Divide by the right count (n+1, not n) and remember the max beats a single die's mean.",
       ],
       keyIdea: "Condition carefully; 2-D events are areas; k-th of n uniforms = k/(n+1).",
@@ -342,7 +342,7 @@ export const expectedValueLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "For a fair ±1 walk between walls at 0 and N, the position is a martingale, so P(reach N first) = i/N (gambler's ruin). The expected DURATION uses the martingale Y² − t and equals i·(N − i) — the common trap i·N drops the −i and overstates it.",
+        "For a fair ±1 walk between walls at 0 and N, the position is a martingale, so P(reach N first) = i/N (gambler's ruin). The expected DURATION uses the martingale Y² − t and equals i·(N − i), the common trap i·N drops the −i and overstates it.",
         "Martingale reasoning also kills betting systems: a doubling ('martingale') strategy on a fair coin still has EV = 0, because the tiny chance of a big loss exactly cancels the large chance of a small win. Wald's identity ties it together: a random sum has mean E[#terms]·E[term].",
       ],
       keyIdea: "Fair walk: reach prob i/N, duration i(N−i); no system beats EV = 0.",
@@ -370,7 +370,7 @@ export const expectedValueLevels: Level[] = [
     title: "Infinity & Simulation Desk",
     subtitle: "Divergent EV sentinels & coin-simulation procedures",
     blurb:
-      "Reason through St.-Petersburg-type games whose EV is infinite, and coin procedures (Von Neumann, dyadic, rejection) — then reveal.",
+      "Reason through St.-Petersburg-type games whose EV is infinite, and coin procedures (Von Neumann, dyadic, rejection), then reveal.",
     section: SECTION,
     difficulty: "hard",
     mode: "flashcard",
@@ -378,12 +378,12 @@ export const expectedValueLevels: Level[] = [
     flashcards: expectedValueFlashcards,
     lesson: {
       paragraphs: [
-        "Some expected values are genuinely INFINITE. In a St.-Petersburg-type game the prize grows as fast as the probability shrinks, so each term of the EV sum stays ≥ a positive constant and the series diverges — the fair price is infinite, and the tempting finite number (a convergent doubling-prize analog) is exactly the trap. A heavy 1/n tail can also make an expected WAITING time infinite even though you win with probability 1.",
-        "Other questions have a PROCEDURE or FORMULA as the answer, not a scalar: the Von Neumann extractor turns a biased coin fair in 1/(p(1−p)) flips; a fair coin simulates any dyadic k/2ⁿ by mapping k of 2ⁿ sequences; non-dyadic and irrational targets use rejection sampling / binary expansion. These are integrity-based flashcards — reason it through, reveal, and self-assess.",
+        "Some expected values are genuinely INFINITE. In a St.-Petersburg-type game the prize grows as fast as the probability shrinks, so each term of the EV sum stays ≥ a positive constant and the series diverges, the fair price is infinite, and the tempting finite number (a convergent doubling-prize analog) is exactly the trap. A heavy 1/n tail can also make an expected WAITING time infinite even though you win with probability 1.",
+        "Other questions have a PROCEDURE or FORMULA as the answer, not a scalar: the Von Neumann extractor turns a biased coin fair in 1/(p(1−p)) flips; a fair coin simulates any dyadic k/2ⁿ by mapping k of 2ⁿ sequences; non-dyadic and irrational targets use rejection sampling / binary expansion. These are integrity-based flashcards, reason it through, reveal, and self-assess.",
       ],
       keyIdea: "Prize×prob ratio ≥ 1 ⇒ infinite EV; some answers are a procedure, not a number.",
       whyInterviewers:
-        "Recognizing when an EV diverges — and when the 'answer' is a construction — shows real probabilistic maturity.",
+        "Recognizing when an EV diverges, and when the 'answer' is a construction, shows real probabilistic maturity.",
       deepDive: {
         whyItWorks:
           "An expected value is infinite when the payoff grows as fast as its probability shrinks, so each term of the sum stays above a positive constant and the series diverges; and some questions genuinely ask for a procedure or formula rather than a number.",

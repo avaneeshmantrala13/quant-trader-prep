@@ -12,19 +12,19 @@ import {
 import { varianceCovarianceCltFlashcards } from "./flashcards";
 
 /**
- * Probability & Statistics — **Variance, Covariance & the CLT**: a focused topic
+ * Probability & Statistics, **Variance, Covariance & the CLT**: a focused topic
  * (re-homed from the former "General" grab-bag, consolidating the
  * covariance/variance-trap family with the CLT / concentration-bound family —
  * both are second-moment / limit-law reasoning). Three Candy-Crush levels
  * ramping Medium → Hard, each using the mode that best teaches it:
  *
- *   • `numeric`   — vc-1 computes the classic second-moment values as
+ *   • `numeric`  , vc-1 computes the classic second-moment values as
  *                  free-response with tagged error-mode coaching (Cauchy–Schwarz
  *                  covariance ceiling, affine-correlation sign, the SD-addition
  *                  trap, the variance-doubling z of a difference); vc-2 computes
  *                  variance of a linear combination, CLT normal-approximation
  *                  tails, and a Markov concentration bound.
- *   • `flashcard` — vc-3 is the non-scalar desk: deducing a linear relation from
+ *   • `flashcard`, vc-3 is the non-scalar desk: deducing a linear relation from
  *                  perfect correlation (a procedure) and the dependence-aware
  *                  dry-weekend answer (a conditional).
  *
@@ -54,8 +54,8 @@ export const varianceCovarianceCltLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "Covariance has a ceiling: Cov(X,Y) ≤ √(VarX·VarY) by Cauchy–Schwarz, and the MEANS are red herrings — forgetting the square root or using the means is the trap. Correlation is scale-and-shift robust: ρ(a+bX, c+dY) = sign(b)·sign(d)·ρ, so only the SIGNS of the slopes survive.",
-        "The deadliest variance trap: for a sum of independent variables you add VARIANCES, not standard deviations. σ(X+Y) = √(σ_X² + σ_Y²), never σ_X + σ_Y. The same doubling bites a DIFFERENCE: Var(S − T) = Var(S) + Var(T) = 2nσ², so the z-argument is −thresh/√(2nσ²) — using only nσ² (forgetting the doubling) is the classic slip.",
+        "Covariance has a ceiling: Cov(X,Y) ≤ √(VarX·VarY) by Cauchy–Schwarz, and the MEANS are red herrings, forgetting the square root or using the means is the trap. Correlation is scale-and-shift robust: ρ(a+bX, c+dY) = sign(b)·sign(d)·ρ, so only the SIGNS of the slopes survive.",
+        "The deadliest variance trap: for a sum of independent variables you add VARIANCES, not standard deviations. σ(X+Y) = √(σ_X² + σ_Y²), never σ_X + σ_Y. The same doubling bites a DIFFERENCE: Var(S − T) = Var(S) + Var(T) = 2nσ², so the z-argument is −thresh/√(2nσ²), using only nσ² (forgetting the doubling) is the classic slip.",
       ],
       keyIdea: "Cov ≤ √(VarX·VarY); ρ keeps only slope signs; variances add (SDs don't); a difference DOUBLES variance.",
       whyInterviewers:
@@ -91,7 +91,7 @@ export const varianceCovarianceCltLevels: Level[] = [
     numericGenerator: mixNumeric([genVarCombo, genCltTail, genMarkovBound]),
     lesson: {
       paragraphs: [
-        "For independent X, Y the variance of a linear combination is Var(aX + bY) = a²Var(X) + b²Var(Y) — coefficients enter SQUARED and, under independence, there is no cross term. The CLT approximates a sum by a normal: P(X ≥ k) ≈ 1 − Φ((k − nμ)/√(nσ²)). For a binomial, σ² = np(1−p) (NOT np); dropping the (1−p) is the classic slip.",
+        "For independent X, Y the variance of a linear combination is Var(aX + bY) = a²Var(X) + b²Var(Y), coefficients enter SQUARED and, under independence, there is no cross term. The CLT approximates a sum by a normal: P(X ≥ k) ≈ 1 − Φ((k − nμ)/√(nσ²)). For a binomial, σ² = np(1−p) (NOT np); dropping the (1−p) is the classic slip.",
         "When a closed-form tail is out of reach, Markov's inequality gives a crude but valid bound using only the mean: P(T ≥ a) ≤ E[T]/a. It is a genuine one-sided bound (never inverted to a/E[T], and never squared as if it were a variance-based Chebyshev bound).",
       ],
       keyIdea: "Var(aX+bY)=a²VarX+b²VarY; P(X≥k)≈1−Φ(z), σ²=np(1−p); Markov ≤ E[T]/a.",
@@ -126,7 +126,7 @@ export const varianceCovarianceCltLevels: Level[] = [
     flashcards: varianceCovarianceCltFlashcards,
     lesson: {
       paragraphs: [
-        "Not every second-moment answer is a graded scalar. Perfect correlation (|ρ| = 1) means an exact linear relation X = aY + b, so the deliverable is a PROCEDURE — take two distinct (X, Y) pairs to solve for a and b — not a probability. There is no spread to integrate over.",
+        "Not every second-moment answer is a graded scalar. Perfect correlation (|ρ| = 1) means an exact linear relation X = aY + b, so the deliverable is a PROCEDURE, take two distinct (X, Y) pairs to solve for a and b, not a probability. There is no spread to integrate over.",
         "And a 'dry weekend' probability is CONDITIONAL on the dependence structure: 0.6·0.5 = 0.3 only under independence; otherwise you must demand the covariance (variances + correlation) between the two rain indicators before answering. Work each through, reveal, and self-assess.",
       ],
       keyIdea: "Some answers are a procedure (two pairs ⇒ the line) or a condition (0.3 only if independent), not a forced number.",
@@ -134,7 +134,7 @@ export const varianceCovarianceCltLevels: Level[] = [
         "The specials reward candidates who recognise when the honest answer is a construction or a stated condition.",
       deepDive: {
         whyItWorks:
-          "|ρ| = 1 forces an exact linear relation between the variables, so there is no spread to integrate over. And a joint ('both') probability depends on the dependence structure — so the honest answer is sometimes a construction or a stated condition, not a single number.",
+          "|ρ| = 1 forces an exact linear relation between the variables, so there is no spread to integrate over. And a joint ('both') probability depends on the dependence structure, so the honest answer is sometimes a construction or a stated condition, not a single number.",
         approach: [
           "When |ρ| = 1, recognise that X and Y lie exactly on a line X = aY + b.",
           "Recover that line by solving for the slope and intercept from two distinct (X, Y) pairs.",

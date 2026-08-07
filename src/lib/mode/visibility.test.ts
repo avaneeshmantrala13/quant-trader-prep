@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 import {
+  COURSE_ONLY_ROUTES,
   dashboardFocus,
   EXTRA_RELEVANT_KNOWLEDGE_TOPIC_KEYS,
   featureEmphasis,
@@ -8,6 +9,8 @@ import {
   isExtraRelevantKnowledge,
   isFeatureVisible,
   navFor,
+  navRouteBases,
+  QUANT_ONLY_ROUTES,
   topicCategory,
 } from "./visibility";
 
@@ -82,7 +85,6 @@ describe("navFor", () => {
       "Practice",
       "Games",
       "Interview Prep",
-      "Community",
       "Settings",
     ]);
     // Overview leads with Home.
@@ -95,29 +97,116 @@ describe("navFor", () => {
     expect(labels).not.toContain("Intro to Probability");
   });
 
-  it("Case A keeps course groups prominent and quant-heavy groups 'beyond the course'", () => {
+  it("Case A is a lean, course-scoped menu (no quant-only groups)", () => {
     const groups = navFor("course");
     const headings = groups.map((g) => g.heading);
-    expect(headings).toContain("Courses");
-    expect(headings).toContain("Foundations");
-    expect(headings).toContain("Beyond the course");
+    // Only the course-relevant subsections remain — the quant-heavy groups
+    // (Practice / Games / Interview Prep / Community / Beyond the course) are
+    // gone from course mode entirely.
+    expect(headings).toEqual([
+      "Overview",
+      "Courses",
+      "Foundations",
+      "Settings",
+    ]);
+    for (const dropped of [
+      "extra-topics",
+      "practice",
+      "games",
+      "interview-prep",
+      "community",
+    ]) {
+      expect(groups.some((g) => g.id === dropped)).toBe(false);
+    }
+
     // The two course tracks live in the prominent Courses group.
     const courses = groups.find((g) => g.id === "courses")!;
     const courseRoutes = courses.items.map((i) => i.to);
     expect(courseRoutes).toContain("/course/m362k");
     expect(courseRoutes).toContain("/course/m362m");
-    // Course-relevant groups are prominent (no beyond marker); quant-heavy ones
-    // are de-emphasized (visible, not hidden) via a group-level beyond marker.
-    expect(courses.emphasis).toBeUndefined();
-    for (const id of ["extra-topics", "practice", "games", "interview-prep", "community"]) {
-      const g = groups.find((x) => x.id === id)!;
-      expect(g.emphasis).toBe("beyond");
-      expect(g.items.every((i) => i.emphasis === "beyond")).toBe(true);
-      // Beyond groups start collapsed to reduce scroll for a course learner.
-      expect(g.defaultOpen).toBe(false);
+
+    // Every remaining group is prominent (course mode no longer de-emphasizes
+    // anything — the irrelevant stuff is simply absent, not greyed out).
+    for (const g of groups) {
+      expect(g.emphasis).toBeUndefined();
+      expect(g.items.every((i) => i.emphasis === undefined)).toBe(true);
     }
+
+    // Foundations stay first-class for a course learner (not "beyond").
+    const foundations = groups.find((g) => g.id === "foundations")!;
+    expect(foundations.defaultOpen).toBe(true);
+
+    // None of the quant-only competitive surfaces are advertised here.
     const labels = groups.flatMap((g) => g.items.map((i) => i.label));
-    expect(labels).toContain("Speed Arena");
+    for (const gone of [
+      "Speed Arena",
+      "Fermi Drill",
+      "Quant Games",
+      "The Trading Floor",
+      "Leaderboard",
+      "Mock Interview",
+      "Verified Bank",
+      "Community",
+      "Timed Sections",
+    ]) {
+      expect(labels).not.toContain(gone);
+    }
+  });
+});
+
+describe("navFor — mode scoping invariants", () => {
+  const base = (mode: "interview" | "course") => new Set(navRouteBases(mode));
+
+  it("the quant-only and course-only exclusion sets are disjoint", () => {
+    const quant = new Set(QUANT_ONLY_ROUTES);
+    for (const r of COURSE_ONLY_ROUTES) expect(quant.has(r)).toBe(false);
+  });
+
+  it("no quant-only route is surfaced in the course menu", () => {
+    const course = base("course");
+    for (const route of QUANT_ONLY_ROUTES) {
+      expect(course.has(route)).toBe(false);
+    }
+  });
+
+  it("every quant-only route stays reachable from the interview menu", () => {
+    const interview = base("interview");
+    for (const route of QUANT_ONLY_ROUTES) {
+      expect(interview.has(route)).toBe(true);
+    }
+  });
+
+  it("no course-only route leaks into the interview menu", () => {
+    const interview = base("interview");
+    for (const route of COURSE_ONLY_ROUTES) {
+      expect(interview.has(route)).toBe(false);
+    }
+  });
+
+  it("every course-only route is surfaced in the course menu", () => {
+    const course = base("course");
+    for (const route of COURSE_ONLY_ROUTES) {
+      expect(course.has(route)).toBe(true);
+    }
+  });
+
+  it("keeps the genuinely-shared surfaces in BOTH menus", () => {
+    const SHARED = [
+      "/",
+      "/dashboard",
+      "/roadmap",
+      "/contents",
+      "/simulations",
+      "/themes",
+      "/track/mental-math",
+      "/track/math-questions",
+    ];
+    const interview = base("interview");
+    const course = base("course");
+    for (const route of SHARED) {
+      expect(interview.has(route)).toBe(true);
+      expect(course.has(route)).toBe(true);
+    }
   });
 });
 
@@ -136,22 +225,15 @@ describe("navFor — grouped structure is well-formed", () => {
       "games",
       "trading-floor",
       "mock",
-      "verified-bank",
-      "community",
-      "recalibrate",
       "themes",
     ],
+    // Course mode is lean: only the course-relevant anchors survive (the
+    // Intro-to-Probability card carries the `probability` anchor).
     course: [
       "dashboard",
       "contents",
+      "probability",
       "simulations",
-      "arena",
-      "games",
-      "trading-floor",
-      "mock",
-      "verified-bank",
-      "community",
-      "recalibrate",
       "themes",
     ],
   };
@@ -176,13 +258,10 @@ describe("navFor — grouped structure is well-formed", () => {
       "/fermi",
       "/games",
       "/trading-floor",
-      "/leaderboard",
       "/mock",
-      "/verified-bank",
-      "/community",
-      "/diagnostic",
       "/themes",
     ],
+    // Course mode surfaces ONLY the course-relevant routes.
     course: [
       "/",
       "/dashboard",
@@ -193,21 +272,6 @@ describe("navFor — grouped structure is well-formed", () => {
       "/simulations",
       "/track/mental-math",
       "/track/math-questions",
-      "/track/probability?topic=betting-and-sizing",
-      "/track/probability?topic=game-theory-and-puzzles",
-      "/track/interview-games",
-      "/track/brainteasers",
-      "/arena",
-      "/arbitrage",
-      "/ev-timed",
-      "/fermi",
-      "/games",
-      "/trading-floor",
-      "/leaderboard",
-      "/mock",
-      "/verified-bank",
-      "/community",
-      "/diagnostic",
       "/themes",
     ],
   };
@@ -247,11 +311,13 @@ describe("navFor — grouped structure is well-formed", () => {
         }
       });
 
-      it("adds the Leaderboard to the nav", () => {
+      it("never advertises the Leaderboard or Community in either mode (UI removed; libs/routes kept for re-enable)", () => {
         const labels = groups.flatMap((g) => g.items.map((i) => i.label));
         const routes = groups.flatMap((g) => g.items.map((i) => i.to));
-        expect(labels).toContain("Leaderboard");
-        expect(routes).toContain("/leaderboard");
+        expect(labels).not.toContain("Leaderboard");
+        expect(routes).not.toContain("/leaderboard");
+        expect(labels).not.toContain("Community");
+        expect(routes).not.toContain("/community");
       });
 
       it("preserves exactly the expected tour anchors", () => {

@@ -1,7 +1,8 @@
-import { DIFFICULTY_META, type Difficulty } from "@/types/content";
+import { type Difficulty } from "@/types/content";
 import type { TopicMastery } from "@/types/mastery";
 import { BOTTOM_OUT_MISSES } from "./config";
 import {
+  isTopicFloorTier,
   remediationStep,
   type RemediationAction,
   type RemediationInput,
@@ -52,6 +53,13 @@ export interface FinishRemediationContext {
    * Additive: absent/false ⇒ the original conservative behavior is unchanged.
    */
   wasLowConfidenceUnlock?: boolean;
+  /**
+   * OPTIONAL mastery snapshot lookup for the prerequisite topics, forwarded to
+   * {@link remediationStep} so a no-misconception descent targets the learner's
+   * WEAKEST relevant prereq (via `chooseDescentEdge`) instead of the first-listed
+   * one. Absent ⇒ the deterministic first-prereq fallback (unchanged behavior).
+   */
+  masteryOf?: (topicKey: string) => { mean: number; theta: number } | undefined;
 }
 
 export type FinishRemediationPlan =
@@ -94,9 +102,14 @@ export function planFinishRemediation(
     // (at least) the bottom-out threshold so the policy evaluates a descent —
     // while still honoring the atFloorTier / P(intro) / slip safeguards below.
     consecutiveMisses: Math.max(ctx.missedCount, BOTTOM_OUT_MISSES),
-    // Mirror the mid-lesson heuristic: an intro/easy level IS the floor tier.
-    atFloorTier: DIFFICULTY_META[ctx.levelDifficulty].order <= 1,
+    // At-floor is judged against the TOPIC'S OWN minimum authored tier, not a
+    // global intro/easy threshold — so a failed medium-only topic (no intro/easy
+    // level, e.g. Conditional Expectation) is correctly recognised as at-floor
+    // and can descend, instead of being pinned to `retry-in-place` forever.
+    atFloorTier: isTopicFloorTier(ctx.topicKey, ctx.levelDifficulty),
     misconceptionTag: ctx.misconceptionTag,
+    // Route a no-misconception descent to the learner's weakest relevant prereq.
+    masteryOf: ctx.masteryOf,
     // Finishing a whole level below mastery is never a fast+confident slip.
     responseFast: false,
     depthThisSession: 0,

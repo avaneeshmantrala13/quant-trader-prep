@@ -27,6 +27,71 @@ export {
 } from "./scoring";
 export { selectBehavioral, BEHAVIORAL_BANK_SIZE } from "./behavioral";
 export {
+  gradeReasoningDeterministic,
+  normalizeReasoningPayload,
+  numbersIn,
+  isHedgedReasoning,
+  buildReasoningClarifyPrompt,
+} from "./reasoning";
+export type { ReasoningInput } from "./reasoning";
+export {
+  gradeConclusion,
+  buildClarifyPrompt,
+  committedPolarity,
+  valuesIn,
+} from "./conclusion";
+export type {
+  ConclusionVerdict,
+  ConclusionSpec,
+  ConclusionResult,
+  Polarity,
+} from "./conclusion";
+export {
+  buildFollowupPresentations,
+  buildAiFollowup,
+  gradeFollowup,
+  gradeReasoningConclusion,
+  gradeClarification,
+  gradeMainClarification,
+  specFromPresentation,
+  gradeAgainstReference,
+  extractTargetAnswer,
+  keywordHit,
+} from "./followups";
+export {
+  buildMarketMakingSteps,
+  buildMockMmStep,
+  initMmState,
+  playMmRound,
+  validateMmQuote,
+  verdictFor,
+  maxSpreadFor,
+} from "./marketMaking";
+export {
+  drawNumericQuestion,
+  drawArchetype,
+  toContentDifficulty,
+  type PoolDifficulty,
+  type MockNumericQuestion,
+  type ArchetypeId,
+} from "./questionPools";
+export {
+  MOCK_PRESETS,
+  PRESET_ORDER,
+  getPreset,
+  type MockPreset,
+  type PresetItem,
+  type PresetItemKind,
+} from "./presets";
+export {
+  computePerformance,
+  deterministicDiagnosis,
+  floorDiagnosis,
+  normalizeDiagnosisPayload,
+  tierLabel,
+} from "./diagnosis";
+export { gradeReasoning, generateFollowup, getDiagnosis } from "./aiMock";
+export {
   createSpeechController,
   detectSpeechSupport,
   isSpeechRecognitionSupported,
@@ -44,6 +109,7 @@ export type {
 } from "./speech";
 export {
   MOCK_ACTIVE_KEY,
+  mockActiveKey,
   MOCK_PERSIST_VERSION,
   serializeSession,
   deserializeSession,

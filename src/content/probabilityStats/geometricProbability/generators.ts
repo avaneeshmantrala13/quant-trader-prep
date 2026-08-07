@@ -21,12 +21,12 @@ import { MISCONCEPTION } from "@/lib/tutor/misconception";
  * misconception guaranteed ≠ the answer and distinct.
  *
  * Modes:
- *   • quiz    — genGeoArea (the r-vs-r² area trap)
- *   • numeric — genTileFit, genMeeting, genGlance
+ *   • quiz   , genGeoArea (the r-vs-r² area trap)
+ *   • numeric, genTileFit, genMeeting, genGlance
  */
 
 /* ========================================================================== */
-/* ===============  1 — AREA-vs-LINEAR DISK TRAP (quiz)  =================== */
+/* ===============  1. AREA-vs-LINEAR DISK TRAP (quiz)  =================== */
 /* ========================================================================== */
 
 const DISK_THEME = [
@@ -38,7 +38,7 @@ const DISK_THEME = [
 /**
  * A point lands uniformly on a radius-`R` disk. P(within radius r) = r²/R²
  * (inner) or P(farther than r) = 1 − r²/R² (outer). The headline trap is
- * LINEAR-vs-QUADRATIC: distance is NOT uniform — P(ρ ≤ x) grows like x² (area),
+ * LINEAR-vs-QUADRATIC: distance is NOT uniform. P(ρ ≤ x) grows like x² (area),
  * not x, because outer rings hold more area.
  */
 export function buildGeoAreaInstance(
@@ -64,7 +64,7 @@ export function buildGeoAreaInstance(
 
   const correct: Choice = {
     text: fracText(value),
-    rationale: `Correct — P(ρ ≤ x) = x²/R² scales with AREA, so P(${event.includes("WITHIN") ? "within" : "farther"}) = ${fracText(value)}.`,
+    rationale: `Correct. P(ρ ≤ x) = x²/R² scales with AREA, so P(${event.includes("WITHIN") ? "within" : "farther"}) = ${fracText(value)}.`,
   };
   const distractors: Choice[] = [
     {
@@ -73,7 +73,7 @@ export function buildGeoAreaInstance(
     },
     {
       text: fracText(complement),
-      rationale: `That's the complement — you answered the OPPOSITE event (P = ${fracText(complement)}).`,
+      rationale: `That's the complement, you answered the OPPOSITE event (P = ${fracText(complement)}).`,
     },
     {
       text: fracText(dimSlip),
@@ -85,7 +85,7 @@ export function buildGeoAreaInstance(
     `${th.noun.charAt(0).toUpperCase() + th.noun.slice(1)} strikes a uniformly-random spot on ${th.surface} of radius ${R}. ` +
     `What is the probability it ${event}?`;
   const explanation =
-    `For a uniform point on a radius-${R} disk, P(distance ≤ x) = x²/R² — the AREA ratio, quadratic in x. ` +
+    `For a uniform point on a radius-${R} disk, P(distance ≤ x) = x²/R², the AREA ratio, quadratic in x. ` +
     `Here the answer is ${fracText(value)}. The seductive ${fracText(linear)} comes from treating distance as uniform (linear r/R); it ignores that a thin ring at radius x has area ∝ x, so probability accumulates like x².`;
 
   return {
@@ -103,7 +103,7 @@ export function buildGeoAreaInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the disk area-trap — the PHASE_1/2 MCQ→free
+ * FREE-RESPONSE (numeric) form of the disk area-trap, the PHASE_1/2 MCQ→free
  * conversion of `buildGeoAreaInstance`. Same exact solver + same three genuine
  * error modes (linear-vs-quadratic, complement, dimensional slip), now as a
  * parametric error-mode catalog carrying a machine-readable `misconception` tag +
@@ -136,17 +136,17 @@ export function buildGeoAreaNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     linear,
-    `Close — it looks like you used the DISTANCE ratio ${outer ? `1 − ${r}/${R}` : `${r}/${R}`}. But a point uniform in a disk isn't uniform in distance: a ring at radius x has area growing like x. So should the probability grow like r or like r²?`,
+    `Close, it looks like you used the DISTANCE ratio ${outer ? `1 − ${r}/${R}` : `${r}/${R}`}. But a point uniform in a disk isn't uniform in distance: a ring at radius x has area growing like x. So should the probability grow like r or like r²?`,
     "linear_not_area",
   );
   push(
     complement,
-    `That's the OPPOSITE event. Re-read carefully — does the point ${event}? If you found the other case, what do you do to switch to this one?`,
+    `That's the OPPOSITE event. Re-read carefully, does the point ${event}? If you found the other case, what do you do to switch to this one?`,
     MISCONCEPTION.complementConfusion,
   );
   push(
     dimSlip,
-    `You squared the radius on top (r²) but left the bottom linear (${R}). For a probability the numerator and denominator must be the SAME kind of quantity (both areas) — what should the denominator be?`,
+    `You squared the radius on top (r²) but left the bottom linear (${R}). For a probability the numerator and denominator must be the SAME kind of quantity (both areas), what should the denominator be?`,
     "dimensional_mismatch",
   );
 
@@ -154,7 +154,7 @@ export function buildGeoAreaNumericInstance(
     `${th.noun.charAt(0).toUpperCase() + th.noun.slice(1)} strikes a uniformly-random spot on ${th.surface} of radius ${R}. ` +
     `What is the probability it ${event}? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
-    `For a uniform point on a radius-${R} disk, P(distance ≤ x) = x²/R² — the AREA ratio, quadratic in x. ` +
+    `For a uniform point on a radius-${R} disk, P(distance ≤ x) = x²/R², the AREA ratio, quadratic in x. ` +
     `Here the answer is ${fracText(value)} ≈ ${decText(value, dp)}. The seductive ${fracText(linear)} comes from treating distance as uniform (linear r/R); it ignores that a thin ring at radius x has area ∝ x, so probability accumulates like x².`;
 
   return {
@@ -175,7 +175,7 @@ export function buildGeoAreaNumericInstance(
 }
 
 /* ========================================================================== */
-/* ====================  2 — TILE FIT (numeric)  =========================== */
+/* ====================  2. TILE FIT (numeric)  =========================== */
 /* ========================================================================== */
 
 /**
@@ -205,7 +205,7 @@ export function buildTileFitInstance(
   );
   push(
     F(1).sub(value),
-    `That's the complement — the probability the disk DOES poke across a cell boundary.`,
+    `That's the complement, the probability the disk DOES poke across a cell boundary.`,
   );
 
   const prompt =
@@ -233,7 +233,7 @@ export function buildTileFitInstance(
 }
 
 /* ========================================================================== */
-/* ===================  3 — OVERLAP WINDOW (numeric)  ====================== */
+/* ===================  3. OVERLAP WINDOW (numeric)  ====================== */
 /* ========================================================================== */
 
 const OVERLAP_THEME = [
@@ -261,7 +261,7 @@ export function buildMeetingInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(w, T),
-    `A linear guess. The favourable set is an AREA — the band |x−y| ≤ ${w} inside the ${T}×${T} square — not a single length ratio ${w}/${T}.`,
+    `A linear guess. The favourable set is an AREA, the band |x−y| ≤ ${w} inside the ${T}×${T} square, not a single length ratio ${w}/${T}.`,
   );
   push(
     F((T - w) * (T - w), T * T),
@@ -297,7 +297,7 @@ export function buildMeetingInstance(
 }
 
 /* ========================================================================== */
-/* ====================  4 — GLANCE CATCH (numeric)  ======================= */
+/* ====================  4. GLANCE CATCH (numeric)  ======================= */
 /* ========================================================================== */
 
 const GLANCE_THEME = [

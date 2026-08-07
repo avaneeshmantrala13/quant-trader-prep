@@ -22,7 +22,7 @@ import {
  * integrated from datasets 3–8. Each `(rng) => Flashcard` draws fresh
  * parameters, computes the answer with an exact solver in
  * `./techniqueSolvers.ts`, and templates a self-contained prompt + a strong
- * explanation (several phrasing variants) around the drawn numbers — so
+ * explanation (several phrasing variants) around the drawn numbers, so
  * infinitely many fresh, verified instances can be produced per seed with NO
  * LLM / API. None of these reproduces a dataset puzzle verbatim: the parameter
  * spaces are chosen to keep each technique's "aha" intact while avoiding the
@@ -35,7 +35,7 @@ import {
  */
 
 /* ========================================================================== */
-/*  FAMILY — Pigeonhole thresholds (dataset 6)                                 */
+/*  FAMILY. Pigeonhole thresholds (dataset 6)                                 */
 /* ========================================================================== */
 
 const PIGEON_BOX_ITEMS = [
@@ -60,7 +60,7 @@ export function genPigeonhole(rng: Rng): Flashcard {
     const answer =
       `${k}. In general, guaranteeing ≥ m items in some box among B boxes needs B·(m−1) + 1 = ${boxes}·${perBox - 1} + 1 = ${k}.`;
     const explanation =
-      `This is the PIGEONHOLE PRINCIPLE in its "≥ m per box" form. The worst you can do while keeping every ${box} below ${perBox} is to put exactly ${perBox - 1} in each — that is ${boxes}·(${perBox} − 1) = ${worst} ${plural} with NO ${box} yet at ${perBox}. Every one of those placements is still "safe", so ${worst} is not enough. Add just one more: the (${worst} + 1) = ${k}-th ${plural.replace(/s$/, "")} must land in a ${box} that already has ${perBox - 1}, pushing it to ${perBox}. Hence the guaranteed threshold is B·(m−1) + 1 = ${k}. (One fewer, ${worst}, can be arranged to fail, so the bound is tight.)`;
+      `This is the PIGEONHOLE PRINCIPLE in its "≥ m per box" form. The worst you can do while keeping every ${box} below ${perBox} is to put exactly ${perBox - 1} in each, that is ${boxes}·(${perBox} − 1) = ${worst} ${plural} with NO ${box} yet at ${perBox}. Every one of those placements is still "safe", so ${worst} is not enough. Add just one more: the (${worst} + 1) = ${k}-th ${plural.replace(/s$/, "")} must land in a ${box} that already has ${perBox - 1}, pushing it to ${perBox}. Hence the guaranteed threshold is B·(m−1) + 1 = ${k}. (One fewer, ${worst}, can be arranged to fail, so the bound is tight.)`;
     return {
       id: `bt-pigeon-box-${boxes}-${perBox}`,
       prompt,
@@ -86,7 +86,7 @@ export function genPigeonhole(rng: Rng): Flashcard {
     const answer =
       `${k}. The ${N} numbers split into ${N / 2} partner pairs {i, ${sum}−i}; taking ${N / 2} could dodge them all, so ${N / 2} + 1 = ${k} forces a pair.`;
     const explanation =
-      `Group the numbers by the invariant "sums to ${sum}": {1, ${N}}, {2, ${N - 1}}, … — exactly ${N / 2} disjoint partner pairs, each a pigeonhole. You could unluckily pick one number from every pair (${N / 2} tickets) and still have no matching pair. But once you take ${N / 2} + 1 = ${k}, the PIGEONHOLE PRINCIPLE says two of them must come from the same pair, and that pair sums to ${sum}. So ${k} is the guaranteed threshold (the general answer for 1..N is N/2 + 1).`;
+      `Group the numbers by the invariant "sums to ${sum}": {1, ${N}}, {2, ${N - 1}}, …, exactly ${N / 2} disjoint partner pairs, each a pigeonhole. You could unluckily pick one number from every pair (${N / 2} tickets) and still have no matching pair. But once you take ${N / 2} + 1 = ${k}, the PIGEONHOLE PRINCIPLE says two of them must come from the same pair, and that pair sums to ${sum}. So ${k} is the guaranteed threshold (the general answer for 1..N is N/2 + 1).`;
     return {
       id: `bt-pigeon-pair-${N}`,
       prompt,
@@ -113,7 +113,7 @@ export function genPigeonhole(rng: Rng): Flashcard {
   const answer =
     `${k}. There are ${multiples} multiples of ${d} in 1..${N} and ${nonMultiples} non-multiples; drawing all ${nonMultiples} non-multiples then one more forces a multiple: ${nonMultiples} + 1 = ${k}.`;
   const explanation =
-    `Split 1..${N} into "multiples of ${d}" (there are ⌊${N}/${d}⌋ = ${multiples}) and "non-multiples" (${N} − ${multiples} = ${nonMultiples}). The adversary's best stall is to hand you every non-multiple first — ${nonMultiples} cards with still no multiple of ${d}. By the PIGEONHOLE PRINCIPLE the very next card (the ${nonMultiples} + 1 = ${k}-th) must be a multiple of ${d}, since the non-multiples are exhausted. So the guaranteed threshold is (N − ⌊N/d⌋) + 1 = ${k}.`;
+    `Split 1..${N} into "multiples of ${d}" (there are ⌊${N}/${d}⌋ = ${multiples}) and "non-multiples" (${N} − ${multiples} = ${nonMultiples}). The adversary's best stall is to hand you every non-multiple first, ${nonMultiples} cards with still no multiple of ${d}. By the PIGEONHOLE PRINCIPLE the very next card (the ${nonMultiples} + 1 = ${k}-th) must be a multiple of ${d}, since the non-multiples are exhausted. So the guaranteed threshold is (N − ⌊N/d⌋) + 1 = ${k}.`;
   return {
     id: `bt-pigeon-mult-${N}-${d}`,
     prompt,
@@ -129,7 +129,7 @@ export function genPigeonhole(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — House of Cards (triangular sum, dataset 5)                        */
+/*  FAMILY. House of Cards (triangular sum, dataset 5)                        */
 /* ========================================================================== */
 
 export function genHouseOfCards(rng: Rng): Flashcard {
@@ -159,7 +159,7 @@ export function genHouseOfCards(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Two Balls / minimum worst-case drops (triangular, dataset 5)      */
+/*  FAMILY. Two Balls / minimum worst-case drops (triangular, dataset 5)      */
 /* ========================================================================== */
 
 export function genTwoBalls(rng: Rng): Flashcard {
@@ -175,7 +175,7 @@ export function genTwoBalls(rng: Rng): Flashcard {
   const answer =
     `${n} drops. The fewest N with N(N+1)/2 ≥ ${floors}: here ${n}·${n + 1}/2 = ${reached} ≥ ${floors} while ${n - 1}·${n}/2 = ${prevReached} < ${floors}.`;
   const explanation =
-    `With only two balls you cannot binary-search: once the first ball breaks you must climb the remaining span one floor at a time with the last ball. The trick is to make every possible outcome cost the same worst case. Start the first ball at floor ${n}; if it survives, jump ${n - 1} floors, then ${n - 2}, and so on — each survived drop spends one drop but shrinks the follow-up linear search by one. The floors covered in N drops is the TRIANGULAR NUMBER N + (N−1) + … + 1 = N(N+1)/2, so you need the smallest N with N(N+1)/2 ≥ ${floors}. Since ${n}(${n}+1)/2 = ${reached} ≥ ${floors} but (${n}−1)${n}/2 = ${prevReached} < ${floors}, the answer is ${n}.`;
+    `With only two balls you cannot binary-search: once the first ball breaks you must climb the remaining span one floor at a time with the last ball. The trick is to make every possible outcome cost the same worst case. Start the first ball at floor ${n}; if it survives, jump ${n - 1} floors, then ${n - 2}, and so on, each survived drop spends one drop but shrinks the follow-up linear search by one. The floors covered in N drops is the TRIANGULAR NUMBER N + (N−1) + … + 1 = N(N+1)/2, so you need the smallest N with N(N+1)/2 ≥ ${floors}. Since ${n}(${n}+1)/2 = ${reached} ≥ ${floors} but (${n}−1)${n}/2 = ${prevReached} < ${floors}, the answer is ${n}.`;
   return {
     id: `bt-twoballs-${floors}`,
     prompt,
@@ -191,7 +191,7 @@ export function genTwoBalls(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Trailing zeros of n! (number theory, dataset 7)                   */
+/*  FAMILY. Trailing zeros of n! (number theory, dataset 7)                   */
 /* ========================================================================== */
 
 export function genTrailingZeros(rng: Rng): Flashcard {
@@ -226,7 +226,7 @@ export function genTrailingZeros(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Smallest number with a given digit product (dataset 7)            */
+/*  FAMILY. Smallest number with a given digit product (dataset 7)            */
 /* ========================================================================== */
 
 /** Products (≥ 2) reachable by single digits, giving clean 2–6 digit answers. */
@@ -248,7 +248,7 @@ export function genDigitProduct(rng: Rng): Flashcard {
   const explanation =
     `Two ideas make this exact. First, to make the number SHORT (fewer digits ⇒ smaller number), greedily peel off the LARGEST single-digit factors from 9 down to 2: repeatedly divide ${product} by 9, then 8, …, then 2. That yields the digit multiset {${digits.join(
       ", ",
-    )}}. Second, given a fixed multiset of digits, the SMALLEST number arranges them in ASCENDING order, so read them small-to-large: ${num}. (If a product has a prime factor above 7 — like 11 or 13 — no single-digit decomposition exists and there is no such number.) Check: ${digits.join(
+    )}}. Second, given a fixed multiset of digits, the SMALLEST number arranges them in ASCENDING order, so read them small-to-large: ${num}. (If a product has a prime factor above 7, like 11 or 13, no single-digit decomposition exists and there is no such number.) Check: ${digits.join(
       " × ",
     )} = ${product}.`;
   return {
@@ -266,7 +266,7 @@ export function genDigitProduct(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Binary weights to cover 1..N (number theory, dataset 7)           */
+/*  FAMILY. Binary weights to cover 1..N (number theory, dataset 7)           */
 /* ========================================================================== */
 
 export function genBinaryWeights(rng: Rng): Flashcard {
@@ -302,7 +302,7 @@ export function genBinaryWeights(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Modular checksum prisoners' hats (dataset 3)                       */
+/*  FAMILY. Modular checksum prisoners' hats (dataset 3)                       */
 /* ========================================================================== */
 
 const HAT_COLOR_NAMES: Record<number, string> = {
@@ -328,7 +328,7 @@ export function genModularHats(rng: Rng): Flashcard {
   const answer =
     `Guarantee ${savedForCertain} survivors (everyone except possibly the rearmost). The back prisoner announces the checksum (sum of the ${n - 1} hats he sees) mod ${colors} as a color; each prisoner ahead then deduces their own hat with certainty. The rearmost prisoner survives with probability ${prob} = 1/${colors}.`;
   const explanation =
-    `Encode the ${colors} colors as the numbers 0..${colors - 1}. The rearmost prisoner computes the MODULAR CHECKSUM S = (sum of all ${n - 1} hats he can see) mod ${colors} and calls out the color coded by S — spending his own guess to broadcast one shared parity-style symbol. Now consider any prisoner ahead: they can SEE every hat in front of them and have HEARD every guess behind them (each of which, after the first, is that prisoner's true hat). Subtracting the visible sum and the already-announced true hats from the broadcast S (all mod ${colors}) leaves exactly their own color. So all ${savedForCertain} prisoners ahead are saved for certain. The rearmost prisoner's own hat is independent of the checksum he sent, so he is right with probability 1/${colors} = ${prob}. The single idea — one shared checksum digit carries enough information for everyone ahead — generalizes the classic 2-color parity trick to ${colors} colors.`;
+    `Encode the ${colors} colors as the numbers 0..${colors - 1}. The rearmost prisoner computes the MODULAR CHECKSUM S = (sum of all ${n - 1} hats he can see) mod ${colors} and calls out the color coded by S, spending his own guess to broadcast one shared parity-style symbol. Now consider any prisoner ahead: they can SEE every hat in front of them and have HEARD every guess behind them (each of which, after the first, is that prisoner's true hat). Subtracting the visible sum and the already-announced true hats from the broadcast S (all mod ${colors}) leaves exactly their own color. So all ${savedForCertain} prisoners ahead are saved for certain. The rearmost prisoner's own hat is independent of the checksum he sent, so he is right with probability 1/${colors} = ${prob}. The single idea, one shared checksum digit carries enough information for everyone ahead, generalizes the classic 2-color parity trick to ${colors} colors.`;
   return {
     id: `bt-modhats-${n}-${colors}`,
     prompt,
@@ -343,14 +343,14 @@ export function genModularHats(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Subtraction / count-to-target game (dataset 7, LG17)              */
+/*  FAMILY. Subtraction / count-to-target game (dataset 7, LG17)              */
 /* ========================================================================== */
 
 export function genSubtractionGame(rng: Rng): Flashcard {
   const maxStep = rng.int(2, 6);
   const period = maxStep + 1;
   // Choose a target that is NOT a multiple of `period` most of the time (first
-  // player wins) but sometimes a multiple (second player wins) — both are
+  // player wins) but sometimes a multiple (second player wins), both are
   // instructive; the answer always states who wins and why.
   const target = rng.int(20, 60);
   const { firstPlayerWins, firstMove } = firstToTargetGame(target, maxStep);
@@ -360,10 +360,10 @@ export function genSubtractionGame(rng: Rng): Flashcard {
     `Two players alternate turns. A running total starts at 0; on your turn you add any whole number from 1 to ${maxStep} to it. ` +
     `Whoever makes the total reach exactly ${target} wins. If you move FIRST and play perfectly, do you win, and what is your strategy?`;
   const answer = firstPlayerWins
-    ? `Yes — the first player wins. Open by making the total ${firstMove} (add ${firstMove}), then on every turn bring the total back to the next multiple of ${period} away from ${target}: keep it ≡ ${r} (mod ${period}), i.e. ${listResidueTargets(target, period)}.`
-    : `No — with perfect play the SECOND player wins, because ${target} is a multiple of ${period} = ${maxStep} + 1. Whatever you add (1..${maxStep}), the second player adds the complement to ${period} and restores a multiple of ${period}, eventually landing on ${target}.`;
+    ? `Yes, the first player wins. Open by making the total ${firstMove} (add ${firstMove}), then on every turn bring the total back to the next multiple of ${period} away from ${target}: keep it ≡ ${r} (mod ${period}), i.e. ${listResidueTargets(target, period)}.`
+    : `No, with perfect play the SECOND player wins, because ${target} is a multiple of ${period} = ${maxStep} + 1. Whatever you add (1..${maxStep}), the second player adds the complement to ${period} and restores a multiple of ${period}, eventually landing on ${target}.`;
   const explanation =
-    `This is a SUBTRACTION GAME solved by working backward mod (maxStep + 1) = ${period}. The player who reaches ${target} wins, so the "safe" totals to hand your opponent are those from which they cannot avoid giving you a reachable win — precisely the totals ≡ ${target} (mod ${period}), because from such a total any legal add of 1..${maxStep} lets you complete back to the next safe total (partner-adds to ${period}). ${
+    `This is a SUBTRACTION GAME solved by working backward mod (maxStep + 1) = ${period}. The player who reaches ${target} wins, so the "safe" totals to hand your opponent are those from which they cannot avoid giving you a reachable win, precisely the totals ≡ ${target} (mod ${period}), because from such a total any legal add of 1..${maxStep} lets you complete back to the next safe total (partner-adds to ${period}). ${
       firstPlayerWins
         ? `Since ${target} mod ${period} = ${r} ≠ 0, the first player seizes control immediately by moving to ${firstMove} and thereafter mirroring: whatever the opponent adds (call it s), reply with ${period} − s. This keeps the total on the safe ladder ${listResidueTargets(
             target,

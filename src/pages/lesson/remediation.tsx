@@ -12,6 +12,11 @@ import {
 } from "@/lib/regenerate";
 import { isNodeCleared } from "@/lib/remediation/climbBack";
 import {
+  buildTargetedMistakeItems,
+  type TargetedItem,
+} from "@/lib/remediation/targetedPractice";
+import { Rng } from "@/lib/rng";
+import {
   probeTierFor,
   remediationStep,
   type RemediationAction,
@@ -212,7 +217,7 @@ export function RemediationFlow({
     <div className="animate-print-in space-y-4 border-t-2 border-dashed border-accent pt-5">
       {interstitial}
       <p className="text-sm text-secondary">
-        Good — you're in the productive zone, not simply &ldquo;wrong.&rdquo; Two
+        Good: you're in the productive zone, not simply &ldquo;wrong.&rdquo; Two
         misses in a row here usually means a foundation underneath needs a quick
         top-up. Let&rsquo;s check it, then climb straight back.
       </p>
@@ -287,7 +292,7 @@ export function RemediationFlow({
             </div>
           )}
           <button onClick={onExit} className="btn-primary mt-4 w-full">
-            Got the foundation — resume the lesson ▸
+            Got the foundation. Resume the lesson ▸
           </button>
         </div>
       )}
@@ -295,7 +300,7 @@ export function RemediationFlow({
       {action.kind === "exit" && (
         <div className="panel p-5">
           <p className="text-sm text-secondary">
-            That looked like a slip more than a gap — no detour needed. Keep
+            That looked like a slip more than a gap, so no detour needed. Keep
             going.
           </p>
           <button onClick={onExit} className="btn-primary mt-3 w-full">
@@ -364,13 +369,20 @@ export function FinishRemediation({
   );
   const shownAtRef = useRef<number>(Date.now());
 
-  // Serve the probe/climb tier at the learner's ~0.85 band for that node.
-  const tierFor = (topicKey: string): Difficulty =>
-    probeTierFor(
-      getTopicMastery(topicKey)?.theta ?? origin.theta,
-      topicKey,
-      progress.tierDifficulty ?? {},
-    );
+  // Serve the probe/climb tier at the learner's ~0.85 band for that node. T12:
+  // the adaptive engine refines this — the fitted IRT ability (when confident)
+  // stands in for the incremental Elo θ, the per-tier Glicko difficulty ratings
+  // sharpen the difficulty view, and a seeded RNG turns the hard argmin into
+  // Thompson-sampled ZPD exploration so the climb-back varies within the band.
+  const tierFor = (topicKey: string): Difficulty => {
+    const m = getTopicMastery(topicKey);
+    return probeTierFor(m?.theta ?? origin.theta, topicKey, progress.tierDifficulty ?? {}, {
+      glickoD: progress.glickoDifficulty,
+      irtAbility: m?.irtAbility,
+      irtAbilitySe: m?.irtAbilitySe,
+      rng: new Rng(freshPracticeSeed()),
+    });
+  };
 
   // Materialize content for the current DESCENT decision (the climb has its own
   // probe loader). Advancing the depth counter happens here in lockstep.
@@ -544,7 +556,7 @@ export function FinishRemediation({
       <p className="text-sm text-secondary">
         That attempt finished below the mastery bar. Instead of moving on with a
         gap, let&rsquo;s quickly check the foundation underneath this topic and
-        shore it up — then climb straight back and review your results.
+        shore it up, then climb straight back and review your results.
       </p>
 
       {showProbe && probe && (
@@ -587,7 +599,7 @@ export function FinishRemediation({
           {answered && cleared !== null && (
             <p className="text-xs text-muted">
               {cleared
-                ? "Looking solid here — climbing back toward the topic."
+                ? "Looking solid here. Climbing back toward the topic."
                 : "Let’s keep shoring this up as we climb back."}
             </p>
           )}
@@ -625,8 +637,8 @@ export function FinishRemediation({
           )}
           <button onClick={startClimb} className="btn-primary mt-4 w-full">
             {session.depth > 0
-              ? "Got it — climb back up ▸"
-              : "Got the foundation — see results ▸"}
+              ? "Got it. Climb back up ▸"
+              : "Got the foundation. See results ▸"}
           </button>
         </div>
       )}
@@ -634,7 +646,7 @@ export function FinishRemediation({
       {!climb && action.kind === "exit" && (
         <div className="panel p-5">
           <p className="text-sm text-secondary">
-            That looked more like a slip than a gap — no detour needed.
+            That looked more like a slip than a gap, so no detour needed.
           </p>
           <button onClick={onDone} className="btn-primary mt-3 w-full">
             See my results ▸
@@ -656,7 +668,126 @@ export function FinishRemediation({
 
       {/* Always-available escape: never trap the learner in a remediation loop. */}
       <button onClick={onDone} className="btn-ghost w-full text-sm">
-        Skip remediation — see my results ▸
+        Skip remediation: see my results ▸
+      </button>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Targeted repeated-mistake practice (ZPD) — UNSCORED drill of ONE error mode */
+/*                                                                             */
+/*  Launched from the lesson-finish "you made this specific mistake N times"   */
+/*  feedback. It serves a small set of the SAME topic's questions that trip     */
+/*  EXACTLY that misconception tag (via `buildTargetedMistakeItems`), rendered  */
+/*  with the plain QuizCard/NumericCard. It is RE-PREP ONLY: it NEVER calls      */
+/*  `recordItemAttempt`, so it can't move any topic's mastery (exactly like     */
+/*  bonus practice). Grading/feedback is the card's local display grade.        */
+/* -------------------------------------------------------------------------- */
+
+export function TargetedMistakePractice({
+  topicKey,
+  tag,
+  label,
+  onClose,
+}: {
+  topicKey: string;
+  /** The misconception tag to drill (bare, no topicKey prefix). */
+  tag: string;
+  /** Learner-facing description of the mistake (from MISCONCEPTION_LABELS). */
+  label: string;
+  onClose: () => void;
+}) {
+  // Build the fixed targeted set once (deterministic in a fresh seed). Never
+  // scored — no `recordItemAttempt` anywhere in this component.
+  const [items] = useState<TargetedItem[]>(() =>
+    buildTargetedMistakeItems(topicKey, tag, freshPracticeSeed(), 5),
+  );
+  const [idx, setIdx] = useState(0);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [entered, setEntered] = useState<number | null>(null);
+
+  const item = items[idx];
+  const answered = selected !== null || entered !== null;
+  const isLast = idx >= items.length - 1;
+
+  const advance = () => {
+    if (isLast) {
+      onClose();
+      return;
+    }
+    setIdx((i) => i + 1);
+    setSelected(null);
+    setEntered(null);
+  };
+
+  const header = (
+    <div className="flex items-center justify-between">
+      <span className="label text-accent">Targeted Practice · Just This Mistake</span>
+      <span className="chip border-subtle text-secondary">Not scored · re-prep only</span>
+    </div>
+  );
+
+  // No item carried the tag (rare/untagged error mode) ⇒ graceful fallback.
+  if (!item) {
+    return (
+      <div className="animate-print-in space-y-3 border-t-2 border-dashed border-accent pt-5">
+        {header}
+        <p className="text-sm text-secondary">
+          We couldn&rsquo;t assemble a targeted set for &ldquo;{label}&rdquo; right
+          now. Re-running the lesson will keep surfacing this error when it comes up.
+        </p>
+        <button onClick={onClose} className="btn-primary w-full">
+          Back to results ▸
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-print-in space-y-3 border-t-2 border-dashed border-accent pt-5">
+      {header}
+      <p className="text-sm text-secondary">
+        Drilling one thing only: <span className="font-semibold text-primary">{label}</span>.
+        These don&rsquo;t affect your score or mastery — they&rsquo;re pure reps on
+        the exact spot that keeps tripping you.
+      </p>
+      <p className="text-xs text-muted">
+        Rep {idx + 1} / {items.length}
+      </p>
+      {item.mode === "quiz" && item.question ? (
+        <QuizCard
+          key={`${item.question.id}-tm`}
+          question={item.question}
+          number={0}
+          total={0}
+          answered={answered}
+          selected={selected}
+          isLast={isLast}
+          onSelect={(i) => setSelected(i)}
+          onNext={advance}
+          headerLabel="Targeted Rep"
+          nextLabel={isLast ? "Done ▸" : "Next rep ▸"}
+          hintLevel={item.level}
+        />
+      ) : item.numericQuestion ? (
+        <NumericCard
+          key={`${item.numericQuestion.id}-tm`}
+          question={item.numericQuestion}
+          number={0}
+          total={0}
+          answered={answered}
+          entered={entered}
+          isLast={isLast}
+          onSubmit={(v) => setEntered(v)}
+          onNext={advance}
+          headerLabel="Targeted Rep"
+          nextLabel={isLast ? "Done ▸" : "Next rep ▸"}
+          hintLevel={item.level}
+        />
+      ) : null}
+      <button onClick={onClose} className="btn-ghost w-full text-sm">
+        Done with this drill ▸
       </button>
     </div>
   );

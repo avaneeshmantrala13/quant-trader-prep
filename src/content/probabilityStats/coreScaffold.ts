@@ -16,7 +16,7 @@ import { mixNumericGenerators, mixQuestionGenerators } from "../mixFamilies";
  * consistent.
  *
  * Every distractor produced through these helpers must be a re-derived, NAMED
- * misconception — guaranteed distinct and ≠ the answer (asserted in the tests).
+ * misconception, guaranteed distinct and ≠ the answer (asserted in the tests).
  */
 
 export interface Choice {
@@ -93,7 +93,7 @@ export function numDp(f: FractionType, min = 2, cap = 4): number {
 }
 
 /**
- * Combine several Question generators into one that picks per call — now via the
+ * Combine several Question generators into one that picks per call, now via the
  * shared family-tagging mixer, so each item is stamped with its family and the
  * result exposes a `.families` lookup for family-preserving regeneration.
  */

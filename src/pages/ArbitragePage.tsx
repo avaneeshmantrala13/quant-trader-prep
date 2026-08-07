@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 import { ChevronLeftIcon, GaugeIcon } from "@/components/icons";
 import {
   buildArbitrageDrill,
@@ -31,15 +32,17 @@ type Phase = "intro" | "running" | "summary";
 
 export function ArbitragePage() {
   const navigate = useNavigate();
+  const { username } = useAuth();
 
-  // Resume a persisted in-progress run (leave/reload-proof). Read once, and only
-  // trust a snapshot whose response array still matches the drill length.
+  // Resume the CURRENT user's persisted in-progress run (leave/reload-proof).
+  // Read once, and only trust a snapshot whose response array still matches the
+  // drill length. Scoping by user means account B never resumes account A's run.
   const resumed = useMemo(() => {
-    const saved = loadArbitrageRun();
+    const saved = loadArbitrageRun(username);
     if (!saved) return undefined;
     if (saved.responses.length !== DRILL_LENGTH) return undefined;
     return saved;
-  }, []);
+  }, [username]);
 
   const [seed, setSeed] = useState(
     () => resumed?.seed ?? Math.floor(Math.random() * 1_000_000),
@@ -62,19 +65,22 @@ export function ArbitragePage() {
   // it; reaching the scorecard or restarting clears it (start fresh next time).
   useEffect(() => {
     if (phase === "running") {
-      saveArbitrageRun({
-        version: 1,
-        seed,
-        index,
-        responses,
-        committed,
-        chosen,
-        typed,
-      });
+      saveArbitrageRun(
+        {
+          version: 1,
+          seed,
+          index,
+          responses,
+          committed,
+          chosen,
+          typed,
+        },
+        username,
+      );
     } else {
-      clearArbitrageRun();
+      clearArbitrageRun(username);
     }
-  }, [phase, seed, index, responses, committed, chosen, typed]);
+  }, [phase, seed, index, responses, committed, chosen, typed, username]);
 
   const item = items[index];
   const score = scoreDrill(responses, DRILL_LENGTH);
@@ -151,7 +157,7 @@ export function ArbitragePage() {
                 <p className="mt-2 text-sm leading-relaxed text-secondary">
                   Strip the vig off a book of quoted odds to recover fair
                   probabilities, spot the guaranteed arb, and call the value leg.
-                  Every item is drawn fresh and graded exactly — only the method
+                  Every item is drawn fresh and graded exactly; only the method
                   transfers.
                 </p>
               </div>

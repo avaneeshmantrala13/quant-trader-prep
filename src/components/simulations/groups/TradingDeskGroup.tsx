@@ -159,7 +159,7 @@ function ScorePanel(props: {
         </span>{" "}
         {benchFinal > 0
           ? `You captured ${grade.pct.toFixed(0)}% of the desk's edge.`
-          : "The desk was flat-to-down on this stream too — the market gave little edge."}
+          : "The desk was flat-to-down on this stream too; the market gave little edge."}
       </div>
     </div>
   );
@@ -214,7 +214,7 @@ function BasketballSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="You quote a two-sided market on the game's FINAL total. Fair value = points already scored + expected points still to come. A wider spread earns more per fill but wins less flow; too tight (or a mispriced mid) and informed flow picks you off. Carrying inventory while the score swings is what drives drawdown — raise skew to lean your quotes against your position and stay flat. Green line is your cumulative P&L, dashed grey is the benchmark desk on the same game."
+      howToRead="You quote a two-sided market on the game's FINAL total. Fair value = points already scored + expected points still to come. A wider spread earns more per fill but wins less flow; too tight (or a mispriced mid) and informed flow picks you off. Carrying inventory while the score swings is what drives drawdown; raise skew to lean your quotes against your position and stay flat. Green line is your cumulative P&L, dashed grey is the benchmark desk on the same game."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -306,7 +306,7 @@ function MarbleSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Each race you quote a two-sided market on EVERY marble's 'to win' contract (pays 1 if it wins). Because exactly one marble wins, your prices must be coherent: if your asks sum below 1 (or bids above 1) an arbitrageur lifts your whole book for a RISK-FREE profit — a Dutch book. Renormalizing your mids to sum to 1 (de-vigging your own quotes) GUARANTEES the book is arbitrage-free for any spread. Winner markets settle with high variance, so watch the trend, not one race. Green is your cumulative P&L, dashed grey the arbitrage-free desk."
+      howToRead="Each race you quote a two-sided market on EVERY marble's 'to win' contract (pays 1 if it wins). Because exactly one marble wins, your prices must be coherent: if your asks sum below 1 (or bids above 1) an arbitrageur lifts your whole book for a RISK-FREE profit: a Dutch book. Renormalizing your mids to sum to 1 (de-vigging your own quotes) GUARANTEES the book is arbitrage-free for any spread. Winner markets settle with high variance, so watch the trend, not one race. Green is your cumulative P&L, dashed grey the arbitrage-free desk."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -328,7 +328,7 @@ function MarbleSim(): JSX.Element {
               onClick={() => setNormalize((n) => !n)}
               className={`btn w-full ${normalize ? "btn-primary" : "btn-secondary"}`}
             >
-              {normalize ? "ON — arbitrage-free" : "OFF — raw book"}
+              {normalize ? "ON: arbitrage-free" : "OFF: raw book"}
             </button>
           </label>
           <Slider
@@ -360,7 +360,7 @@ function MarbleSim(): JSX.Element {
                 <span className="num text-primary">1.00</span>, so Σ ask ={" "}
                 <span className="num text-bull">{sumAskIfNorm.toFixed(2)}</span> ≥ 1
                 and Σ bid ={" "}
-                <span className="num text-bull">{sumBidIfNorm.toFixed(2)}</span> ≤ 1 —{" "}
+                <span className="num text-bull">{sumBidIfNorm.toFixed(2)}</span> ≤ 1,{" "}
                 <span className="text-bull">provably arbitrage-free</span>.
               </>
             ) : (
@@ -433,7 +433,7 @@ function EtfSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="You make a two-sided market on an ETF whose fair value is its NAV = Σ shares × component price. The catch is LATENCY: you quote off the NAV you see now, but fills resolve after the components tick, so a creation/redemption arbitrageur picks you off whenever your quote is stale. Your spread must be wide enough to COVER the likely NAV move over that window — too tight and you're arbitraged, too wide and you win no flow. Skew your quotes to keep ETF inventory flat and control drawdown. Green is your cumulative P&L, dashed grey the benchmark desk."
+      howToRead="You make a two-sided market on an ETF whose fair value is its NAV = Σ shares × component price. The catch is LATENCY: you quote off the NAV you see now, but fills resolve after the components tick, so a creation/redemption arbitrageur picks you off whenever your quote is stale. Your spread must be wide enough to COVER the likely NAV move over that window; too tight and you're arbitraged, too wide and you win no flow. Skew your quotes to keep ETF inventory flat and control drawdown. Green is your cumulative P&L, dashed grey the benchmark desk."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">

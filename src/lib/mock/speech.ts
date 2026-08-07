@@ -15,7 +15,21 @@
  *
  * NOTE: The Web Speech types aren't in the app's ambient lib set, so this module
  * types the surface it uses locally (no global augmentation of shared files).
+ *
+ * NEURAL VOICE (Phase — human-sounding interviewer): `speak()` now PREFERS a
+ * neural text-to-speech voice served by the app's existing AI Lambda layer
+ * (OpenAI `gpt-4o-mini-tts`, returned as base64 mp3 the client decodes + plays
+ * via an `HTMLAudioElement`). It reuses the SAME endpoint/config the AI flavor
+ * client already resolves (`readAiConfig` over the `VITE_AI_*` env, see
+ * `aiConfig.ts` / `aiFlavor.ts`) — no new config mechanism. If that layer is
+ * off / unconfigured / offline / errors, `speak()` transparently FALLS BACK to
+ * the tuned Web Speech synthesis below, so a TTS failure can never break the
+ * interview. The PUBLIC interface is unchanged: callers still just call
+ * `speak(text)` / `cancelSpeech()`.
  */
+import { readAiConfig } from "@/lib/aiConfig";
+import { env } from "@/lib/aiFlavor";
+import { readAwsConfig, type EnvLike } from "@/lib/awsConfig";
 
 /* -------------------------------------------------------------------------- */
 /*  Minimal local typings for the Web Speech surface we touch                 */
@@ -289,6 +303,156 @@ export function chunkForSpeech(text: string): string[] {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  NEURAL TTS (human-sounding voice) — config, auth, decode + playback        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The interviewer voice. OpenAI's `gpt-4o-mini-tts` voices range from bright
+ * ("nova"/"shimmer") to neutral ("alloy") to warm-professional ("onyx"). We
+ * pick **"onyx"** — a calm, grounded, professional male timbre that reads like a
+ * real quant-trading interviewer rather than an assistant. Overridable per call
+ * site / env, but this is the default the whole app uses.
+ */
+export const DEFAULT_TTS_VOICE = "onyx";
+/** OpenAI TTS model the server uses (kept here for docs/tests parity). */
+export const DEFAULT_TTS_MODEL = "gpt-4o-mini-tts";
+/** Path appended to the AI base endpoint for the TTS route (POST). */
+export const TTS_PATH = "/tts";
+
+/**
+ * Client-side config for the neural voice. `endpoint` is the SAME base URL the
+ * AI flavor client resolves (`readAiConfig().endpoint`); we POST to
+ * `${endpoint}${TTS_PATH}`. `getAuthToken` supplies the Cognito JWT (the TTS
+ * route sits behind the same authorizer as the other AI endpoints).
+ */
+export interface TtsClientConfig {
+  endpoint: string;
+  voice: string;
+  getAuthToken?: () => string | null;
+}
+
+/**
+ * Best-effort read of the current Cognito ID token from the well-known public
+ * localStorage locations (mirrors `aiFlavor.ts`'s reader — we only READ public
+ * token keys, never import another workstream's storage internals). Returns
+ * `null` when unauthenticated, in which case the request still goes out (and, if
+ * the route rejects it, we fall back to Web Speech).
+ */
+function readIdToken(e: EnvLike): string | null {
+  if (typeof localStorage === "undefined") return null;
+  const get = (k: string): string | null => {
+    try {
+      return localStorage.getItem(k);
+    } catch {
+      return null;
+    }
+  };
+  const oauthTok = get("qtp.aws.oauth.idToken");
+  const oauthExp = Number(get("qtp.aws.oauth.exp") ?? "0");
+  if (oauthTok && oauthExp > Date.now()) return oauthTok;
+  const clientId = readAwsConfig(e)?.userPoolClientId;
+  if (!clientId) return null;
+  const last = get(`CognitoIdentityServiceProvider.${clientId}.LastAuthUser`);
+  if (!last) return null;
+  return get(`CognitoIdentityServiceProvider.${clientId}.${last}.idToken`);
+}
+
+/**
+ * Resolve the neural-voice config from the SAME env the AI layer uses. Returns
+ * `null` (→ Web Speech fallback) when the AI layer is OFF, in local-dev STUB
+ * mode (no real endpoint), or when no endpoint is configured. Pure aside from
+ * reading `import.meta.env` via `env()`; never throws.
+ */
+export function resolveTtsConfig(voice: string = DEFAULT_TTS_VOICE): TtsClientConfig | null {
+  let e: EnvLike;
+  try {
+    e = env();
+  } catch {
+    return null;
+  }
+  const cfg = readAiConfig(e);
+  if (!cfg || cfg.stub || !cfg.endpoint) return null;
+  return {
+    endpoint: cfg.endpoint,
+    voice,
+    getAuthToken: () => readIdToken(e),
+  };
+}
+
+/** A handle to an in-flight neural playback; `stop()` halts + discards it. */
+export interface NeuralPlayback {
+  stop(): void;
+}
+
+/**
+ * Plays base64 mp3 and reports completion/failure. Abstracted so it can be
+ * stubbed in tests (jsdom/node has no real `<audio>` pipeline). The default
+ * implementation decodes → Blob → object URL → `HTMLAudioElement`.
+ */
+export type NeuralPlayer = (
+  audioBase64: string,
+  handlers: { onEnded: () => void; onError: () => void },
+) => NeuralPlayback;
+
+/** Decode base64 → `Blob` (default `audio/mpeg`). Browser-only (`atob`/`Blob`). */
+export function base64ToBlob(b64: string, type = "audio/mpeg"): Blob {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type });
+}
+
+/**
+ * Default neural player: base64 mp3 → object URL → `HTMLAudioElement`. Only ever
+ * constructed at PLAY time (never at import), so this module still loads cleanly
+ * in the node/SSR test environment where `Audio` doesn't exist.
+ */
+const defaultNeuralPlayer: NeuralPlayer = (audioBase64, handlers) => {
+  const url = URL.createObjectURL(base64ToBlob(audioBase64));
+  const audio = new Audio();
+  audio.src = url;
+  let done = false;
+  const revoke = () => {
+    if (done) return;
+    done = true;
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+  };
+  audio.onended = () => {
+    revoke();
+    handlers.onEnded();
+  };
+  audio.onerror = () => {
+    revoke();
+    handlers.onError();
+  };
+  // `play()` can reject under autoplay policies — treat that as an error so the
+  // caller can fall back to Web Speech.
+  void Promise.resolve(audio.play?.()).catch(() => {
+    revoke();
+    handlers.onError();
+  });
+  return {
+    stop() {
+      try {
+        audio.pause();
+      } catch {
+        /* ignore */
+      }
+      try {
+        audio.src = "";
+      } catch {
+        /* ignore */
+      }
+      revoke();
+    },
+  };
+};
+
+/* -------------------------------------------------------------------------- */
 /*  Controller                                                                */
 /* -------------------------------------------------------------------------- */
 
@@ -303,13 +467,23 @@ export interface SpeechController {
   /** True iff at least recognition OR synthesis is available. */
   readonly supported: boolean;
   readonly support: SpeechSupport;
-  /** Speak text aloud (no-op if synthesis unsupported). */
+  /**
+   * Speak text aloud. PREFERS the neural voice (when the AI layer is configured)
+   * and transparently falls back to Web Speech synthesis on any failure. No-op
+   * when neither path is available. Fire-and-forget: returns immediately while
+   * the (possibly async) neural request runs.
+   */
   speak(text: string): void;
+  /**
+   * Warm the neural-audio cache for `text` WITHOUT playing it (low-latency
+   * prefetch for the next prompt). Safe no-op when neural TTS is unavailable.
+   */
+  prefetch(text: string): void;
   /** Start listening. Returns `true` if listening actually began. */
   listen(handlers: ListenHandlers): boolean;
   /** Stop the current recognition session (safe to call anytime). */
   stop(): void;
-  /** Cancel any in-flight speech. */
+  /** Cancel any in-flight speech — neural (stop audio + abort fetch) AND Web Speech. */
   cancelSpeech(): void;
 }
 
@@ -317,12 +491,23 @@ export interface SpeechControllerOptions {
   /** BCP-47 language tag for recognition + synthesis (default "en-US"). */
   lang?: string;
   /**
-   * Speaking rate for synthesis. Defaults to a slightly-relaxed 0.97 which reads
-   * more naturally than the platform default of 1.0 (which tends to feel rushed).
+   * Speaking rate for Web-Speech synthesis (the FALLBACK path). Defaults to a
+   * slightly-relaxed 0.97 which reads more naturally than the platform default
+   * of 1.0 (which tends to feel rushed). The neural path uses server-side prosody.
    */
   rate?: number;
   /** Synthesis pitch (default 1.0 — neutral, natural). */
   pitch?: number;
+  /**
+   * Neural-voice config. `undefined` (default) → auto-resolve from the AI env
+   * via `resolveTtsConfig()`. `null` → force Web-Speech-only. An explicit config
+   * is used as-is (dependency injection for tests).
+   */
+  tts?: TtsClientConfig | null;
+  /** Injected `fetch` (defaults to the global). Exposed for tests. */
+  fetchImpl?: typeof fetch;
+  /** Injected neural audio player (defaults to the `HTMLAudioElement` one). */
+  neuralPlayer?: NeuralPlayer;
 }
 
 /**
@@ -388,36 +573,214 @@ export function createSpeechController(
     return cachedVoice;
   };
 
+  /* ------------------------- neural TTS state + helpers ------------------- */
+  // `undefined` → auto-resolve from env; `null` → force Web-Speech-only.
+  const ttsConfig =
+    options?.tts === undefined ? resolveTtsConfig() : options.tts;
+  const doFetch: typeof fetch | null =
+    options?.fetchImpl ??
+    (typeof fetch !== "undefined" ? fetch.bind(globalThis) : null);
+  const playNeural: NeuralPlayer = options?.neuralPlayer ?? defaultNeuralPlayer;
+  const neuralEnabled = !!ttsConfig && !!doFetch;
+  // Cache synthesized audio per (voice, text) so repeated prompts never
+  // re-synthesize (and `prefetch` can warm the next prompt for zero latency).
+  const audioCache = new Map<string, string>();
+  const cacheKey = (voice: string, text: string) => `${voice}\u0000${text}`;
+  // Monotonic "which utterance is current" token. Every `speak`/`cancelSpeech`
+  // bumps it, so any async neural continuation older than the latest is dropped
+  // (prevents a slow fetch from playing after the user moved on / cancelled).
+  let speakEpoch = 0;
+  let currentAbort: AbortController | null = null;
+  let currentPlayback: NeuralPlayback | null = null;
+
+  const stopNeural = () => {
+    if (currentAbort) {
+      try {
+        currentAbort.abort();
+      } catch {
+        /* ignore */
+      }
+      currentAbort = null;
+    }
+    if (currentPlayback) {
+      try {
+        currentPlayback.stop();
+      } catch {
+        /* ignore */
+      }
+      currentPlayback = null;
+    }
+  };
+
+  const stopWebSpeech = () => {
+    const w = getWin();
+    try {
+      w?.speechSynthesis?.cancel();
+    } catch {
+      /* ignore */
+    }
+  };
+
+  // The FALLBACK: tuned Web Speech synthesis (best local voice + relaxed prosody
+  // + sentence chunking for natural pauses). Never throws into the UI.
+  const webSpeechSpeak = (text: string) => {
+    const w = getWin();
+    if (!support.synthesis || !w?.speechSynthesis || !w.SpeechSynthesisUtterance)
+      return;
+    try {
+      w.speechSynthesis.cancel();
+      const voice = resolveVoice();
+      const chunks = chunkForSpeech(text);
+      const parts = chunks.length > 0 ? chunks : [text];
+      for (const part of parts) {
+        const utter = new w.SpeechSynthesisUtterance(part) as Record<
+          string,
+          unknown
+        >;
+        utter.lang = lang;
+        utter.rate = rate;
+        utter.pitch = pitch;
+        if (voice) utter.voice = voice;
+        w.speechSynthesis.speak(utter);
+      }
+    } catch {
+      /* best-effort: never throw into the UI */
+    }
+  };
+
+  const startNeuralPlayback = (b64: string, epoch: number, text: string) => {
+    if (epoch !== speakEpoch) return;
+    try {
+      currentPlayback = playNeural(b64, {
+        onEnded: () => {
+          if (epoch === speakEpoch) currentPlayback = null;
+        },
+        onError: () => {
+          if (epoch !== speakEpoch) return;
+          currentPlayback = null;
+          // Audio pipeline failed AFTER a good response → fall back so the
+          // prompt is still heard.
+          webSpeechSpeak(text);
+        },
+      });
+    } catch {
+      if (epoch === speakEpoch) webSpeechSpeak(text);
+    }
+  };
+
+  // Fetch synthesized audio (or use cache), then play it. On ANY failure that
+  // is NOT a user cancellation, transparently fall back to Web Speech.
+  const neuralSpeak = async (
+    text: string,
+    epoch: number,
+    cfg: TtsClientConfig,
+  ) => {
+    const key = cacheKey(cfg.voice, text);
+    const cached = audioCache.get(key);
+    if (cached) {
+      startNeuralPlayback(cached, epoch, text);
+      return;
+    }
+
+    const abort = new AbortController();
+    currentAbort = abort;
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+    };
+    const token = cfg.getAuthToken?.();
+    if (token) headers["authorization"] = token;
+
+    let res: Response;
+    try {
+      res = await (doFetch as typeof fetch)(`${cfg.endpoint}${TTS_PATH}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ text, voice: cfg.voice }),
+        signal: abort.signal,
+      });
+    } catch {
+      // A user cancel aborts the fetch — do NOT fall back in that case.
+      if (abort.signal.aborted || epoch !== speakEpoch) return;
+      webSpeechSpeak(text);
+      return;
+    }
+    if (currentAbort === abort) currentAbort = null;
+    if (epoch !== speakEpoch) return; // cancelled while awaiting
+    if (!res.ok) {
+      webSpeechSpeak(text);
+      return;
+    }
+
+    let b64: string | null = null;
+    try {
+      const json = (await res.json()) as { audioBase64?: unknown };
+      b64 =
+        typeof json.audioBase64 === "string" && json.audioBase64
+          ? json.audioBase64
+          : null;
+    } catch {
+      b64 = null;
+    }
+    if (epoch !== speakEpoch) return;
+    if (!b64) {
+      webSpeechSpeak(text);
+      return;
+    }
+    audioCache.set(key, b64);
+    startNeuralPlayback(b64, epoch, text);
+  };
+
   return {
     supported: support.recognition || support.synthesis,
     support,
 
     speak(text: string) {
-      const w = getWin();
-      if (!support.synthesis || !w?.speechSynthesis || !w.SpeechSynthesisUtterance)
-        return;
-      try {
-        w.speechSynthesis.cancel();
-        const voice = resolveVoice();
-        // Speak sentence-ish chunks as SEQUENTIAL utterances: the synthesizer
-        // queues them, giving a natural pause between sentences instead of one
-        // flat, rushed read. Falls back to the whole string if it can't split.
-        const chunks = chunkForSpeech(text);
-        const parts = chunks.length > 0 ? chunks : [text];
-        for (const part of parts) {
-          const utter = new w.SpeechSynthesisUtterance(part) as Record<
-            string,
-            unknown
-          >;
-          utter.lang = lang;
-          utter.rate = rate;
-          utter.pitch = pitch;
-          if (voice) utter.voice = voice;
-          w.speechSynthesis.speak(utter);
-        }
-      } catch {
-        /* best-effort: never throw into the UI */
+      const trimmed = (text ?? "").trim();
+      // Bump the epoch and hard-stop anything currently playing/pending so a new
+      // prompt never overlaps the previous one (neural OR Web Speech).
+      const epoch = ++speakEpoch;
+      stopNeural();
+      stopWebSpeech();
+      if (!trimmed) return;
+      if (neuralEnabled && ttsConfig) {
+        void neuralSpeak(trimmed, epoch, ttsConfig);
+      } else {
+        webSpeechSpeak(trimmed);
       }
+    },
+
+    prefetch(text: string) {
+      const trimmed = (text ?? "").trim();
+      if (!trimmed || !neuralEnabled || !ttsConfig) return;
+      const cfg = ttsConfig;
+      const key = cacheKey(cfg.voice, trimmed);
+      if (audioCache.has(key)) return;
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+      };
+      const token = cfg.getAuthToken?.();
+      if (token) headers["authorization"] = token;
+      // Best-effort cache warm; failures are silent (the real `speak` will just
+      // re-request and, if needed, fall back).
+      void (async () => {
+        try {
+          const res = await (doFetch as typeof fetch)(
+            `${cfg.endpoint}${TTS_PATH}`,
+            {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ text: trimmed, voice: cfg.voice }),
+            },
+          );
+          if (!res.ok) return;
+          const json = (await res.json()) as { audioBase64?: unknown };
+          if (typeof json.audioBase64 === "string" && json.audioBase64) {
+            audioCache.set(key, json.audioBase64);
+          }
+        } catch {
+          /* ignore — prefetch is purely an optimization */
+        }
+      })();
     },
 
     listen(handlers: ListenHandlers): boolean {
@@ -458,12 +821,11 @@ export function createSpeechController(
     },
 
     cancelSpeech() {
-      const w = getWin();
-      try {
-        w?.speechSynthesis?.cancel();
-      } catch {
-        /* ignore */
-      }
+      // Invalidate any in-flight neural continuation, stop audio + abort fetch,
+      // and clear the Web Speech queue.
+      speakEpoch++;
+      stopNeural();
+      stopWebSpeech();
     },
   };
 }

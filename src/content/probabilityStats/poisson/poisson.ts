@@ -1,7 +1,7 @@
 /**
  * Exact + high-precision solvers for the Probability & Statistics → **Poisson
  * Distribution & Process** subcategory (UT M362K ch. 4.7 / M362M Poisson-process
- * core; interview-relevant per FIRM_TIMED_ASSESSMENTS — arrival/rare-event
+ * core; interview-relevant per FIRM_TIMED_ASSESSMENTS, arrival/rare-event
  * modelling).
  *
  * The Poisson pmf carries an `e^{−λ}` factor, so probabilities are genuinely
@@ -10,7 +10,7 @@
  * process COUNT expectations (`λt`, thinning `λtp`, superposition `(λ₁+λ₂)t`) and
  * the "which stream first" split `λ₁/(λ₁+λ₂)` are exact rationals.
  *
- * NONE of these are copied source questions — the generators author fresh items;
+ * NONE of these are copied source questions, the generators author fresh items;
  * this file is the independent verifier the tests re-derive against.
  */
 
@@ -31,7 +31,7 @@ export function poissonAtLeastOne(lambda: number): number {
   return 1 - Math.exp(-lambda);
 }
 
-/** Variance of Poisson(λ) = λ (equal to the mean — the signature Poisson fact). */
+/** Variance of Poisson(λ) = λ (equal to the mean, the signature Poisson fact). */
 export function poissonVariance(lambda: number): number {
   return lambda;
 }

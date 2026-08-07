@@ -9,6 +9,8 @@ import {
   domainPointerCoaching,
   isArithmeticSlip,
   arithmeticSlipCoaching,
+  isDeterministicContext,
+  isLogicOrConstructionContext,
   type ErrorModeCatalog,
 } from "./errorModes";
 
@@ -263,5 +265,62 @@ describe("isArithmeticSlip / arithmeticSlipCoaching", () => {
     expect(msg.toLowerCase()).toContain("arithmetic");
     expect(msg).not.toMatch(/\d/);
     expect(msg).not.toMatch(METHOD_WORDS);
+  });
+});
+
+describe("isDeterministicContext (RC1: rung-4 generic elicitation flavour)", () => {
+  it("flags deterministic arithmetic / logic / number-theory / sequence contexts", () => {
+    expect(isDeterministicContext({ section: "Mental Math" })).toBe(true);
+    expect(isDeterministicContext({ section: "Rates, Algebra & Word Problems" })).toBe(true);
+    expect(isDeterministicContext({ section: "Geometry & Derivations" })).toBe(true);
+    expect(isDeterministicContext({ section: "Number Theory & Counting" })).toBe(true);
+    expect(isDeterministicContext({ section: "Sequences & Pattern Recognition" })).toBe(true);
+    expect(isDeterministicContext({ section: "Core Puzzles" })).toBe(true);
+    expect(isDeterministicContext({ family: "genMentalAddition" })).toBe(true);
+    expect(isDeterministicContext({ family: "genSumOddsRangeNumeric" })).toBe(true);
+    expect(isDeterministicContext({ family: "geometricNext" })).toBe(true);
+  });
+
+  it("does NOT flag genuine probability contexts (they keep the trial/enumerate confront)", () => {
+    expect(isDeterministicContext({ section: "Core Probability" })).toBe(false);
+    expect(isDeterministicContext({ section: "Conditional Probability" })).toBe(false);
+    expect(isDeterministicContext({ family: "genBinomial" })).toBe(false);
+    expect(isDeterministicContext({ family: "genBayes" })).toBe(false);
+    expect(isDeterministicContext({})).toBe(false);
+  });
+});
+
+describe("isLogicOrConstructionContext (RC3b: arithmetic-slip gate)", () => {
+  it("flags logic / construction / conceptual (brainteaser, game-theory, sequence) contexts", () => {
+    expect(isLogicOrConstructionContext({ section: "Core Puzzles" })).toBe(true);
+    expect(isLogicOrConstructionContext({ section: "Techniques Toolkit" })).toBe(true);
+    expect(isLogicOrConstructionContext({ section: "Game Theory & Puzzles" })).toBe(true);
+    expect(isLogicOrConstructionContext({ section: "Sequences & Pattern Recognition" })).toBe(true);
+    expect(isLogicOrConstructionContext({ family: "genPigeonhole" })).toBe(true);
+    expect(isLogicOrConstructionContext({ family: "geometricNext" })).toBe(true);
+    expect(isLogicOrConstructionContext({ family: "genValue2x2" })).toBe(true);
+  });
+
+  it("does NOT flag genuine numeric-arithmetic contexts (arithmetic-slip stays enabled there)", () => {
+    expect(isLogicOrConstructionContext({ section: "Mental Math" })).toBe(false);
+    expect(isLogicOrConstructionContext({ section: "Core Probability" })).toBe(false);
+    expect(isLogicOrConstructionContext({ family: "genMentalAddition" })).toBe(false);
+    expect(isLogicOrConstructionContext({ family: "genExpectedValueNumeric" })).toBe(false);
+    expect(isLogicOrConstructionContext({})).toBe(false);
+  });
+
+  it("flags derivation-heavy items by their `concept` when section/family are absent (static pools)", () => {
+    // The Interview-Games EV pool carries no section/family — concept is the
+    // only signal that a near-miss is a derivation, not a digit slip.
+    expect(
+      isLogicOrConstructionContext({ concept: "Order statistics / expected maximum" }),
+    ).toBe(true);
+    expect(
+      isLogicOrConstructionContext({ concept: "Optimal stopping (secretary problem)" }),
+    ).toBe(true);
+    // A plain EV-of-a-bet concept is genuine arithmetic → still not flagged.
+    expect(isLogicOrConstructionContext({ concept: "Expected value of a bet" })).toBe(
+      false,
+    );
   });
 });

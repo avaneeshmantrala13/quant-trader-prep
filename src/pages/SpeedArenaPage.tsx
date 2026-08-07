@@ -312,8 +312,9 @@ export function SpeedArenaPage() {
                 Speed Arena
               </h1>
               <p className="mt-1 text-sm text-secondary">
-                Timed mental-math drills in the Zetamac / Optiver mold. Reasoning
-                stays untimed elsewhere — this is pure speed practice.
+                Timed mental-math drills: the fast, exact arithmetic many quant
+                firms screen on. Reasoning stays untimed elsewhere; this is pure
+                speed practice.
               </p>
             </header>
             <PresetPicker onStart={start} />

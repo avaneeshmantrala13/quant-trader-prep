@@ -6,7 +6,7 @@
  * shifts, odd-one-out, analogy). Given the rule's parameters it returns:
  *   - the terms actually SHOWN to the learner,
  *   - the true next term / answer (correct-by-construction), and
- *   - a list of NAMED "misreads" — each a specific reasoning error (off-by-one
+ *   - a list of NAMED "misreads", each a specific reasoning error (off-by-one
  *     continuation, wrong operation, used the previous term, treated one rule as
  *     another) with a stable misconception `tag` and a `why` explanation.
  *
@@ -67,7 +67,7 @@ export function posToLetter(pos: number): string {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  1. Arithmetic — constant common difference d                               */
+/*  1. Arithmetic, constant common difference d                               */
 /* -------------------------------------------------------------------------- */
 
 export function arithmetic(a0: number, d: number, n: number): SeqSolution {
@@ -78,7 +78,7 @@ export function arithmetic(a0: number, d: number, n: number): SeqSolution {
     {
       value: term(n + 1),
       tag: "off_by_one_continuation",
-      why: `Skipped a term — extrapolated to the term AFTER next instead of adding ${d} once.`,
+      why: `Skipped a term, extrapolated to the term AFTER next instead of adding ${d} once.`,
     },
     {
       value: term(n - 1),
@@ -95,7 +95,7 @@ export function arithmetic(a0: number, d: number, n: number): SeqSolution {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  2. Geometric — constant ratio r                                            */
+/*  2. Geometric, constant ratio r                                            */
 /* -------------------------------------------------------------------------- */
 
 export function geometric(a0: number, r: number, n: number): SeqSolution {
@@ -125,7 +125,7 @@ export function geometric(a0: number, r: number, n: number): SeqSolution {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  3. Polynomial / finite-difference — constant SECOND difference (quadratic)  */
+/*  3. Polynomial / finite-difference, constant SECOND difference (quadratic)  */
 /* -------------------------------------------------------------------------- */
 
 export function quadratic(
@@ -150,7 +150,7 @@ export function quadratic(
     {
       value: last + firstDiff + 2 * secondDiff,
       tag: "over_accelerated",
-      why: "Added the second difference twice — over-accelerated the growth.",
+      why: "Added the second difference twice, over-accelerated the growth.",
     },
     {
       value: last,
@@ -162,7 +162,7 @@ export function quadratic(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  4. Interleaved — two interwoven arithmetic strands (even/odd positions)     */
+/*  4. Interleaved, two interwoven arithmetic strands (even/odd positions)     */
 /* -------------------------------------------------------------------------- */
 
 export function interleaved(
@@ -206,7 +206,7 @@ export function interleaved(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  5. Fibonacci-like — each term = sum of the previous two (general seeds)      */
+/*  5. Fibonacci-like, each term = sum of the previous two (general seeds)      */
 /* -------------------------------------------------------------------------- */
 
 export function fibonacciLike(s0: number, s1: number, n: number): SeqSolution {
@@ -237,7 +237,7 @@ export function fibonacciLike(s0: number, s1: number, n: number): SeqSolution {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  6. Alternating-operation — cycle "+a" then "×b"                             */
+/*  6. Alternating-operation, cycle "+a" then "×b"                             */
 /* -------------------------------------------------------------------------- */
 
 export function alternatingOp(
@@ -281,7 +281,7 @@ export function alternatingOp(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  7. Alphabetic — constant Caesar shift +k                                    */
+/*  7. Alphabetic, constant Caesar shift +k                                    */
 /* -------------------------------------------------------------------------- */
 
 export function caesar(p0: number, k: number, n: number): LetterSolution {
@@ -309,7 +309,7 @@ export function caesar(p0: number, k: number, n: number): LetterSolution {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  8. Alphabetic — alternating shifts (+a, +b, +a, …)                          */
+/*  8. Alphabetic, alternating shifts (+a, +b, +a, …)                          */
 /* -------------------------------------------------------------------------- */
 
 export function alternatingShift(
@@ -349,13 +349,13 @@ export function alternatingShift(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  9. Odd-one-out — the one value that violates an encoded divisibility rule    */
+/*  9. Odd-one-out, the one value that violates an encoded divisibility rule    */
 /* -------------------------------------------------------------------------- */
 
 /**
  * Given the four displayed values and the divisor rule `m`, return the UNIQUE
  * value that is NOT a multiple of `m` (the one that does not belong). Throws if
- * the caller did not construct exactly one violator — this is the exact
+ * the caller did not construct exactly one violator, this is the exact
  * "verifier" that keeps the generator honest.
  */
 export function findOddByDivisor(values: number[], m: number): number {
@@ -369,28 +369,53 @@ export function findOddByDivisor(values: number[], m: number): number {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  10. Analogy — "a : b :: c : ?" under a multiplicative rule                   */
+/*  10. Analogy, "a₁ : b₁ :: a₂ : b₂ :: c : ?" under a multiplicative rule      */
 /* -------------------------------------------------------------------------- */
 
 export interface AnalogySolution {
-  b: number;
+  a1: number;
+  b1: number;
+  a2: number;
+  b2: number;
   answer: number;
   misreads: Misread[];
 }
 
-export function analogyMul(a: number, r: number, c: number): AnalogySolution {
-  const b = a * r;
+/**
+ * Numeric analogy under the rule "multiply by r". A SINGLE example pair
+ * `a : ar` is genuinely ambiguous — the additive reading `c + (ar − a)` is an
+ * equally defensible rule, so a learner who adds the gap is not actually wrong
+ * (audit S1). We therefore anchor the rule with TWO example pairs with distinct
+ * inputs (`a1 ≠ a2`). Two points determine a unique affine map `y = m·x + k`;
+ * because both pairs satisfy `y = r·x` (so `k = 0`), that unique affine rule IS
+ * "×r". The additive reading "add a constant gap" requires
+ * `b1 − a1 = b2 − a2`, i.e. `a1(r−1) = a2(r−1)`, which fails whenever
+ * `a1 ≠ a2` — so it is now a genuine misconception, not a co-valid reading, and
+ * `c·r` is the only defensible answer.
+ */
+export function analogyMul(
+  a1: number,
+  a2: number,
+  r: number,
+  c: number,
+): AnalogySolution {
+  const b1 = a1 * r;
+  const b2 = a2 * r;
   const answer = c * r;
+  // The additive gap differs between the two pairs (a1 ≠ a2 ⇒ different gap),
+  // which is exactly why the "add the gap" reading is ruled out; we surface the
+  // most-recent pair's gap as the tempting-but-wrong additive answer.
+  const gap = b2 - a2;
   const misreads: Misread[] = [
     {
-      value: c + (b - a),
+      value: c + gap,
       tag: "copied_absolute_gap",
-      why: `Copied the absolute change (${b - a}) from the example instead of applying the ×${r} rule.`,
+      why: `Added the last pair's absolute gap (${gap}) to ${c}. That "add a constant" reading fails the FIRST pair (${a1}→${b1} adds ${b1 - a1}, not ${gap}); only ×${r} fits both examples.`,
     },
     {
-      value: b,
+      value: b2,
       tag: "copied_example_output",
-      why: "Reused the example's output (b) instead of applying the rule to c.",
+      why: "Reused the previous pair's output instead of applying the rule to c.",
     },
     {
       value: c + r,
@@ -398,5 +423,5 @@ export function analogyMul(a: number, r: number, c: number): AnalogySolution {
       why: `Added the ratio ${r} instead of multiplying by it.`,
     },
   ];
-  return { b, answer, misreads };
+  return { a1, b1, a2, b2, answer, misreads };
 }

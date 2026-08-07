@@ -166,7 +166,7 @@ describe("game pages render (playable sanity)", () => {
   it("The Trading Floor shows its setup CTA", () => {
     renderPage(<TradingFloorPage />);
     expect(screen.getAllByText(/The Trading Floor/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/Open the market/i)).toBeTruthy();
+    expect(screen.getByText(/Start trading/i)).toBeTruthy();
   });
 });
 
@@ -326,6 +326,6 @@ describe("game pages resume a saved in-progress game (persistence)", () => {
     renderPage(<TradingFloorPage />);
     // The playing screen (quote pad) replaces the setup CTA on resume.
     expect(await screen.findByText(/Quote market/i)).toBeTruthy();
-    expect(screen.queryByText(/Open the market/i)).toBeNull();
+    expect(screen.queryByText(/Start trading/i)).toBeNull();
   });
 });

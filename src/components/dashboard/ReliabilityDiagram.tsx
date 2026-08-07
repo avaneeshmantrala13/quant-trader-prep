@@ -1,4 +1,8 @@
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 
 const SIZE = 240;
 const PAD = 28;
@@ -25,20 +29,22 @@ export function ReliabilityDiagram({
   // Below MIN_PAIRS we render an encouraging progress state instead of numbers —
   // this is what eliminates the misleading "n=1" panel.
   if (!data.sufficient) {
+    const needed = elicitedPairsNeeded(data.count, data.minPairs);
     return (
       <div className="grid min-h-[180px] place-items-center border border-dashed border-subtle bg-surface-muted p-6 text-center">
         <div>
           <div className="label text-muted">Reliability diagram</div>
           <p className="mt-2 max-w-sm text-sm text-secondary">
-            Calibration needs a bit more data — answer{" "}
-            <span className="num font-semibold text-primary">
-              ~{data.minPairs}
-            </span>{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches your accuracy.
+            This graph needs data points where you actually STATE a confidence.
+            Only two activities produce one: {ELICITED_ACTIVITIES_SENTENCE}.
+            Normal lessons and quizzes don't count toward it.
           </p>
           <p className="mt-2 num text-xs text-muted">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            <span className="font-semibold text-primary">
+              {needed} more
+            </span>{" "}
+            of those to unlock the graph.
           </p>
           <div className="mx-auto mt-2 h-1.5 w-48 max-w-full border border-subtle bg-surface">
             <div
@@ -132,6 +138,12 @@ export function ReliabilityDiagram({
         {/* Primary read: one plain-language sentence (derived from the signed gap). */}
         {cal && <p className="text-sm text-primary">{cal.label}</p>}
 
+        {/* Provenance: names the drills that actually elicited a confidence, so
+            the panel never implies ordinary answering measured confidence. */}
+        {data.sourceNote && (
+          <p className="text-xs text-muted">{data.sourceNote}</p>
+        )}
+
         {data.headline && (
           <p className="text-sm text-secondary">
             When you say <span className="num font-semibold">~80%</span>, you're
@@ -162,10 +174,10 @@ export function ReliabilityDiagram({
             confidence > accuracy = points BELOW the diagonal). */}
         <p className="text-xs text-muted">
           {leanLabel === "under-confident"
-            ? "Your points sit above the diagonal — you're more accurate than you feel."
+            ? "Your points sit above the diagonal: you're more accurate than you feel."
             : leanLabel === "over-confident"
-              ? "Your points sit below the diagonal — you're less accurate than you feel."
-              : "Your points hug the diagonal — confidence ≈ accuracy."}
+              ? "Your points sit below the diagonal: you're less accurate than you feel."
+              : "Your points hug the diagonal: confidence ≈ accuracy."}
         </p>
 
         {/* Jargon on demand: raw Brier / reliability-gap / counts behind a details accordion. */}

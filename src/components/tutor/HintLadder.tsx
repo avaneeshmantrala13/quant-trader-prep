@@ -10,6 +10,8 @@ import { ConfrontSim } from "./ConfrontSim";
 export interface SiblingWorked {
   prompt: string;
   steps: string[];
+  /** The sibling's OWN final answer (different numbers → never the current answer). */
+  answer?: string;
 }
 
 function isNfTree(p: HintRung["payload"]): p is NaturalFrequencyTree {
@@ -118,19 +120,28 @@ export function HintLadder({
 
             {rung.kind === "worked-sibling" && siblingWorked && (
               <div className="panel-ruled mt-3 p-4">
-                <div className="label text-accent">Worked sibling</div>
-                <p className="mt-1 text-sm text-secondary">
+                <div className="label text-accent">
+                  Worked sibling · different numbers
+                </div>
+                <p className="mt-1 whitespace-pre-line text-sm text-secondary">
                   {siblingWorked.prompt}
                 </p>
                 <ol className="mt-2 list-decimal space-y-1 pl-5">
                   {siblingWorked.steps.map((s, i) => (
-                    <li key={i} className="text-sm text-primary">
+                    <li key={i} className="whitespace-pre-line text-sm text-primary">
                       {s}
                     </li>
                   ))}
                 </ol>
+                {siblingWorked.answer && (
+                  <p className="mt-2 text-sm text-primary">
+                    <span className="label text-accent">Sibling answer · </span>
+                    <span className="num font-semibold">{siblingWorked.answer}</span>
+                  </p>
+                )}
                 <p className="mt-2 text-xs text-muted">
-                  Now mirror that step on your own item, then move on.
+                  Study the step you slipped on above, then mirror it on your own
+                  item (your numbers differ) and re-derive your answer.
                 </p>
               </div>
             )}
@@ -160,8 +171,8 @@ export function HintLadder({
           className="btn-secondary w-full"
         >
           {nextRung.kind === "reveal"
-            ? "I've tried — show the full solution ▸"
-            : "Still stuck — show another hint ▾"}
+            ? "I've tried: show the full solution ▸"
+            : "Still stuck: show another hint ▾"}
         </button>
       )}
     </div>

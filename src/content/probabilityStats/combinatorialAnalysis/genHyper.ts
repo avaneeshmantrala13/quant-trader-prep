@@ -12,7 +12,7 @@ import { hyperAtLeastProb, hyperExactlyProb, hyperNoneProb } from "./solvers";
  * "ordinary" items).
  *
  * Every ground-truth answer comes straight from the EXACT solvers in
- * `./solvers.ts` (`hyperExactlyProb`, `hyperNoneProb`, `hyperAtLeastProb`) — the
+ * `./solvers.ts` (`hyperExactlyProb`, `hyperNoneProb`, `hyperAtLeastProb`), the
  * generators never recompute a probability by hand. Each distractor
  * (`numeric` commonErrors) is a re-derived, NAMED misconception, guaranteed
  * finite, positive, and ≠ the answer at the grading precision (`numericErrors`
@@ -23,7 +23,7 @@ import { hyperAtLeastProb, hyperExactlyProb, hyperNoneProb } from "./solvers";
  */
 
 /* ========================================================================== */
-/* =================  1 — EXACTLY j SPECIAL (hypergeometric)  ============== */
+/* =================  1. EXACTLY j SPECIAL (hypergeometric)  ============== */
 /* ========================================================================== */
 
 const EXACTLY_THEME = [
@@ -68,7 +68,7 @@ export function genHyperExactly(rng: Rng): NumericQuestion {
   );
   push(
     wrongJ,
-    `${fracText(wrongJ)} is P(exactly ${j + 1} special) — an off-by-one on j. You want exactly ${j}, i.e. C(${m},${j})·C(${N - m},${k - j})/C(${N},${k}).`,
+    `${fracText(wrongJ)} is P(exactly ${j + 1} special), an off-by-one on j. You want exactly ${j}, i.e. C(${m},${j})·C(${N - m},${k - j})/C(${N},${k}).`,
   );
   push(
     noOrdinary,
@@ -80,7 +80,7 @@ export function genHyperExactly(rng: Rng): NumericQuestion {
     `You draw ${k} of them at random, all at once (without replacement). ` +
     `What is the probability that exactly ${j} of the ${k} drawn are ${th.adj}? (Round to ${dp} decimals.)`;
   const explanation =
-    `This is a hypergeometric draw: choose which ${j} of the ${m} ${th.adj} ${th.noun} appear — C(${m},${j}) ways — and fill the remaining ${k - j} picks from the ${N - m} ordinary ${th.noun} — C(${N - m},${k - j}) ways — over all C(${N},${k}) equally-likely draws of ${k}. ` +
+    `This is a hypergeometric draw: choose which ${j} of the ${m} ${th.adj} ${th.noun} appear. C(${m},${j}) ways, and fill the remaining ${k - j} picks from the ${N - m} ordinary ${th.noun}. C(${N - m},${k - j}) ways, over all C(${N},${k}) equally-likely draws of ${k}. ` +
     `So P = C(${m},${j})·C(${N - m},${k - j})/C(${N},${k}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
     `Note the with-replacement binomial guess ${fracText(binom)} is only an approximation here.`;
 
@@ -99,7 +99,7 @@ export function genHyperExactly(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — NO SPECIAL (hypergeometric)  ==================== */
+/* =================  2. NO SPECIAL (hypergeometric)  ==================== */
 /* ========================================================================== */
 
 const NONE_THEME = [
@@ -139,7 +139,7 @@ export function genHyperNone(rng: Rng): NumericQuestion {
   );
   push(
     complement,
-    `${fracText(complement)} = 1 − answer is P(at LEAST one ${th.adj} ${th.noun}), the complement of "none" — you subtracted from 1 one time too many.`,
+    `${fracText(complement)} = 1 − answer is P(at LEAST one ${th.adj} ${th.noun}), the complement of "none", you subtracted from 1 one time too many.`,
   );
   push(
     firstOnly,
@@ -170,7 +170,7 @@ export function genHyperNone(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — AT LEAST j SPECIAL (hypergeometric)  ============= */
+/* =================  3. AT LEAST j SPECIAL (hypergeometric)  ============= */
 /* ========================================================================== */
 
 const ATLEAST_THEME = [
@@ -216,7 +216,7 @@ export function genHyperAtLeast(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, dp);
   push(
     exactlyOnly,
-    `${fracText(exactlyOnly)} is P(exactly ${j} special) only — "at least ${j}" also includes ${j + 1}, ${j + 2}, … up to ${Math.min(m, k)}, so you dropped the upper tail.`,
+    `${fracText(exactlyOnly)} is P(exactly ${j} special) only, "at least ${j}" also includes ${j + 1}, ${j + 2}, … up to ${Math.min(m, k)}, so you dropped the upper tail.`,
   );
   push(
     binomTail,

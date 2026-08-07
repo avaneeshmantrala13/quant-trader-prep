@@ -1,6 +1,9 @@
 import type { Difficulty } from "@/types/content";
 import { TIER_SEED } from "@/lib/mastery/config";
 import { misconceptionKey } from "@/lib/mastery/topicKey";
+import { applyDiagnosticSeed } from "@/lib/mastery/mastery";
+import { isTopicUnlocked } from "@/lib/mastery/unlock";
+import { prereqClosure } from "@/lib/mastery/unlockGraph";
 
 /**
  * Pure seed derivation for the cold-start diagnostic (PHASE_3 §4/§5).
@@ -24,6 +27,13 @@ export interface TopicSeed {
   thetaSeed: number;
   /** Fully-namespaced misconception keys (`${topicKey}::${tag}`). */
   misconceptions: string[];
+  /**
+   * True for a seed DERIVED from KST prerequisite expansion rather than a
+   * directly-assessed topic (see {@link withPrereqUnlocks}). The seed writer
+   * applies a derived low-confidence unlock ONLY when the learner has NO prior
+   * evidence on that topic, so it can never clobber real (good OR bad) history.
+   */
+  derived?: boolean;
 }
 
 /** One graded diagnostic item outcome for a topic. */
@@ -102,6 +112,62 @@ export function diagnosticToSeeds(outcomes: DiagnosticOutcome[]): TopicSeed[] {
       misconceptions: [...misc],
     };
   });
+}
+
+/**
+ * The canonical LOW-CONFIDENCE prereq seed: α = 3, β = 1 ⇒ Beta mean 0.75
+ * (clears `UNLOCK_MEAN_BAR`) with a tiny pseudo-count (α+β = 4) so a single
+ * subsequent miss swings it back under the bar and re-locks it — identical to a
+ * strong 2/2 diagnostic (see `@/lib/mastery/unlock`).
+ */
+const LOW_CONFIDENCE_SEED = { successes: 2, failures: 0 } as const;
+
+/** Did the learner "perform well" on this topic? Uses the EXISTING unlock bar. */
+function performedWell(seed: {
+  successes: number;
+  failures: number;
+}): boolean {
+  return isTopicUnlocked(applyDiagnosticSeed(undefined, seed));
+}
+
+/**
+ * Expand a set of directly-assessed diagnostic seeds with LOW-CONFIDENCE unlocks
+ * for the KST PREREQUISITES of every topic the learner performed WELL on
+ * (Part B, requirement 2). "Performed well" reuses the existing unlock bar
+ * (`isTopicUnlocked`), so no new scale is invented.
+ *
+ * Prereqs are pulled from `skillGraph.ts` (transitive) and optionally scoped by
+ * `inScope` to keep the expansion "within that path" (e.g. the selected course's
+ * topic set). A DERIVED prereq seed is only added for a topic that was NOT
+ * directly assessed (direct results always win), and is flagged `derived` so the
+ * seed writer never overwrites real prior evidence on that prereq. Pure: the
+ * input array is never mutated.
+ */
+export function withPrereqUnlocks(
+  seeds: TopicSeed[],
+  inScope?: (topicKey: string) => boolean,
+): TopicSeed[] {
+  const directKeys = new Set(seeds.map((s) => s.topicKey));
+  const derivedKeys = new Set<string>();
+  const derived: TopicSeed[] = [];
+
+  for (const s of seeds) {
+    if (!performedWell(s)) continue;
+    for (const prereq of prereqClosure(s.topicKey, inScope)) {
+      if (directKeys.has(prereq) || derivedKeys.has(prereq)) continue;
+      derivedKeys.add(prereq);
+      derived.push({
+        topicKey: prereq,
+        successes: LOW_CONFIDENCE_SEED.successes,
+        failures: LOW_CONFIDENCE_SEED.failures,
+        thetaSeed: 0,
+        misconceptions: [],
+        derived: true,
+      });
+    }
+  }
+
+  return [...seeds, ...derived];
 }
 
 /* -------------------------------------------------------------------------- */

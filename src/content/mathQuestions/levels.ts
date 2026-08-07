@@ -10,7 +10,7 @@ import {
 import { solvingUnknownsFlashcards } from "./flashcards";
 
 /**
- * Math Questions — a NEW top-level track for DETERMINISTIC math word problems,
+ * Math Questions, a NEW top-level track for DETERMINISTIC math word problems,
  * DISTINCT from Probability & Statistics. Answers are exact counts / measures /
  * times (not probabilities in [0,1]), so the track routes by answer SHAPE:
  *
@@ -32,7 +32,7 @@ const levels: Level[] = [
     title: "Rate, Work & Motion",
     subtitle: "Combined rates, trips, currents, escalators",
     blurb:
-      "Rate, work, and motion problems — combined fill-and-drain, two-leg trips, river currents, and escalator step counts, solved by net rates.",
+      "Rate, work, and motion problems, combined fill-and-drain, two-leg trips, river currents, and escalator step counts, solved by net rates.",
     section: "Rates, Algebra & Word Problems",
     difficulty: "easy",
     mode: "numeric",
@@ -49,18 +49,18 @@ const levels: Level[] = [
         "Rate/work setups are the bread-and-butter warm-ups on quant screens.",
       deepDive: {
         whyItWorks:
-          "Rates measured per unit of time are additive over the same interval: processes acting together on one quantity add, and an opposing process subtracts, because in any fixed time the amounts they move simply combine. Speeds obey the same rule — a current or moving surface adds to (or resists) an object's own speed.",
+          "Rates measured per unit of time are additive over the same interval: processes acting together on one quantity add, and an opposing process subtracts, because in any fixed time the amounts they move simply combine. Speeds obey the same rule, a current or moving surface adds to (or resists) an object's own speed.",
         approach: [
           "Identify the quantity being changed and write every process's rate in the same units.",
           "Add the rates that help and subtract the rates that oppose to get a single net rate.",
-          "For motion, adjust the object's own speed by the medium — add when carried, subtract when resisted.",
+          "For motion, adjust the object's own speed by the medium, add when carried, subtract when resisted.",
           "Write one equation per trip or scenario using time = amount ÷ rate.",
           "Eliminate the shared unknown across the equations and solve for what is asked.",
         ],
         pitfalls: [
           "Averaging the rates or the times instead of combining the rates.",
           "Dropping the opposing process (drain or current) or flipping its sign.",
-          "Mixing units — per-minute against per-hour — before combining.",
+          "Mixing units, per-minute against per-hour, before combining.",
           "Stopping at an intermediate value (a speed or one leg) instead of the quantity asked.",
         ],
       },
@@ -80,7 +80,7 @@ const levels: Level[] = [
     numericGenerator: mixNumeric(ALGEBRA_SYSTEMS),
     lesson: {
       paragraphs: [
-        "Translate words into equations, then solve. A triangular stack totals n(n+1)/2 (invert it — don't take a plain square root). A heads/legs count is a 2×2 system; a win/loss ledger backs the losses out of the net.",
+        "Translate words into equations, then solve. A triangular stack totals n(n+1)/2 (invert it, don't take a plain square root). A heads/legs count is a 2×2 system; a win/loss ledger backs the losses out of the net.",
         "'Solving unknowns' with clean numbers lives here too: a self-referential length (tail = head + ½ body, body = head + tail) collapses to a single multiple of the head, and three pairwise products hand you each value via a square root.",
       ],
       keyIdea: "Name the unknowns, write one equation per fact, then eliminate.",
@@ -88,7 +88,7 @@ const levels: Level[] = [
         "Fast, correct algebra from a word problem is exactly what the desk rewards.",
       deepDive: {
         whyItWorks:
-          "Each stated fact is a linear (or linearly reducible) equation in named unknowns; with as many independent equations as unknowns, the system has a single solution reachable by substitution and elimination. Some setups also carry an exact structure — a triangular total n(n+1)/2, or the product of the three pairwise products equalling the square of the overall product — that a closed form inverts directly.",
+          "Each stated fact is a linear (or linearly reducible) equation in named unknowns; with as many independent equations as unknowns, the system has a single solution reachable by substitution and elimination. Some setups also carry an exact structure, a triangular total n(n+1)/2, or the product of the three pairwise products equalling the square of the overall product, that a closed form inverts directly.",
         approach: [
           "Give each unknown quantity its own letter.",
           "Translate every fact in the problem into its own equation.",
@@ -110,7 +110,7 @@ const levels: Level[] = [
     title: "Number Theory & Growth",
     subtitle: "Series, multiples, and doubling",
     blurb:
-      "Number theory and growth — summing odd ranges, contiguous sums, counting multiples in an interval, and doubling growth (beware the half-in-time trap).",
+      "Number theory and growth, summing odd ranges, contiguous sums, counting multiples in an interval, and doubling growth (beware the half-in-time trap).",
     section: "Number Theory & Counting",
     difficulty: "medium",
     mode: "numeric",
@@ -119,8 +119,8 @@ const levels: Level[] = [
     numericGenerator: mixNumeric(NUMBER_THEORY_NUMERIC),
     lesson: {
       paragraphs: [
-        "Series are counts × averages: the sum of a range is (#terms)·(average), and the odd numbers in a range are their own arithmetic progression — don't accidentally sum everything or reach for n² outside 1,3,5,…",
-        "Counting multiples in [lo, hi] is ⌊hi/d⌋ − ⌊(lo−1)/d⌋ (mind the lower boundary). For doubling growth, work BACKWARD by whole periods: if it's full on day D and doubles every k days, it was ¼ covered on day D − 2k — NOT on day D/4.",
+        "Series are counts × averages: the sum of a range is (#terms)·(average), and the odd numbers in a range are their own arithmetic progression, don't accidentally sum everything or reach for n² outside 1,3,5,…",
+        "Counting multiples in [lo, hi] is ⌊hi/d⌋ − ⌊(lo−1)/d⌋ (mind the lower boundary). For doubling growth, work BACKWARD by whole periods: if it's full on day D and doubles every k days, it was ¼ covered on day D − 2k. NOT on day D/4.",
       ],
       keyIdea: "Sum = terms × average; multiples via floors; undo doubling by periods.",
       whyInterviewers:
@@ -129,7 +129,7 @@ const levels: Level[] = [
         whyItWorks:
           "An arithmetic series sums to (number of terms) × (average of first and last term), because pairing terms inward from both ends gives equal sums. Multiples of d sit evenly among the integers, so counting them in an interval is a difference of floor divisions; and doubling multiplies by two each period, so undoing it means dividing by two once per whole period.",
         approach: [
-          "Decide exactly which terms are included — all integers, only the odds, only the evens, or only the multiples.",
+          "Decide exactly which terms are included, all integers, only the odds, only the evens, or only the multiples.",
           "For a series, count the terms, average the first and last, and multiply.",
           "For multiples in [lo, hi], subtract ⌊(lo−1)/d⌋ from ⌊hi/d⌋.",
           "For doubling growth, work in whole periods, halving the coverage once per period as you step backward.",
@@ -148,7 +148,7 @@ const levels: Level[] = [
     title: "Counting & Arrangements",
     subtitle: "Packing, grids, multisets, schedules",
     blurb:
-      "Counting done right — floor-then-multiply packing (343 not 421), rectangles vs squares on a grid, multiset arrangements, and round-robin schedules.",
+      "Counting done right, floor-then-multiply packing (343 not 421), rectangles vs squares on a grid, multiset arrangements, and round-robin schedules.",
     section: "Number Theory & Counting",
     difficulty: "medium",
     mode: "numeric",
@@ -157,7 +157,7 @@ const levels: Level[] = [
     numericGenerator: mixNumeric(COUNTING_NUMERIC),
     lesson: {
       paragraphs: [
-        "Counting is where confident wrong answers live. Packing cubes: FLOOR each dimension THEN multiply — dividing the volumes (30³/4³ ≈ 421) reuses wasted edge space that can't hold a cube (the answer is ⌊30/4⌋³ = 343).",
+        "Counting is where confident wrong answers live. Packing cubes: FLOOR each dimension THEN multiply, dividing the volumes (30³/4³ ≈ 421) reuses wasted edge space that can't hold a cube (the answer is ⌊30/4⌋³ = 343).",
         "Decide what a choice really is: a rectangle picks 2 of the vertical AND 2 of the horizontal lines (C(n+1,2)²), not just the equal-sided squares; arrangements of repeated letters divide by a factorial PER repeated symbol; a round-robin multiplies C(n,2) by the meetings per pair.",
       ],
       keyIdea: "Name the object exactly: floor-then-multiply, pairs of lines, per-symbol repeats.",
@@ -187,7 +187,7 @@ const levels: Level[] = [
     title: "Geometry",
     subtitle: "Angles, coverage, volumes, radii",
     blurb:
-      "Geometry with clean answers — clock-hand angles, paint cans by ceiling division, box volume from edge clues, and a circle's radius by completing the square.",
+      "Geometry with clean answers, clock-hand angles, paint cans by ceiling division, box volume from edge clues, and a circle's radius by completing the square.",
     section: "Geometry & Derivations",
     difficulty: "hard",
     mode: "numeric",
@@ -234,15 +234,15 @@ const levels: Level[] = [
     flashcards: solvingUnknownsFlashcards,
     lesson: {
       paragraphs: [
-        "Some answers aren't a single number to type. A linear Diophantine puzzle wants a full 5-tuple (A,B,C,D,E) — solve by substitution and elimination, using distinctness (and the odd inequality) to pin the last ambiguity.",
+        "Some answers aren't a single number to type. A linear Diophantine puzzle wants a full 5-tuple (A,B,C,D,E), solve by substitution and elimination, using distinctness (and the odd inequality) to pin the last ambiguity.",
         "Others are two-part (the 2/3 & 1/3 glass split) or a whole derivation (a river's width from two crossings, the fastest road-then-field path, a balance mobile). Reason each out honestly, reveal, and grade yourself.",
       ],
       keyIdea: "Substitute, eliminate, and use distinctness/invariants to finish.",
       whyInterviewers:
-        "Interviewers want your reasoning narrated — these reward derivation over recall.",
+        "Interviewers want your reasoning narrated, these reward derivation over recall.",
       deepDive: {
         whyItWorks:
-          "These answers aren't a single scalar (a full tuple, a two-part split, or a derived measurement), so the method is structured reasoning rather than one formula. Substitution narrows the possibilities, and an invariant or extremal principle — distinctness of the digits, a combined-distance ratio, a geometric-series limit, or a speed-ratio optimum — pins the final answer exactly.",
+          "These answers aren't a single scalar (a full tuple, a two-part split, or a derived measurement), so the method is structured reasoning rather than one formula. Substitution narrows the possibilities, and an invariant or extremal principle, distinctness of the digits, a combined-distance ratio, a geometric-series limit, or a speed-ratio optimum, pins the final answer exactly.",
         approach: [
           "Name the unknowns and translate every constraint into an equation or relation.",
           "Substitute and eliminate to shrink the set of candidate solutions.",
@@ -266,7 +266,7 @@ export const mathQuestionsTrack: Track = {
   title: "Applied Math & Number Puzzles",
   tagline: "Applied Math & Number Puzzles",
   description:
-    "Deterministic math word-problems with exact answers — rates & work, algebra & systems, number theory & counting, and geometry — verifier-checked and fresh every attempt.",
+    "Deterministic math word-problems with exact answers, rates & work, algebra & systems, number theory & counting, and geometry, verifier-checked and fresh every attempt.",
   motif: "mathQuestions",
   levels,
 };

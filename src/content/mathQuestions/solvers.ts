@@ -3,7 +3,7 @@
  * problems: rate/work, algebra & systems, counting, number theory, geometry,
  * doubling/growth, and "solving unknowns"). Every user-facing answer and every
  * misconception distractor is computed here (or in `generators.ts`) from the
- * problem parameters — never hardcoded — so each generated item is provably
+ * problem parameters, never hardcoded, so each generated item is provably
  * correct and the verification tests can re-derive the same values a second,
  * independent way.
  *
@@ -14,7 +14,7 @@
  */
 
 /* -------------------------------------------------------------------------- */
-/*  Small exact combinatorics (values here are small — safe as JS numbers)     */
+/*  Small exact combinatorics (values here are small, safe as JS numbers)     */
 /* -------------------------------------------------------------------------- */
 
 /** Exact binomial coefficient C(n, k) as a number (n small in this track). */
@@ -33,7 +33,7 @@ export function factorial(n: number): number {
   return f;
 }
 
-/** Multinomial coefficient (Σparts)! / ∏(partᵢ!) — arrangements of a multiset. */
+/** Multinomial coefficient (Σparts)! / ∏(partᵢ!), arrangements of a multiset. */
 export function multinomial(parts: number[]): number {
   const total = parts.reduce((a, b) => a + b, 0);
   let res = factorial(total);
@@ -47,7 +47,7 @@ export function multinomial(parts: number[]): number {
 
 /**
  * Cold-Storage packing: how many s-cubes fit inside an L×W×H box. You must FLOOR
- * each dimension THEN multiply — not divide the volumes. (MQ7: 30³ box, 4-cubes
+ * each dimension THEN multiply, not divide the volumes. (MQ7: 30³ box, 4-cubes
  * ⇒ ⌊30/4⌋³ = 7³ = 343, NOT ⌊30³/4³⌋ = 421.)
  */
 export function packedCubes(dims: [number, number, number], s: number): number {
@@ -273,7 +273,7 @@ export function escalatorSteps(up: number, down: number): number {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  SOLVING UNKNOWNS — Linear Diophantine (A–E a permutation of 1..5)           */
+/*  SOLVING UNKNOWNS. Linear Diophantine (A–E a permutation of 1..5)           */
 /* -------------------------------------------------------------------------- */
 
 export type DiophantineVars = { A: number; B: number; C: number; D: number; E: number };

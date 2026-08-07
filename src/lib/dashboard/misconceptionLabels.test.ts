@@ -79,31 +79,44 @@ describe("describeMisconception", () => {
     ).toBe("Ignoring the base rate");
   });
 
-  it("degrades an idx:<i> fallback to a topic-level phrasing (never a raw key)", () => {
+  const SUBSKILL = "Conditioning on the right event and applying Bayes' rule";
+
+  it("degrades an idx:<i> fallback to the topic's concrete sub-skill (never a raw key, never a bare restatement)", () => {
     const out = describeMisconception(`${TOPIC_KEY}::idx:0`, {
       topicName: TOPIC_NAME,
     });
-    expect(out).toBe(`Recurring mistakes in ${TOPIC_NAME}`);
+    expect(out).toBe(SUBSKILL);
     expect(out).not.toContain("idx");
     expect(out).not.toContain("option 0");
     expect(out).not.toContain("::");
+    // The useless bare topic restatement is gone.
+    expect(out).not.toMatch(/^Recurring mistakes in/);
   });
 
-  it("degrades an err:<value> fallback to a topic-level phrasing", () => {
+  it("degrades an err:<value> fallback to the topic's concrete sub-skill", () => {
     const out = describeMisconception(`${TOPIC_KEY}::err:12.5`, {
       topicName: TOPIC_NAME,
     });
-    expect(out).toBe(`Recurring mistakes in ${TOPIC_NAME}`);
+    expect(out).toBe(SUBSKILL);
     expect(out).not.toContain("err");
     expect(out).not.toContain("12.5");
   });
 
-  it("degrades an UNKNOWN semantic tag to the topic phrasing", () => {
+  it("degrades an UNKNOWN semantic tag to the topic's concrete sub-skill", () => {
     const out = describeMisconception(`${TOPIC_KEY}::totally_new_tag`, {
       topicName: TOPIC_NAME,
     });
-    expect(out).toBe(`Recurring mistakes in ${TOPIC_NAME}`);
+    expect(out).toBe(SUBSKILL);
     expect(out).not.toContain("totally_new_tag");
+  });
+
+  it("degrades an unmapped topic to a concrete-but-generic sub-skill, not a bare restatement", () => {
+    const out = describeMisconception("some-track::Some Section::idx:1", {
+      topicName: "Some Section",
+    });
+    expect(out).toBe("Core problem-setups in Some Section");
+    expect(out).not.toMatch(/^Recurring mistakes in/);
+    expect(out).not.toContain("::");
   });
 
   it("NEVER surfaces a raw key for any resolvable input shape", () => {

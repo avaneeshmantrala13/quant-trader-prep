@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Rng } from "@/lib/rng";
+import type { Fill } from "@/lib/games/makeMarket/engine";
 import {
   cardValue,
   freshDeck,
@@ -13,6 +14,7 @@ import {
   resolvePlayerQuote,
   playerTradesBotQuote,
   settle,
+  coachSettlement,
   dealGame,
   revealNext,
   addFills,
@@ -24,6 +26,12 @@ import {
 } from "./engine";
 
 const c = (rank: number, suit: Card["suit"], value: number): Card => ({ rank, suit, value });
+const f = (side: "buy" | "sell", price: number, size = 1, round = 1): Fill => ({
+  side,
+  price,
+  size,
+  round,
+});
 
 describe("card valuation (number × 10, signed faces)", () => {
   it("number cards are face × 10 regardless of suit", () => {
@@ -175,15 +183,53 @@ describe("resolvePlayerQuote across multiple bots", () => {
     expect(anyFill).toBe(true);
   });
 
-  it("informed pick-offs are capped to a nibble (≤1 lot per bot)", () => {
-    // Offer a wildly cheap ask so both high bots want to lift big; the cap holds.
-    const q: Quote = { bid: 100, ask: 150, bidSize: 3, askSize: 3 };
+  it("informed flow presses size on a mis-priced quote (capped by the size you show) and picks the stale side", () => {
+    // A clean state whose fair value (playerEV) is exactly 100: two 5s = +100
+    // known, EV/card 0, nothing else revealed.
+    const evState: GameState = {
+      config: { numBots: 2, numRounds: 1, aceMode: "high" },
+      playerHand: [c(5, "♥", 50), c(5, "♦", 50)],
+      bots: [highBot, { ...highBot, id: 1, name: "H2" }],
+      community: [],
+      revealedCount: 0,
+      totalCards: 11,
+      trueTotal: 0,
+      evPerCard: 0,
+      fills: [],
+      roundIdx: 1,
+    };
+
+    // Quote WAY too high (mid 155 vs fair 100) → informed hits your rich bid: you BUY.
+    const tooHigh: Quote = { bid: 150, ask: 160, bidSize: 3, askSize: 3 };
+    let sawPress = false;
     for (let seed = 0; seed < 300; seed++) {
-      const { trades } = resolvePlayerQuote(q, state, new Rng(seed));
+      const { fills, trades } = resolvePlayerQuote(tooHigh, evState, new Rng(seed));
+      const bought = fills.filter((f) => f.side === "buy").reduce((a, f) => a + f.size, 0);
+      const sold = fills.filter((f) => f.side === "sell").reduce((a, f) => a + f.size, 0);
+      expect(bought).toBeLessThanOrEqual(tooHigh.bidSize); // never exceeds offered size
+      expect(sold).toBeLessThanOrEqual(tooHigh.askSize);
       for (const t of trades) {
-        if (t.botId >= 0) expect(t.size).toBeLessThanOrEqual(1); // informed nibble
+        if (t.botId >= 0) {
+          expect(t.side).toBe("buy"); // they hit the rich bid, not the (also-rich) offer
+          if (t.size > 1) sawPress = true; // presses more than a single-lot nibble
+        }
       }
     }
+    expect(sawPress).toBe(true);
+
+    // Quote WAY too low (mid 45 vs fair 100) → informed lifts your cheap offer: you SELL.
+    const tooLow: Quote = { bid: 40, ask: 50, bidSize: 3, askSize: 3 };
+    let sawSell = false;
+    for (let seed = 0; seed < 200; seed++) {
+      const { trades } = resolvePlayerQuote(tooLow, evState, new Rng(seed));
+      for (const t of trades) {
+        if (t.botId >= 0) {
+          expect(t.side).toBe("sell");
+          sawSell = true;
+        }
+      }
+    }
+    expect(sawSell).toBe(true);
   });
 });
 
@@ -277,9 +323,66 @@ describe("maker EV — the game is winnable via two-sided spread capture", () =>
     expect(oneSided.winRate).toBeLessThan(twoSided.winRate - 0.1);
   });
 
-  it("quoting at the max spread earns less than a tighter market (less flow)", () => {
-    const tight = run((ev) => ({ bid: Math.round(ev - 4), ask: Math.round(ev + 4), bidSize: 2, askSize: 2 }));
-    const wide = run((ev) => ({ bid: Math.round(ev - 10), ask: Math.round(ev + 10), bidSize: 2, askSize: 2 }));
-    expect(wide.avg).toBeLessThan(tight.avg);
+  it("EV falls monotonically as centring worsens (a smooth gradient, not a cliff)", () => {
+    const at = (off: number) =>
+      run((ev) => ({ bid: Math.round(ev + off - 4), ask: Math.round(ev + off + 4), bidSize: 2, askSize: 2 })).avg;
+    const g0 = at(0);
+    const g20 = at(20);
+    const g60 = at(60);
+    expect(g0).toBeGreaterThan(g20); // 20-off is worse than centred
+    expect(g20).toBeGreaterThan(g60); // 60-off is worse still
+  });
+
+  it("mis-centred quotes are adversely selected and lose EV as |quote−fair| grows (F4)", () => {
+    // Same tight spread + size, only the CENTRING changes: on-fair, +40 off, +150 off.
+    const good = run((ev) => ({ bid: Math.round(ev - 4), ask: Math.round(ev + 4), bidSize: 2, askSize: 2 }));
+    const off40 = run((ev) => ({ bid: Math.round(ev + 40 - 4), ask: Math.round(ev + 40 + 4), bidSize: 2, askSize: 2 }));
+    const off150 = run((ev) => ({ bid: Math.round(ev + 150 - 4), ask: Math.round(ev + 150 + 4), bidSize: 2, askSize: 2 }));
+    expect(good.avg).toBeGreaterThan(0); // a well-centred quote is winnable
+    expect(off40.avg).toBeLessThan(0); // a 40-off quote now LOSES EV (was ≈ break-even)
+    expect(off40.avg).toBeLessThan(good.avg - 50); // and is meaningfully worse than good
+    expect(off150.avg).toBeLessThan(off40.avg); // EV keeps falling as the mis-price grows
+  });
+});
+
+describe("settlement coaching leads with pricing quality (F4/F5)", () => {
+  const base: GameState = {
+    config: { numBots: 3, numRounds: 4, aceMode: "high" },
+    playerHand: [],
+    bots: [],
+    community: [],
+    revealedCount: 0,
+    totalCards: 11,
+    trueTotal: 300,
+    evPerCard: 0,
+    fills: [],
+    roundIdx: 4,
+  };
+  const withFills = (fills: Fill[]): GameState => ({ ...base, fills });
+
+  it("a mis-priced losing book is called out on PRICE, not praised as a risk pass", () => {
+    // Both lots bought well above the true 300 → adversely selected, net loss.
+    const g = withFills([f("buy", 345, 1, 2), f("buy", 340, 1, 3)]);
+    const cch = coachSettlement(g, settle(g));
+    expect(cch.tone).toBe("bad");
+    expect(cch.headline).toMatch(/mis-priced/i);
+    expect(cch.adverseFrac).toBe(1);
+    expect(cch.detail).toMatch(/mid|centre|centred/i);
+  });
+
+  it("a centred, two-sided, profitable book earns the 'well-priced' verdict", () => {
+    const g = withFills([f("sell", 312, 1, 2), f("buy", 288, 1, 3)]); // both favourable vs 300
+    const cch = coachSettlement(g, settle(g));
+    expect(cch.tone).toBe("good");
+    expect(cch.twoSided).toBe(true);
+    expect(cch.headline).toMatch(/well-priced/i);
+  });
+
+  it("a one-way win is flagged as risk, not making (no false 'pass')", () => {
+    const g = withFills([f("buy", 280, 1, 2), f("buy", 285, 1, 3)]); // only bought, but below true → won
+    const cch = coachSettlement(g, settle(g));
+    expect(cch.twoSided).toBe(false);
+    expect(cch.tone).toBe("mixed");
+    expect(cch.headline).toMatch(/one-way risk/i);
   });
 });

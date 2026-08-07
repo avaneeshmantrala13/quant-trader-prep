@@ -85,14 +85,52 @@ describe("parseDrillIntent — count", () => {
     expect(parseDrillIntent("bayes, 12 questions").count).toBe(12);
   });
 
-  it("clamps below the minimum", () => {
-    expect(parseDrillIntent("bayes, 1 question").count).toBe(DRILL_COUNT_MIN);
+  it("honors a small explicit count (regression: '3 questions' must be 3, not 5)", () => {
+    // The core bug: a small requested count was silently inflated to the old
+    // minimum of 5. A learner asking for 3 must get 3.
+    expect(parseDrillIntent("3 questions on markov chains").count).toBe(3);
+    expect(parseDrillIntent("bayes, 1 question").count).toBe(1);
+  });
+
+  it("prefers the count attached to a 'questions' word over an earlier number", () => {
+    // "level 2" should not be mistaken for the count when "3 questions" is present.
+    expect(parseDrillIntent("markov level 2, 3 questions").count).toBe(3);
+  });
+
+  it("clamps below the minimum (0/negative → MIN)", () => {
+    expect(parseDrillIntent("bayes, 0 questions").count).toBe(DRILL_COUNT_MIN);
+  });
+
+  it("honors a realistic double-digit count without clamping (regression: 37)", () => {
+    // The old MAX of 25 clamped "37 questions" down to 25; the cap is now 50.
+    expect(DRILL_COUNT_MAX).toBeGreaterThanOrEqual(37);
+    expect(parseDrillIntent("37 questions on markov").count).toBe(37);
   });
 
   it("clamps above the maximum", () => {
     expect(parseDrillIntent("bayes, 999 questions").count).toBe(
       DRILL_COUNT_MAX,
     );
+  });
+});
+
+describe("parseDrillIntent — the reported bug end-to-end", () => {
+  it("'3 questions on markov chains' → 3 questions, Markov Chains, all levels", () => {
+    const spec = parseDrillIntent("3 questions on markov chains");
+    expect(spec.count).toBe(3);
+    expect(spec.topicKeys).toEqual([topicKey("Markov Chains")]);
+    // No difficulty stated ⇒ sensible default of the full band ("all levels").
+    expect(spec.minOrder).toBe(0);
+    expect(spec.maxOrder).toBe(4);
+    expect(bandLabel(spec.minOrder, spec.maxOrder)).toBe("all levels");
+  });
+
+  it("respects a stated difficulty alongside a small count", () => {
+    const spec = parseDrillIntent("5 hard questions on expected value");
+    expect(spec.count).toBe(5);
+    expect(spec.topicKeys).toEqual([topicKey("Expected Value")]);
+    expect(spec.minOrder).toBe(3);
+    expect(spec.maxOrder).toBe(3);
   });
 });
 

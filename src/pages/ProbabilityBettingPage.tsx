@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { browserBoardStore, submitLocalScore } from "@/lib/leaderboard/localBoard";
@@ -74,6 +75,7 @@ const CATEGORY_META: Record<
 export function ProbabilityBettingPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   /* ---- config ---------------------------------------------------------- */
   const [numRounds, setNumRounds] = useState(5);
@@ -96,7 +98,12 @@ export function ProbabilityBettingPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<ProbBettingSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<ProbBettingSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
@@ -111,7 +118,7 @@ export function ProbabilityBettingPage() {
     setSettlement(s.settlement);
     setGradeLog(s.gradeLog);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (phase === "setup" || phase === "summary") return;
@@ -120,8 +127,10 @@ export function ProbabilityBettingPage() {
       GAME_ID,
       { numRounds, perCategory, aceHigh, phase, balance, roundIdx, round, stakes, specialStakes, settlement, gradeLog },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, balance, roundIdx, round, stakes, specialStakes, settlement, gradeLog, numRounds, perCategory, aceHigh]);
+  }, [phase, balance, roundIdx, round, stakes, specialStakes, settlement, gradeLog, numRounds, perCategory, aceHigh, username]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -179,7 +188,7 @@ export function ProbabilityBettingPage() {
         meta: { skill: round2(skill.total), pnl },
       });
       void submitGameScore(GAME_ID, board);
-      clearGameSession(browserSessionStore(), GAME_ID);
+      clearGameSession(browserSessionStore(), GAME_ID, username);
       if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -252,7 +261,7 @@ export function ProbabilityBettingPage() {
             balance={balance}
             gradeLog={gradeLog}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -312,7 +321,7 @@ function SetupScreen(props: {
           card, and coin events. Each quote implies a probability{" "}
           <span className="num">1/(b+1)</span>. Compute the true probability, bet{" "}
           <strong className="text-primary">only where the house pays more than fair</strong>, and
-          size each stake with Kelly <span className="num">f* = (bp − q)/b</span>. Passing is free —
+          size each stake with Kelly <span className="num">f* = (bp − q)/b</span>. Passing is free;
           betting a fair or unfavourable event costs you skill points.
         </p>
       </article>
@@ -478,7 +487,7 @@ function BetScreen(props: {
           <p className="mt-2 border-l-2 border-accent-2 bg-surface-muted px-3 py-2 text-[13px] text-secondary">
             <span className="label text-accent-2">Arb watch</span>
             <br />
-            Pairing a high-odds event with Insurance can lock a guaranteed profit here — stake
+            Pairing a high-odds event with Insurance can lock a guaranteed profit here; stake
             structure exists this round.
           </p>
         )}
@@ -519,7 +528,7 @@ function BetScreen(props: {
           className="btn-primary w-full"
           disabled={remaining < 0}
         >
-          {remaining < 0 ? "Over-staked — reduce your bets" : "Submit bets"}
+          {remaining < 0 ? "Over-staked: reduce your bets" : "Submit bets"}
         </button>
       )}
     </div>

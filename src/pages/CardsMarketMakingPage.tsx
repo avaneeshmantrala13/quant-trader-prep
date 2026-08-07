@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { CardsIcon, GaugeIcon } from "@/components/icons";
@@ -69,6 +70,7 @@ interface CardsSession {
 export function CardsMarketMakingPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   /* ---- config ---------------------------------------------------------- */
   const [numRounds, setNumRounds] = useState(5);
@@ -101,7 +103,12 @@ export function CardsMarketMakingPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<CardsSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<CardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
@@ -118,7 +125,7 @@ export function CardsMarketMakingPage() {
     setOutcome(s.outcome);
     setLog(s.log);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   // Persist every meaningful change while a run is in progress.
   useEffect(() => {
     if (!hydratedRef.current) return;
@@ -128,8 +135,10 @@ export function CardsMarketMakingPage() {
       GAME_ID,
       { numRounds, numCards, aceHigh, phase, balance, roundIdx, round, action, size, pnlGuess, voiGuess, outcome, log },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, balance, roundIdx, round, action, size, pnlGuess, voiGuess, outcome, log, numRounds, numCards, aceHigh]);
+  }, [phase, balance, roundIdx, round, action, size, pnlGuess, voiGuess, outcome, log, numRounds, numCards, aceHigh, username]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -177,7 +186,7 @@ export function CardsMarketMakingPage() {
       // clear the durable session (a finished run is not resumable).
       submitLocalScore(browserBoardStore(), GAME_ID, { score: balance, atMs: Date.now() });
       void submitGameScore(GAME_ID, balance);
-      clearGameSession(browserSessionStore(), GAME_ID);
+      clearGameSession(browserSessionStore(), GAME_ID, username);
       if (balance >= START_BALANCE) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -275,7 +284,7 @@ export function CardsMarketMakingPage() {
             balance={balance}
             log={log}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -362,7 +371,7 @@ function SetupScreen(props: {
           ({numCards} × {meanCard(aceHigh ? 14 : 1)}/card).{" "}
           <strong className="text-primary">Buy</strong> when the ask sits below EV,{" "}
           <strong className="text-primary">Sell</strong> when the bid sits above it, otherwise{" "}
-          <strong className="text-primary">pass</strong>. The cards flip for a moment — then you
+          <strong className="text-primary">pass</strong>. The cards flip for a moment, then you
           state the <em>exact</em> P&amp;L. A wrong loss guess costs double.
         </p>
       </article>
@@ -504,7 +513,7 @@ function VoiScreen({
               <span className="num font-semibold text-primary">{answer.toFixed(2)} pts</span>
               {Number.isFinite(g) && (
                 <span className={`ml-2 ${close ? "text-bull" : "text-bear"}`}>
-                  {close ? "· nicely done" : "· off — see the method"}
+                  {close ? "· nicely done" : "· off, see the method"}
                 </span>
               )}
             </p>
@@ -631,7 +640,7 @@ function TradeScreen({
           </article>
 
           <button onClick={onSubmitTrade} className="btn-primary w-full">
-            {action === "none" ? "Pass — reveal the cards" : "Place order & reveal →"}
+            {action === "none" ? "Pass: reveal the cards" : "Place order & reveal →"}
           </button>
         </>
       ) : (
@@ -639,11 +648,11 @@ function TradeScreen({
           <article className="panel-ruled bg-surface-muted p-4 text-center">
             <p className="text-sm text-secondary">
               Study the sum. Next you'll state your{" "}
-              <strong className="text-primary">exact P&amp;L</strong> — the cards go away.
+              <strong className="text-primary">exact P&amp;L</strong>; the cards go away.
             </p>
           </article>
           <button onClick={onProceedToPnl} className="btn-primary w-full">
-            I've got it — state my P&amp;L →
+            I've got it: state my P&amp;L →
           </button>
         </>
       )}
@@ -747,7 +756,7 @@ function ResultScreen({
             tone={actualPnl}
           />
           <ResultStat
-            label={`Score (${guessCorrect ? "exact" : actualPnl < 0 ? "wrong loss ×2" : "wrong — 0"})`}
+            label={`Score (${guessCorrect ? "exact" : actualPnl < 0 ? "wrong loss ×2" : "wrong: 0"})`}
             value={`${score >= 0 ? "+" : "−"}${Math.abs(score)}`}
             tone={score}
           />
@@ -758,7 +767,7 @@ function ResultScreen({
             label="Decision"
             detail={
               edge.correctAction === "none"
-                ? "No edge — passing was right"
+                ? "No edge: passing was right"
                 : `Edge was to ${edge.correctAction} (${edge.edgePerLot.toFixed(0)}/lot). You ${
                     action === "none" ? "passed" : action + "ed"
                   }.`
@@ -769,7 +778,7 @@ function ResultScreen({
             label="P&L precision"
             detail={
               guessCorrect
-                ? "Exact — full credit"
+                ? "Exact: full credit"
                 : actualPnl < 0
                   ? "Missed a loss → penalty doubled"
                   : "Missed a profit → zero credit"

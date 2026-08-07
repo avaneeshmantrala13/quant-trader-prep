@@ -70,10 +70,13 @@ describe("simLinkFor", () => {
       { section: "Conditional Probability" },
       { section: "Betting & Sizing" },
       { section: "Order Statistics" },
-      { section: "Variance, Covariance & the CLT" },
       { section: "Geometric Probability" },
       { section: "Combinatorial Analysis" },
-      { section: "Game Theory & Puzzles" },
+      // Genuinely-CLT and game-theory-value FAMILIES resolve to a sim even
+      // though their broad SECTIONS are deliberate no-links (asserted below).
+      { family: "genCltTail" },
+      { family: "genValue2x2" },
+      { family: "genRuin" },
     ];
     for (const ctx of contexts) {
       const link = simLinkFor(ctx);
@@ -83,6 +86,102 @@ describe("simLinkFor", () => {
       expect(link!.title).toBe(SIM_BY_ID[link!.simId].title);
       expect(link!.blurb.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  // ---- RC1: rung-4 simulation mis-mapping regressions -----------------------
+  describe("RC1 sim-mapping fixes (no cross-topic mis-pin)", () => {
+    it("Markov random-walk / ruin / hitting-time / pattern families reach the Gambler's-Ruin sim (not the stationary sim)", () => {
+      const ruinFamilies = [
+        "genRuin",
+        "genRuinNumeric",
+        "genRuinReach",
+        "genBoldPlay",
+        "genLineWalk",
+        "genCubeWalk",
+        "genPolygonWalk",
+        "genGridWalk",
+        "genRunHeads",
+        "genTwoInARow",
+        "genResetChain",
+        "genPatternRace",
+        "genPatternWaitNumeric",
+      ];
+      for (const family of ruinFamilies) {
+        expect(simLinkFor({ family, section: "Markov Chains" })?.simId).toBe("gamblers-ruin");
+      }
+      // Stationary families keep the stationary sim.
+      for (const family of ["genTwoStateStationary", "genThreeStateStationary", "genStationaryReward"]) {
+        expect(simLinkFor({ family, section: "Markov Chains" })?.simId).toBe("markov-chain");
+      }
+    });
+
+    it("only the 2×2 mixed-strategy VALUE families reach the game-theory matrix; other game families do not", () => {
+      expect(simLinkFor({ family: "genValue2x2", section: "Game Theory & Puzzles" })?.simId).toBe(
+        "game-theory-matrix",
+      );
+      expect(simLinkFor({ family: "genValue3x2", section: "Game Theory & Puzzles" })?.simId).toBe(
+        "game-theory-matrix",
+      );
+      // Dominant-strategy / sequential / spatial / threshold games have no
+      // family map, so with the SECTION a no-link they resolve to null.
+      for (const family of ["genPD", "genEntry", "genHotelling", "genBeauty", "genVolunteer"]) {
+        expect(simLinkFor({ family, section: "Game Theory & Puzzles" })).toBeNull();
+      }
+    });
+
+    it("genuine CLT families reach the CLT sim, but Cov/ρ/variance-combo families do NOT", () => {
+      for (const family of ["genCltTail", "genCltDiffZ", "genCltDiffZNumeric", "genCltStatement"]) {
+        expect(
+          simLinkFor({ family, section: "Variance, Covariance & the CLT" })?.simId,
+        ).toBe("clt");
+      }
+      // Covariance / correlation / variance-combination / Markov-bound families
+      // have no CLT-appropriate sim; with the section a no-link they are null.
+      for (const family of ["genCovariance", "genCorrelation", "genVarCombo", "genMarkovBound"]) {
+        expect(simLinkFor({ family, section: "Variance, Covariance & the CLT" })).toBeNull();
+      }
+    });
+
+    it("`complement_confusion` (a 1−p complement) never resolves to the Venn set-overlap sim", () => {
+      const link = simLinkFor({ misconceptionTag: MISCONCEPTION.complementConfusion });
+      // No confident tag-level sim → falls through; must never be the Venn sim.
+      expect(link?.simId).not.toBe("venn-two-events");
+      // A ruin complement (family present) resolves to the Gambler's-Ruin sim.
+      expect(
+        simLinkFor({
+          misconceptionTag: MISCONCEPTION.complementConfusion,
+          family: "genRuin",
+        })?.simId,
+      ).toBe("gamblers-ruin");
+    });
+
+    it("discrete joint-pmf and single-variable Y=X² transform do NOT get the continuous double-integral heatmap", () => {
+      // Only genuine continuous bivariate families get the heatmap.
+      for (const family of ["genJointNorm", "genJointSum", "genSumDensityRect"]) {
+        expect(simLinkFor({ family, section: "Joint Distributions" })?.simId).toBe(
+          "joint-density-integral",
+        );
+      }
+      // Discrete pmf tables / single-variable transform have no heatmap map; with
+      // the section a no-link they resolve to null (never the heatmap).
+      for (const family of ["genTransform", "genJointMarginal", "genJointConditional", "genJointCovariance"]) {
+        const link = simLinkFor({ family, section: "Joint Distributions" });
+        expect(link?.simId).not.toBe("joint-density-integral");
+        expect(link).toBeNull();
+      }
+    });
+
+    it("no-link sections resolve to null at SECTION granularity (rung 4 shows generic elicitation, not a misdirection)", () => {
+      for (const section of [
+        "Variance, Covariance & the CLT",
+        "Joint Distributions",
+        "Game Theory & Puzzles",
+        "Number Theory & Counting",
+        "Continuous-Time Markov Chains",
+      ]) {
+        expect(simLinkFor({ section })).toBeNull();
+      }
+    });
   });
 
   it("regression (P(A and B) bug): `and_means_add` resolves to a joint/Venn sim, not coin-flips", () => {
@@ -116,6 +215,15 @@ const EXPECTED_NO_LINK_SECTIONS = new Set<string>([
   "Continuous Distributions",
   "Poisson Distribution & Process",
   "Branching Processes",
+  // Sections with NO confident SECTION-level sim — the fitting sim (if any) is
+  // per-FAMILY only, so the section default is deliberately null to avoid the
+  // audit's cross-topic mis-pins (Cov/ρ→CLT, discrete pmf→heatmap, all
+  // game-theory→2×2 matrix, series→counting, CTMC→discrete stationary).
+  "Variance, Covariance & the CLT",
+  "Joint Distributions",
+  "Game Theory & Puzzles",
+  "Number Theory & Counting",
+  "Continuous-Time Markov Chains",
 ]);
 
 describe("simLinkFor — full section coverage (self-maintaining via catalog inversion)", () => {

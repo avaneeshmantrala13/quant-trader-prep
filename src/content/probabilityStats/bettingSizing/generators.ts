@@ -28,7 +28,7 @@ import {
 import { mixNumericGenerators } from "../../mixFamilies";
 
 /**
- * The nine parametric Kelly generators — the 3×3 (source × odds-format) grid
+ * The nine parametric Kelly generators, the 3×3 (source × odds-format) grid
  * that forms the infinitely-scalable "question factory". Each generator, seeded
  * by the shared `Rng`, draws a positive-edge event + odds, then chooses a
  * bankroll that makes the exact Kelly stake a clean positive integer. Every
@@ -224,7 +224,7 @@ function drawEvent(rng: Rng, source: Source, tier: Tier): DrawnEvent {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Core builder — draws a positive-edge instance with a clean integer stake    */
+/*  Core builder, draws a positive-edge instance with a clean integer stake    */
 /* -------------------------------------------------------------------------- */
 
 function bDerivation(o: Odds): string {
@@ -266,20 +266,20 @@ export function buildKellyInstance(
     const implied = impliedProb(odds);
     const venue = rng.pick(VENUES);
     const prompt =
-      `At ${venue}, ${ev.setup} — you win if ${ev.phrase}. ` +
+      `At ${venue}, ${ev.setup}, you win if ${ev.phrase}. ` +
       `The book prices it at ${oddsLabel(odds)} (${format}). ` +
       `With a $${bankroll.toLocaleString("en-US")} bankroll, what whole-dollar ` +
       `amount does the Kelly criterion say to stake?`;
 
     const q = fracText(F(1).sub(p)); // 1 − p
     const explanation =
-      `Step 1 — True win probability. ${cap(ev.phrase)}: p = ${ev.probDerivation}` +
+      `Step 1. True win probability. ${cap(ev.phrase)}: p = ${ev.probDerivation}` +
       (fracText(p) !== ev.probDerivation ? ` = ${fracText(p)}` : "") +
       ` ≈ ${pctText(p)}. So q = 1 − p = ${q}.\n` +
-      `Step 2 — Net odds. ${oddsLabel(odds)} (${format}) → b = ${bDerivation(odds)} = ${fracText(b)} (profit per $1 staked).\n` +
-      `Step 3 — Confirm the edge. Break-even (implied) prob = ${fracText(implied)} ≈ ${pctText(implied)}; your true p ≈ ${pctText(p)} is higher, so the edge is positive — size it.\n` +
-      `Step 4 — Kelly fraction. f* = (b·p − q)/b = ${fracText(fStar)} ≈ ${pctText(fStar)} of bankroll.\n` +
-      `Step 5 — Stake. f* × bankroll = ${fracText(fStar)} × $${bankroll.toLocaleString("en-US")} = $${stake.toLocaleString("en-US")}. Bet $${stake.toLocaleString("en-US")}.`;
+      `Step 2. Net odds. ${oddsLabel(odds)} (${format}) → b = ${bDerivation(odds)} = ${fracText(b)} (profit per $1 staked).\n` +
+      `Step 3. Confirm the edge. Break-even (implied) prob = ${fracText(implied)} ≈ ${pctText(implied)}; your true p ≈ ${pctText(p)} is higher, so the edge is positive, size it.\n` +
+      `Step 4. Kelly fraction. f* = (b·p − q)/b = ${fracText(fStar)} ≈ ${pctText(fStar)} of bankroll.\n` +
+      `Step 5. Stake. f* × bankroll = ${fracText(fStar)} × $${bankroll.toLocaleString("en-US")} = $${stake.toLocaleString("en-US")}. Bet $${stake.toLocaleString("en-US")}.`;
 
     const commonErrors = buildCommonErrors({
       p,
@@ -341,7 +341,7 @@ function buildCommonErrors(args: {
   };
   // Every wrong-odds distractor is re-solved through the SAME exact Kelly
   // solver with a mis-converted b, so each is a genuine "what you'd get if you
-  // made this specific conversion mistake" value — not an arbitrary offset.
+  // made this specific conversion mistake" value, not an arbitrary offset.
   const pushWrongB = (bWrong: Fraction, feedback: string) => {
     const fWrong = kellyFraction(p, bWrong);
     if (fWrong.valueOf() > 0) push(Math.round(fWrong.mul(bankroll).valueOf()), feedback);
@@ -350,19 +350,19 @@ function buildCommonErrors(args: {
   // 1) Bet the win probability p (forgot to subtract q / scale by odds).
   push(
     Math.round(p.mul(bankroll).valueOf()),
-    "You staked bankroll × p — that bets your raw win probability, not the Kelly fraction. Kelly subtracts the loss probability q and scales the edge by the net odds b: f* = (b·p − q)/b.",
+    "You staked bankroll × p, that bets your raw win probability, not the Kelly fraction. Kelly subtracts the loss probability q and scales the edge by the net odds b: f* = (b·p − q)/b.",
   );
   // 2) Use the implied / break-even probability as the bet fraction.
   push(
     Math.round(implied.mul(bankroll).valueOf()),
     "You used the break-even (implied) probability as your bet fraction. Implied prob only tells you whether an edge exists; the Kelly fraction tells you how much to bet.",
   );
-  // 3) Stake the un-normalized numerator (b·p − q) — the full edge, not divided by b.
+  // 3) Stake the un-normalized numerator (b·p − q), the full edge, not divided by b.
   push(
     Math.round(b.mul(p).sub(q).mul(bankroll).valueOf()),
-    "You staked (b·p − q) × bankroll — the raw edge, not the Kelly fraction. You forgot to divide by b: f* = (b·p − q)/b.",
+    "You staked (b·p − q) × bankroll, the raw edge, not the Kelly fraction. You forgot to divide by b: f* = (b·p − q)/b.",
   );
-  // 4) Bet the entire bankroll (no sizing at all — the classic risk-of-ruin mistake).
+  // 4) Bet the entire bankroll (no sizing at all, the classic risk-of-ruin mistake).
   push(
     bankroll,
     "That stakes your whole bankroll. Kelly bets only the fraction f* = (b·p − q)/b of it; betting the full roll maximizes variance and risk of ruin, not long-run growth.",
@@ -370,7 +370,7 @@ function buildCommonErrors(args: {
   // 5) Treat the Kelly percentage as a dollar amount (ignored the bankroll).
   push(
     Math.round(fStar.mul(100).valueOf()),
-    `You used f* ≈ ${pctText(fStar)} as a dollar figure. f* is a FRACTION of bankroll — multiply it by your $${bankroll.toLocaleString("en-US")} bankroll to get the stake.`,
+    `You used f* ≈ ${pctText(fStar)} as a dollar figure. f* is a FRACTION of bankroll, multiply it by your $${bankroll.toLocaleString("en-US")} bankroll to get the stake.`,
   );
   // 6) Format-specific odds→b conversion mistakes, each re-solved exactly.
   if (odds.format === "american") {
@@ -405,7 +405,7 @@ function buildCommonErrors(args: {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Fallback (guaranteed valid) — red card / decimal 2.00 style                 */
+/*  Fallback (guaranteed valid), red card / decimal 2.00 style                 */
 /* -------------------------------------------------------------------------- */
 
 function canonicalFallback(
@@ -523,7 +523,7 @@ export const mixNumeric = (
   pool: NumericQuestionGenerator[],
 ): NumericQuestionGenerator => mixNumericGenerators(pool);
 
-/** The nine instance builders (structured output) — used by verification tests. */
+/** The nine instance builders (structured output), used by verification tests. */
 export const KELLY_INSTANCE_BUILDERS: Record<
   string,
   (rng: Rng) => KellyInstance

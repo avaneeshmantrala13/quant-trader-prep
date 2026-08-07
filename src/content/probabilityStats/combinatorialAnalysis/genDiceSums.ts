@@ -28,7 +28,7 @@ import {
  *
  * Every ground-truth answer comes straight from the EXACT solvers in
  * `./solvers.ts` (`diceSumEqualsProb`, `topTwoMaxProb`, `atLeastKOfAKindProb`,
- * `subsetSumsToProb`, `strictlyIncreasingProb`, `expectedPairsDealt`) — the
+ * `subsetSumsToProb`, `strictlyIncreasingProb`, `expectedPairsDealt`), the
  * generators never recompute the answer by hand. Each distractor
  * (`numeric` commonErrors) is a re-derived, NAMED misconception, kept finite,
  * positive, and ≠ the answer at the grading precision (`numericErrors` dedupes,
@@ -41,7 +41,7 @@ import {
 const SRC = "Combinatorial Analysis · Dice sums (stars & bars + inclusion–exclusion)";
 
 /* ========================================================================== */
-/* =================  1 — EXACT SUM OF SEVERAL DICE (numeric)  ============= */
+/* =================  1. EXACT SUM OF SEVERAL DICE (numeric)  ============= */
 /* ========================================================================== */
 
 const SUM_THEME = [
@@ -69,13 +69,13 @@ export function genDiceSumTarget(rng: Rng): NumericQuestion {
   const answer = Number(decText(value, dp));
 
   // (a) UNCAPPED stars & bars: positive-integer solutions C(target−1,dice−1)
-  //     over faces^dice — ignores the ≤faces cap, so it overcounts.
+  //     over faces^dice, ignores the ≤faces cap, so it overcounts.
   const uncapped = F(chooseBig(target - 1, dice - 1).toString()).div(
     F(powBig(faces, dice).toString()),
   );
   // (b) target shifted by one.
   const shifted = diceSumEqualsProb(dice, faces, target - 1);
-  // (c) "all totals equally likely" — 1 over the number of attainable sums.
+  // (c) "all totals equally likely", 1 over the number of attainable sums.
   const supportSize = dice * (faces - 1) + 1;
   const equalLikely = F(1, supportSize);
 
@@ -116,7 +116,7 @@ export function genDiceSumTarget(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — TOP TWO DICE HIT THE MAX (numeric)  ============== */
+/* =================  2. TOP TWO DICE HIT THE MAX (numeric)  ============== */
 /* ========================================================================== */
 
 const TOPTWO_THEME = [
@@ -127,7 +127,7 @@ const TOPTWO_THEME = [
 
 /**
  * P(the two highest of `dice` d-`faces` dice sum to the maximum 2·faces) —
- * equivalently at least two dice show `faces` — via `topTwoMaxProb`
+ * equivalently at least two dice show `faces`, via `topTwoMaxProb`
  * (P(X ≥ 2), X ~ Bin(dice, 1/faces)). Distractors: EXACTLY two maxes
  * C(dice,2)(1/faces)²((faces−1)/faces)^{dice−2} (drops the ≥3 tail), P(at least
  * one max) 1−((faces−1)/faces)^dice, and (1/faces)² (both a specified pair fixed).
@@ -148,7 +148,7 @@ export function genTopTwoSum(rng: Rng): NumericQuestion {
     .mul(F(faces - 1, faces).pow(dice - 2) as FractionType);
   // (b) P(at least one max) = 1 − ((faces−1)/faces)^dice.
   const atLeastOne = F(1).sub(F(faces - 1, faces).pow(dice) as FractionType);
-  // (c) (1/faces)² — both dice in one fixed pair land on the max.
+  // (c) (1/faces)², both dice in one fixed pair land on the max.
   const bothFixed = F(1, faces).pow(2) as FractionType;
 
   const { errors, push } = numericErrors(answer, dp);
@@ -187,7 +187,7 @@ export function genTopTwoSum(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — AT LEAST k OF A KIND (numeric)  ================== */
+/* =================  3. AT LEAST k OF A KIND (numeric)  ================== */
 /* ========================================================================== */
 
 const KIND_THEME = [
@@ -261,7 +261,7 @@ export function genAtLeastKOfAKind(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  4 — SUBSET SUMS TO A TARGET (numeric)  =============== */
+/* =================  4. SUBSET SUMS TO A TARGET (numeric)  =============== */
 /* ========================================================================== */
 
 const SUBSET_THEME = [
@@ -373,7 +373,7 @@ export function genSubsetSum(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  5 — STRICTLY INCREASING ROLL (numeric)  ============= */
+/* =================  5. STRICTLY INCREASING ROLL (numeric)  ============= */
 /* ========================================================================== */
 
 const INCREASING_THEME = [
@@ -402,13 +402,13 @@ export function genStrictlyIncreasing(rng: Rng): NumericQuestion {
   let diceFact = 1;
   for (let i = 2; i <= dice; i++) diceFact *= i;
 
-  // (a) 1/dice! — assumes the dice already show distinct values in random order.
+  // (a) 1/dice!, assumes the dice already show distinct values in random order.
   const invFact = F(1, diceFact);
-  // (b) C(faces,dice)/C(faces+dice−1,dice) — divides by the multiset count.
+  // (b) C(faces,dice)/C(faces+dice−1,dice), divides by the multiset count.
   const wrongDenom = F(chooseBig(faces, dice).toString()).div(
     F(chooseBig(faces + dice - 1, dice).toString()),
   );
-  // (c) NON-strict: C(faces+dice−1,dice)/faces^dice — allows ties (non-decreasing).
+  // (c) NON-strict: C(faces+dice−1,dice)/faces^dice, allows ties (non-decreasing).
   const nonStrict = F(chooseBig(faces + dice - 1, dice).toString()).div(
     F(powBig(faces, dice).toString()),
   );
@@ -431,7 +431,7 @@ export function genStrictlyIncreasing(rng: Rng): NumericQuestion {
     `On ${th.actor}, ${dice} fair ${faces}-sided ${th.die} are rolled one after another in a row. ` +
     `What is the probability that the values come out strictly increasing (each roll larger than the previous)? (Round to ${dp} decimals.)`;
   const explanation =
-    `A strictly increasing sequence needs ${dice} DISTINCT faces, and any such set corresponds to exactly one increasing order — so there are C(${faces},${dice}) = ${chooseBig(faces, dice).toString()} favorable ordered rolls out of ${faces}^${dice} = ${powBig(faces, dice).toString()}. ` +
+    `A strictly increasing sequence needs ${dice} DISTINCT faces, and any such set corresponds to exactly one increasing order, so there are C(${faces},${dice}) = ${chooseBig(faces, dice).toString()} favorable ordered rolls out of ${faces}^${dice} = ${powBig(faces, dice).toString()}. ` +
     `Thus P = C(${faces},${dice})/${faces}^${dice} = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
     `Allowing ties would instead give the non-decreasing count ${fracText(nonStrict)}.`;
 
@@ -450,7 +450,7 @@ export function genStrictlyIncreasing(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  6 — EXPECTED COMPLETE PAIRS DEALT (numeric)  ========= */
+/* =================  6. EXPECTED COMPLETE PAIRS DEALT (numeric)  ========= */
 /* ========================================================================== */
 
 const PAIRS_THEME = [
@@ -481,7 +481,7 @@ export function genExpectedPairs(rng: Rng): NumericQuestion {
   const perRank = F(chooseBig(total - copies, deal - copies).toString()).div(
     F(chooseBig(total, deal).toString()),
   );
-  // (b) deal/2 — naively assumes every two dealt cards form a pair.
+  // (b) deal/2, naively assumes every two dealt cards form a pair.
   const naiveHalf = deal / 2;
   // (c) ranks·(copies/total) slip.
   const ratioSlip = F(ranks * copies, total);

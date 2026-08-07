@@ -10,7 +10,6 @@ import {
   type ArenaPack,
   type ArenaPreset,
 } from "@/lib/arena/config";
-import { firmFormatFor, firmSummary } from "@/content/arena/firmFormats";
 import { perQuestionBudgetMs } from "@/lib/arena/budget";
 import { auditPresetBudget } from "@/content/arena/oaFormats";
 
@@ -20,7 +19,7 @@ const MODE_OA_FORMAT: Partial<Record<ArenaMode, string>> = {
 };
 
 /**
- * PresetPicker — thin view that lets the learner choose Zetamac / Optiver, or
+ * PresetPicker — thin view that lets the learner choose a built-in preset or
  * build a Custom preset. All scoring/timing logic lives in the pure `arena/*`
  * modules; this component only assembles an `ArenaPreset` and hands it up.
  */
@@ -82,7 +81,7 @@ export function PresetPicker({
             ["zetamac", "Zetamac", "120s · count · no penalty"],
             [
               "optiver",
-              "80/8 Mental-Math Sprint",
+              "Rapid-Fire Arithmetic Sprint",
               "80Q / 8:00 · +1 / −1 · skips free",
             ],
             [
@@ -92,67 +91,31 @@ export function PresetPicker({
             ],
             ["custom", "Custom", "Your ops, packs & clock"],
           ] as [ArenaMode, string, string][]
-        ).map(([m, title, sub]) => {
-          const attribution = firmFormatFor(m);
-          return (
-            <button
-              key={m}
-              onClick={() => setMode(m)}
-              className={[
-                "panel p-4 text-left transition-colors",
-                mode === m
-                  ? "border-accent ring-1 ring-accent"
-                  : "hover:border-border-strong",
-              ].join(" ")}
-            >
-              <div className="font-display text-lg font-bold text-primary">
-                {title}
-              </div>
-              <div className="mt-1 text-xs text-secondary">{sub}</div>
-              {attribution && (
-                <div className="mt-2 flex flex-wrap items-center gap-1">
-                  <span className="chip border-subtle text-[9px] uppercase text-muted">
-                    community-reported
-                  </span>
-                  <span className="text-[10px] text-muted">
-                    {firmSummary(attribution)}
-                  </span>
-                </div>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Firm attribution lives in the dated `firmFormats` data layer, never
-          baked into this component as fact. Shown for the selected mode and
-          clearly flagged as community lore that may be stale. */}
-      {(() => {
-        const attribution = firmFormatFor(mode);
-        if (!attribution) return null;
-        return (
-          <div className="panel-ruled space-y-1 p-3 text-xs text-muted">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="label text-[9px]">Format attribution</span>
-              <span className="chip border-subtle text-[9px] uppercase text-muted">
-                confidence: {attribution.confidence}
-              </span>
-              <span className="chip border-subtle text-[9px] uppercase text-muted">
-                as of {attribution.asOf}
-              </span>
+        ).map(([m, title, sub]) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={[
+              "panel p-4 text-left transition-colors",
+              mode === m
+                ? "border-accent ring-1 ring-accent"
+                : "hover:border-border-strong",
+            ].join(" ")}
+          >
+            <div className="font-display text-lg font-bold text-primary">
+              {title}
             </div>
-            <p className="text-secondary">{firmSummary(attribution)}.</p>
-            <p>{attribution.caveat}</p>
-          </div>
-        );
-      })()}
+            <div className="mt-1 text-xs text-secondary">{sub}</div>
+          </button>
+        ))}
+      </div>
 
       {mode === "weakspot" && (
         <div className="panel-ruled space-y-1 p-3 text-xs text-muted">
           <span className="label text-[9px]">Adaptive drill</span>
           <p className="text-secondary">
             Buckets your past attempts by operation × operand size and
-            over-samples the buckets you miss most — spending practice where it
+            over-samples the buckets you miss most, spending practice where it
             pays off. Same count-only scoring as Zetamac; only the question mix
             adapts.
           </p>
@@ -247,8 +210,8 @@ export function PresetPicker({
             className="mt-0.5"
           />
           <span>
-            <span className="font-semibold text-primary">Interview pacing</span>{" "}
-            — per-question budget, live countdown, and speed stats (median solve,
+            <span className="font-semibold text-primary">Interview pacing</span>
+            : per-question budget, live countdown, and speed stats (median solve,
             % within budget) at the end.
           </span>
         </label>
@@ -265,8 +228,8 @@ export function PresetPicker({
               <span>
                 <span className="font-semibold text-primary">
                   Adaptive pressure
-                </span>{" "}
-                — tighten the budget as your accuracy stabilizes.
+                </span>
+                : tighten the budget as your accuracy stabilizes.
               </span>
             </label>
 

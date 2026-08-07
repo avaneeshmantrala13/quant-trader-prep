@@ -23,7 +23,7 @@ export function WorkedExample({
   answer,
   illustration,
   onContinue,
-  continueLabel = "I've studied this — start ▸",
+  continueLabel = "I've studied this: start ▸",
   deepDive,
   detailLabel = "Explain in more detail ▾",
 }: {

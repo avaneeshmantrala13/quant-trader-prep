@@ -19,7 +19,7 @@ import {
  *
  * Every ground-truth answer comes straight from the EXACT solvers in
  * `./solvers.ts` (`binomTailLE`, `binomTailGE`, `returnToOriginProb`,
- * `stepSequencesCount`, `latticeMeetingProb`, `coinRaceHeadsWinProb`) — the
+ * `stepSequencesCount`, `latticeMeetingProb`, `coinRaceHeadsWinProb`), the
  * generators never recompute a probability or count by hand. Each distractor
  * (`numeric` commonErrors) is a re-derived, NAMED misconception, guaranteed
  * finite, positive, and ≠ the answer at the grading precision (`numericErrors`
@@ -34,7 +34,7 @@ const SOURCE = "Combinatorial Analysis · Binomial coin/dice counting";
 const HALF = () => F(1, 2);
 
 /* ========================================================================== */
-/* =================  1 — AT MOST k TAILS (lower binomial tail)  ========== */
+/* =================  1. AT MOST k TAILS (lower binomial tail)  ========== */
 /* ========================================================================== */
 
 const ATMOST_THEME = [
@@ -98,7 +98,7 @@ export function genBinomAtMost(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — MORE TAILS THAN HEADS (upper tail)  ============= */
+/* =================  2. MORE TAILS THAN HEADS (upper tail)  ============= */
 /* ========================================================================== */
 
 const MORETAILS_THEME = [
@@ -163,7 +163,7 @@ export function genMoreTails(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — RETURN TO START (symmetric ±1 walk)  ============ */
+/* =================  3. RETURN TO START (symmetric ±1 walk)  ============ */
 /* ========================================================================== */
 
 const RETURN_THEME = [
@@ -203,7 +203,7 @@ export function genReturnOrigin(rng: Rng): NumericQuestion {
   );
   push(
     naivePairs,
-    `(1/2)^{${half}} = ${fracText(naivePairs)} pretends the walk is ${half} independent "return" trials; the moves aren't paired that way — count C(${steps},${half}) balanced sequences instead.`,
+    `(1/2)^{${half}} = ${fracText(naivePairs)} pretends the walk is ${half} independent "return" trials; the moves aren't paired that way, count C(${steps},${half}) balanced sequences instead.`,
   );
 
   const prompt =
@@ -228,7 +228,7 @@ export function genReturnOrigin(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  4 — STEP-SEQUENCE COUNT (integer count)  ============ */
+/* =================  4. STEP-SEQUENCE COUNT (integer count)  ============ */
 /* ========================================================================== */
 
 const STEPCOUNT_THEME = [
@@ -278,7 +278,7 @@ export function genStepCount(rng: Rng): NumericQuestion {
     `How many distinct move sequences leave it exactly ${end} unit${end === 1 ? "" : "s"} to the right of where it started? (Whole number.)`;
   const explanation =
     `To finish at displacement ${end} after ${steps} moves you need r = (${steps}+${end})/2 = ${right} right-moves (the rest left), and the number of orderings is C(${steps},${right}) = ${value}. ` +
-    `So exactly ${answer} sequences end ${end} to the right — one C(${steps},·) choice of which moves are the rights.`;
+    `So exactly ${answer} sequences end ${end} to the right, one C(${steps},·) choice of which moves are the rights.`;
 
   return {
     id: `gen-stepcount-${steps}-${end}`,
@@ -294,7 +294,7 @@ export function genStepCount(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  5 — TWO WALKERS MEET ON A GRID  ===================== */
+/* =================  5. TWO WALKERS MEET ON A GRID  ===================== */
 /* ========================================================================== */
 
 const LATTICE_THEME = [
@@ -326,7 +326,7 @@ export function genLatticeMeeting(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, dp);
   push(
     naiveInv,
-    `1/(n+1) = ${fracText(naiveInv)} guesses the ${n + 1} anti-diagonal meeting points are equally likely; they aren't — point i has probability C(${n},i)/2^${n}.`,
+    `1/(n+1) = ${fracText(naiveInv)} guesses the ${n + 1} anti-diagonal meeting points are equally likely; they aren't, point i has probability C(${n},i)/2^${n}.`,
   );
   push(
     halfPow,
@@ -342,7 +342,7 @@ export function genLatticeMeeting(rng: Rng): NumericQuestion {
     `What is the probability they are at the same lattice point when they cross the middle diagonal? (Round to ${dp} decimals.)`;
   const explanation =
     `Each walker reaches anti-diagonal point i with probability C(${n},i)/2^${n}, so P(meet) = Σ_{i=0}^{${n}} (C(${n},i)/2^${n})² = C(${2 * n},${n})/4^${n} by Vandermonde. ` +
-    `That equals ${fracText(value)} ≈ ${decText(value, dp)} — the per-point probabilities must be squared and summed, not treated as uniform.`;
+    `That equals ${fracText(value)} ≈ ${decText(value, dp)}, the per-point probabilities must be squared and summed, not treated as uniform.`;
 
   return {
     id: `gen-latticemeet-${n}`,
@@ -359,7 +359,7 @@ export function genLatticeMeeting(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  6 — RACE WITH A HEAD-START (tail conditioning)  ===== */
+/* =================  6. RACE WITH A HEAD-START (tail conditioning)  ===== */
 /* ========================================================================== */
 
 const RACE_THEME = [
@@ -402,7 +402,7 @@ export function genRaceCondition(rng: Rng): NumericQuestion {
   );
   push(
     complement,
-    `${fracText(complement)} = 1 − ${fracText(value)} is P(the TAILS side wins) — the complement of what's asked.`,
+    `${fracText(complement)} = 1 − ${fracText(value)} is P(the TAILS side wins), the complement of what's asked.`,
   );
 
   const prompt =

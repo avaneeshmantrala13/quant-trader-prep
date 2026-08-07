@@ -6,8 +6,6 @@ import { WeaknessList } from "@/components/dashboard/WeaknessList";
 import { ReviewsDue } from "@/components/dashboard/ReviewsDue";
 import { ReliabilityDiagram } from "@/components/dashboard/ReliabilityDiagram";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
-
 /**
  * BASE Dashboard renderer — the default, theme-agnostic Mastery & Calibration
  * dashboard mounted by `src/pages/DashboardPage.tsx` whenever the active theme
@@ -50,7 +48,6 @@ export function BaseDashboard({
               Mastery Dashboard
             </div>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -84,7 +81,9 @@ export function BaseDashboard({
           {/* Link to the ordered readiness pathway (Roadmap). */}
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border border-subtle bg-surface-muted px-3 py-2">
             <span className="text-sm text-secondary">
-              See the full skill pathway and how ready you are for interviews.
+              {courseMode
+                ? "See the full skill pathway and how ready you are for your courses."
+                : "See the full skill pathway and how ready you are for interviews."}
             </span>
             <Link
               to="/roadmap"

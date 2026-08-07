@@ -4,12 +4,15 @@ import type {
   DashboardTopicEntry,
   DashboardViewProps,
 } from "../types";
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 import type { MasteryState } from "@/lib/mastery/verdict";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import { INK, BullBear, StockChart } from "./pageArt";
 
 /**
@@ -121,7 +124,7 @@ function VerdictStamp({ state }: { state: MasteryState }) {
   const v = VERDICT[state];
   return (
     <span
-      title={`${v.word} — calibration-aware verdict (${v.note})`}
+      title={`${v.word}: calibration-aware verdict (${v.note})`}
       className={`inline-flex shrink-0 items-center gap-1.5 border px-2 py-0.5 font-mono text-[11px] font-semibold uppercase tracking-label ${v.box} ${v.text}`}
     >
       <span aria-hidden="true">{v.glyph}</span>
@@ -278,7 +281,7 @@ function WatchlistLedger({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="text-sm italic text-secondary">
-        No graded evidence on the tape yet — trade a few items (or run the
+        No graded evidence on the tape yet. Trade a few items (or run the
         warm-up) to rank your weak spots.
       </p>
     );
@@ -332,7 +335,7 @@ function StandingOrders({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="text-sm italic text-secondary">
-        The order book is clear — mastered topics resurface here on their SM-2
+        The order book is clear. Mastered topics resurface here on their SM-2
         spaced-review schedule.
       </p>
     );
@@ -374,16 +377,18 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
         <div className="max-w-sm">
           <span className="label text-accent">Awaiting Returns</span>
           <p className="mt-2 text-sm italic leading-relaxed text-secondary">
-            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches your accuracy.
+            This column only tallies forecasts where you STATE a confidence —
+            just two file them: {ELICITED_ACTIVITIES_SENTENCE}. Ordinary lessons
+            and quizzes are not counted here.
           </p>
           <p className="num mt-3 text-sm not-italic text-primary">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            {elicitedPairsNeeded(data.count, data.minPairs)} more of those to
+            print the chart.
           </p>
           <div
             role="img"
-            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} confidence-rated questions`}
+            aria-label={`Calibration progress: ${data.count} of ${data.minPairs} elicited-confidence data points (Fermi 90% intervals and Trading-Floor quotes)`}
             className="mt-2 h-3 w-full border border-border-strong bg-surface"
           >
             <div
@@ -405,20 +410,20 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
           text: "over-confident",
           cls: "border-bear text-bear",
           caption:
-            "The curve prints below the dashed diagonal — conviction runs ahead of the returns.",
+            "The curve prints below the dashed diagonal: conviction runs ahead of the returns.",
         }
       : data.calibration.lean === "under"
         ? {
             text: "under-confident",
             cls: "border-accent text-accent",
             caption:
-              "The curve prints above the dashed diagonal — the returns run ahead of the conviction.",
+              "The curve prints above the dashed diagonal: the returns run ahead of the conviction.",
           }
         : {
             text: "well-calibrated",
             cls: "border-bull text-bull",
             caption:
-              "The curve tracks the dashed diagonal — conviction and returns agree.",
+              "The curve tracks the dashed diagonal: conviction and returns agree.",
           }
     : null;
 
@@ -523,6 +528,12 @@ function CalibrationReport({ data }: { data: ReliabilityDiagramData }) {
           </p>
         )}
 
+        {data.sourceNote && (
+          <p className="text-[11px] leading-relaxed text-muted">
+            {data.sourceNote}
+          </p>
+        )}
+
         {data.calibration && (
           <div className="border-l-2 border-accent pl-3">
             <p className="font-display text-base font-bold leading-snug text-primary">
@@ -607,7 +618,6 @@ export function BroadsheetDashboard({
               Markets &amp; Analyst's Report
             </span>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -638,7 +648,7 @@ export function BroadsheetDashboard({
               <span className="h-px flex-1 bg-border-strong" />
             </div>
             <p className="mx-auto mt-3 max-w-2xl text-[14px] italic leading-relaxed text-secondary">
-              A standing account of your positions across the curriculum — where
+              A standing account of your positions across the curriculum: where
               conviction is earned, where it is merely claimed, and where the
               tape says to trade next.
             </p>
@@ -657,7 +667,7 @@ export function BroadsheetDashboard({
           <aside className="flex items-start gap-3 border-y-2 border-accent bg-[rgb(var(--color-accent)/0.06)] px-4 py-3">
             <span className="label mt-0.5 shrink-0 text-accent">Bulletin</span>
             <p className="text-sm leading-relaxed text-secondary">
-              You haven't filed the calibration warm-up yet — it sets where your
+              You haven't filed the calibration warm-up yet; it sets where your
               practice opens.{" "}
               <Link
                 to={diagnosticHref}
@@ -682,7 +692,7 @@ export function BroadsheetDashboard({
                     {recommended.name}
                   </p>
                   <p className="mt-2 max-w-prose text-sm italic leading-relaxed text-secondary">
-                    Surfaced as the most confidently-weak position on the book —
+                    Surfaced as the most confidently-weak position on the book:
                     its 95% floor sits lowest, so the desk recommends opening
                     here.
                   </p>
@@ -702,7 +712,7 @@ export function BroadsheetDashboard({
               </div>
             ) : (
               <p className="text-sm italic leading-relaxed text-secondary">
-                No clear weak spot on the tape yet — open a fresh topic, or file
+                No clear weak spot on the tape yet. Open a fresh topic, or file
                 the calibration warm-up to seed your starting position.
               </p>
             )}
@@ -774,7 +784,7 @@ export function BroadsheetDashboard({
                 aside={`${weaknesses.length} with evidence`}
               />
               <p className="mb-3 text-[11px] italic text-muted">
-                Ranked ascending by CI_low — the confidently-weak surface first.
+                Ranked ascending by CI_low: the confidently-weak surface first.
               </p>
               <WatchlistLedger topics={weaknesses} />
             </section>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { CardsIcon, BrainIcon } from "@/components/icons";
@@ -132,6 +133,7 @@ interface NextCardSession {
 export function NextCardBettingPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   const [phase, setPhase] = useState<Phase>("setup");
   const [config, setConfig] = useState<GameConfig>({ numSuits: 2, aceMode: "high" });
@@ -216,7 +218,12 @@ export function NextCardBettingPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<NextCardSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<NextCardSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active") return;
     const s = env.snapshot;
     const savedActive = s.active;
@@ -238,7 +245,7 @@ export function NextCardBettingPage() {
     setLog(s.log);
     setLastCycle(s.lastCycle);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (phase === "setup" || phase === "summary") return;
@@ -260,8 +267,10 @@ export function NextCardBettingPage() {
         decisions: decisionsRef.current,
       },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, balance, active, selections, log, lastCycle, config]);
+  }, [phase, balance, active, selections, log, lastCycle, config, username]);
 
   const resolveCycle = () => {
     if (!active) return;
@@ -345,7 +354,7 @@ export function NextCardBettingPage() {
         meta: { skill: Math.round(skill * 10) / 10, bankroll: balance },
       });
       void submitGameScore(GAME_ID, board);
-      clearGameSession(browserSessionStore(), GAME_ID);
+      clearGameSession(browserSessionStore(), GAME_ID, username);
       if (balance >= START_CHIPS) setTimeout(themeDef.celebration ?? celebrate, 260);
     } else {
       dealCycleAt(next, balance);
@@ -399,7 +408,7 @@ export function NextCardBettingPage() {
             log={log}
             aceMode={config.aceMode}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -475,14 +484,14 @@ function Setup({
           judge the <span className="font-semibold text-primary">true probability</span> of each
           side, and stake the <span className="font-semibold text-primary">Kelly fraction</span> of
           your bankroll. Payouts are even money, so the optimal stake on a side with probability{" "}
-          <span className="num">p</span> is <span className="num">2p − 1</span> — anything at or
+          <span className="num">p</span> is <span className="num">2p − 1</span>; anything at or
           below 50% is a skip.
         </p>
         <p className="mt-3 border-l-2 border-accent-2 bg-surface-muted px-3 py-2 text-[13px] text-secondary">
           <span className="label text-accent-2">You bet blind</span>
           <br />
           You choose your side and stake before the answer shows. The reveal then gives you the exact
-          probabilities and the ideal Kelly size — so the counting method transfers, not the deal.
+          probabilities and the ideal Kelly size, so the counting method transfers, not the deal.
         </p>
       </article>
 
@@ -777,7 +786,7 @@ function BetResultCard({ r }: { r: BetResult }) {
       {!skipped && (
         <p className="num mt-1.5 text-[13px] text-secondary">
           You bet <span className="font-semibold text-primary">{sideLabel(r, r.chosenSide!)}</span> with{" "}
-          {r.stake.toLocaleString()} chips — {r.won ? "won" : "lost"}.
+          {r.stake.toLocaleString()} chips, {r.won ? "won" : "lost"}.
         </p>
       )}
 
@@ -796,7 +805,7 @@ function BetResultCard({ r }: { r: BetResult }) {
         <p className="num pt-0.5 text-[12px] text-muted">
           Best: <span className="text-accent">{r.best.label}</span> at {pct(r.best.p)} → stake Kelly{" "}
           <span className="text-accent-2">{pct(r.best.kelly)}</span> of bankroll
-          {r.best.kelly === 0 && " (no edge — skip)"}
+          {r.best.kelly === 0 && " (no edge, skip)"}
         </p>
       </div>
     </article>

@@ -44,6 +44,10 @@ export function buildProbeItem(
 ): ProbeItem | null {
   const node = prereqNode(topicKey);
   if (!node) return null;
+  // External drill/game nodes (Speed Arena, Sequences, No-Arbitrage, Fermi, …)
+  // have no registered `levelRef`: they exist only to ROUTE a failure down to a
+  // real prerequisite, and are never themselves probed in place.
+  if (!node.levelRef) return null;
 
   const tierLevel = resolveProbeLevel(node, probeTier);
   if (tierLevel) {
@@ -92,6 +96,7 @@ function resolveProbeLevel(
   node: PrereqNode,
   probeTier?: Difficulty,
 ): Level | undefined {
+  if (!node.levelRef) return undefined;
   const base = getLevel(node.levelRef.trackId, node.levelRef.levelId)?.level;
   if (!base || !probeTier) return base;
 

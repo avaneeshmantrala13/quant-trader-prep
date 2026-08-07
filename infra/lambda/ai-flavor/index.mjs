@@ -284,6 +284,217 @@ function selfExplainMessages(body) {
   return { sys, user };
 }
 
+/**
+ * MOCK-REASON-GRADE mode (mock-interview): judge the QUALITY of a candidate's
+ * reasoning for ONE question. The CLIENT's deterministic verifier has ALREADY
+ * decided whether the final answer is correct and passes that verdict in
+ * `correct` — it is AUTHORITATIVE and the model must NEVER contradict, re-grade,
+ * or flip it (mirrors self-explain / the ~56%-reliable-grader research). The
+ * model rates ONLY the reasoning process and may pose ONE adversarial probe. The
+ * response schema deliberately carries NO correctness field, so nothing the
+ * model returns can override the client's `correct`.
+ */
+function mockReasonGradeMessages(body) {
+  const sys =
+    "You are a demanding quant-trading interview coach judging the QUALITY of a " +
+    "candidate's REASONING for ONE question. A deterministic verifier has ALREADY " +
+    "decided whether their final answer is correct; that verdict is FINAL and " +
+    "provided to you — you must NEVER contradict it, re-grade the answer, or state " +
+    "your own correctness judgement. Assess ONLY the reasoning process. " +
+    "GRADE THE COMMITTED CONCLUSION, NOT KEYWORD PRESENCE. First determine which " +
+    "single side/value the candidate actually COMMITTED to (what they assert as " +
+    "their final stance), then judge whether their reasoning validly and " +
+    "non-contradictorily supports it. Merely quoting a correct fact or the correct " +
+    "term somewhere does NOT earn credit if the committed conclusion is wrong, " +
+    "unsupported, or self-contradictory. This is the key anti-gaming rule: an " +
+    "answer that COMMITS to the wrong side while quoting a true fact (e.g. concludes " +
+    "'yes, the same' but then states a fact that actually implies 'no, different') " +
+    "is CONTRADICTORY and must be rated 'ambiguous', never 'sound' or 'partial'. " +
+    "CRITICALLY EVALUATE EVERY STATED STEP for logical validity AND arithmetic " +
+    "correctness: recompute each explicit claim the candidate writes (e.g. \u201c1 " +
+    "divided by 2 is 5\u201d, \u201c3 \u00d7 4 = 11\u201d) and check it. A correct " +
+    "FINAL answer does NOT make the reasoning sound: if any step is arithmetically " +
+    "wrong, is a non-sequitur, or is a made-up rule that doesn't actually produce " +
+    "the answer, the reasoning is FLAWED even though the answer was marked correct. " +
+    "Respond as " +
+    'strict JSON with EXACTLY these keys: "reasoningQuality" (one of "sound", ' +
+    '"partial", "flawed", "ambiguous", "vague", "absent" — sound=commits to ONE ' +
+    "answer, every step correct, complete, well-justified; partial=commits clearly " +
+    "but a step or justification is missing, or it reaches a wrong result; " +
+    "flawed=contains a FALSE arithmetic step or a nonsensical/non-sequitur chain " +
+    "that doesn't validly reach the answer (USE THIS even when the final answer is " +
+    "correct); ambiguous=MIXED or self-CONTRADICTORY or HEDGED / both-sides / " +
+    "'either could be right', OR commits to a conclusion that conflicts with its " +
+    "own stated reason, OR you cannot CONFIDENTLY extract a single committed " +
+    "conclusion (USE THIS for gaming answers that state a correct fact but commit to " +
+    "the wrong side — do NOT rescue them into 'sound'); vague=hand-wavy, asserts " +
+    "without showing work; absent=no real reasoning), \"issues\" (array of specific, " +
+    "concrete critiques that NAME the exact flawed/contradictory step and give the " +
+    "correct value, e.g. 'you concluded \\\"yes, the same\\\" but your reason " +
+    "\\\"both can't occur\\\" implies they are DIFFERENT'; use [] if none), " +
+    "\"clarifyPrompt\" (REQUIRED and non-empty when reasoningQuality is " +
+    "\"ambiguous\": ONE sentence that NAMES the two sides/values in tension and " +
+    "forces the candidate to commit, e.g. 'You concluded X but your reasoning " +
+    "suggests Y — commit to ONE answer and give the single reason it is correct.'; " +
+    "use \"\" for every other quality), and \"probe\" (ONE sharp adversarial " +
+    "follow-up that stress-tests or breaks their logic or asks a harder variation; " +
+    "use \"\" if nothing useful). Rules: if the answer was marked CORRECT, do not " +
+    "claim it is wrong — but you MUST still call out wrong/nonsensical/contradictory " +
+    "reasoning as flawed or ambiguous. If it was marked INCORRECT, the probe and " +
+    "clarifyPrompt must nudge toward the flaw WITHOUT revealing the correct final " +
+    "answer. SAFETY DEFAULT: when you are unsure whether the reasoning cleanly " +
+    "commits to the correct side, PREFER 'ambiguous' (which triggers a clarifying " +
+    "follow-up) over 'sound'/'partial' — never let a mixed or contradictory answer " +
+    "pass as good reasoning. If this is mental math, DO NOT penalize brevity: a " +
+    "fast correct number with terse or no explanation is acceptable and must NOT be " +
+    "rated 'vague', 'absent', or 'ambiguous' merely for being short — HOWEVER a " +
+    "wrong stated computation is never acceptable and is 'flawed' even in mental " +
+    "math. DO NOT penalize varied WORDING, NOTATION, or METHOD: symbolic recurrences " +
+    "(e.g. \u201ca\u2099 = a\u2099\u208b\u2081 + a\u2099\u208b\u2082\u201d), plain-English rules, " +
+    "fractions vs. decimals vs. percentages, spelled-out numbers (\u201ctwo-thirds\u201d), and " +
+    "currency forms (\u201c-$0.50\u201d) are all equivalent, and a DIFFERENT-but-valid method " +
+    "that correctly and unambiguously reaches the conclusion is fully 'sound'. Judge " +
+    "the LOGIC and the COMMITMENT, never the phrasing. No markdown, no extra keys.";
+  const user =
+    `Question:\n${body.prompt || ""}\n\n` +
+    (body.concept ? `Concept: ${body.concept}\n` : "") +
+    `Ground-truth answer: ${body.correctAnswer ?? ""}\n` +
+    `Verifier verdict (FINAL, authoritative): ${body.correct ? "CORRECT" : "INCORRECT"}\n` +
+    `Mental math: ${body.isMentalMath ? "yes" : "no"}\n` +
+    `Candidate's reasoning:\n${body.reasoning || "(none)"}\n\n` +
+    "Return the JSON now:";
+  return { sys, user };
+}
+
+/**
+ * MOCK-CLARIFY-GRADE mode (mock-interview): grade the candidate's ONE clarifying
+ * response STRICTLY. A clarify round only fires after an ambiguous / mixed /
+ * contradictory answer; here the candidate must now COMMIT to the correct side
+ * with valid, non-contradictory reasoning. This is a hard pass/fail — there is no
+ * second clarify. The deterministic client is authoritative and only consults
+ * this when the AI layer is on; the model may NEVER flip a clarification that the
+ * client already resolved, it only sharpens the resolved/unresolved judgement.
+ */
+function mockClarifyGradeMessages(body) {
+  const sys =
+    "You are a demanding quant-trading interviewer grading a candidate's SINGLE " +
+    "clarifying answer. Context: their first explanation was MIXED / contradictory " +
+    "/ hedged, so they were asked to COMMIT to one answer and give the single " +
+    "reason it is correct. This is the FINAL round — there is no second chance. " +
+    "Grade STRICTLY on the COMMITTED CONCLUSION, not keyword presence. Respond as " +
+    'strict JSON with EXACTLY these keys: "resolved" (one of "yes" or "no" — "yes" ' +
+    "ONLY if they now commit clearly to the correct side/value AND give a valid, " +
+    "non-contradictory reason for it; \"no\" if they still hedge, contradict " +
+    "themselves, commit to the wrong side, or give an irrelevant/invalid " +
+    "justification even while naming the right side), and \"issues\" (array of " +
+    "concrete critiques naming exactly why it is unresolved; use [] when resolved). " +
+    "SAFETY DEFAULT: if you are not confident they cleanly committed to the correct " +
+    "side with a valid reason, answer \"no\". Ignore wording/notation/method " +
+    "differences; judge only the commitment and its logic. No markdown, no extra " +
+    "keys.";
+  const user =
+    `Question:\n${body.prompt || ""}\n\n` +
+    (body.concept ? `Concept: ${body.concept}\n` : "") +
+    `Correct answer: ${body.correctAnswer ?? ""}\n` +
+    `The tension they must resolve / clarify prompt shown:\n${body.clarifyPrompt || ""}\n\n` +
+    `Their original (ambiguous) reasoning:\n${body.reasoning || "(none)"}\n\n` +
+    `Their clarifying answer:\n${body.clarification || "(none)"}\n\n` +
+    "Return the JSON now:";
+  return { sys, user };
+}
+
+/**
+ * MOCK-FOLLOWUP mode (mock-interview): generate ONE standalone adversarial
+ * follow-up question, independent of reasoning grading (e.g. after a correct
+ * answer, probe genuine understanding vs. memorization). The model never grades
+ * anything; it only writes a question plus an internal note on a strong answer.
+ */
+function mockFollowupMessages(body) {
+  const difficulty = oneOf(
+    body.difficulty,
+    ["harder", "variation", "break-logic"],
+    "harder",
+  );
+  const styleLine =
+    difficulty === "variation"
+      ? "Change the setup to test whether they can TRANSFER the idea to a new scenario."
+      : difficulty === "break-logic"
+        ? "Design it to expose a likely misconception or break flawed reasoning."
+        : "Raise the difficulty to test genuine understanding vs. memorization.";
+  const sys =
+    "You are a sharp quant-trading interviewer generating ONE standalone adversarial " +
+    "follow-up question. It must be self-contained and answerable on its own. Respond " +
+    'as strict JSON with EXACTLY these keys: "question" (the single follow-up question) ' +
+    'and "idealAnswerNote" (a brief internal note, for the interviewer only, on what a ' +
+    "strong answer contains). " +
+    styleLine +
+    " CRITICAL for grading: the client extracts the intended answer from your note " +
+    "DETERMINISTICALLY. If the follow-up has a single numeric answer, END the note with " +
+    "that final value after an '=' (e.g. \u201c\u2026 = 0.25\u201d) and include NO other stray " +
+    "numbers after it; give ONE unambiguous target. If it is conceptual (no single " +
+    "number), state the required conclusion in plain words. Write the question so a " +
+    "correct answer can be phrased many ways (symbolic, plain-English, fraction or " +
+    "decimal) and still be gradable. No markdown, no extra keys.";
+  const user =
+    `Original question:\n${body.prompt || ""}\n\n` +
+    (body.concept ? `Concept: ${body.concept}\n` : "") +
+    `Reference answer: ${body.correctAnswer ?? ""}\n` +
+    (body.reasoning ? `Candidate's reasoning:\n${body.reasoning}\n` : "") +
+    `Follow-up style: ${difficulty}\n\n` +
+    "Return the JSON now:";
+  return { sys, user };
+}
+
+/**
+ * MOCK-DIAGNOSIS mode (mock-interview): write the final brutal-but-fair interview
+ * diagnosis. The CLIENT computes EVERY performance number deterministically
+ * (accuracy incl. follow-ups, timing, reasoning-quality tallies, MM P&L) and
+ * passes a compact, PII-minimized summary. The model turns those numbers into
+ * honest prose + specific strengths/weaknesses/next-steps and MUST NOT invent any
+ * statistic that is not in the summary.
+ */
+function mockDiagnosisMessages(body) {
+  const summary = body.summary && typeof body.summary === "object" ? body.summary : {};
+  const sys =
+    "You are a brutally honest but fair quant-trading interview coach writing a final, " +
+    "STRICT, PER-COMPETENCY diagnosis. You are given a compact, already-computed " +
+    "performance summary — a deterministic scorer produced EVERY number. Ground " +
+    "EVERYTHING strictly in these numbers; you MUST NOT invent, assume, or fabricate any " +
+    "statistic that is not present. Respond as strict JSON with EXACTLY these keys: " +
+    "\"verdict\" (one honest sentence on where they stand vs the target firm, e.g. " +
+    "'Would not clear a first-round screen at a top desk'), \"wouldPass\" (one of \"yes\", " +
+    "\"borderline\", \"no\" — be strict: a losing market-making sim, a weak probability/EV " +
+    "or speed competency, any flawed reasoning, or folding on adversarial follow-ups should " +
+    "cap the verdict), \"strengths\" (array), \"weaknesses\" (array of SPECIFIC weaknesses), " +
+    "and \"nextSteps\" (array of CONCRETE steps that ROUTE the student to specific places on " +
+    "THIS site). Grade each competency SEPARATELY (speed/arithmetic, probability & EV, " +
+    "sequences, estimation, brainteaser logic, market-making, follow-up/critical-thinking, " +
+    "reasoning quality) and call out EVERY gap — including 'correct answer but vague/hand-" +
+    "wavy reasoning' (when correctButVagueCount>0) and 'answered the main question but folded " +
+    "on the adversarial follow-up' (when adversarialCorrect is well below probeCorrect). NEVER " +
+    "attribute vagueness to mental-math brevity. For nextSteps, name concrete destinations: " +
+    "Speed Arena (/arena) and EV-Timed (/ev-timed) for speed; the Custom Drill Builder (/drill) " +
+    "on Conditional Probability / Bayes / Expected Value and those lessons for probability; Fermi " +
+    "drills (/fermi) for estimation; Make-a-Market (/make-market) and Cards Market-Making " +
+    "(/cards-market-making) for market-making; re-running the mock (/mock) to defend and " +
+    "generalize follow-ups for critical thinking. Be direct and cite the actual figures. No " +
+    "markdown, no extra keys.";
+  const user =
+    `Performance summary (JSON):\n${JSON.stringify(summary)}\n\n` +
+    "Field guide: scorePct=overall %, mathCorrect/mathTotal=blended math accuracy, " +
+    "avgMathMs=avg ms per math item; PER-COMPETENCY tallies (each {correct,total}, may be " +
+    "absent if that competency was not tested): speed=mental-math speed gate, probEv=probability " +
+    "& EV, sequences=pattern recognition, estimation=Fermi; speedAvgMs=avg ms per speed item. " +
+    "probeCorrect/probeTotal=Follow-up 1 (deepen the principle), adversarialCorrect/" +
+    "adversarialTotal=Follow-up 2 (challenge the logic / generalize), followupCorrect/" +
+    "followupTotal=both combined, brainteaserCorrect/brainteaserTotal, mmPnl=market-making P&L, " +
+    "mmVerdict=market-making assessment, reasoningTags=counts of reasoning quality " +
+    "{sound,partial,flawed,vague,absent}, correctButVagueCount=# items answered correctly but " +
+    "with weak/flawed reasoning, tier=target desk tier.\n\n" +
+    "Return the JSON now:";
+  return { sys, user };
+}
+
 /* -------------------------------- providers ------------------------------- */
 // Join an OpenAI-compatible base URL with the chat-completions path, robustly:
 //   - trims trailing slashes on the base;
@@ -297,13 +508,19 @@ export function chatCompletionsUrl(base) {
   return /\/chat\/completions$/.test(b) ? b : `${b}/chat/completions`;
 }
 
-async function callOpenAI(key, sys, user, wantJson) {
+// Optional per-call tuning `opts`: `{ maxTokens, temperature }`. Both are
+// OPTIONAL and BACKWARD-COMPATIBLE — existing 4-arg callers get the historical
+// defaults (temperature 0.9, and no OpenAI `max_tokens` cap / Anthropic's 1024).
+// The new mock-interview modes pass a low temperature + a tight token cap so the
+// per-question calls stay cheap and produce stable JSON.
+async function callOpenAI(key, sys, user, wantJson, opts = {}) {
   const res = await fetch(chatCompletionsUrl(BASE_URL), {
     method: "POST",
     headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
     body: JSON.stringify({
       model: MODEL,
-      temperature: 0.9,
+      temperature: opts.temperature ?? 0.9,
+      ...(opts.maxTokens ? { max_tokens: opts.maxTokens } : {}),
       messages: [
         { role: "system", content: sys },
         { role: "user", content: user },
@@ -315,7 +532,7 @@ async function callOpenAI(key, sys, user, wantJson) {
   const j = await res.json();
   return j.choices?.[0]?.message?.content?.trim() || "";
 }
-async function callAnthropic(key, sys, user) {
+async function callAnthropic(key, sys, user, opts = {}) {
   // To switch providers set AI_PROVIDER=anthropic (+ store an Anthropic key).
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -326,8 +543,8 @@ async function callAnthropic(key, sys, user) {
     },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 1024,
-      temperature: 0.9,
+      max_tokens: opts.maxTokens ?? 1024,
+      temperature: opts.temperature ?? 0.9,
       system: sys,
       messages: [{ role: "user", content: user }],
     }),
@@ -336,9 +553,44 @@ async function callAnthropic(key, sys, user) {
   const j = await res.json();
   return (j.content?.[0]?.text || "").trim();
 }
-async function callLLM(key, sys, user, wantJson) {
-  if (PROVIDER === "anthropic") return callAnthropic(key, sys, user);
-  return callOpenAI(key, sys, user, wantJson);
+async function callLLM(key, sys, user, wantJson, opts = {}) {
+  if (PROVIDER === "anthropic") return callAnthropic(key, sys, user, opts);
+  return callOpenAI(key, sys, user, wantJson, opts);
+}
+
+/* ---------------------- defensive JSON coercion helpers ------------------- */
+// The mock-interview modes ask the model for STRICT JSON, but we NEVER trust it
+// to be well-formed: every field is coerced with a safe fallback so a malformed
+// or partial model reply degrades to sane defaults instead of crashing the
+// client. None of these helpers can ever surface a correctness verdict.
+function safeParseJson(text) {
+  if (!text || typeof text !== "string") return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Tolerate stray prose / code fences around the JSON object.
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1));
+      } catch {
+        /* fall through */
+      }
+    }
+    return null;
+  }
+}
+function asString(v, fallback = "") {
+  return typeof v === "string" ? v : fallback;
+}
+function asStringArray(v) {
+  return Array.isArray(v)
+    ? v.filter((x) => typeof x === "string" && x.trim().length > 0)
+    : [];
+}
+function oneOf(v, allowed, fallback) {
+  return typeof v === "string" && allowed.includes(v) ? v : fallback;
 }
 
 /* ------------------------------- daily quota ------------------------------ */
@@ -433,17 +685,22 @@ export const handler = async (event) => {
       // spec (topicKeys + difficulty window + count); the CLIENT snaps it back
       // onto the vocabulary (drops unknown keys, clamps orders/count) before use,
       // so a malformed proposal degrades safely to the deterministic parser.
+      //
+      // Low temperature + a tight token cap keep the spec stable and cheap, and
+      // we parse DEFENSIVELY (tolerating ```json fences / stray prose). A reply
+      // we can't parse degrades to `topicKeys: []` — a 200 the client reads as
+      // "no usable topic" and falls back to its deterministic parser, rather
+      // than a hard error. Non-string topicKeys are dropped so the client's
+      // vocabulary check only ever sees candidate strings.
       const { sys, user } = parseDrillIntentMessages(body);
-      const text = await callLLM(key, sys, user, true);
-      let parsed;
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        return reply(502, { ok: false, error: "model returned non-JSON" });
-      }
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 200,
+        temperature: 0.1,
+      });
+      const parsed = safeParseJson(text) || {};
       return reply(200, {
         ok: true,
-        topicKeys: Array.isArray(parsed.topicKeys) ? parsed.topicKeys : [],
+        topicKeys: asStringArray(parsed.topicKeys),
         minOrder: parsed.minOrder,
         maxOrder: parsed.maxOrder,
         count: parsed.count,
@@ -480,6 +737,89 @@ export const handler = async (event) => {
         correct: !!body.correct,
         failedCheck: body.failedCheck ?? null,
         narration: narration || "",
+      });
+    }
+
+    if (body.mode === "mock-reason-grade") {
+      // Judge ONLY reasoning quality around the client's FIXED `correct` verdict.
+      // The response carries no correctness field, so the model can never flip it.
+      // Malformed/partial JSON degrades to safe defaults ("partial", [], "").
+      const { sys, user } = mockReasonGradeMessages(body);
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 600,
+        temperature: 0.3,
+      });
+      const parsed = safeParseJson(text) || {};
+      const reasoningQuality = oneOf(
+        parsed.reasoningQuality,
+        ["sound", "partial", "flawed", "ambiguous", "vague", "absent"],
+        "partial",
+      );
+      // A clarify prompt only rides along with the ambiguous verdict; drop it
+      // otherwise so a stray field can never trigger a needless clarify round.
+      const clarifyPrompt =
+        reasoningQuality === "ambiguous"
+          ? asString(parsed.clarifyPrompt, "")
+          : "";
+      return reply(200, {
+        ok: true,
+        reasoningQuality,
+        issues: asStringArray(parsed.issues),
+        probe: asString(parsed.probe, ""),
+        clarifyPrompt,
+      });
+    }
+
+    if (body.mode === "mock-clarify-grade") {
+      // Grade the ONE clarifying answer strictly. The client stays authoritative;
+      // this only returns resolved yes/no + issues. Malformed JSON degrades to the
+      // conservative default ("no" — unresolved), so ambiguity never passes.
+      const { sys, user } = mockClarifyGradeMessages(body);
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 400,
+        temperature: 0.2,
+      });
+      const parsed = safeParseJson(text) || {};
+      return reply(200, {
+        ok: true,
+        resolved: oneOf(parsed.resolved, ["yes", "no"], "no"),
+        issues: asStringArray(parsed.issues),
+      });
+    }
+
+    if (body.mode === "mock-followup") {
+      // Generate ONE standalone adversarial follow-up. No grading happens here;
+      // missing fields degrade to empty strings so the client never crashes.
+      const { sys, user } = mockFollowupMessages(body);
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 700,
+        temperature: 0.8,
+      });
+      const parsed = safeParseJson(text) || {};
+      return reply(200, {
+        ok: true,
+        question: asString(parsed.question, ""),
+        idealAnswerNote: asString(parsed.idealAnswerNote, ""),
+      });
+    }
+
+    if (body.mode === "mock-diagnosis") {
+      // Turn the client's deterministically-computed summary into honest prose.
+      // The model may not invent stats; malformed JSON degrades to safe defaults
+      // ("borderline", empty arrays) so the diagnosis screen still renders.
+      const { sys, user } = mockDiagnosisMessages(body);
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 1400,
+        temperature: 0.4,
+      });
+      const parsed = safeParseJson(text) || {};
+      return reply(200, {
+        ok: true,
+        verdict: asString(parsed.verdict, ""),
+        wouldPass: oneOf(parsed.wouldPass, ["yes", "borderline", "no"], "borderline"),
+        strengths: asStringArray(parsed.strengths),
+        weaknesses: asStringArray(parsed.weaknesses),
+        nextSteps: asStringArray(parsed.nextSteps),
       });
     }
 

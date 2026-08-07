@@ -5,13 +5,13 @@ import Fraction from "fraction.js";
  * (betting / odds puzzles).
  *
  * Families:
- *   • Probability optimization — "Rig the Bags" (law of total probability):
+ *   • Probability optimization, "Rig the Bags" (law of total probability):
  *     split tokens across two bags to maximize P(draw gold). VERIFIABLE scalar.
- *   • Arbitrage / value betting — convert quoted odds to implied probability;
+ *   • Arbitrage / value betting, convert quoted odds to implied probability;
  *     a set of mutually-exclusive outcomes whose implied probabilities sum
  *     below 1 admits an arbitrage. The implied-probability SUM is a verifiable
  *     scalar (arb ⇔ sum < 1); the full staking plan is open-ended (flashcard).
- *   • Parimutuel — open-ended, bet against known opponents (flashcard only).
+ *   • Parimutuel, open-ended, bet against known opponents (flashcard only).
  *
  * All arithmetic is exact rational via `fraction.js`.
  */
@@ -28,7 +28,7 @@ export function decText(f: Fraction, dp: number): string {
 }
 
 /* ========================================================================== */
-/*  Family: Rig the Bags — probability optimization (law of total prob)       */
+/*  Family: Rig the Bags, probability optimization (law of total prob)       */
 /* ========================================================================== */
 
 export interface BagSplit {
@@ -51,7 +51,7 @@ export function bagWinProb(split: BagSplit): Fraction {
 
 /**
  * Exhaustive optimum over ALL valid two-bag splits of `gold` gold + `black`
- * black tokens (each bag ≥ 1 token). Independent brute-force verifier — does
+ * black tokens (each bag ≥ 1 token). Independent brute-force verifier, does
  * not assume the closed-form "one gold alone" trick.
  */
 export function rigBagsOptimum(
@@ -85,7 +85,7 @@ export function rigBagsClosedForm(gold: number, black: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  Family: Arbitrage — implied probability from decimal odds                 */
+/*  Family: Arbitrage, implied probability from decimal odds                 */
 /* ========================================================================== */
 
 /** Implied (break-even) probability of a decimal-odds quote o: 1/o (exact). */

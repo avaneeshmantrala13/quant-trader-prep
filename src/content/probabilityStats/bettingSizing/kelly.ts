@@ -8,7 +8,7 @@ import Fraction from "fraction.js";
  *   {American, Decimal, Fractional} odds  (a 3×3 schema grid, the Kelly factory).
  *
  * ALL probability / odds / Kelly math is done with exact rationals
- * (`fraction.js`) — never floating point — so every ground-truth answer is an
+ * (`fraction.js`), never floating point, so every ground-truth answer is an
  * exact rational and dollar stakes are exact integers.
  *
  *   Kelly fraction: f* = (b·p − q) / b,  q = 1 − p.   Stake $ = f* × bankroll.
@@ -126,7 +126,7 @@ export function binom(n: number, k: number): number {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  CARDS — winning-card count k out of a 52-card deck                          */
+/*  CARDS, winning-card count k out of a 52-card deck                          */
 /* -------------------------------------------------------------------------- */
 
 export interface CardEvent {
@@ -173,7 +173,7 @@ export function cardEventProb(e: CardEvent): Fraction {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  COINS — winning-outcome count via the binomial over n fair coins           */
+/*  COINS, winning-outcome count via the binomial over n fair coins           */
 /* -------------------------------------------------------------------------- */
 
 export interface CoinEvent {
@@ -271,7 +271,7 @@ export function coinEventProb(e: CoinEvent, n: number): Fraction {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  DICE — p by EXACT ENUMERATION of the 6^n outcome space (n ∈ {1,2})          */
+/*  DICE, p by EXACT ENUMERATION of the 6^n outcome space (n ∈ {1,2})          */
 /* -------------------------------------------------------------------------- */
 
 export interface DiceEvent {

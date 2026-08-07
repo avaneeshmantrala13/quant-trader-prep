@@ -101,7 +101,7 @@ export function WhyThisQuestion({
 
           {verdict.n === 0 ? (
             <p className="text-[13px] leading-relaxed text-secondary">
-              No graded answers on this topic yet — this is a starting estimate
+              No graded answers on this topic yet; this is a starting estimate
               from the prior. It sharpens the moment you begin.
             </p>
           ) : (
@@ -113,7 +113,7 @@ export function WhyThisQuestion({
               <span className="num text-muted">
                 [{pct(verdict.lo)}–{pct(verdict.hi)}]
               </span>{" "}
-              here — {stateCopy[verdict.state]}{" "}
+              here, {stateCopy[verdict.state]}{" "}
               <span className="label text-accent">{verdict.state}</span>{" "}
               <span className="text-muted">({verdict.n} answered)</span>
             </p>
@@ -136,7 +136,7 @@ export function WhyThisQuestion({
           )}
 
           <p className="border-t border-subtle pt-2 text-[11px] leading-snug text-muted">
-            Estimated from your answers so far (Bayesian) — it sharpens as you
+            Estimated from your answers so far (Bayesian); it sharpens as you
             practice. You chose this topic; the numbers above are the engine's
             live read on it.
           </p>

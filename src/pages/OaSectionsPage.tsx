@@ -109,7 +109,7 @@ export function OaSectionsPage() {
                 Timed Sections
               </h1>
               <p className="mt-1 text-sm text-secondary">
-                Interview-condition practice on a real wall clock — it keeps
+                Interview-condition practice on a real wall clock; it keeps
                 running if you leave, so treat it like the live OA. Pick a format
                 to begin.
               </p>

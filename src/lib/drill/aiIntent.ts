@@ -5,6 +5,7 @@ import { DRILL_TOPIC_KEYS, DRILL_TOPICS } from "./vocabulary";
 import {
   DRILL_COUNT_MAX,
   DRILL_COUNT_MIN,
+  clampCount,
   parseDrillIntent,
   type DrillSpec,
 } from "./parseIntent";
@@ -103,9 +104,9 @@ export function snapToVocabulary(
     typeof payload["count"] === "number"
       ? (payload["count"] as number)
       : Number(payload["count"]);
-  const count = Number.isFinite(rawCount)
-    ? Math.max(DRILL_COUNT_MIN, Math.min(DRILL_COUNT_MAX, Math.round(rawCount)))
-    : 10;
+  // `clampCount` already degrades a non-finite value to the default, so an
+  // absent/garbage `count` from the model yields the sane default rather than 0.
+  const count = clampCount(rawCount);
 
   return { topicKeys, minOrder, maxOrder, count };
 }

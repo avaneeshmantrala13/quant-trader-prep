@@ -2,9 +2,9 @@
  * arena/budget.ts — per-question / per-section TIME BUDGETS for the interview
  * pacing overlay (Case B speed focus).
  *
- * Real top-tier OAs give a candidate a FIXED, short budget per question (Optiver
- * 80-in-8 ⇒ 6 s/q; Flow 60-in-6 ⇒ 6 s/q; Maven 50-in-5 ⇒ 6 s/q — see
- * FIRM_TIMED_ASSESSMENTS.md §1). The Speed Arena already runs a fixed WINDOW;
+ * Real top-tier OAs give a candidate a FIXED, short budget per question (the
+ * timed arithmetic sprints all land at ~6 s/q; see FIRM_TIMED_ASSESSMENTS.md §1).
+ * The Speed Arena already runs a fixed WINDOW;
  * this module turns that window into an explicit per-question budget so the
  * runner can show a live per-question countdown and pacing feedback, exactly
  * like sitting a real screen.
@@ -19,7 +19,7 @@ import { DEFAULT_SPRINT_BUDGET_MS, type ArenaPreset } from "./config";
  * The per-question time budget (ms) implied by a preset:
  *  - an explicit `preset.budgetMs` wins (adaptive tightening sets this);
  *  - else, with a question cap, it's `window / cap` (the true OA pace, e.g.
- *    480_000 / 80 = 6000ms for Optiver);
+ *    480_000 / 80 = 6000ms for the ~6s/q sprint);
  *  - else (open window, no cap) it falls back to the sprint consensus budget.
  * Always ≥ 1ms so downstream ratios never divide by zero.
  */

@@ -306,12 +306,12 @@ function KellySim(): JSX.Element {
         Full-Kelly (
         <span className="text-bull">green</span>) maximizes the long-run growth
         rate: under-Kelly grows too slowly, while over-Kelly takes on so much
-        variance that growth falls — and can spiral toward ruin.
+        variance that growth falls, and can spiral toward ruin.
       </p>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-secondary">
-          Final bankroll —{" "}
+          Final bankroll:{" "}
           {labels.map((l, i) => (
             <span key={l}>
               {i > 0 ? " · " : ""}

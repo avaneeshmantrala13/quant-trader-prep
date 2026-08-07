@@ -11,7 +11,7 @@ import {
 /**
  * A few illustrative `Level` objects for the no-arbitrage / de-vig drill. These
  * are DECLARED here for reuse but intentionally NOT registered into any track or
- * catalog — wiring them into the roadmap/course machinery is the Integrator's
+ * catalog, wiring them into the roadmap/course machinery is the Integrator's
  * job (see the T3 handoff). Each level draws fresh, exact-verified items from the
  * generators in `generators.ts`.
  */
@@ -32,7 +32,7 @@ export const ARBITRAGE_LEVELS: Level[] = [
     title: "Odds → Implied Probability",
     subtitle: "Read a quote as a probability",
     blurb:
-      "Convert decimal, fractional, and American-moneyline odds into the implied probability 1/o — the raw building block of every book.",
+      "Convert decimal, fractional, and American-moneyline odds into the implied probability 1/o, the raw building block of every book.",
     section: "No-Arbitrage",
     difficulty: "easy",
     mode: "numeric",
@@ -63,7 +63,7 @@ export const ARBITRAGE_LEVELS: Level[] = [
     questionCount: 6,
     lesson: {
       paragraphs: [
-        "A bookmaker builds in a margin, so Σ(1/oᵢ) > 1. That excess is the overround — the house edge.",
+        "A bookmaker builds in a margin, so Σ(1/oᵢ) > 1. That excess is the overround, the house edge.",
         "To recover the fair probability of any outcome, divide its raw implied prob by the booksum so the whole set sums to exactly 1. This 'de-vigging' is pure normalization.",
       ],
       keyIdea: "fairᵢ = (1/oᵢ) / Σ(1/oⱼ).",
@@ -85,7 +85,7 @@ export const ARBITRAGE_LEVELS: Level[] = [
     questionCount: 6,
     lesson: {
       paragraphs: [
-        "The booksum Σ(1/oᵢ) tells you everything. If it dips below 1, the outcomes are collectively over-priced — back them all for a guaranteed profit (a Dutch book).",
+        "The booksum Σ(1/oᵢ) tells you everything. If it dips below 1, the outcomes are collectively over-priced, back them all for a guaranteed profit (a Dutch book).",
         "Above 1, the overround is the house's edge; equal to 1, the book is fair. The only skill is reading the inequality the right way round.",
       ],
       keyIdea: "booksum < 1 ⇒ arbitrage · > 1 ⇒ overround · = 1 ⇒ fair.",
@@ -98,7 +98,7 @@ export const ARBITRAGE_LEVELS: Level[] = [
     title: "Sizing the Arbitrage",
     subtitle: "Stake for a guaranteed profit",
     blurb:
-      "On a Dutch-book, size each stake proportional to its implied probability so every outcome returns the same — then bank the locked-in profit.",
+      "On a Dutch-book, size each stake proportional to its implied probability so every outcome returns the same, then bank the locked-in profit.",
     section: "No-Arbitrage",
     difficulty: "hard",
     mode: "numeric",
@@ -115,7 +115,7 @@ export const ARBITRAGE_LEVELS: Level[] = [
       ],
       keyIdea: "stakeᵢ = total·(1/oᵢ)/booksum · profit = total·(1 − booksum)/booksum.",
       whyInterviewers:
-        "An edge you can't size correctly isn't an edge — sizing to equalize payouts is what makes it risk-free.",
+        "An edge you can't size correctly isn't an edge, sizing to equalize payouts is what makes it risk-free.",
     },
   },
   {
@@ -135,12 +135,12 @@ export const ARBITRAGE_LEVELS: Level[] = [
     questionCount: 6,
     lesson: {
       paragraphs: [
-        "A basket (or ETF) is worth the weighted sum of its components — Σ qty×price. When the whole trades away from that NAV, sell the rich side and buy the cheap one.",
-        "Against a probability model, the value leg is the one with p·o > 1 — never assume the short-odds favorite is the bet.",
+        "A basket (or ETF) is worth the weighted sum of its components, Σ qty×price. When the whole trades away from that NAV, sell the rich side and buy the cheap one.",
+        "Against a probability model, the value leg is the one with p·o > 1, never assume the short-odds favorite is the bet.",
       ],
       keyIdea: "NAV = Σ qty×price · value bet ⇔ p·o > 1.",
       whyInterviewers:
-        "Relative-value trades — whole vs parts, model vs market — are the bread and butter of arbitrage desks.",
+        "Relative-value trades, whole vs parts, model vs market, are the bread and butter of arbitrage desks.",
     },
   },
 ];

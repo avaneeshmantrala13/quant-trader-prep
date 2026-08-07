@@ -24,13 +24,13 @@ import {
  * Every answer is re-derived by an EXACT rational solver in `solvers.ts` from a
  * clean discrete/uniform model; distractors encode NAMED misconceptions, never
  * random numbers:
- *   - `ignored_winners_curse` — bid the UNCONDITIONAL E[V] (no haircut for the
+ *   - `ignored_winners_curse`, bid the UNCONDITIONAL E[V] (no haircut for the
  *     bad news that winning conveys).
- *   - `no_shading_for_n`      — used a shade sized for fewer bidders (didn't
+ *   - `no_shading_for_n`     , used a shade sized for fewer bidders (didn't
  *     grow the correction as n rose).
- *   - `used_own_signal`       — bid / valued at the raw signal (or the bid) as
+ *   - `used_own_signal`      , bid / valued at the raw signal (or the bid) as
  *     if it were the value.
- *   - `wrong_conditioning`    — conditioned the wrong way (added instead of
+ *   - `wrong_conditioning`   , conditioned the wrong way (added instead of
  *     subtracted, off-by-one range, divided by n, competition-not-information).
  *
  * Answer routing mirrors the interviewGames dataset: a scalar $ answer → numeric
@@ -73,7 +73,7 @@ function dedupeErrors(
 }
 
 /* ========================================================================== */
-/*  NUMERIC — scalar $ answers                                                 */
+/*  NUMERIC, scalar $ answers                                                 */
 /* ========================================================================== */
 
 /**
@@ -90,7 +90,7 @@ function genWinnersCurseShade(rng: Rng): NumericQuestion {
     {
       value: 0,
       feedback:
-        "You reasoned that an unbiased signal (mean-zero noise) needs no correction — but conditioning on WINNING is what bites: you only win when your signal is the highest of the n, which overstates V. Shade by the expected size of that overstatement.",
+        "You reasoned that an unbiased signal (mean-zero noise) needs no correction, but conditioning on WINNING is what bites: you only win when your signal is the highest of the n, which overstates V. Shade by the expected size of that overstatement.",
       misconception: "ignored_winners_curse",
     },
     ...(n > 2
@@ -108,7 +108,7 @@ function genWinnersCurseShade(rng: Rng): NumericQuestion {
     {
       value: fracToRounded(shade.div(n), 4),
       feedback:
-        "You divided the expected overstatement by the number of bidders. The shade is the expected MAXIMUM of the n noises, not that maximum spread across the bidders — do not divide by n.",
+        "You divided the expected overstatement by the number of bidders. The shade is the expected MAXIMUM of the n noises, not that maximum spread across the bidders, do not divide by n.",
       misconception: "wrong_conditioning",
     },
   ];
@@ -121,10 +121,10 @@ function genWinnersCurseShade(rng: Rng): NumericQuestion {
     decimals: 4,
     unit: "$",
     difficulty: "hard",
-    concept: "Winner's curse — shade = E[max of n signals]",
+    concept: "Winner's curse, shade = E[max of n signals]",
     explanation: `Conditional on winning, your own noise is the MAXIMUM of the ${n} i.i.d. noises, so on average your signal overstates V by E[max of ${n} draws from ${noiseStr(m)}] = ${P4(answer)}. Shade your bid by exactly that. It is 0 for a single bidder and rises with n.`,
     commonErrors: errors,
-    source: "Common-value auction — optimal bid shading (winner's curse)",
+    source: "Common-value auction, optimal bid shading (winner's curse)",
     family: "genWinnersCurseShade",
   };
 }
@@ -168,7 +168,7 @@ function genEvGivenWin(rng: Rng): NumericQuestion {
     {
       value: fracToRounded(F_add(signal, shade), 4),
       feedback:
-        "You ADDED the correction instead of subtracting it — that is the loser's blessing, not the winner's curse. Winning means your signal was too HIGH, so E[V | win] sits below your signal.",
+        "You ADDED the correction instead of subtracting it, that is the loser's blessing, not the winner's curse. Winning means your signal was too HIGH, so E[V | win] sits below your signal.",
       misconception: "wrong_conditioning",
     },
   ];
@@ -184,14 +184,14 @@ function genEvGivenWin(rng: Rng): NumericQuestion {
     concept: "Expected value conditional on winning",
     explanation: `Winning ⇒ your signal is the max of the ${n}, so your noise is E[max of ${n} draws from ${noiseStr(m)}] = ${P4(fracToRounded(shade, 4))} too high. Hence E[V | win] = ${signal} − ${P4(fracToRounded(shade, 4))} = ${P4(answer)}, strictly below your signal.`,
     commonErrors: errors,
-    source: "Common-value auction — E[V | you won] (winner's curse)",
+    source: "Common-value auction. E[V | you won] (winner's curse)",
     family: "genEvGivenWin",
   };
 }
 
 /**
  * Acquiring-a-company: E[V | V ≤ b] = b/2 for V uniform on {0, …, M}. A purely
- * conditional-expectation drill — winning (V ≤ b) means the value is low.
+ * conditional-expectation drill, winning (V ≤ b) means the value is low.
  */
 function genAcquireEvGivenWin(rng: Rng): NumericQuestion {
   const M = rng.pick([20, 40, 50, 100] as const);
@@ -203,7 +203,7 @@ function genAcquireEvGivenWin(rng: Rng): NumericQuestion {
     {
       value: fracToRounded(acquireUnconditionalEv(M), 1),
       feedback:
-        "That is the UNCONDITIONAL average, M/2. But you only win when V ≤ your bid, which selects the low values — so condition on V ≤ b, giving a mean of b/2, not M/2.",
+        "That is the UNCONDITIONAL average, M/2. But you only win when V ≤ your bid, which selects the low values, so condition on V ≤ b, giving a mean of b/2, not M/2.",
       misconception: "ignored_winners_curse",
     },
     {
@@ -215,7 +215,7 @@ function genAcquireEvGivenWin(rng: Rng): NumericQuestion {
     {
       value: fracToRounded(F_div(b + 1, 2), 1),
       feedback:
-        "Off-by-one on the range: winning covers the b+1 integers {0, 1, …, b} (including 0), whose mean is b/2 — not (b+1)/2, which averages {1, …, b}.",
+        "Off-by-one on the range: winning covers the b+1 integers {0, 1, …, b} (including 0), whose mean is b/2, not (b+1)/2, which averages {1, …, b}.",
       misconception: "wrong_conditioning",
     },
   ];
@@ -229,7 +229,7 @@ function genAcquireEvGivenWin(rng: Rng): NumericQuestion {
     unit: "$",
     difficulty: "medium",
     concept: "Conditional expectation given you won (acquiring a company)",
-    explanation: `Winning means V ≤ ${b}, so V is uniform on the ${b + 1} integers {0, …, ${b}}, whose mean is ${b}/2 = ${P4(answer)}. Conditioning on winning halves your bid — the essence of the winner's curse.`,
+    explanation: `Winning means V ≤ ${b}, so V is uniform on the ${b + 1} integers {0, …, ${b}}, whose mean is ${b}/2 = ${P4(answer)}. Conditioning on winning halves your bid, the essence of the winner's curse.`,
     commonErrors: errors,
     source: "Acquiring-a-company winner's curse (conditional value)",
     family: "genAcquireEvGivenWin",
@@ -237,7 +237,7 @@ function genAcquireEvGivenWin(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/*  QUIZ — decision answers                                                    */
+/*  QUIZ, decision answers                                                    */
 /* ========================================================================== */
 
 /**
@@ -257,11 +257,11 @@ function genBidEvDecision(rng: Rng): Question {
   const isPos = evWin.sub(bidNum(bid)).valueOf() > 0;
 
   const POS =
-    "+EV — even conditional on winning (your signal being the highest), the bid sits below E[V | win], so winning is profitable on average.";
+    "+EV, even conditional on winning (your signal being the highest), the bid sits below E[V | win], so winning is profitable on average.";
   const NEG =
-    "−EV — the winner's curse: conditional on winning, E[V | win] is below the bid, so winning loses money on average.";
+    "−EV, the winner's curse: conditional on winning, E[V | win] is below the bid, so winning loses money on average.";
   const IGN =
-    "+EV — the signal is an unbiased estimate of V, so any bid at or below your signal cannot lose in expectation.";
+    "+EV, the signal is an unbiased estimate of V, so any bid at or below your signal cannot lose in expectation.";
   const NOSHADE =
     "It depends only on the bid versus your signal; the number of rival bidders is irrelevant to the calculation.";
 
@@ -270,15 +270,15 @@ function genBidEvDecision(rng: Rng): Question {
 
   const q = assemble(rng, {
     id: `auc-biddec-${m}-${n}-${signal}-${bid}`,
-    prompt: `A common-value auction has n = ${n} bidders, each seeing an unbiased signal V + ε with ε uniform on the integer dollars ${noiseStr(m)}. Your signal is $${signal}. Bids increase in the signal (so you win only with the highest signal). You are thinking of bidding $${bid}. Is that bid +EV, break-even, or −EV — evaluated conditional on actually winning?`,
+    prompt: `A common-value auction has n = ${n} bidders, each seeing an unbiased signal V + ε with ε uniform on the integer dollars ${noiseStr(m)}. Your signal is $${signal}. Bids increase in the signal (so you win only with the highest signal). You are thinking of bidding $${bid}. Is that bid +EV, break-even, or −EV, evaluated conditional on actually winning?`,
     correct,
     distractors,
-    explanation: `E[V | win] = signal − E[max of ${n} noises] = ${signal} − ${P4(fracToRounded(expectedMaxOfN(m, n), 4))} = ${P4(fracToRounded(evWin, 4))}. Compared to a bid of ${$(bid)}, winning is ${isPos ? "PROFITABLE (bid below E[V | win])" : "a LOSS (bid above E[V | win]) — the winner's curse"}.`,
+    explanation: `E[V | win] = signal − E[max of ${n} noises] = ${signal} − ${P4(fracToRounded(expectedMaxOfN(m, n), 4))} = ${P4(fracToRounded(evWin, 4))}. Compared to a bid of ${$(bid)}, winning is ${isPos ? "PROFITABLE (bid below E[V | win])" : "a LOSS (bid above E[V | win]), the winner's curse"}.`,
     difficulty: "expert",
     concept: "+EV vs −EV bid conditional on winning",
     distractorRationaleByValue: {
       [POS]:
-        "Comparing the bid to your raw signal instead of to E[V | win] flips the call — a bid below your signal can still be above E[V | win].",
+        "Comparing the bid to your raw signal instead of to E[V | win] flips the call, a bid below your signal can still be above E[V | win].",
       [NEG]:
         "This bid is already shaded below E[V | win], so applying the curse a second time wrongly rejects a profitable bid.",
       [IGN]:
@@ -292,7 +292,7 @@ function genBidEvDecision(rng: Rng): Question {
       [IGN]: "ignored_winners_curse",
       [NOSHADE]: "no_shading_for_n",
     },
-    source: "Common-value auction — +EV/−EV bid decision (winner's curse)",
+    source: "Common-value auction, +EV/−EV bid decision (winner's curse)",
   });
   return { ...q, family: "genBidEvDecision" };
 }
@@ -307,13 +307,13 @@ function genShadingWithN(rng: Rng): Question {
   const [n1, n2] = counts;
 
   const LOWER =
-    "Bid LOWER (shade more) in the auction with more bidders — beating more rivals is worse news about V.";
+    "Bid LOWER (shade more) in the auction with more bidders, beating more rivals is worse news about V.";
   const SAME =
-    "Bid the SAME in both — the number of rivals doesn't change your signal, so it shouldn't change your bid.";
+    "Bid the SAME in both, the number of rivals doesn't change your signal, so it shouldn't change your bid.";
   const HIGHER =
-    "Bid HIGHER with more bidders — you must outbid more rivals, so you have to bid up to win.";
+    "Bid HIGHER with more bidders, you must outbid more rivals, so you have to bid up to win.";
   const RAW =
-    "Bid your raw signal in both — it's an unbiased estimate of V either way.";
+    "Bid your raw signal in both, it's an unbiased estimate of V either way.";
 
   const q = assemble(rng, {
     id: `auc-shadingN-${m}-${n1}-${n2}`,
@@ -336,7 +336,7 @@ function genShadingWithN(rng: Rng): Question {
       [HIGHER]: "wrong_conditioning",
       [RAW]: "used_own_signal",
     },
-    source: "Common-value auction — shading grows with n",
+    source: "Common-value auction, shading grows with n",
   });
   return { ...q, family: "genShadingWithN" };
 }
@@ -358,13 +358,13 @@ function genAcquireDecision(rng: Rng): Question {
   const isPos = acquireIsPositiveEv(fNum, fDen);
 
   const YES =
-    "Yes — positive bids are +EV here (the synergy multiple exceeds 2×, which overcomes the value-halving from conditioning on winning).";
+    "Yes, positive bids are +EV here (the synergy multiple exceeds 2×, which overcomes the value-halving from conditioning on winning).";
   const NO =
-    "No — every positive bid is −EV here (you only win when V is low, and the synergy multiple is too small to beat E[V | win] = b/2).";
+    "No, every positive bid is −EV here (you only win when V is low, and the synergy multiple is too small to beat E[V | win] = b/2).";
   const IGN =
-    "Yes — any synergy multiple above 1× makes bidding worthwhile, since you'd be paying less than the value you add.";
+    "Yes, any synergy multiple above 1× makes bidding worthwhile, since you'd be paying less than the value you add.";
   const DEP =
-    "It depends on M — bid only when your bid b is small relative to the maximum value M.";
+    "It depends on M, bid only when your bid b is small relative to the maximum value M.";
 
   const correct = isPos ? YES : NO;
   const distractors = [YES, NO, IGN, DEP].filter((c) => c !== correct);
@@ -376,7 +376,7 @@ function genAcquireDecision(rng: Rng): Question {
     distractors,
     explanation: `Winning ⇒ V ≤ b ⇒ E[V | win] = b/2, so the value you win is (${fNum}/${fDen})·(b/2) and your expected profit ∝ (${fNum}/${fDen})/2 − 1 = f/2 − 1. Since f = ${fNum}/${fDen} is ${isPos ? "> 2, every positive bid is +EV" : "< 2, every positive bid is −EV"}, independent of b and M.`,
     difficulty: "expert",
-    concept: "Acquiring a company — +EV iff synergy > 2×",
+    concept: "Acquiring a company, +EV iff synergy > 2×",
     distractorRationaleByValue: {
       [YES]:
         "A multiple below 2× cannot overcome the value-halving (E[V | win] = b/2), so bidding still loses in expectation.",
@@ -385,7 +385,7 @@ function genAcquireDecision(rng: Rng): Question {
       [IGN]:
         "This ignores the winner's curse: conditional on winning V averages only b/2, so you need f > 2, not merely f > 1.",
       [DEP]:
-        "The sign of the expected profit is f/2 − 1 — independent of b and M — so no choice of a small bid rescues a low multiple.",
+        "The sign of the expected profit is f/2 − 1, independent of b and M, so no choice of a small bid rescues a low multiple.",
     },
     misconceptionByValue: {
       [YES]: "wrong_conditioning",
@@ -393,7 +393,7 @@ function genAcquireDecision(rng: Rng): Question {
       [IGN]: "ignored_winners_curse",
       [DEP]: "wrong_conditioning",
     },
-    source: "Acquiring-a-company auction — +EV iff synergy exceeds 2× (winner's curse)",
+    source: "Acquiring-a-company auction, +EV iff synergy exceeds 2× (winner's curse)",
   });
   return { ...q, family: "genAcquireDecision" };
 }

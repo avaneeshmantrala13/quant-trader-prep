@@ -34,14 +34,14 @@ import { numericErrors } from "./_shared";
  * NAMED misconception, guaranteed distinct and ≠ the answer at the grading
  * precision (`numericErrors` dedupes and drops non-finite / negative values).
  *
- * Themes are all freshly invented — none reuse a source-dataset title.
+ * Themes are all freshly invented, none reuse a source-dataset title.
  */
 
 const SHARED_SOURCE =
   "Combinatorial Analysis · Arrangements & multiplication principle";
 
 /* ========================================================================== */
-/* =================  1 — ORDERED DRAW / CHAIN RULE (numeric)  ============= */
+/* =================  1. ORDERED DRAW / CHAIN RULE (numeric)  ============= */
 /* ========================================================================== */
 
 const URN_THEMES = [
@@ -102,7 +102,7 @@ export function genOrderedDraw(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, dp);
   push(
     withRepl,
-    `The with-replacement product (a/(a+b))^${n0}·(b/(a+b))^${n1} = ${fracText(withRepl)} keeps the odds fixed every draw — it forgets to decrement the counts as ${th.item} leave the pouch.`,
+    `The with-replacement product (a/(a+b))^${n0}·(b/(a+b))^${n1} = ${fracText(withRepl)} keeps the odds fixed every draw, it forgets to decrement the counts as ${th.item} leave the pouch.`,
   );
   push(
     decDenomOnly,
@@ -118,7 +118,7 @@ export function genOrderedDraw(rng: Rng): NumericQuestion {
   const firstNum = sequence[0] === 0 ? a : b;
   const prompt =
     `From ${th.vessel} holding ${a} ${th.n0} and ${b} ${th.n1} ${th.item}, you draw ${L} ${th.item} one at a time WITHOUT replacement. ` +
-    `What is the probability the colours come out in exactly this order — ${seqWords}? (Round to ${dp} decimals.)`;
+    `What is the probability the colours come out in exactly this order, ${seqWords}? (Round to ${dp} decimals.)`;
   const explanation =
     `Multiply the chain-rule fractions, decrementing after each draw: the first ${first} factor is ${firstNum}/${N0}, then each subsequent factor uses the reduced colour count over a total shrinking from ${N0} down to ${N0 - L + 1}. ` +
     `The full product is P = ${fracText(value)} ≈ ${decText(value, dp)}.`;
@@ -138,7 +138,7 @@ export function genOrderedDraw(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — DEAL UNTIL STOP CARD (numeric)  ================== */
+/* =================  2. DEAL UNTIL STOP CARD (numeric)  ================== */
 /* ========================================================================== */
 
 const DEAL_THEMES = [
@@ -199,7 +199,7 @@ export function genDealUntil(rng: Rng): NumericQuestion {
   );
 
   const prompt =
-    `${cap(th.deck)} contains ${g} distinct ${th.target} kinds — each kind present in ${groupSizes[0]} copies — plus ${stopSize} ${th.stop} card${stopSize > 1 ? "s" : ""}. ` +
+    `${cap(th.deck)} contains ${g} distinct ${th.target} kinds, each kind present in ${groupSizes[0]} copies, plus ${stopSize} ${th.stop} card${stopSize > 1 ? "s" : ""}. ` +
     `Cards are dealt one at a time until the first ${th.stop} appears. What is the probability that exactly one ${th.target} of each of the ${g} kinds shows up before that ${th.stop}? (Round to ${dp} decimals.)`;
   const explanation =
     `Only the ${relevant} relevant cards matter (${sum} ${th.target}s + ${stopSize} ${th.stop}${stopSize > 1 ? "s" : ""}). ` +
@@ -221,7 +221,7 @@ export function genDealUntil(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — CIRCULAR ASCENDING (numeric)  =================== */
+/* =================  3. CIRCULAR ASCENDING (numeric)  =================== */
 /* ========================================================================== */
 
 const RING_THEMES = [
@@ -265,9 +265,9 @@ export function genCircularAscending(rng: Rng): NumericQuestion {
 
   const prompt =
     `${n} ${th.people} of distinct ${th.attr}s sit in random order around ${th.place}. ` +
-    `What is the probability their ${th.attr}s increase in ascending order going ALL THE WAY around — either clockwise or counter-clockwise? (Round to ${dp} decimals.)`;
+    `What is the probability their ${th.attr}s increase in ascending order going ALL THE WAY around, either clockwise or counter-clockwise? (Round to ${dp} decimals.)`;
   const explanation =
-    `Around a circle there are (${n}−1)! = ${factorialBig(n - 1)} distinct seatings (rotations identified). Exactly 2 of them are fully ascending — one clockwise, one counter-clockwise. ` +
+    `Around a circle there are (${n}−1)! = ${factorialBig(n - 1)} distinct seatings (rotations identified). Exactly 2 of them are fully ascending, one clockwise, one counter-clockwise. ` +
     `So P = 2/(${n}−1)! = 2·${n}/${n}! = ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
@@ -285,7 +285,7 @@ export function genCircularAscending(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  4 — GAP METHOD: KEEP BOTH NEIGHBOURS (numeric)  ====== */
+/* =================  4. GAP METHOD: KEEP BOTH NEIGHBOURS (numeric)  ====== */
 /* ========================================================================== */
 
 const GAP_THEMES = [
@@ -296,7 +296,7 @@ const GAP_THEMES = [
 
 /**
  * P(a distinguished anchor keeps BOTH its neighbours when `fillers` items are
- * placed into distinct gaps around a circle of `anchors` items) — its two
+ * placed into distinct gaps around a circle of `anchors` items), its two
  * flanking gaps must both stay empty: C(anchors−2, fillers)/C(anchors, fillers).
  * Traps: keeping only ONE gap empty C(a−1,f)/C(a,f), the complement, and a linear
  * (anchors−2)/anchors "2 bad gaps out of anchors" guess.
@@ -326,7 +326,7 @@ export function genGapMethod(rng: Rng): NumericQuestion {
   );
   push(
     complement,
-    `${fracText(complement)} is the probability the ${th.anchor} LOSES at least one neighbour — the complement of the event asked.`,
+    `${fracText(complement)} is the probability the ${th.anchor} LOSES at least one neighbour, the complement of the event asked.`,
   );
   push(
     linear,
@@ -335,7 +335,7 @@ export function genGapMethod(rng: Rng): NumericQuestion {
 
   const prompt =
     `${anchors} ${th.ring} stand evenly around a circle, and ${fillers} ${th.filler} are hung in ${fillers} of the ${anchors} distinct gaps between consecutive ${th.anchor}s (at most one per gap). ` +
-    `What is the probability that one particular ${th.anchor} keeps BOTH of its neighbouring ${th.anchor}s — i.e. the two gaps flanking it stay empty? (Round to ${dp} decimals.)`;
+    `What is the probability that one particular ${th.anchor} keeps BOTH of its neighbouring ${th.anchor}s, i.e. the two gaps flanking it stay empty? (Round to ${dp} decimals.)`;
   const explanation =
     `The ${fillers} ${th.filler} occupy a uniformly random ${fillers}-subset of the ${anchors} gaps. The chosen ${th.anchor} keeps both neighbours exactly when neither flanking gap is used: ` +
     `C(${anchors}−2,${fillers})/C(${anchors},${fillers}) = ${chooseBig(anchors - 2, fillers)}/${chooseBig(anchors, fillers)} = ${fracText(value)} ≈ ${decText(value, dp)}.`;
@@ -355,7 +355,7 @@ export function genGapMethod(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  5 — INDEPENDENT CHOICES (numeric int)  ============== */
+/* =================  5. INDEPENDENT CHOICES (numeric int)  ============== */
 /* ========================================================================== */
 
 const CHOICE_THEMES = [
@@ -424,7 +424,7 @@ export function genIndependentChoices(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  6 — UNION OF FIXED BIT BLOCKS (numeric int)  ========= */
+/* =================  6. UNION OF FIXED BIT BLOCKS (numeric int)  ========= */
 /* ========================================================================== */
 
 const BIT_THEMES = [
@@ -468,7 +468,7 @@ export function genUnionFixedBits(rng: Rng): NumericQuestion {
   );
   push(
     intersectionOnly,
-    `2^(${L}−${p}−${s}) = ${intersectionOnly} is only the strips matching BOTH blocks — that's the intersection, not the union.`,
+    `2^(${L}−${p}−${s}) = ${intersectionOnly} is only the strips matching BOTH blocks, that's the intersection, not the union.`,
   );
 
   const prompt =
@@ -491,7 +491,7 @@ export function genUnionFixedBits(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  7 — BALANCE SCALE: MAX-WEIGHT PAN (numeric)  ========= */
+/* =================  7. BALANCE SCALE: MAX-WEIGHT PAN (numeric)  ========= */
 /* ========================================================================== */
 
 const SCALE_THEMES = [
@@ -503,7 +503,7 @@ const SCALE_THEMES = [
 /**
  * P(the pan holding the heaviest of six distinct `weights` (three per pan) is the
  * heavier pan). Fix the max on one pan with two of the other five; that pan is
- * heavier iff its total exceeds half the grand total — an exact pair count over
+ * heavier iff its total exceeds half the grand total, an exact pair count over
  * C(5,2)=10. Traps: 1/2 (naive symmetry), the complement (the light-pan case),
  * and assuming the max-weight pan ALWAYS wins (probability 1).
  */
@@ -552,7 +552,7 @@ export function genBalanceScale(rng: Rng): NumericQuestion {
   );
   push(
     complement,
-    `${fracText(complement)} is the probability the max-weight pan is the LIGHTER one — the complement of the event asked.`,
+    `${fracText(complement)} is the probability the max-weight pan is the LIGHTER one, the complement of the event asked.`,
   );
   push(
     alwaysWins,

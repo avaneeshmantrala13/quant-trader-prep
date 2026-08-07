@@ -3,7 +3,7 @@ import Fraction from "fraction.js";
 /**
  * Exact solvers for the Probability & Statistics → Expected Value subcategory.
  *
- * Expected Value is NOT a single repeating formula — it is a cluster of ~25
+ * Expected Value is NOT a single repeating formula, it is a cluster of ~25
  * solution-method "families" (optimal stopping, coupon collector, Wald's
  * identity, indicators + linearity, order statistics, geometric /
  * memorylessness, first-step recursion, gambler's-ruin durations, geometric
@@ -13,7 +13,7 @@ import Fraction from "fraction.js";
  * genuinely irrational / procedure / divergent families are routed to `quiz` or
  * `flashcard` (no forced scalar) instead of numeric grading.
  *
- * None of the 85 source-dataset questions are user-facing — they live only in
+ * None of the 85 source-dataset questions are user-facing, they live only in
  * `./expectedValue.test.ts` as hidden fixtures (`SEED_ANSWERS`), and this
  * solver is asserted to reproduce them there.
  */
@@ -38,7 +38,7 @@ export function exactDecimals(f: Fraction, cap = 6): number {
 }
 
 /* ========================================================================== */
-/*  Harmonic numbers — the backbone of coupon-collector & records families    */
+/*  Harmonic numbers, the backbone of coupon-collector & records families    */
 /* ========================================================================== */
 
 /** Exact H_n = Σ_{k=1..n} 1/k (rational). H_0 = 0. */
@@ -50,7 +50,7 @@ export function harmonic(n: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Coupon collector (indicator + linearity of geometric waits)      */
+/*  FAMILY. Coupon collector (indicator + linearity of geometric waits)      */
 /* ========================================================================== */
 
 /**
@@ -76,7 +76,7 @@ export function couponCollectorPartial(n: number, k: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Geometric waiting time & memorylessness                          */
+/*  FAMILY. Geometric waiting time & memorylessness                          */
 /* ========================================================================== */
 
 /** E[trials to first success] for a geometric(p): 1/p (support {1,2,…}). */
@@ -88,7 +88,7 @@ export function geometricEV(p: Fraction): Fraction {
 /**
  * Memorylessness: given you have already waited `elapsed` failures for a
  * geometric(p) process, the EXPECTED TOTAL number of trials counted from the
- * very start, conditioned on no success yet, is `elapsed + 1/p` — the elapsed
+ * very start, conditioned on no success yet, is `elapsed + 1/p`, the elapsed
  * time does NOT shrink the remaining wait (1/p), it just adds on. The classic
  * error is reporting 1/p and forgetting to add the elapsed m.
  */
@@ -97,7 +97,7 @@ export function geometricMemorylessTotal(p: Fraction, elapsed: number): Fraction
 }
 
 /* ========================================================================== */
-/*  FAMILY — Optimal stopping / re-roll a die                                 */
+/*  FAMILY. Optimal stopping / re-roll a die                                 */
 /* ========================================================================== */
 
 /**
@@ -122,7 +122,7 @@ export function rerollDieEV(N: number, rerolls: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Order statistics (discrete: max/min of dice)                     */
+/*  FAMILY. Order statistics (discrete: max/min of dice)                     */
 /* ========================================================================== */
 
 /**
@@ -153,7 +153,7 @@ export function minOfDiceEV(N: number, dice: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Continuous order statistics / spacings (uniform (0,1))           */
+/*  FAMILY. Continuous order statistics / spacings (uniform (0,1))           */
 /* ========================================================================== */
 
 /**
@@ -166,7 +166,7 @@ export function uniformOrderStatEV(k: number, n: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Wald's identity (random sum)                                      */
+/*  FAMILY. Wald's identity (random sum)                                      */
 /* ========================================================================== */
 
 /**
@@ -180,7 +180,7 @@ export function waldEV(expectedCount: Fraction, expectedTerm: Fraction): Fractio
 }
 
 /* ========================================================================== */
-/*  FAMILY — Indicators + linearity                                            */
+/*  FAMILY. Indicators + linearity                                            */
 /* ========================================================================== */
 
 /**
@@ -219,7 +219,7 @@ export function expectedAdjacentMatches(n: number, m: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Variance / E[X²] (second moments)                                 */
+/*  FAMILY. Variance / E[X²] (second moments)                                 */
 /* ========================================================================== */
 
 /** E[X] of a fair N-sided die. */
@@ -238,7 +238,7 @@ export function dieVariance(N: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Gambler's-ruin / symmetric random-walk durations                  */
+/*  FAMILY. Gambler's-ruin / symmetric random-walk durations                  */
 /* ========================================================================== */
 
 /**
@@ -261,7 +261,7 @@ export function symmetricWalkReachProb(i: number, N: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Geometric probability (EV / probability by area)                  */
+/*  FAMILY. Geometric probability (EV / probability by area)                  */
 /* ========================================================================== */
 
 /**
@@ -277,7 +277,7 @@ export function meetWithinProb(L: Fraction, t: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — First-step recursion (expected waits for coin patterns)           */
+/*  FAMILY. First-step recursion (expected waits for coin patterns)           */
 /* ========================================================================== */
 
 /**
@@ -292,7 +292,7 @@ export function expectedFlipsRunOfHeads(k: number): Fraction {
 
 /**
  * Expected flips to first see the 2-pattern "HT" (distinct symbols) with a fair
- * coin = 4, vs "HH" = 6 — overlap makes same-symbol patterns wait longer. This
+ * coin = 4, vs "HH" = 6, overlap makes same-symbol patterns wait longer. This
  * returns the general fair-coin expected wait for "HT"-type (no self-overlap)
  * length-2 patterns: 4.
  */
@@ -301,14 +301,14 @@ export function expectedFlipsHT(): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Divergent EV (St. Petersburg-type sentinels)                      */
+/*  FAMILY. Divergent EV (St. Petersburg-type sentinels)                      */
 /* ========================================================================== */
 
 /**
  * Sentinel for a DIVERGENT expected value. The dataset marks a few games whose
  * EV is +∞ (a "tripling die", a "widening wheel", St. Petersburg): the naive
  * finite partial sums tempt a finite answer, but Σ diverges. We NEVER surface a
- * numeric target for these — they are represented as `quiz`/`flashcard` where
+ * numeric target for these, they are represented as `quiz`/`flashcard` where
  * "infinite / diverges" is the correct choice. This constant is the internal
  * sentinel used by the solver/fixture (NOT a graded numeric value).
  */
@@ -344,7 +344,7 @@ export function convergentGeometricEV(r: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — First-step recursion: patterns of die/coin faces                  */
+/*  FAMILY. First-step recursion: patterns of die/coin faces                  */
 /* ========================================================================== */
 
 /**
@@ -379,7 +379,7 @@ export function expectedTrialsSuccessOnEven(p: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Negative binomial / sum of geometrics                             */
+/*  FAMILY. Negative binomial / sum of geometrics                             */
 /* ========================================================================== */
 
 /** E[trials to the r-th success], per-trial success prob p: r/p. */
@@ -400,7 +400,7 @@ export function geometricSumEV(perRound: Fraction, pContinue: Fraction): Fractio
 }
 
 /* ========================================================================== */
-/*  FAMILY — Optimal stopping: bust game & one costly reroll                   */
+/*  FAMILY. Optimal stopping: bust game & one costly reroll                   */
 /* ========================================================================== */
 
 /**
@@ -464,7 +464,7 @@ export function oneRerollUniformEV(M: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Geometric probability by area (two-window overlap)                */
+/*  FAMILY. Geometric probability by area (two-window overlap)                */
 /* ========================================================================== */
 
 /**
@@ -481,7 +481,7 @@ export function overlapProbTwoWindows(D: Fraction, a: Fraction, b: Fraction): Fr
 }
 
 /* ========================================================================== */
-/*  FAMILY — EV over a distribution: |difference| & max of two dice            */
+/*  FAMILY. EV over a distribution: |difference| & max of two dice            */
 /* ========================================================================== */
 
 /** E[|X − Y|] for two independent fair N-sided dice (exact). d6 → 35/18. */
@@ -504,7 +504,7 @@ export function higherWhenDifferEV(N: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Continuous convolution / sum of uniforms                          */
+/*  FAMILY. Continuous convolution / sum of uniforms                          */
 /* ========================================================================== */
 
 /** E[sum of `k` i.i.d. Uniform(0, L)] = k·L/2 (linearity). Two U(0,1) → 1. */
@@ -514,10 +514,10 @@ export function sumOfUniformsEV(k: number, L: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Elementary probability scalars (for exact distractor derivation)  */
+/*  FAMILY. Elementary probability scalars (for exact distractor derivation)  */
 /* ========================================================================== */
 
-/** P(two independent fair N-dice rolls match) = 1/N (NOT 1/N² — classic trap). */
+/** P(two independent fair N-dice rolls match) = 1/N (NOT 1/N², classic trap). */
 export function twoDiceMatchProb(N: number): Fraction {
   return F(1, N);
 }
@@ -537,7 +537,7 @@ export function allSameCoinsProb(n: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Sum of geometrics with shrinking success set ("convert all")      */
+/*  FAMILY. Sum of geometrics with shrinking success set ("convert all")      */
 /* ========================================================================== */
 
 /**
@@ -551,7 +551,7 @@ export function convertAllEV(N: number, r: number): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Symmetric spacings (expected wait to the first "marker")          */
+/*  FAMILY. Symmetric spacings (expected wait to the first "marker")          */
 /* ========================================================================== */
 
 /**

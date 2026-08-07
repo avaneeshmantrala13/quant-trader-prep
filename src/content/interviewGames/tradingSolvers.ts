@@ -3,8 +3,8 @@ import Fraction from "fraction.js";
 /**
  * Exact solvers for the Dataset-1 "trading game" mechanics that reduce to
  * skills our exact-verifier engine already models. ALL probability / odds /
- * pricing math is done with exact rationals (`fraction.js`) — never floating
- * point — so every ground-truth answer is an exact rational and every dollar
+ * pricing math is done with exact rationals (`fraction.js`), never floating
+ * point, so every ground-truth answer is an exact rational and every dollar
  * figure is exact.
  *
  * Families (see datasets/quant-interview-games-mechanics.md):
@@ -20,13 +20,13 @@ export const F = (n: number | string, d?: number): Fraction =>
   d === undefined ? new Fraction(n as never) : new Fraction(n as never, d);
 
 /* -------------------------------------------------------------------------- */
-/*  Next-Card betting — conditional probability of the next draw               */
+/*  Next-Card betting, conditional probability of the next draw               */
 /* -------------------------------------------------------------------------- */
 
 /**
  * P(next card is a "hit") when `hits` favorable and `miss` unfavorable cards
  * remain in the deck: hits / (hits + miss). This is the sequential/updating
- * probability — NOT the original 26/52 = 1/2 of a full deck.
+ * probability. NOT the original 26/52 = 1/2 of a full deck.
  */
 export function nextHitProb(hits: number, miss: number): Fraction {
   return F(hits, hits + miss);
@@ -42,7 +42,7 @@ export function nextCardFairPrice(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Vig / overround — de-vigging a book & Dutch-book detection                 */
+/*  Vig / overround, de-vigging a book & Dutch-book detection                 */
 /* -------------------------------------------------------------------------- */
 
 /** Implied probability of a leg quoted at decimal odds `o`: 1/o. */
@@ -60,7 +60,7 @@ export function booksum(oddsStrs: string[]): Fraction {
 
 /**
  * De-vigged (arbitrage-free) fair probability of leg `idx`:
- * (1/oᵢ) / Σ(1/oⱼ) — normalize the raw implied probs so they sum to 1.
+ * (1/oᵢ) / Σ(1/oⱼ), normalize the raw implied probs so they sum to 1.
  */
 export function deVigFairProb(oddsStrs: string[], idx: number): Fraction {
   return impliedFromDecimal(oddsStrs[idx]).div(booksum(oddsStrs));
@@ -72,7 +72,7 @@ export function hasArbitrage(oddsStrs: string[]): boolean {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Basket / ETF NAV — weighted-sum pricing                                    */
+/*  Basket / ETF NAV, weighted-sum pricing                                    */
 /* -------------------------------------------------------------------------- */
 
 export interface BasketLeg {
@@ -87,7 +87,7 @@ export function basketNAV(legs: BasketLeg[]): number {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Make-a-Market — expected adverse-selection P&L of a two-sided quote        */
+/*  Make-a-Market, expected adverse-selection P&L of a two-sided quote        */
 /* -------------------------------------------------------------------------- */
 
 /**

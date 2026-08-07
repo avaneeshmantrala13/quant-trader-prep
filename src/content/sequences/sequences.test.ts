@@ -263,13 +263,75 @@ describe("sequence quiz generators: odd-one-out & analogy (matrix family)", () =
     }
   });
 
-  it("analogyNext: answer transfers the a→b ratio onto c", () => {
+  it("analogyNext: answer transfers the shared ratio onto c", () => {
     for (const seed of SEEDS) {
       const q = SEQUENCE_QUIZ_GENERATORS.analogyNext(new Rng(seed));
-      const m = q.prompt.match(/^(\d+) is to (\d+) as (\d+) is to/)!;
-      const [a, b, c] = [Number(m[1]), Number(m[2]), Number(m[3])];
-      expect(b % a).toBe(0);
-      expect(Number(q.choices[q.correctIndex])).toBe(c * (b / a));
+      const m = q.prompt.match(
+        /^(\d+) is to (\d+) as (\d+) is to (\d+) as (\d+) is to/,
+      )!;
+      expect(m).not.toBeNull();
+      const [a1, b1, a2, b2, c] = [
+        Number(m[1]),
+        Number(m[2]),
+        Number(m[3]),
+        Number(m[4]),
+        Number(m[5]),
+      ];
+      // Both pairs share the SAME integer ratio r ≥ 2.
+      expect(b1 % a1).toBe(0);
+      expect(b2 % a2).toBe(0);
+      const r = b1 / a1;
+      expect(b2 / a2).toBe(r);
+      expect(r).toBeGreaterThanOrEqual(2);
+      // The ×r reading is the authored answer.
+      expect(Number(q.choices[q.correctIndex])).toBe(c * r);
+    }
+  });
+
+  it("analogyNext: the ×r rule is UNIQUE — the additive reading is ruled out and never collides", () => {
+    for (const seed of SEEDS) {
+      const q = SEQUENCE_QUIZ_GENERATORS.analogyNext(new Rng(seed));
+      const m = q.prompt.match(
+        /^(\d+) is to (\d+) as (\d+) is to (\d+) as (\d+) is to/,
+      )!;
+      const [a1, b1, a2, b2, c] = [
+        Number(m[1]),
+        Number(m[2]),
+        Number(m[3]),
+        Number(m[4]),
+        Number(m[5]),
+      ];
+      const r = b1 / a1;
+      const answer = c * r;
+
+      // Two DISTINCT anchor inputs ⇒ the two additive gaps differ, so no single
+      // "add a constant" rule fits both example pairs (additive reading killed).
+      expect(a1).not.toBe(a2);
+      const gap1 = b1 - a1;
+      const gap2 = b2 - a2;
+      expect(gap1).not.toBe(gap2);
+
+      // c is distinct from both anchors, so BOTH additive readings differ from
+      // the ×r answer — no ambiguity and no answer/distractor collision.
+      expect(c).not.toBe(a1);
+      expect(c).not.toBe(a2);
+      expect(c + gap1).not.toBe(answer);
+      expect(c + gap2).not.toBe(answer);
+
+      // The additive distractor is present, genuinely wrong, and ≠ the answer.
+      const additive = c + gap2;
+      const choiceNums = q.choices.map(Number);
+      expect(choiceNums).toContain(additive);
+      expect(additive).not.toBe(answer);
+
+      // The authored answer is the ONLY choice equal to the unique ×r reading;
+      // every distractor is a distinct value ≠ the answer.
+      expect(choiceNums.filter((v) => v === answer)).toHaveLength(1);
+      expect(new Set(choiceNums).size).toBe(4);
+      for (let i = 0; i < 4; i++) {
+        if (i === q.correctIndex) continue;
+        expect(choiceNums[i]).not.toBe(answer);
+      }
     }
   });
 });

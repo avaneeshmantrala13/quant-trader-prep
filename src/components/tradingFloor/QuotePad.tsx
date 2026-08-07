@@ -74,7 +74,7 @@ export function QuotePad(props: QuotePadProps): JSX.Element {
     if (e.key === "Enter") submit();
   };
 
-  const midLabel = binary ? "Probability — your mid (%)" : `Mid — fair value (${unit})`;
+  const midLabel = binary ? "Probability: your mid (%)" : `Mid: fair value (${unit})`;
   const halfLabel = binary ? "Half-spread (%)" : `Half-spread (${unit})`;
 
   return (

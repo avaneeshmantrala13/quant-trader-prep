@@ -16,10 +16,10 @@ export function FloorGroup(): JSX.Element {
   return (
     <SimCard
       id="trading-floor-live"
-      title="The Trading Floor — play it live"
+      title="The Trading Floor: play it live"
       whatShows="An adversarial, round-by-round make-a-market game: quote a two-sided market on a hidden quantity revealed a step at a time, get picked off when your price is wrong, and beat the honest desk on the same flow."
       topics={["market making", "adverse selection", "calibration", "inventory skew"]}
-      howToRead="The desk sims above let you tune a policy and watch a whole run replay. The Trading Floor puts YOU in the seat instead: every round you post a mid, half-spread, skew, and size under a shot clock while an informed-with-noise counterparty trades against you. Uninformed flow pays your spread; informed flow only trades when you're on the wrong side of fair. Finish for a full debrief — your P&L vs the desk, drawdown, pick-offs, and (for the 0/1 packs) a reliability diagram, since your mid IS your probability and honest calibration is the P&L-maximizing play."
+      howToRead="The desk sims above let you tune a policy and watch a whole run replay. The Trading Floor puts YOU in the seat instead: every round you post a mid, half-spread, skew, and size under a shot clock while an informed-with-noise counterparty trades against you. Uninformed flow pays your spread; informed flow only trades when you're on the wrong side of fair. Finish for a full debrief: your P&L vs the desk, drawdown, pick-offs, and (for the 0/1 packs) a reliability diagram, since your mid IS your probability and honest calibration is the P&L-maximizing play."
     >
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -28,7 +28,7 @@ export function FloorGroup(): JSX.Element {
             auto-stand-aside.
           </Feature>
           <Feature title="Get picked off">
-            An informed counterparty only trades when your price is wrong — read
+            An informed counterparty only trades when your price is wrong; read
             the flow and recentre.
           </Feature>
           <Feature title="Calibration debrief">

@@ -54,7 +54,7 @@ export function CourseReadinessCards({
             </Link>
           ) : (
             <p className="mt-3 border border-bull/50 bg-success-soft px-3 py-2 text-sm text-primary">
-              Every topic mastered — this course is complete. 🎉
+              Every topic mastered. This course is complete. 🎉
             </p>
           )}
 

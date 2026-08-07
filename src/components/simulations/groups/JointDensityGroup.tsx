@@ -143,7 +143,7 @@ function JointDensityIntegralCard(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="The heatmap is the joint density f(x, y): brighter = more likely that pair of returns. The bright dashed box is your integration region. The DOUBLE INTEGRAL ∫∫ f dx dy over that box is the volume of the surface sitting above it — i.e. P(both returns land in the box). Drag the region edges and the probability updates live; hit 'Run again' to scatter correlated draws (green = inside the box) and watch the empirical fraction close in on that exact integral. Slide ρ toward +1 and the mass squeezes onto the diagonal (the two assets move together), so diagonal boxes get more probable while off-diagonal boxes get less."
+      howToRead="The heatmap is the joint density f(x, y): brighter = more likely that pair of returns. The bright dashed box is your integration region. The DOUBLE INTEGRAL ∫∫ f dx dy over that box is the volume of the surface sitting above it, i.e. P(both returns land in the box). Drag the region edges and the probability updates live; hit 'Run again' to scatter correlated draws (green = inside the box) and watch the empirical fraction close in on that exact integral. Slide ρ toward +1 and the mass squeezes onto the diagonal (the two assets move together), so diagonal boxes get more probable while off-diagonal boxes get less."
     >
       <p className="text-sm text-secondary">
         A joint distribution describes two random quantities <em>at once</em>.
@@ -155,7 +155,7 @@ function JointDensityIntegralCard(): JSX.Element {
         returns is; the total volume under it is 1. The{" "}
         <strong>double integral</strong> of f over a rectangle is the{" "}
         <strong>probability that both returns land inside that box on the same
-        day</strong> — the joint-tail question you can&apos;t answer from either
+        day</strong>: the joint-tail question you can&apos;t answer from either
         stock alone.
       </p>
 
@@ -411,7 +411,7 @@ function JointDensityIntegralCard(): JSX.Element {
               fontSize={11}
               className="fill-secondary font-mono"
             >
-              X — index ETF return (%)
+              X: index ETF return (%)
             </text>
             <text
               x={14}
@@ -421,7 +421,7 @@ function JointDensityIntegralCard(): JSX.Element {
               className="fill-secondary font-mono"
               transform={`rotate(-90 14 ${plotTop + plotH / 2})`}
             >
-              Y — tech stock return (%)
+              Y: tech stock return (%)
             </text>
           </svg>
           <p className="mt-2 text-center text-xs text-muted">
@@ -470,7 +470,7 @@ function JointDensityIntegralCard(): JSX.Element {
         The last cell shows why correlation matters: if the two returns were{" "}
         <em>independent</em>, the joint probability would just be the product of
         the two 1-D (marginal) probabilities. When ρ ≠ 0 the true double
-        integral pulls <em>away</em> from that product — that gap is exactly the
+        integral pulls <em>away</em> from that product, and that gap is exactly the
         joint-tail risk (or diversification benefit) that a single stock&apos;s
         distribution hides.
       </p>

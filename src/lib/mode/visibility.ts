@@ -225,9 +225,10 @@ function trackItem(id: string, extra?: Partial<NavItem>): NavItem {
 /**
  * The Case-B (interview) navigation — the full flat menu reorganised into
  * logical, collapsible SUBSECTIONS so the growing feature set no longer forces
- * the learner to scroll one long list. Every route and every `data-tour` anchor
- * from the old flat menu is preserved (just regrouped), and the unified
- * Leaderboard is now a first-class nav item under Games.
+ * the learner to scroll one long list. The Leaderboard and Community surfaces
+ * are intentionally NOT advertised here (their routes/libs still exist for a
+ * future re-enable — see App.tsx and src/lib/{leaderboard,community}) — the menu
+ * simply doesn't link them.
  */
 function interviewNav(): NavGroup[] {
   return [
@@ -286,7 +287,6 @@ function interviewNav(): NavGroup[] {
           end: false,
           tour: "trading-floor",
         },
-        { to: "/leaderboard", label: "Leaderboard", end: false },
       ],
     },
     {
@@ -295,20 +295,6 @@ function interviewNav(): NavGroup[] {
       defaultOpen: true,
       items: [
         { to: "/mock", label: "Mock Interview", end: false, tour: "mock" },
-        {
-          to: "/verified-bank",
-          label: "Verified Bank",
-          end: false,
-          tour: "verified-bank",
-        },
-      ],
-    },
-    {
-      id: "community",
-      heading: "Community",
-      defaultOpen: false,
-      items: [
-        { to: "/community", label: "Community", end: false, tour: "community" },
       ],
     },
     {
@@ -316,12 +302,6 @@ function interviewNav(): NavGroup[] {
       heading: "Settings",
       defaultOpen: false,
       items: [
-        {
-          to: "/diagnostic",
-          label: "Recalibrate",
-          end: false,
-          tour: "recalibrate",
-        },
         { to: "/themes", label: "Themes", end: false, tour: "themes" },
       ],
     },
@@ -329,12 +309,20 @@ function interviewNav(): NavGroup[] {
 }
 
 /**
- * The Case-A (course) navigation — the course-relevant subsections (Overview,
- * Courses, Foundations) stay prominent and expanded, while the quant-heavy
- * competitive content keeps its "beyond the course" framing: those groups are
- * marked `emphasis: "beyond"` (de-emphasized, visible-not-hidden) and collapsed
- * by default. Every Case-A route and `data-tour` anchor is preserved; the
- * Leaderboard is added under the (optional) Games group.
+ * The Case-A (course) navigation — a cleanly COURSE-SCOPED menu. It surfaces
+ * only what is genuinely relevant to mastering the two UT probability courses:
+ * the Overview (Home / Dashboard / Roadmap), the two Courses + shared
+ * Simulations, the math Foundations the courses lean on, and Settings.
+ *
+ * Quant-interview-only surfaces (Speed Arena, Timed Sections, the market-making
+ * Games hub, the Trading Floor, the Leaderboard, the Mock Interview, the
+ * Verified Bank, the Community, and the quant-only tracks/topics: Fermi,
+ * Arbitrage, EV-under-time, Custom Drill, Interview Games, Brainteasers, and the
+ * Betting/Game-Theory probability sub-topics) are DELIBERATELY absent from this
+ * menu. They are not deleted — the routes still work and the mode toggle still
+ * reveals them under Interview prep — course mode simply doesn't advertise them.
+ * `QUANT_ONLY_ROUTES` is the single source of truth for that exclusion set (and
+ * is enforced by `visibility.test.ts`).
  */
 function courseNav(): NavGroup[] {
   return [
@@ -359,7 +347,12 @@ function courseNav(): NavGroup[] {
           end: false,
           tour: "contents",
         },
-        { to: "/course/m362k", label: "Intro to Probability", end: false },
+        {
+          to: "/course/m362k",
+          label: "Intro to Probability",
+          end: false,
+          tour: "probability",
+        },
         {
           to: "/course/m362m",
           label: "Intro to Stochastic Processes",
@@ -378,114 +371,8 @@ function courseNav(): NavGroup[] {
       heading: "Foundations",
       defaultOpen: true,
       items: [
-        trackItem("mental-math", { emphasis: "beyond" }),
-        trackItem("math-questions", { emphasis: "beyond" }),
-      ],
-    },
-    {
-      id: "extra-topics",
-      heading: "Beyond the course",
-      defaultOpen: false,
-      emphasis: "beyond",
-      items: [
-        {
-          to: "/track/probability?topic=betting-and-sizing",
-          label: "Betting & Sizing (Kelly)",
-          end: false,
-          emphasis: "beyond",
-        },
-        {
-          to: "/track/probability?topic=game-theory-and-puzzles",
-          label: "Game Theory & Puzzles",
-          end: false,
-          emphasis: "beyond",
-        },
-        trackItem("interview-games", { emphasis: "beyond" }),
-        trackItem("brainteasers", { emphasis: "beyond" }),
-      ],
-    },
-    {
-      id: "practice",
-      heading: "Practice",
-      defaultOpen: false,
-      emphasis: "beyond",
-      items: [
-        {
-          to: "/arena",
-          label: "Speed Arena",
-          end: false,
-          tour: "arena",
-          emphasis: "beyond",
-        },
-        {
-          to: "/arbitrage",
-          label: "Arbitrage & De-vig",
-          end: false,
-          emphasis: "beyond",
-        },
-        { to: "/ev-timed", label: "EV Under Time", end: false, emphasis: "beyond" },
-        { to: "/fermi", label: "Fermi Drill", end: false, emphasis: "beyond" },
-        { to: "/drill", label: "Custom Drill", end: false, emphasis: "beyond" },
-      ],
-    },
-    {
-      id: "games",
-      heading: "Games",
-      defaultOpen: false,
-      emphasis: "beyond",
-      items: [
-        {
-          to: "/games",
-          label: "Quant Games",
-          end: false,
-          tour: "games",
-          emphasis: "beyond",
-        },
-        {
-          to: "/trading-floor",
-          label: "The Trading Floor",
-          end: false,
-          tour: "trading-floor",
-          emphasis: "beyond",
-        },
-        { to: "/leaderboard", label: "Leaderboard", end: false, emphasis: "beyond" },
-      ],
-    },
-    {
-      id: "interview-prep",
-      heading: "Interview Prep",
-      defaultOpen: false,
-      emphasis: "beyond",
-      items: [
-        {
-          to: "/mock",
-          label: "Mock Interview",
-          end: false,
-          tour: "mock",
-          emphasis: "beyond",
-        },
-        {
-          to: "/verified-bank",
-          label: "Verified Bank",
-          end: false,
-          tour: "verified-bank",
-          emphasis: "beyond",
-        },
-      ],
-    },
-    {
-      id: "community",
-      heading: "Community",
-      defaultOpen: false,
-      emphasis: "beyond",
-      items: [
-        {
-          to: "/community",
-          label: "Community",
-          end: false,
-          tour: "community",
-          emphasis: "beyond",
-        },
+        trackItem("mental-math"),
+        trackItem("math-questions"),
       ],
     },
     {
@@ -493,16 +380,51 @@ function courseNav(): NavGroup[] {
       heading: "Settings",
       defaultOpen: false,
       items: [
-        {
-          to: "/diagnostic",
-          label: "Recalibrate",
-          end: false,
-          tour: "recalibrate",
-        },
         { to: "/themes", label: "Themes", end: false, tour: "themes" },
       ],
     },
   ];
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Canonical mode-scoping route sets (single source of truth for tests)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * QUANT-ONLY discovery surfaces: routes/tracks that the INTERVIEW menu may link
+ * but the COURSE menu must never advertise. These stay fully reachable (the
+ * routes exist and the mode toggle reveals them) — course mode just doesn't
+ * surface them. Route bases are compared ignoring any `?query` (a `/track/...`
+ * deep-link with a `?topic=` is still the same nav surface).
+ */
+export const QUANT_ONLY_ROUTES: string[] = [
+  "/oa",
+  "/arena",
+  "/arbitrage",
+  "/ev-timed",
+  "/fermi",
+  "/drill",
+  "/games",
+  "/trading-floor",
+  "/mock",
+  "/track/interview-games",
+  "/track/brainteasers",
+];
+
+/**
+ * COURSE-ONLY discovery surfaces: the two course-framed table-of-contents pages
+ * that only make sense in course mode and must never leak into the interview
+ * menu. (The underlying probability content is still reachable in interview mode
+ * via the shared `/track/probability` track.)
+ */
+export const COURSE_ONLY_ROUTES: string[] = [
+  "/course/m362k",
+  "/course/m362m",
+];
+
+/** Every nav-item route in a mode's menu, normalised to its `?query`-less base. */
+export function navRouteBases(mode: GoalMode): string[] {
+  return navFor(mode).flatMap((g) => g.items.map((i) => i.to.split("?")[0]));
 }
 
 /** Mode-aware navigation groups for the AppShell menu. */

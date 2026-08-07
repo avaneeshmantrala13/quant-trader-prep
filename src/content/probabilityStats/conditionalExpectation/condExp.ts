@@ -4,7 +4,7 @@ import { F } from "../coreSolvers";
 /**
  * Exact solvers for **Conditional Expectation & the Tower Rule** (UT M362M ch. 1
  * / M362K expectation; the E[X|Y], law-of-total-expectation, and law-of-total-
- * variance toolkit). All exact rationals via `fraction.js` — every value here is
+ * variance toolkit). All exact rationals via `fraction.js`, every value here is
  * a finite sum/product of rationals, so nothing is transcendental.
  *
  *   • E[X | Y=y] from a joint pmf table: Σ_i xᵢ·w(i,y) / Σ_i w(i,y).
@@ -14,7 +14,7 @@ import { F } from "../coreSolvers";
  *   • Law of total variance for a random sum (N ⟂ iid Xᵢ):
  *     Var(S) = E[N]·Var(X) + Var(N)·E[X]².
  *
- * NONE of these are copied source questions — the generators author fresh items;
+ * NONE of these are copied source questions, the generators author fresh items;
  * this file is the independent verifier the tests re-derive against.
  */
 

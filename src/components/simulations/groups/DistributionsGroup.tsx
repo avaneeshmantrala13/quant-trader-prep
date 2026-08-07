@@ -247,7 +247,7 @@ function CltSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Each point is how often a sample mean landed in that bin (a density); the dashed curve is the limiting normal. Larger sample size n ⇒ the histogram tightens into a smoother, more normal bell — always centered on the true mean μ, with spread σ = sd/√n."
+      howToRead="Each point is how often a sample mean landed in that bin (a density); the dashed curve is the limiting normal. Larger sample size n ⇒ the histogram tightens into a smoother, more normal bell, always centered on the true mean μ, with spread σ = sd/√n."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -392,7 +392,7 @@ function OrderStatisticsSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead={`The curve is the density of the ${kind} of n uniforms. With more samples the empirical line matches the theoretical pdf, and as n grows the extremes concentrate near the edge — ${concentrateText}.`}
+      howToRead={`The curve is the density of the ${kind} of n uniforms. With more samples the empirical line matches the theoretical pdf, and as n grows the extremes concentrate near the edge: ${concentrateText}.`}
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">

@@ -42,7 +42,7 @@ import {
  * from the source dataset's own error taxonomy (e.g. Cold Storage's volume-
  * division 421 vs the correct floor-then-multiply 343; permutations vs
  * combinations; rectangles C(9,2)² vs squares Σk²; the doubling "half-in-time"
- * trap). No original dataset question is reused verbatim — the numbers, themes,
+ * trap). No original dataset question is reused verbatim, the numbers, themes,
  * and framings are all freshly drawn per seed.
  */
 
@@ -80,7 +80,7 @@ function numericErrors(answer: number, dp: number) {
 }
 
 /* ========================================================================== */
-/*  FAMILY 1 — RATE, WORK & MOTION  (numeric free-entry, clean scalars)         */
+/*  FAMILY 1. RATE, WORK & MOTION  (numeric free-entry, clean scalars)         */
 /* ========================================================================== */
 
 const TANK_THEME = [
@@ -234,7 +234,7 @@ export function genRiverDrift(rng: Rng): NumericQuestion {
   push(V, `That is the CURRENT speed V = ${V} m/h, not the river length. The length is t₁·V = ${t1}·${V} = ${answer} m.`);
   push(
     t1 * s,
-    `That multiplies ${th.craft}'s own speed (${s} m/h) by the drift time — ignoring the current. Solve ${t1}·V = ${t2}·(V+${s}) for V first.`,
+    `That multiplies ${th.craft}'s own speed (${s} m/h) by the drift time, ignoring the current. Solve ${t1}·V = ${t2}·(V+${s}) for V first.`,
   );
   push(
     (V + s) * t1,
@@ -304,7 +304,7 @@ export function genEscalatorSteps(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — COUNTING & ARRANGEMENTS  (quiz, misconception-rich distractors)  */
+/*  FAMILY 2. COUNTING & ARRANGEMENTS  (quiz, misconception-rich distractors)  */
 /* ========================================================================== */
 
 const COLD_THEME = [
@@ -313,7 +313,7 @@ const COLD_THEME = [
   { box: "display case", item: "gift box" },
 ];
 
-/** Cold Storage: ⌊L/s⌋·⌊W/s⌋·⌊H/s⌋ cubes fit — FLOOR then multiply (343 not 421). (MQ7.) */
+/** Cold Storage: ⌊L/s⌋·⌊W/s⌋·⌊H/s⌋ cubes fit. FLOOR then multiply (343 not 421). (MQ7.) */
 export function genColdStorage(rng: Rng): Question {
   return assembleDistinct(rng, (r) => {
     const th = r.pick(COLD_THEME);
@@ -340,7 +340,7 @@ export function genColdStorage(rng: Rng): Question {
       difficulty: "medium" as const,
       concept: "Packing count (floor per dimension, then multiply)",
       distractorRationaleByValue: {
-        [fmt(trap)]: `Dividing the VOLUMES, ⌊${fmt(L * W * H)}/${s ** 3}⌋ = ${fmt(trap)}, pretends the wasted edge space can be reused elsewhere — the classic over-count.`,
+        [fmt(trap)]: `Dividing the VOLUMES, ⌊${fmt(L * W * H)}/${s ** 3}⌋ = ${fmt(trap)}, pretends the wasted edge space can be reused elsewhere, the classic over-count.`,
         [fmt(ceilProduct)]: `Rounding each edge UP counts cubes that would stick out past the walls.`,
         [fmt(twoDims)]: `That multiplies only two dimensions and forgets the ${Math.floor(H / s)} layers in the third.`,
       },
@@ -415,7 +415,7 @@ export function genWordArrangements(rng: Rng): Question {
       distractorRationaleByValue: {
         [fmt(allDistinct)]: `${n}! = ${fmt(allDistinct)} treats all characters as distinct, ignoring the repeats.`,
         [fmt(oneRepeat)]: `Dividing by a single 2! corrects for only ONE of the two doubled characters.`,
-        [fmt(overDivide)]: `Dividing by an extra 2! over-corrects — there are only two doubled characters, so divide by 2!·2!, not 2!·2!·2!.`,
+        [fmt(overDivide)]: `Dividing by an extra 2! over-corrects, there are only two doubled characters, so divide by 2!·2!, not 2!·2!·2!.`,
       },
       source: "Math Questions · Counting",
     };
@@ -447,7 +447,7 @@ export function genRoundRobin(rng: Rng): Question {
       difficulty: "medium" as const,
       concept: "Round-robin scheduling (combinations × meetings)",
       distractorRationaleByValue: {
-        [fmt(once)]: `C(${n},2) = ${once} counts each matchup only once — it forgets the ${meetings} meetings per pair.`,
+        [fmt(once)]: `C(${n},2) = ${once} counts each matchup only once, it forgets the ${meetings} meetings per pair.`,
         [fmt(withSelf)]: `${n}² = ${withSelf} counts every ordered pairing including a ${th.side} against itself.`,
         [fmt(ordered)]: `${meetings}·${n}·(${n}−1) = ${fmt(ordered)} double-counts each game by treating "A hosts B" and "B hosts A" as separate.`,
       },
@@ -457,7 +457,7 @@ export function genRoundRobin(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — ALGEBRA & SYSTEMS  (numeric free-entry, clean scalars)           */
+/*  FAMILY 3. ALGEBRA & SYSTEMS  (numeric free-entry, clean scalars)           */
 /* ========================================================================== */
 
 const STACK_THEME = [
@@ -476,7 +476,7 @@ export function genTriangularTotal(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(Math.round(Math.sqrt(2 * total)), `√(2·${fmt(total)}) ≈ ${Math.round(Math.sqrt(2 * total))} drops the "+½": n(n+1)/2 = ${fmt(total)} solves to n = ${n}, not √(2·total).`);
   push(Math.round(Math.sqrt(total)), `√${fmt(total)} ≈ ${Math.round(Math.sqrt(total))} would be right for a SQUARE (n²), but a triangular stack totals n(n+1)/2.`);
-  push(n - 1, `Off by one — check the endpoints: rows 1..${n} give 1+2+…+${n} = ${fmt(total)}.`);
+  push(n - 1, `Off by one, check the endpoints: rows 1..${n} give 1+2+…+${n} = ${fmt(total)}.`);
 
   const prompt =
     `A ${th.shape} of ${th.obj} has 1 in the top ${th.row}, 2 in the next, 3 in the next, and so on. ` +
@@ -670,7 +670,7 @@ export function genPairwiseProducts(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/*  FAMILY 4 — NUMBER THEORY & GROWTH  (quiz, misconception-rich distractors)   */
+/*  FAMILY 4. NUMBER THEORY & GROWTH  (quiz, misconception-rich distractors)   */
 /* ========================================================================== */
 
 /** Sum of odd integers in a range. (MQ25.) */
@@ -691,13 +691,13 @@ export function genSumOddsRange(rng: Rng): Question {
       prompt: `What is the sum of all ODD integers from ${a} to ${b} inclusive?`,
       correct: fmt(correct),
       distractors: [fmt(all), fmt(evens), fmt(nSquared)],
-      explanation: `The odd integers run ${lo}, ${lo + 2}, …, ${hi} — that's ${count} terms averaging (${lo}+${hi})/2 = ${(lo + hi) / 2}. Sum = ${count}·${(lo + hi) / 2} = ${fmt(correct)}.`,
+      explanation: `The odd integers run ${lo}, ${lo + 2}, …, ${hi}, that's ${count} terms averaging (${lo}+${hi})/2 = ${(lo + hi) / 2}. Sum = ${count}·${(lo + hi) / 2} = ${fmt(correct)}.`,
       difficulty: "medium" as const,
       concept: "Arithmetic series of odd numbers",
       distractorRationaleByValue: {
         [fmt(all)]: `${fmt(all)} sums EVERY integer in the range, not just the odd ones.`,
         [fmt(evens)]: `${fmt(evens)} sums the EVEN integers instead.`,
-        [fmt(nSquared)]: `${count}² = ${fmt(nSquared)} misapplies "the sum of the first n odds is n²" — that only holds for 1,3,5,… starting at 1.`,
+        [fmt(nSquared)]: `${count}² = ${fmt(nSquared)} misapplies "the sum of the first n odds is n²", that only holds for 1,3,5,… starting at 1.`,
       },
       source: "Math Questions · Number Theory",
     };
@@ -723,7 +723,7 @@ export function genSumRange(rng: Rng): Question {
       concept: "Sum of a contiguous integer range",
       distractorRationaleByValue: {
         [fmt(forgotLower)]: `${fmt(forgotLower)} = ${b}(${b}+1)/2 sums from 1, forgetting to remove 1..${a - 1}.`,
-        [fmt(droppedLast)]: `${fmt(droppedLast)} stops at ${b - 1} — an off-by-one that drops the final term ${b}.`,
+        [fmt(droppedLast)]: `${fmt(droppedLast)} stops at ${b - 1}, an off-by-one that drops the final term ${b}.`,
         [fmt(product)]: `${a}·${b} = ${fmt(product)} just multiplies the endpoints.`,
       },
       source: "Math Questions · Number Theory",
@@ -794,7 +794,7 @@ export function genDoublingCoverage(rng: Rng): Question {
       concept: "Doubling growth (work backward by periods)",
       distractorRationaleByValue: {
         [fmt(oneStep)]: `Day ${fmt(oneStep)} steps back only ONE ${period}-day period (that's the ½-covered day), not ${m}.`,
-        [fmt(timeFallacy)]: `Day ${fmt(timeFallacy)} ≈ ${fullDay}/${2 ** m} applies the fraction to the DAY number — the "${frac} of the time" fallacy.`,
+        [fmt(timeFallacy)]: `Day ${fmt(timeFallacy)} ≈ ${fullDay}/${2 ** m} applies the fraction to the DAY number, the "${frac} of the time" fallacy.`,
         [fmt(daysNotPeriods)]: `Day ${fmt(daysNotPeriods)} steps back ${m} DAYS instead of ${m} periods of ${period} days.`,
       },
       source: "Math Questions · Number Theory",
@@ -803,7 +803,7 @@ export function genDoublingCoverage(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/*  FAMILY 5 — GEOMETRY  (numeric free-entry)                                   */
+/*  FAMILY 5. GEOMETRY  (numeric free-entry)                                   */
 /* ========================================================================== */
 
 /** Clock-hand angle at h:mm = |30h − 5.5m| (mod, minor arc). (MQ1.) */
@@ -866,8 +866,8 @@ export function genPaintPots(rng: Rng): NumericQuestion {
   const answer = Math.ceil(area / coverage); // = pots
 
   const { errors, push } = numericErrors(answer, 0);
-  push(Math.floor(area / coverage), `Rounding DOWN leaves part of the ${th.cover} bare — you must round UP: ⌈${area}/${coverage}⌉ = ${answer}.`);
-  push(answer + 1, `Buying ${answer + 1} is one more than needed — ${answer} ${th.canUnit}s cover ${answer * coverage} m² ≥ ${area} m².`);
+  push(Math.floor(area / coverage), `Rounding DOWN leaves part of the ${th.cover} bare, you must round UP: ⌈${area}/${coverage}⌉ = ${answer}.`);
+  push(answer + 1, `Buying ${answer + 1} is one more than needed, ${answer} ${th.canUnit}s cover ${answer * coverage} m² ≥ ${area} m².`);
   push(area, `${area} is the AREA in m², not the number of ${th.canUnit}s; divide by the ${coverage} m² each ${th.canUnit} covers, then round up.`);
 
   const prompt =
@@ -982,7 +982,7 @@ export function genCircleRadius(rng: Rng): NumericQuestion {
 /*  line that NAMES the slip and asks a leading question WITHOUT the answer.    */
 /* ========================================================================== */
 
-/* ---- FAMILY 2 (mq-2) — COUNTING & ARRANGEMENTS → numeric ----------------- */
+/* ---- FAMILY 2 (mq-2). COUNTING & ARRANGEMENTS → numeric ----------------- */
 
 /** Free-response twin of {@link genColdStorage}: ⌊L/s⌋·⌊W/s⌋·⌊H/s⌋ cubes. */
 export function genColdStorageNumeric(rng: Rng): NumericQuestion {
@@ -1004,12 +1004,12 @@ export function genColdStorageNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     volumeTrap([L, W, H], s),
-    `Careful — that's the whole VOLUME ${fmt(L * W * H)} divided by ${s}³. Leftover space along an edge can't be pooled to hold another cube. Should you floor each edge first, or divide the volumes?`,
+    `Careful, that's the whole VOLUME ${fmt(L * W * H)} divided by ${s}³. Leftover space along an edge can't be pooled to hold another cube. Should you floor each edge first, or divide the volumes?`,
     "volume_division_pack",
   );
   push(
     Math.ceil(L / s) * Math.ceil(W / s) * Math.ceil(H / s),
-    `Close — but rounding each edge UP counts cubes that would poke out past the walls. When a whole cube must fit inside, which way do you round each edge?`,
+    `Close, but rounding each edge UP counts cubes that would poke out past the walls. When a whole cube must fit inside, which way do you round each edge?`,
     "ceil_not_floor",
   );
   push(
@@ -1046,12 +1046,12 @@ export function genGridRectanglesNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     gridSquares(n),
-    `That counts only the equal-sided SQUARES. A rectangle traced on the grid lines need not have equal sides — must every rectangle be a square?`,
+    `That counts only the equal-sided SQUARES. A rectangle traced on the grid lines need not have equal sides, must every rectangle be a square?`,
     "squares_not_rectangles",
   );
   push(
     lines,
-    `You picked one pair of lines (${lines} ways) in a single direction. A rectangle fixes a pair of lines in BOTH directions — how do two independent choices combine?`,
+    `You picked one pair of lines (${lines} ways) in a single direction. A rectangle fixes a pair of lines in BOTH directions, how do two independent choices combine?`,
     "one_dimension_only",
   );
   push(
@@ -1094,7 +1094,7 @@ export function genWordArrangementsNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     factorial(n),
-    `${n}! treats every character as distinct — but two of them repeat. When two identical letters swap places, do you get a genuinely NEW arrangement?`,
+    `${n}! treats every character as distinct, but two of them repeat. When two identical letters swap places, do you get a genuinely NEW arrangement?`,
     "ignored_repeats",
   );
   push(
@@ -1104,7 +1104,7 @@ export function genWordArrangementsNumeric(rng: Rng): NumericQuestion {
   );
   push(
     factorial(n) / 8,
-    `That divides by one 2! too many. There are exactly two doubled characters — should you divide by 2!·2! or by 2!·2!·2!?`,
+    `That divides by one 2! too many. There are exactly two doubled characters, should you divide by 2!·2! or by 2!·2!·2!?`,
     "over_divided_repeats",
   );
 
@@ -1137,7 +1137,7 @@ export function genRoundRobinNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     once,
-    `That counts each matchup only once. But every pair of ${th.side}s meets ${meetings} times — how should that scale the total?`,
+    `That counts each matchup only once. But every pair of ${th.side}s meets ${meetings} times, how should that scale the total?`,
     "forgot_meetings",
   );
   push(
@@ -1169,7 +1169,7 @@ export function genRoundRobinNumeric(rng: Rng): NumericQuestion {
   };
 }
 
-/* ---- FAMILY 4 (mq-4) — NUMBER THEORY & GROWTH → numeric ------------------ */
+/* ---- FAMILY 4 (mq-4). NUMBER THEORY & GROWTH → numeric ------------------ */
 
 /** Free-response twin of {@link genSumOddsRange}: sum of odds in [a,b]. */
 export function genSumOddsRangeNumeric(rng: Rng): NumericQuestion {
@@ -1194,13 +1194,13 @@ export function genSumOddsRangeNumeric(rng: Rng): NumericQuestion {
   );
   push(
     count * count,
-    `Looks like "the first n odds sum to n²" — but that identity only holds for 1,3,5,… starting at 1. Does this range start at 1?`,
+    `Looks like "the first n odds sum to n²", but that identity only holds for 1,3,5,… starting at 1. Does this range start at 1?`,
     "n_squared_misapplied",
   );
 
   const prompt = `What is the sum of all ODD integers from ${a} to ${b} inclusive? (Enter a whole number.)`;
   const explanation =
-    `The odd integers run ${lo}, ${lo + 2}, …, ${hi} — that's ${count} terms averaging (${lo}+${hi})/2 = ${(lo + hi) / 2}. Sum = ${count}·${(lo + hi) / 2} = ${fmt(answer)}.`;
+    `The odd integers run ${lo}, ${lo + 2}, …, ${hi}, that's ${count} terms averaging (${lo}+${hi})/2 = ${(lo + hi) / 2}. Sum = ${count}·${(lo + hi) / 2} = ${fmt(answer)}.`;
 
   return {
     id: `mq-sumodds-num-${a}-${b}`,
@@ -1224,7 +1224,7 @@ export function genSumRangeNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     sumRange(1, b),
-    `That sums from 1 up to ${b}. The range starts at ${a} — what do you subtract to drop the 1..${a - 1} head?`,
+    `That sums from 1 up to ${b}. The range starts at ${a}, what do you subtract to drop the 1..${a - 1} head?`,
     "forgot_lower_bound",
   );
   push(
@@ -1234,7 +1234,7 @@ export function genSumRangeNumeric(rng: Rng): NumericQuestion {
   );
   push(
     a * b,
-    `${a}·${b} just multiplies the endpoints. A run of consecutive integers is (#terms)×(average) — how many terms are there, and what's their average?`,
+    `${a}·${b} just multiplies the endpoints. A run of consecutive integers is (#terms)×(average), how many terms are there, and what's their average?`,
     "multiplied_endpoints",
   );
 
@@ -1266,7 +1266,7 @@ export function genCountMultiplesNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     Math.floor((hi - lo) / d),
-    `That divides the SPAN ${fmt(hi - lo)} by ${d}, which can miss a boundary multiple. Counting multiples in [${fmt(lo)}, ${fmt(hi)}] is a difference of two floor-divisions — which two?`,
+    `That divides the SPAN ${fmt(hi - lo)} by ${d}, which can miss a boundary multiple. Counting multiples in [${fmt(lo)}, ${fmt(hi)}] is a difference of two floor-divisions, which two?`,
     "span_over_d",
   );
   push(
@@ -1310,12 +1310,12 @@ export function genDoublingCoverageNumeric(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, 0);
   push(
     fullDay - period,
-    `Day ${fullDay - period} steps back only ONE ${period}-day period — that's the HALF-covered day. To reach ${frac}, how many times must the coverage halve?`,
+    `Day ${fullDay - period} steps back only ONE ${period}-day period, that's the HALF-covered day. To reach ${frac}, how many times must the coverage halve?`,
     "one_period_only",
   );
   push(
     Math.round(fullDay / 2 ** m),
-    `That applies the fraction ${frac} to the DAY NUMBER. Doubling scales the AREA each period, not the calendar day — should you divide the day, or step back whole periods?`,
+    `That applies the fraction ${frac} to the DAY NUMBER. Doubling scales the AREA each period, not the calendar day, should you divide the day, or step back whole periods?`,
     "fraction_of_time_fallacy",
   );
   push(
@@ -1373,7 +1373,7 @@ export const COUNTING = [
   genRoundRobin,
 ];
 
-/** Free-response (numeric) forms of the COUNTING families — mq-2 conversion. */
+/** Free-response (numeric) forms of the COUNTING families, mq-2 conversion. */
 export const COUNTING_NUMERIC = [
   genColdStorageNumeric,
   genGridRectanglesNumeric,
@@ -1396,7 +1396,7 @@ export const NUMBER_THEORY = [
   genDoublingCoverage,
 ];
 
-/** Free-response (numeric) forms of the NUMBER_THEORY families — mq-4 conversion. */
+/** Free-response (numeric) forms of the NUMBER_THEORY families, mq-4 conversion. */
 export const NUMBER_THEORY_NUMERIC = [
   genSumOddsRangeNumeric,
   genSumRangeNumeric,
@@ -1448,7 +1448,7 @@ export const NUMERIC_GENERATORS = {
 
 /**
  * The ORIGINAL quiz generators for the mq-2 / mq-4 families. Kept exported +
- * tested even though those levels now route to their numeric twins above — the
+ * tested even though those levels now route to their numeric twins above, the
  * multiple-choice items remain valid and the existing round-trip/fingerprint
  * tests exercise them.
  */

@@ -15,8 +15,8 @@ import { OPTIVER_DEFAULT, ZETAMAC_DEFAULT } from "@/lib/arena/config";
 
 describe("derivePerQuestionSec", () => {
   it("is totalSec / count rounded to 0.1s", () => {
-    expect(derivePerQuestionSec(480, 80)).toBe(6); // Optiver 80-in-8
-    expect(derivePerQuestionSec(720, 50)).toBe(14.4); // Citadel 50/12min
+    expect(derivePerQuestionSec(480, 80)).toBe(6); // 80 Qs / 8 min sprint
+    expect(derivePerQuestionSec(720, 50)).toBe(14.4); // 50-Q / 12-min battery
     expect(derivePerQuestionSec(0, 0)).toBe(0);
   });
 });
@@ -34,7 +34,7 @@ describe("OA benchmark catalog", () => {
     }
   });
 
-  it("the 80-in-8 sprint is 6.0 s/q, grounded in the research doc", () => {
+  it("the arithmetic sprint is 6.0 s/q, grounded in the research doc", () => {
     const opt = oaFormatById("optiver-80-8")!;
     expect(opt.perQuestionSec).toBe(6);
     expect(opt.archetype).toBe("arithmetic-sprint");
@@ -77,7 +77,7 @@ describe("auditOaFormat", () => {
 });
 
 describe("auditPresetBudget — parity of a preset vs the real OA", () => {
-  it("marks the Optiver preset faithful (6000ms == 6000ms benchmark)", () => {
+  it("marks the arithmetic sprint preset faithful (6000ms == 6000ms benchmark)", () => {
     const budget = presetImpliedBudgetMs(OPTIVER_DEFAULT);
     expect(budget).toBe(6000);
     const audit = auditPresetBudget("optiver-80-8", budget)!;

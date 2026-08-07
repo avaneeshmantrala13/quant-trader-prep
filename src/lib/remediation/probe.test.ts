@@ -5,9 +5,25 @@ import { buildProbeItem } from "./probe";
 
 const ALL_TIERS = Object.keys(DIFFICULTY_META) as Difficulty[];
 
+/**
+ * The PROBEABLE nodes: those with an own registered `levelRef`. External
+ * drill/game routing stubs (Speed Arena, Sequences, No-Arbitrage, Fermi, …) are
+ * intentionally never probed in place — `buildProbeItem` returns null for them —
+ * so they are excluded from the "every node materializes an item" invariants.
+ */
+const PROBEABLE_KEYS = Object.values(PREREQ_DAG)
+  .filter((n) => n.levelRef)
+  .map((n) => n.topicKey);
+
 describe("buildProbeItem", () => {
-  it("materializes a quiz or numeric probe for every DAG node (deterministic in seed)", () => {
-    for (const topicKey of Object.keys(PREREQ_DAG)) {
+  it("returns null for an external routing-stub node (never probed in place)", () => {
+    const external = Object.values(PREREQ_DAG).find((n) => n.external);
+    expect(external, "expected at least one external node").toBeDefined();
+    expect(buildProbeItem(external!.topicKey, 12345)).toBeNull();
+  });
+
+  it("materializes a quiz or numeric probe for every probeable DAG node (deterministic in seed)", () => {
+    for (const topicKey of PROBEABLE_KEYS) {
       const a = buildProbeItem(topicKey, 12345);
       expect(a, topicKey).not.toBeNull();
       expect(a!.topicKey).toBe(topicKey);
@@ -57,8 +73,8 @@ describe("buildProbeItem — probeTier (Wilson 85% Rule) honoring", () => {
     expect(expert!.level.difficulty).toBe("expert");
   });
 
-  it("degrades gracefully: every DAG node serves a non-null item at EVERY tier", () => {
-    for (const topicKey of Object.keys(PREREQ_DAG)) {
+  it("degrades gracefully: every probeable DAG node serves a non-null item at EVERY tier", () => {
+    for (const topicKey of PROBEABLE_KEYS) {
       for (const tier of ALL_TIERS) {
         const item = buildProbeItem(topicKey, 4242, tier);
         expect(item, `${topicKey} @ ${tier}`).not.toBeNull();

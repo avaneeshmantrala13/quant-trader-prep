@@ -5,7 +5,7 @@ import Fraction from "fraction.js";
  * subcategory.
  *
  * Every question in the source dataset is an absorbing-Markov-chain setup solved
- * by FIRST-STEP ANALYSIS — E[s] = 1 + Σ P(s→s')·E[s'] with E = 0 at absorbing
+ * by FIRST-STEP ANALYSIS. E[s] = 1 + Σ P(s→s')·E[s'] with E = 0 at absorbing
  * states for expected hitting times, or the analogous h[s] = Σ P(s→s')·h[s']
  * (h = 1 at the target, 0 at ruin) for gambler's-ruin / reach-a-target
  * probabilities. This file is organised by the three families the dataset
@@ -25,7 +25,7 @@ import Fraction from "fraction.js";
  * (`solveLinearFraction`) backs the graph walks and bold play, and a matching
  * float solver (`solveLinearFloat`) backs the big grid.
  *
- * NONE of the 16 source-dataset questions are user-facing — they live only in
+ * NONE of the 16 source-dataset questions are user-facing, they live only in
  * `./markovChains.test.ts` as hidden fixtures, and this solver is asserted to
  * reproduce every documented answer there.
  */
@@ -82,7 +82,7 @@ export function solveLinearFraction(A: Fraction[][], b: Fraction[]): Fraction[] 
   return M.map((row) => row[n]);
 }
 
-/** Float analogue of `solveLinearFraction` — for the large 2-D grid solve. */
+/** Float analogue of `solveLinearFraction`, for the large 2-D grid solve. */
 export function solveLinearFloat(A: number[][], b: number[]): number[] {
   const n = A.length;
   const M = A.map((row, i) => [...row, b[i]]);
@@ -198,7 +198,7 @@ export function absorptionProbability(
 }
 
 /* ========================================================================== */
-/*  FAMILY 1 — Expected hitting time (absorbing chains)                        */
+/*  FAMILY 1. Expected hitting time (absorbing chains)                        */
 /* ========================================================================== */
 
 /**
@@ -217,7 +217,7 @@ export function runWaitExpected(p: Fraction, n: number): Fraction {
 /**
  * Expected trials for TWO successes in a row, each w.p. `p`: (1 + p)/p²
  * (= `runWaitExpected(p, 2)`, kept explicit because the +1 term is the whole
- * teaching point — the trap is the geometric 1/p²). For p = 3/8 → 88/9 ≈ 9.78.
+ * teaching point, the trap is the geometric 1/p²). For p = 3/8 → 88/9 ≈ 9.78.
  * Exact.
  */
 export function twoInARowExpected(p: Fraction): Fraction {
@@ -250,7 +250,7 @@ export function spinnerTwoDistinctExpected(probs: Fraction[]): Fraction {
  * Symmetric ±1 walk on a path of `sites` interior positions in a row (a walker
  * at site `startSite`, 1-indexed, steps to either neighbour w.p. ½ and is
  * absorbed on stepping off either end). Expected steps = startSite·(sites + 1 −
- * startSite) — the gambler's-ruin duration i·(N − i) with N = sites + 1.
+ * startSite), the gambler's-ruin duration i·(N − i) with N = sites + 1.
  * (Jumping Toad: 2 sites, start 1 → 2.) Exact.
  */
 export function lineWalkExpected(sites: number, startSite: number): Fraction {
@@ -334,7 +334,7 @@ function gridSpec(m: number): {
 /**
  * Expected steps for a particle at the CENTER of a (2m+1)×(2m+1) grid of
  * integer points to reach the boundary (each step N/S/E/W w.p. ¼, absorbed on
- * any boundary point). Solved EXACTLY over the rationals — intended for small m
+ * any boundary point). Solved EXACTLY over the rationals, intended for small m
  * (gameplay). For the documented 11×11 case (m = 5) use
  * `grid2DCenterExpectedFloat` (fast). Exact.
  */
@@ -375,7 +375,7 @@ export function grid2DCenterExpectedFloat(m: number): number {
 
 /**
  * Expected number of items drawn (each uniform over `N` types, with
- * replacement) until the FIRST repeat — the birthday-style absorbing chain.
+ * replacement) until the FIRST repeat, the birthday-style absorbing chain.
  * With k distinct types already seen, the next is new w.p. (N − k)/N, so
  * E[k] = 1 + ((N − k)/N)·E[k+1], back-recursion from E[N] = 0. Computed in
  * floating point (N up to 2000). For N = 2000 → ≈ 56.72. (Bet of 100-without-a-
@@ -390,7 +390,7 @@ export function expectedDrawsUntilRepeat(N: number): number {
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — Gambler's ruin / reaching a target                             */
+/*  FAMILY 2. Gambler's ruin / reaching a target                             */
 /* ========================================================================== */
 
 /**
@@ -412,7 +412,7 @@ export function gamblerRuinReach(k: number, N: number, p: Fraction): Fraction {
  * BOLD play: start with `start` units, target `target`, each round stake
  * min(w, target − w) and win the stake w.p. `p` (else lose it). Probability of
  * reaching `target` before 0, via first-step analysis on states 0…target.
- * (Start 3, target 5, p = 1/3 → 29/77 ≈ 0.377 — strictly better than the timid
+ * (Start 3, target 5, p = 1/3 → 29/77 ≈ 0.377, strictly better than the timid
  * unit-stake ruin value.) Exact.
  */
 export function boldPlayReachProb(start: number, target: number, p: Fraction): Fraction {
@@ -430,7 +430,7 @@ export function boldPlayReachProb(start: number, target: number, p: Fraction): F
 }
 
 /**
- * The Drunkard's Walk — semi-infinite gambler's ruin. Standing one step from a
+ * The Drunkard's Walk, semi-infinite gambler's ruin. Standing one step from a
  * cliff (position 1, 0 = fall); each step AWAY w.p. `p`, TOWARD the cliff w.p.
  * 1 − p. Probability of eventually falling off. PIECEWISE: from X = (1−p) + p·X²,
  * the fall probability is 1 when p ≤ ½ (certain), and (1 − p)/p when p > ½.
@@ -442,7 +442,7 @@ export function drunkardFallProb(p: Fraction): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — Pattern races (Conway leading numbers, fair coin)              */
+/*  FAMILY 3. Pattern races (Conway leading numbers, fair coin)              */
 /* ========================================================================== */
 
 /**
@@ -461,7 +461,7 @@ export function patternCorr(x: string, y: string): number {
 
 /**
  * Expected number of fair-coin tosses to first see pattern `a`, via Conway:
- * E = 2·corr(a, a). (HHH → 14; THH → 8 — the overlap makes THH strictly faster
+ * E = 2·corr(a, a). (HHH → 14; THH → 8, the overlap makes THH strictly faster
  * because a failure does not fully reset progress.) Exact.
  */
 export function patternWaitExpected(a: string): Fraction {

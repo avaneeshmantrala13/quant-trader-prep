@@ -1,6 +1,7 @@
 import type { NumericQuestion, Question } from "./content";
 import type { GlickoDifficultyMap, TierDifficultyMap, TopicMasteryMap } from "./mastery";
 import type { OaTimedStore } from "@/lib/oa/types";
+import type { SrsStore } from "@/lib/srs/store";
 
 export interface LevelProgress {
   bestScore: number; // 0..1, best fraction correct achieved
@@ -82,7 +83,7 @@ export interface PersistedCalibrationPair {
 }
 
 export interface UserProgress {
-  version: number; // was 1; Phase 1 wrote 2; T12 adaptive engine writes 3 (see src/lib/mastery/migrate.ts)
+  version: number; // was 1; Phase 1 wrote 2; T12 adaptive engine wrote 3; T14 SRS wrote 4; ZPD repeated-mistake tally writes 5 (see src/lib/mastery/migrate.ts)
   levelProgress: Record<string, LevelProgress>;
   resume: Record<string, ResumeState>;
   xp: number;
@@ -148,12 +149,39 @@ export interface UserProgress {
    * saves without it load unchanged; the v2→v3 migration leaves it absent.
    */
   glickoDifficulty?: GlickoDifficultyMap;
+  /**
+   * OPTIONAL, additive (T14 retention — v3→v4). The persisted Spaced-Repetition
+   * card store: a flat `cardId → SrsCard` map of SM-2 scheduling state with
+   * ABSOLUTE wall-clock `dueAtMs` (reload-proof across sessions) plus a review
+   * counter (`src/lib/srs/store.ts`). Card CONTENT is regenerated deterministically
+   * from the mode-scoped catalog (`src/lib/srs/deck.ts`) and joined by id, so
+   * only scheduling state is stored. Its OWN lane: it NEVER gates content or
+   * affects scoring / mastery / the confident-mastery + unlock bars / the
+   * adaptive-engine (Glicko/IRT) fold / relock. Older saves without it load
+   * unchanged; the v3→v4 migration leaves it absent unless the blob carried it.
+   */
+  srs?: SrsStore;
+  /**
+   * OPTIONAL, additive (ZPD remediation — v4→v5). Per-topic RAW misconception
+   * frequency: the OUTER key is a topicKey, the INNER key is a misconception TAG
+   * (the string AFTER the `topicKey::` prefix a misconception KEY carries, via
+   * `misconceptionTagOf`), and the value is the CUMULATIVE hit count in that
+   * topic. Unlike `TopicMastery.misconceptions` (decayed on a clean solve,
+   * mastery-facing), these counts are NEVER decayed — they exist purely to power
+   * the "you made this specific mistake N times" repeated-mistake feedback and
+   * its targeted, UNSCORED re-prep. Its OWN lane: populated by `recordItemAttempt`
+   * alongside the mastery fold, but it NEVER gates content or affects scoring /
+   * mastery / the confident-mastery + unlock bars / relock / the migration. Older
+   * saves without it load unchanged; the v4→v5 migration leaves it absent unless
+   * the saved blob already carried it.
+   */
+  misconceptionsByTopic?: Record<string, Record<string, number>>;
 }
 
 export function emptyProgress(): UserProgress {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    version: 3,
+    version: 5,
     levelProgress: {},
     resume: {},
     xp: 0,

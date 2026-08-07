@@ -1,23 +1,16 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  Quant Trader Prep — OPTIONAL AI "flavor / open-ended" layer. A SEPARATE,
-  additive stack (it does NOT touch the working auth/data stack in
-  quant-trader-prep.yaml): its own AWS Lambda + API Gateway HTTP API with a
-  Cognito JWT authorizer that points at the EXISTING User Pool (passed in as
-  parameters). The Lambda reads the LLM provider API key from SSM Parameter
-  Store (SecureString) at runtime — the key is NEVER in the browser bundle or in
-  this template. NOTE: the LLM API is an EXTERNAL PAID service and is NOT part of
-  the AWS Free Tier (see infra/AI_SETUP.md). The AWS pieces here (Lambda, HTTP
-  API, a tiny on-demand DynamoDB quota table) are Free-Tier-friendly at pilot
-  scale.
-  The single POST /ai endpoint serves ALL Lambda modes, selected by the request
-  body `mode` field: "flavor" (default, verifier-gated reskin), "open-ended"
-  (unverified flashcard), plus the Phase-7 additions "hint" (rephrase ONE
-  deterministic hint rung's wording, re-guarded to never leak the answer) and
-  "self-explain" (narrate around the client verifier's FIXED correctness verdict;
-  the LLM can never change a grade). No new endpoint, env var, or quota is needed
-  — the new modes reuse this same route, JWT authorizer, SSM key, and per-user
-  DailyQuota counter.
+  Quant Trader Prep — OPTIONAL AI layer (SEPARATE, additive stack; does NOT
+  touch the auth/data stack). Its own Lambdas + API Gateway HTTP API with a
+  Cognito JWT authorizer pointed at the EXISTING User Pool. Lambdas read the LLM
+  provider API key from SSM Parameter Store (SecureString) at runtime — never in
+  the browser bundle or this template. NOTE: the LLM/TTS APIs are EXTERNAL PAID
+  services, not AWS Free Tier (see infra/AI_SETUP.md).
+  Routes: POST /ai serves all text modes (flavor, open-ended, hint, self-explain,
+  and the mock-interview modes) via the request `mode` field; POST /tts fronts a
+  neural text-to-speech Lambda (OpenAI gpt-4o-mini-tts) returning base64 mp3 for
+  the AI Mock Interview's human voice. Both routes reuse the same JWT authorizer
+  and SSM key; the client falls back to browser speech when unavailable.
 
 # ---------------------------------------------------------------------------
 Parameters:
@@ -65,6 +58,21 @@ Parameters:
       Model id: gpt-4o-mini for raw OpenAI, claude-3-5-haiku-latest for Anthropic,
       or the TrueFoundry `provider_account/model_name` form (e.g.
       openai-main/gpt-4o-mini) when pointing AiBaseUrl at TrueFoundry.
+
+  AiTtsModel:
+    Type: String
+    Default: gpt-4o-mini-tts
+    Description: >
+      OpenAI text-to-speech model id for the /tts route (the AI Mock Interview's
+      neural voice). Default gpt-4o-mini-tts.
+
+  AiTtsVoice:
+    Type: String
+    Default: onyx
+    Description: >
+      Default OpenAI TTS voice for /tts when a request omits one. "onyx" is a
+      calm, professional interviewer timbre. Others: alloy, echo, fable, nova,
+      shimmer, sage, coral, ash, ballad.
 
   AiSsmParam:
     Type: String
@@ -241,6 +249,67 @@ Resources:
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AiHttpApi}/*"
 
+  # ---- Neural text-to-speech Lambda (the AI Mock Interview's human voice).
+  #      Reuses AiFunctionRole (it already has ssm:GetParameter + kms:Decrypt for
+  #      the SAME api-key parameter) and the SAME HTTP API + JWT authorizer, on a
+  #      second POST /tts route. Placeholder inline code is replaced by
+  #      deploy-ai.sh with infra/lambda/ai-tts/index.mjs (runtime-bundled AWS SDK
+  #      + global fetch — no packaging needed).
+  AiTtsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-ai-tts"
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Role: !GetAtt AiFunctionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          AI_BASE_URL: !Ref AiBaseUrl
+          AI_SSM_PARAM: !Ref AiSsmParam
+          AI_TTS_MODEL: !Ref AiTtsModel
+          AI_TTS_VOICE: !Ref AiTtsVoice
+          ALLOW_ORIGIN: !Select [0, !Ref CorsOrigins]
+      Code:
+        ZipFile: |
+          // PLACEHOLDER — replaced by infra/deploy-ai.sh (update-function-code).
+          // Fails safe until the real handler is uploaded (client falls back to
+          // browser Web Speech until then).
+          exports.handler = async () => ({
+            statusCode: 503,
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              ok: false,
+              error: "AI TTS Lambda code not deployed yet — run infra/deploy-ai.sh",
+            }),
+          });
+
+  AiTtsIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref AiHttpApi
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt AiTtsFunction.Arn
+      PayloadFormatVersion: "2.0"
+
+  AiTtsRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref AiHttpApi
+      RouteKey: "POST /tts"
+      AuthorizationType: JWT
+      AuthorizerId: !Ref AiJwtAuthorizer
+      Target: !Sub "integrations/${AiTtsIntegration}"
+
+  AiTtsInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref AiTtsFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${AiHttpApi}/*"
+
 # ---------------------------------------------------------------------------
 Outputs:
   AiEndpoint:
@@ -249,3 +318,9 @@ Outputs:
   AiFunctionName:
     Description: Lambda function name (used by deploy-ai.sh update-function-code)
     Value: !Ref AiFunction
+  AiTtsFunctionName:
+    Description: TTS Lambda function name (used by deploy-ai.sh update-function-code)
+    Value: !Ref AiTtsFunction
+  AiTtsEndpoint:
+    Description: Neural TTS endpoint (the client POSTs to this URL)
+    Value: !Sub "${AiHttpApi.ApiEndpoint}/tts"

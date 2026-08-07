@@ -45,25 +45,50 @@ describe("PREREQ_DAG structure", () => {
     }
   });
 
-  it("every node's levelRef resolves and its section-topicKey matches the node", () => {
-    for (const node of nodes) {
-      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+  /** Nodes that carry an own probe level (i.e. NOT external routing stubs). */
+  const probeNodes = nodes.filter((n) => n.levelRef);
+
+  it("every (non-external) node's levelRef resolves and its section-topicKey matches the node", () => {
+    for (const node of probeNodes) {
+      const resolved = getLevel(node.levelRef!.trackId, node.levelRef!.levelId);
       expect(resolved, `${node.topicKey} levelRef`).toBeDefined();
       // The mastery bucket a probe from this level writes MUST equal the node.
-      const derived = topicKeyForLevel(node.levelRef.trackId, resolved!.level);
+      const derived = topicKeyForLevel(node.levelRef!.trackId, resolved!.level);
       expect(derived).toBe(node.topicKey);
     }
   });
 
-  it("every node's levelRef is a SCORED (non-flashcard) level — buildProbeItem needs one", () => {
+  it("every (non-external) node's levelRef is a SCORED (non-flashcard) level — buildProbeItem needs one", () => {
     // `buildProbeItem` returns null for flashcard levels, so a flashcard
     // levelRef would silently disable remediation for that node.
-    for (const node of nodes) {
-      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+    for (const node of probeNodes) {
+      const resolved = getLevel(node.levelRef!.trackId, node.levelRef!.levelId);
       expect(
         isFlashcardLevel(resolved!.level),
         `${node.topicKey} levelRef must be quiz/numeric`,
       ).toBe(false);
+    }
+  });
+
+  it("external drill/game nodes have NO own levelRef but descend to a real, scored prereq", () => {
+    // An external node (unregistered drill/game topic) is a pure routing stub: it
+    // has no probe level of its own, so it MUST have prereqs, and every prereq
+    // must be a real node with a resolvable, scored levelRef so descent lands on
+    // a real probe (never a dead end / no-gap exit).
+    const externals = nodes.filter((n) => n.external);
+    expect(externals.length, "expected external drill/game nodes").toBeGreaterThan(0);
+    for (const node of externals) {
+      expect(node.levelRef, `${node.topicKey} must not carry a levelRef`).toBeUndefined();
+      expect(node.prereqs.length, `${node.topicKey} must route somewhere`).toBeGreaterThan(0);
+      for (const p of node.prereqs) {
+        const parent = PREREQ_DAG[p];
+        expect(parent, `${node.topicKey} → ${p}`).toBeDefined();
+        expect(parent.external, `${p} must be a real (non-external) node`).not.toBe(true);
+        expect(parent.levelRef, `${p} must have a probe level`).toBeDefined();
+        const resolved = getLevel(parent.levelRef!.trackId, parent.levelRef!.levelId);
+        expect(resolved, `${p} levelRef`).toBeDefined();
+        expect(isFlashcardLevel(resolved!.level), `${p} scored`).toBe(false);
+      }
     }
   });
 
@@ -124,10 +149,10 @@ describe("PREREQ_DAG scored-topic coverage (remediation gap fix)", () => {
   it("each newly-covered node draws its probe from a real scored level", () => {
     for (const key of NEWLY_COVERED) {
       const node = prereqNode(key)!;
-      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+      const resolved = getLevel(node.levelRef!.trackId, node.levelRef!.levelId);
       expect(resolved, `${key} levelRef`).toBeDefined();
       expect(isFlashcardLevel(resolved!.level), `${key} scored`).toBe(false);
-      expect(topicKeyForLevel(node.levelRef.trackId, resolved!.level)).toBe(key);
+      expect(topicKeyForLevel(node.levelRef!.trackId, resolved!.level)).toBe(key);
     }
   });
 
@@ -155,10 +180,10 @@ describe("PREREQ_DAG scored-topic coverage (remediation gap fix)", () => {
       ]),
     );
     // Probes materialize from CE's own scored intro level.
-    const resolved = getLevel(node!.levelRef.trackId, node!.levelRef.levelId);
+    const resolved = getLevel(node!.levelRef!.trackId, node!.levelRef!.levelId);
     expect(resolved, `${key} levelRef`).toBeDefined();
     expect(isFlashcardLevel(resolved!.level)).toBe(false);
-    expect(topicKeyForLevel(node!.levelRef.trackId, resolved!.level)).toBe(key);
+    expect(topicKeyForLevel(node!.levelRef!.trackId, resolved!.level)).toBe(key);
   });
 
   it("the self-assessed Brainteaser flashcard tracks remain intentionally uncovered", () => {
@@ -255,13 +280,97 @@ describe("ERK super-node split into seven first-class topics", () => {
   it("each new topic's levelRef is that topic's own SCORED level", () => {
     for (const t of SPLIT) {
       const node = prereqNode(P(t.section))!;
-      expect(node.levelRef.levelId).toBe(t.levelId);
-      const resolved = getLevel(node.levelRef.trackId, node.levelRef.levelId);
+      expect(node.levelRef!.levelId).toBe(t.levelId);
+      const resolved = getLevel(node.levelRef!.trackId, node.levelRef!.levelId);
       expect(resolved, `${t.section} levelRef`).toBeDefined();
       expect(isFlashcardLevel(resolved!.level), `${t.section} scored`).toBe(false);
       // A probe from this level writes to the node's own bucket.
-      expect(topicKeyForLevel(node.levelRef.trackId, resolved!.level)).toBe(
+      expect(topicKeyForLevel(node.levelRef!.trackId, resolved!.level)).toBe(
         P(t.section),
+      );
+    }
+  });
+});
+
+describe("PREREQ_DAG external drill/game coverage (audit Z1 / auctions no-routing)", () => {
+  /** topicKey → expected prereqs for each newly-wired external routing stub. */
+  const EXTERNAL: { key: string; prereqs: string[] }[] = [
+    {
+      key: topicKeyOf("sequences", "Sequences & Pattern Recognition"),
+      prereqs: [topicKeyOf("math-questions", "Number Theory & Counting")],
+    },
+    {
+      key: topicKeyOf("arbitrage", "No-Arbitrage"),
+      prereqs: [
+        topicKeyOf("probability", "Core Probability"),
+        topicKeyOf("probability", "Expected Value"),
+      ],
+    },
+    {
+      key: topicKeyOf("fermi"),
+      prereqs: [topicKeyOf("math-questions", "Rates, Algebra & Word Problems")],
+    },
+    { key: topicKeyOf("ev-timed"), prereqs: [topicKeyOf("probability", "Expected Value")] },
+    { key: topicKeyOf("arena"), prereqs: [topicKeyOf("mental-math")] },
+    {
+      key: topicKeyOf("auctions"),
+      prereqs: [
+        topicKeyOf("probability", "Conditional Probability"),
+        topicKeyOf("probability", "Expected Value"),
+        topicKeyOf("probability", "Order Statistics"),
+      ],
+    },
+  ];
+
+  it("each previously-unrouted drill/game topic is now a DAG node with the right prereqs", () => {
+    for (const t of EXTERNAL) {
+      const node = prereqNode(t.key);
+      expect(node, `${t.key} should be a DAG node`).toBeDefined();
+      expect(node!.external, `${t.key} is an external routing stub`).toBe(true);
+      expect(new Set(node!.prereqs), t.key).toEqual(new Set(t.prereqs));
+    }
+  });
+
+  it("drill/game domain misconception tags route to a genuine prereq of the tripping node", () => {
+    // Each tag → prereq mapping must be honored: the target is an actual prereq
+    // of a node that emits that tag (so descent picks it, not prereqs[0]).
+    const cases: { tag: string; topicKey: string; expect: string }[] = [
+      // Sequences → Number Theory.
+      {
+        tag: "off_by_one_continuation",
+        topicKey: topicKeyOf("sequences", "Sequences & Pattern Recognition"),
+        expect: topicKeyOf("math-questions", "Number Theory & Counting"),
+      },
+      // No-Arbitrage: odds-reading ⇒ meaning of probability; basket ⇒ EV.
+      {
+        tag: "complement_prob",
+        topicKey: topicKeyOf("arbitrage", "No-Arbitrage"),
+        expect: topicKeyOf("probability", "Core Probability"),
+      },
+      {
+        tag: "unweighted_basket",
+        topicKey: topicKeyOf("arbitrage", "No-Arbitrage"),
+        expect: topicKeyOf("probability", "Expected Value"),
+      },
+      // Auctions: winner's-curse conditioning ⇒ Conditional Probability;
+      // shade-with-n ⇒ Order Statistics.
+      {
+        tag: "ignored_winners_curse",
+        topicKey: topicKeyOf("auctions"),
+        expect: topicKeyOf("probability", "Conditional Probability"),
+      },
+      {
+        tag: "no_shading_for_n",
+        topicKey: topicKeyOf("auctions"),
+        expect: topicKeyOf("probability", "Order Statistics"),
+      },
+    ];
+    for (const c of cases) {
+      const target = MISCONCEPTION_EDGE[c.tag];
+      expect(target, `${c.tag} should map somewhere`).toBe(c.expect);
+      // And the target must actually be a prereq of the node that trips the tag.
+      expect(prereqNode(c.topicKey)!.prereqs, `${c.tag} on ${c.topicKey}`).toContain(
+        target,
       );
     }
   });

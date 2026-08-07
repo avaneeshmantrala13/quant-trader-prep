@@ -38,7 +38,7 @@ export function ConfrontSim({ spec }: { spec: MonteCarloSpec }) {
       <div className="label text-accent">Run the simulation</div>
       <p className="mt-1 text-sm text-secondary">
         {spec.trials.toLocaleString("en-US")} independent trials, seeded and
-        reproducible. Watch the frequency settle — the streak carried no
+        reproducible. Watch the frequency settle; the streak carried no
         information.
       </p>
       <ul className="mt-3 space-y-1">

@@ -5,7 +5,7 @@ import { type Choice, assembleChoices } from "../coreScaffold";
 
 /**
  * Quiz generators for **Moment Generating Functions** (Bucket 2, "Extra Relevant
- * Knowledge"; UT M362K 5.6/7 — academic for interviews). Conceptual/derivation
+ * Knowledge"; UT M362K 5.6/7, academic for interviews). Conceptual/derivation
  * content, so MC with NAMED misconception distractors (E[X]=M'(0) not M(0); the
  * variance needs M''(0)−M'(0)²; MGF of a sum is the PRODUCT of MGFs).
  */
@@ -21,12 +21,12 @@ export function buildMgfMeanInstance(
 
   const correct: Choice = {
     text: fracText(mean),
-    rationale: `Correct — E[X] = M'(0). Differentiating M(t)=λ/(λ−t) gives M'(t)=λ/(λ−t)², so M'(0)=1/λ = ${fracText(mean)}.`,
+    rationale: `Correct. E[X] = M'(0). Differentiating M(t)=λ/(λ−t) gives M'(t)=λ/(λ−t)², so M'(0)=1/λ = ${fracText(mean)}.`,
   };
   const distractors: Choice[] = [
     {
       text: "1",
-      rationale: `M(0)=1 for EVERY MGF — you evaluated the MGF instead of its derivative. E[X]=M'(0), not M(0).`,
+      rationale: `M(0)=1 for EVERY MGF, you evaluated the MGF instead of its derivative. E[X]=M'(0), not M(0).`,
     },
     {
       text: fracText(variance),
@@ -69,7 +69,7 @@ export function buildMgfVarInstance(
 
   const correct: Choice = {
     text: fracText(variance),
-    rationale: `Correct — Var = M''(0) − M'(0)². For Exp(λ), M''(0)=2/λ² and M'(0)=1/λ, so Var = 2/λ² − 1/λ² = 1/λ² = ${fracText(variance)}.`,
+    rationale: `Correct. Var = M''(0) − M'(0)². For Exp(λ), M''(0)=2/λ² and M'(0)=1/λ, so Var = 2/λ² − 1/λ² = 1/λ² = ${fracText(variance)}.`,
   };
   const distractors: Choice[] = [
     {
@@ -122,7 +122,7 @@ export function buildMgfIdentifyInstance(
 
   const correct: Choice = {
     text: target.name,
-    rationale: `Correct — ${target.mgf} is the ${target.name} MGF.`,
+    rationale: `Correct, ${target.mgf} is the ${target.name} MGF.`,
   };
   const distractors: Choice[] = MGF_TABLE.filter((_, i) => i !== idx).map((d) => ({
     text: d.name,
@@ -155,12 +155,12 @@ export function buildMgfSumInstance(
 ): { answer: string; question: Question } {
   const correct: Choice = {
     text: "M(t)²",
-    rationale: `Correct — for independent X, Y the MGF of X+Y is M_X(t)·M_Y(t); iid ⇒ M(t)·M(t) = M(t)².`,
+    rationale: `Correct, for independent X, Y the MGF of X+Y is M_X(t)·M_Y(t); iid ⇒ M(t)·M(t) = M(t)².`,
   };
   const distractors: Choice[] = [
     {
       text: "2·M(t)",
-      rationale: `2M(t) would be the MGF of 2·(a single X) scaled additively — wrong. MGFs of INDEPENDENT sums MULTIPLY: M(t)².`,
+      rationale: `2M(t) would be the MGF of 2·(a single X) scaled additively, wrong. MGFs of INDEPENDENT sums MULTIPLY: M(t)².`,
     },
     {
       text: "M(2t)",

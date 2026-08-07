@@ -25,12 +25,12 @@ import { cap, numDp, numericErrors } from "../coreScaffold";
  * re-derived, NAMED misconception, guaranteed distinct and ≠ the answer at the
  * grading precision (`numericErrors` dedupes and drops non-finite values).
  *
- * NONE of the source-dataset questions are user-facing — every playable item is
+ * NONE of the source-dataset questions are user-facing, every playable item is
  * freshly themed with different objects, stories, and numbers.
  */
 
 /* ========================================================================== */
-/* =====================  1 — BOTH COLOURS (numeric)  ====================== */
+/* =====================  1. BOTH COLOURS (numeric)  ====================== */
 /* ========================================================================== */
 
 const TWO_COLOUR_THEME = [
@@ -71,7 +71,7 @@ export function buildBothColorsInstance(
   );
   push(
     mono.mul(2),
-    `That's P(all one colour) — the OPPOSITE event; the question asks for at-least-one-of-each = 1 − that.`,
+    `That's P(all one colour), the OPPOSITE event; the question asks for at-least-one-of-each = 1 − that.`,
   );
   push(
     mono,
@@ -106,7 +106,7 @@ export function buildBothColorsInstance(
 }
 
 /* ========================================================================== */
-/* =====================  2 — CONTAINS DIGIT (numeric)  ==================== */
+/* =====================  2. CONTAINS DIGIT (numeric)  ==================== */
 /* ========================================================================== */
 
 const DIGIT_THEME = [
@@ -137,7 +137,7 @@ export function buildContainsDigitInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(9 ** L, 10 ** L),
-    `That's P(the digit ${d} NEVER appears) = (9/10)^${L} — you forgot to take the complement (1 − that).`,
+    `That's P(the digit ${d} NEVER appears) = (9/10)^${L}, you forgot to take the complement (1 − that).`,
   );
   push(
     L / 10,
@@ -173,7 +173,7 @@ export function buildContainsDigitInstance(
 }
 
 /* ========================================================================== */
-/* =====================  3 — SUB-INTERVAL (numeric)  ====================== */
+/* =====================  3. SUB-INTERVAL (numeric)  ====================== */
 /* ========================================================================== */
 
 const SUBINTERVAL_THEME = [
@@ -210,8 +210,8 @@ export function buildSubIntervalInstance(
   if (a === 2 && b === 5 && k === 4) k = rng.pick([2, 3]);
   const f = F(a, b);
 
-  const whole = F(1).sub(f.pow(k) as FractionType); // P(≥1 in whole window) — GIVEN
-  const value = F(1).sub(f); // P(≥1 in one sub-interval) — ANSWER
+  const whole = F(1).sub(f.pow(k) as FractionType); // P(≥1 in whole window). GIVEN
+  const value = F(1).sub(f); // P(≥1 in one sub-interval). ANSWER
 
   const dp = numDp(value);
   const answer = Number(decText(value, dp));
@@ -257,7 +257,7 @@ export function buildSubIntervalInstance(
 }
 
 /* ========================================================================== */
-/* =====================  4 — PRODUCT EVEN (numeric)  ====================== */
+/* =====================  4. PRODUCT EVEN (numeric)  ====================== */
 /* ========================================================================== */
 
 const DICE_THEME = [
@@ -290,7 +290,7 @@ export function buildProductEvenInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     allOdd,
-    `That's P(product ODD) = P(all ${dice} dice odd) = (${odd}/${faces})^${dice} — the complement of what's asked.`,
+    `That's P(product ODD) = P(all ${dice} dice odd) = (${odd}/${faces})^${dice}, the complement of what's asked.`,
   );
   push(
     F(1, 2),
@@ -326,7 +326,7 @@ export function buildProductEvenInstance(
 }
 
 /* ========================================================================== */
-/* =====================  5 — SMALLEST N (numeric integer)  ================ */
+/* =====================  5. SMALLEST N (numeric integer)  ================ */
 /* ========================================================================== */
 
 const SMALLEST_N_THEME = [
@@ -393,7 +393,7 @@ export function buildSmallestNInstance(
 }
 
 /* ========================================================================== */
-/* =====================  6 — BINOMIAL TAIL (numeric)  ===================== */
+/* =====================  6. BINOMIAL TAIL (numeric)  ===================== */
 /* ========================================================================== */
 
 const BINOM_THEME = [
@@ -453,7 +453,7 @@ export function buildBinomTailInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     opposite,
-    `You forgot the complement — P(X ≤ ${k}) and P(X ≥ ${k}) are complements only around the boundary; this is the OPPOSITE tail (1 − answer).`,
+    `You forgot the complement. P(X ≤ ${k}) and P(X ≥ ${k}) are complements only around the boundary; this is the OPPOSITE tail (1 − answer).`,
   );
   push(
     single,

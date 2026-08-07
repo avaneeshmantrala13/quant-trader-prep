@@ -23,6 +23,12 @@ export interface UseMockSpeech {
   /** Live interim transcript for the current utterance (display only). */
   interim: string;
   speak: (text: string) => void;
+  /**
+   * Warm the neural-voice cache for an upcoming prompt (low-latency prefetch).
+   * Safe no-op when neural TTS is unavailable. Additive — existing callers can
+   * ignore it entirely.
+   */
+  prefetch: (text: string) => void;
   /** Begin listening; `onFinal` fires once with the final transcript. */
   startListening: (onFinal: (text: string) => void) => void;
   stopListening: () => void;
@@ -76,6 +82,10 @@ export function useMockSpeech(): UseMockSpeech {
     (text: string) => controller.speak(text),
     [controller],
   );
+  const prefetch = useCallback(
+    (text: string) => controller.prefetch(text),
+    [controller],
+  );
   const cancelSpeech = useCallback(
     () => controller.cancelSpeech(),
     [controller],
@@ -97,6 +107,7 @@ export function useMockSpeech(): UseMockSpeech {
       listening,
       interim,
       speak,
+      prefetch,
       startListening,
       stopListening,
       cancelSpeech,
@@ -106,6 +117,7 @@ export function useMockSpeech(): UseMockSpeech {
       listening,
       interim,
       speak,
+      prefetch,
       startListening,
       stopListening,
       cancelSpeech,

@@ -43,6 +43,16 @@ export interface TopicMastery {
    * `irtAbility` is absent.
    */
   irtAbilitySe?: number;
+  /**
+   * OPTIONAL, additive (T12 adaptive engine). A capped rolling buffer of the
+   * topic's recent graded responses as 2PL items — `b` is the item DIFFICULTY on
+   * the logit scale at serve time (the Glicko-derived difficulty when trusted,
+   * else the Elo tier difficulty) and `s` is the graded score ∈ [0,1]. This is
+   * the ONLY input to the {@link irtAbility} MAP fit (`estimateAbility2PL`); it is
+   * never read by scoring, the confident-mastery bar, or unlock. Capped at
+   * `IRT_BUFFER_CAP` (oldest dropped). Absent on pre-T12 saves.
+   */
+  irtResponses?: { b: number; s: number }[];
 }
 
 export type TopicMasteryMap = Record<string, TopicMastery>;

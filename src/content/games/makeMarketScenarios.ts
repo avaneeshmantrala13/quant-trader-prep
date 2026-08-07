@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- *  MAKE ME A MARKET — SCENARIO GENERATORS
+ *  MAKE ME A MARKET. SCENARIO GENERATORS
  * ============================================================================
  * Anti-memorization scenario engine for Game 1 (`QuantGames-Mechanics.md`).
  *
@@ -18,7 +18,7 @@
  *     are drawn at random from a larger pool, so you don't know which you'll get.
  *
  * `dealScenario(rng)` picks a generator and produces a concrete Scenario. The
- * player never chooses — they're dealt a question and must price it cold, like a
+ * player never chooses, they're dealt a question and must price it cold, like a
  * real interview. Pure data + math, no React.
  */
 import { Rng } from "@/lib/rng";
@@ -71,16 +71,20 @@ function niceNumber(target: number): number {
 }
 
 /**
- * A strict max-spread scaled to ~25% of the answer's magnitude, rounded nice.
+ * A strict max-spread scaled to ~1/3 of the answer's magnitude, rounded nice.
  * This is deliberately generous: the counterparty mixes informed pick-offs with
  * uninformed flow that pays your spread, so a fair, winnable game needs enough
  * room to quote a tight-but-real two-sided market (the earning sweet spot sits
- * near HALF the cap). Too small a cap and the half-spread you collect is dwarfed
- * by estimation error; ~25% keeps it challenging but achievable for a skilled
- * player.
+ * near HALF the cap). The cap must be wide enough that a competent-but-imperfect
+ * estimate (say ±10% of the true value) can be BRACKETED by a sensible spread:
+ * a half-cap spread then has a half-spread ≈ 1/6 of the value, which comfortably
+ * covers a ~10% valuation error so the player earns the noise flow instead of
+ * being adversely selected every round. Too small a cap (the old ~25%) demanded
+ * near-perfect valuation (F1); ~33% keeps it challenging but winnable for a
+ * skilled-but-human estimator.
  */
 function niceSpread(trueValue: number): number {
-  return niceNumber(trueValue * 0.25);
+  return niceNumber(trueValue * 0.33);
 }
 
 function roundTo(n: number, step: number): number {
@@ -91,7 +95,7 @@ function roundTo(n: number, step: number): number {
 /*  Guesstimate generators (fully parametric)                                  */
 /* ========================================================================== */
 
-/** Single-use water bottles sold per day in a city — answer in thousands. */
+/** Single-use water bottles sold per day in a city, answer in thousands. */
 const genWaterBottles: ScenarioGenerator = (rng) => {
   const popM = rng.pick([0.5, 0.8, 1, 1.5, 2, 3]);
   const buyPct = rng.pick([25, 30, 33, 40]);
@@ -109,7 +113,7 @@ const genWaterBottles: ScenarioGenerator = (rng) => {
     decomposition: [
       `Assume about ${buyPct}% of the ${popLabel(popM)} residents buy a bottle on a given day → ~${commas(buyers)} people.`,
       `Most buy exactly one, so ~${commas(buyers)} bottles ≈ ${commas(trueThousands)} thousand.`,
-      `Cautionary check: if your answer implies MORE than one bottle per resident, you've over-priced — that's the classic "730k in a 1M city" trap.`,
+      `Cautionary check: if your answer implies MORE than one bottle per resident, you've over-priced, that's the classic "730k in a 1M city" trap.`,
     ],
     anchor: `Hard ceiling: even 1 bottle per resident is only ${commas(pop / 1000)}k. A defensible answer is a FRACTION of the population, never a multiple.`,
   };
@@ -138,11 +142,11 @@ const genPianoTuners: ScenarioGenerator = (rng) => {
       `~${pianoPct}% own a piano → ~${commas(pianos)} pianos, each tuned about once a year.`,
       `A tuner does ~${commas(perTuner)} tunings/year → ${commas(pianos)} ÷ ${commas(perTuner)} ≈ ${commas(tuners)} tuners.`,
     ],
-    anchor: `The famous Enrico Fermi estimation — the STRUCTURE (households → pianos → tunings → tuners) beats the exact number every time.`,
+    anchor: `The famous Enrico Fermi estimation, the STRUCTURE (households → pianos → tunings → tuners) beats the exact number every time.`,
   };
 };
 
-/** Passengers through a major airport per year — answer in millions. */
+/** Passengers through a major airport per year, answer in millions. */
 const genAirportPax: ScenarioGenerator = (rng) => {
   const flightsPerDay = rng.pick([1500, 1800, 2200, 2500, 2800]);
   const paxPerFlight = rng.pick([100, 120, 140, 160]);
@@ -161,11 +165,11 @@ const genAirportPax: ScenarioGenerator = (rng) => {
       `× 365 days ≈ ${commas(paxYear)} per year.`,
       `That's ≈ ${commas(millions)} million.`,
     ],
-    anchor: `World population is ~8 billion; a single airport handling more than ~1 billion/yr would be absurd — cap your upper bound.`,
+    anchor: `World population is ~8 billion; a single airport handling more than ~1 billion/yr would be absurd, cap your upper bound.`,
   };
 };
 
-/** Streetlights in a city — answer in thousands. */
+/** Streetlights in a city, answer in thousands. */
 const genStreetlights: ScenarioGenerator = (rng) => {
   const popM = rng.pick([0.5, 1, 2, 3, 5]);
   const perPerson = rng.pick([0.04, 0.06, 0.08]);
@@ -185,7 +189,7 @@ const genStreetlights: ScenarioGenerator = (rng) => {
       `${popLabel(popM)} × ${perPerson} ≈ ${commas(lights)} lights.`,
       `That's ≈ ${commas(thousands)} thousand.`,
     ],
-    anchor: `Sanity check against roads: streetlights scale with road length, which scales with people — a per-capita rate keeps you honest.`,
+    anchor: `Sanity check against roads: streetlights scale with road length, which scales with people, a per-capita rate keeps you honest.`,
   };
 };
 
@@ -207,7 +211,7 @@ const genHighwayCars: ScenarioGenerator = (rng) => {
       `${lanesEachWay} lanes × 2 directions = ${2 * lanesEachWay} lanes.`,
       `${2 * lanesEachWay} × ${commas(carsPerLaneHour)} ≈ ${commas(total)} cars/hour.`,
     ],
-    anchor: `A single lane tops out near ~2,000 cars/hour before it jams — that's your per-lane ceiling.`,
+    anchor: `A single lane tops out near ~2,000 cars/hour before it jams, that's your per-lane ceiling.`,
   };
 };
 
@@ -220,7 +224,7 @@ const GUESSTIMATE_GENERATORS: ScenarioGenerator[] = [
 ];
 
 /* ========================================================================== */
-/*  Fact pool (real values — a larger pool so you can't predict the draw)      */
+/*  Fact pool (real values, a larger pool so you can't predict the draw)      */
 /* ========================================================================== */
 
 /** Static fact scenarios; drawn at random. Real values, hand-tuned spreads. */
@@ -235,7 +239,7 @@ const FACT_POOL: Scenario[] = [
     suggestedMaxSpread: 5,
     decomposition: [
       "A typical top-division sumo wrestler is ~150–180 kg.",
-      "The record-holder is famously an outlier — roughly double a normal heavyweight.",
+      "The record-holder is famously an outlier, roughly double a normal heavyweight.",
       "That lands near ~290 kg.",
     ],
     anchor: "Hard ceiling: no human has ever been credibly recorded above ~450 kg.",
@@ -268,7 +272,7 @@ const FACT_POOL: Scenario[] = [
       "Both are in the 6,000–7,000 km range.",
       "The Nile is usually quoted around 6,650 km.",
     ],
-    anchor: "Earth's circumference is ~40,000 km — no river exceeds a fraction of that.",
+    anchor: "Earth's circumference is ~40,000 km, no river exceeds a fraction of that.",
   },
   {
     id: "everest-height",
@@ -283,7 +287,7 @@ const FACT_POOL: Scenario[] = [
       "It's the tallest of the '8,000 m peaks'.",
       "So ~8,849 m.",
     ],
-    anchor: "Commercial jets cruise at ~11,000 m — Everest is below cruising altitude.",
+    anchor: "Commercial jets cruise at ~11,000 m. Everest is below cruising altitude.",
   },
   {
     id: "moon-distance",
@@ -298,7 +302,7 @@ const FACT_POOL: Scenario[] = [
       "1.3 s × 300,000 km/s ≈ 384,000 km.",
       "So ~384 thousand km.",
     ],
-    anchor: "Earth's diameter is ~12,700 km — the Moon is ~30 Earth-diameters away.",
+    anchor: "Earth's diameter is ~12,700 km, the Moon is ~30 Earth-diameters away.",
   },
   {
     id: "blue-whale-weight",
@@ -328,7 +332,7 @@ const FACT_POOL: Scenario[] = [
       "With antennas it reaches ~330 m.",
       "So ~330 m.",
     ],
-    anchor: "A typical storey is ~3 m — 330 m is about a 100-storey building.",
+    anchor: "A typical storey is ~3 m, 330 m is about a 100-storey building.",
   },
   {
     id: "speed-of-sound",
@@ -343,7 +347,7 @@ const FACT_POOL: Scenario[] = [
       "1000 m ÷ 3 s ≈ 330–340 m/s.",
       "The standard figure is ~343 m/s.",
     ],
-    anchor: "Light is ~million× faster — that's why you see lightning before you hear it.",
+    anchor: "Light is ~million× faster, that's why you see lightning before you hear it.",
   },
   {
     id: "human-bones",
@@ -358,7 +362,7 @@ const FACT_POOL: Scenario[] = [
       "Adults settle at ~206.",
       "So ~206 bones.",
     ],
-    anchor: "Over half are in the hands and feet — a useful cross-check.",
+    anchor: "Over half are in the hands and feet, a useful cross-check.",
   },
   {
     id: "great-wall-length",
@@ -373,7 +377,7 @@ const FACT_POOL: Scenario[] = [
       "That's about half Earth's circumference.",
       "So ~21 thousand km.",
     ],
-    anchor: "Earth's circumference is ~40,000 km — the Wall is a sizeable fraction, which is why the figure surprises people.",
+    anchor: "Earth's circumference is ~40,000 km, the Wall is a sizeable fraction, which is why the figure surprises people.",
   },
 ];
 
@@ -385,7 +389,7 @@ const genFact: ScenarioGenerator = (rng) => rng.pick(FACT_POOL);
 
 /**
  * The full generator pool. Each guesstimate generator counts once, and facts
- * enter via a single `genFact` that samples the fact pool — a roughly even
+ * enter via a single `genFact` that samples the fact pool, a roughly even
  * split between (parametric) guesstimates and (real-valued) facts per deal.
  */
 export const GENERATORS: ScenarioGenerator[] = [

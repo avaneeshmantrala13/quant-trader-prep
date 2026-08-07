@@ -20,11 +20,28 @@ describe("SKILL_GRAPH structure", () => {
   });
 
   it("references a REAL first level whose topicKey matches the node", () => {
-    for (const node of SKILL_GRAPH) {
+    // EXTERNAL drill/game topics are authored but not yet registered into a
+    // playable track, so their firstLevelId does not resolve via `getLevel` until
+    // the integrator wires them in. Every NON-external node must still resolve.
+    for (const node of SKILL_GRAPH.filter((n) => !n.external)) {
       const found = getLevel(node.trackId, node.firstLevelId);
       expect(found, `${node.trackId}/${node.firstLevelId} must exist`).toBeDefined();
       const key = topicKeyOf(node.trackId, found!.level.section);
       expect(key).toBe(node.topicKey);
+    }
+  });
+
+  it("external drill/game topics rest only on REAL (registered) prerequisite nodes", () => {
+    // An external node has no probe level of its own, so remediation can only
+    // route it DOWN — every prereq must be a real, non-external node so the
+    // descent target resolves to a real probe level.
+    for (const node of SKILL_GRAPH.filter((n) => n.external)) {
+      expect(node.prereqs.length, `${node.topicKey} must route somewhere`).toBeGreaterThan(0);
+      for (const p of node.prereqs) {
+        const parent = skillByKey(p);
+        expect(parent, `${node.topicKey} → ${p}`).toBeDefined();
+        expect(parent!.external, `${p} (target of ${node.topicKey}) must be real`).not.toBe(true);
+      }
     }
   });
 

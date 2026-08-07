@@ -56,7 +56,7 @@ function LeadFigure() {
         })}
       </svg>
       <figcaption className="label mt-2 text-[9px]">
-        Fig. 1 — The whole funnel is one skill: pricing uncertainty.
+        Fig. 1. The whole funnel is one skill: pricing uncertainty.
       </figcaption>
     </figure>
   );
@@ -107,7 +107,7 @@ export function LoginPage() {
               resolve({
                 ok: false,
                 error:
-                  "This is taking too long — check your connection and try again.",
+                  "This is taking too long. Check your connection and try again.",
               }),
             25_000,
           ),
@@ -188,7 +188,7 @@ export function LoginPage() {
                 <span className="float-left mr-2 font-display text-5xl font-black leading-[0.8] text-primary">
                   Q
                 </span>
-                uant interviews reward one durable skill — pricing uncertainty
+                uant interviews reward one durable skill: pricing uncertainty
                 honestly. This desk teaches it as a single ordered path:
                 probability from the ground up, speed arithmetic, the classic
                 brainteasers, and the expected-value games traders actually play.
@@ -196,7 +196,7 @@ export function LoginPage() {
               <p className="mb-3">
                 Every question is exact and every wrong answer is a real mistake,
                 not a giveaway. Levels unlock only when you earn mastery, drawn
-                as a charted route across the map — a beautifully typeset
+                as a charted route across the map: a beautifully typeset
                 broadsheet for a trader’s desk.
               </p>
             </div>
@@ -306,8 +306,8 @@ export function LoginPage() {
 
               <p className="label mt-4 text-[9px] leading-relaxed">
                 {AWS_BACKEND
-                  ? "Cloud edition — your account is secured by Amazon Cognito and your progress syncs privately to the cloud, so it follows you across devices."
-                  : "Local-first edition — your account and progress are stored privately in this browser. No email, no API keys."}
+                  ? "Cloud edition: your account is secured by Amazon Cognito and your progress syncs privately to the cloud, so it follows you across devices."
+                  : "Local-first edition: your account and progress are stored privately in this browser. No email, no API keys."}
               </p>
             </div>
           </aside>

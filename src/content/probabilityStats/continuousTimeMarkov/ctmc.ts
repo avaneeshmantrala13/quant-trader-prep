@@ -3,7 +3,7 @@ import { F } from "../coreSolvers";
 
 /**
  * Exact solvers for **continuous-time Markov chains** and light queueing (Bucket
- * 2 "Extra Relevant Knowledge"; UT M362M / Ross IPM — academic for interviews).
+ * 2 "Extra Relevant Knowledge"; UT M362M / Ross IPM, academic for interviews).
  *
  *   • Holding time in a state is Exp(total out-rate), so E[hold] = 1/Σrates.
  *   • A 2-state CTMC with 0→1 rate λ and 1→0 rate μ has stationary

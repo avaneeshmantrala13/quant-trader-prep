@@ -272,7 +272,7 @@ export function OaRunner({
         // answers in order and advances; the last question submits.
         <div className="space-y-4">
           <div className="label text-[10px] text-muted">
-            Module-locked — you can&apos;t return to an earlier question.
+            Module-locked: you can&apos;t return to an earlier question.
           </div>
           {session.index < total - 1 ? (
             <button

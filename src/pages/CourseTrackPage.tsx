@@ -6,6 +6,7 @@ import { DIFFICULTY_META, totalQuestions, type Level } from "@/types/content";
 import { CheckIcon, LockIcon, ChevronLeftIcon, MOTIF_ICON } from "@/components/icons";
 import { levelLockState } from "@/lib/locking";
 import { topicKeyForLevel } from "@/lib/mastery/topicKey";
+import { seedUnlockedLevelIds } from "@/lib/mastery/unlockGraph";
 import {
   getCourse,
   type CourseMeta,
@@ -38,12 +39,24 @@ interface CourseTopicGroup {
 export function CourseTrackPage() {
   const { courseId } = useParams();
   const navigate = useNavigate();
-  const { getLevelProgress } = useProgress();
+  const { getLevelProgress, getTopicMastery } = useProgress();
 
   const course: CourseMeta | undefined = courseId ? getCourse(courseId) : undefined;
   const track = getTrack("probability");
 
   const isMastered = (id: string) => !!getLevelProgress(id)?.mastered;
+
+  // Diagnostic low-confidence unlocks: level ids whose TOPIC is currently
+  // unlocked (Beta mean over the bar) — opens the whole topic ahead of mastery
+  // and re-locks live when a failing quiz swings the mean back under the bar.
+  const seedUnlocked = useMemo(() => {
+    const set = track
+      ? seedUnlockedLevelIds(track.levels, track.id, getTopicMastery)
+      : new Set<string>();
+    return (id: string) => set.has(id);
+    // getTopicMastery derives from progress.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [track, getTopicMastery]);
 
   // Group the probability track's levels by the course's topics, in course order
   // (primary topics first, then shared/upstream). We keep each level's GLOBAL
@@ -157,7 +170,12 @@ export function CourseTrackPage() {
 
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {g.levels.map(({ level, globalIndex }) => {
-              const state = levelLockState(track.levels, globalIndex, isMastered);
+              const state = levelLockState(
+                track.levels,
+                globalIndex,
+                isMastered,
+                seedUnlocked,
+              );
               const clickable = state !== "locked";
               return (
                 <button

@@ -9,13 +9,13 @@ import type {
 } from "@/types/content";
 
 /**
- * mixFamilies.ts — the ONE shared mechanism that makes "Generate another like
+ * mixFamilies.ts, the ONE shared mechanism that makes "Generate another like
  * this" a TRUE variant of the SAME question family.
  *
  * THE BUG IT FIXES. A level can bundle several distinct question families behind
  * a single `generator` via the `mix*` wrappers (`mix`, `mixQuiz`, `mixNumeric`,
  * `mixEV`, `mixed`, …). The original wrappers were just
- * `(rng) => rng.pick(pool)(rng)` — they RANDOM-PICK a family on EVERY call, so
+ * `(rng) => rng.pick(pool)(rng)`, they RANDOM-PICK a family on EVERY call, so
  * regenerating a "committee of k from n" item would often jump to a "P(A and B)"
  * item (a sibling family). That is the family-jump bug.
  *
@@ -28,7 +28,7 @@ import type {
  *
  * Normal play is UNCHANGED: `level.generator(rng)` still random-picks a family
  * per call and consumes the RNG in exactly the same order as before (one
- * `rng.int` to choose the index, then the sub-generator) — the only difference
+ * `rng.int` to choose the index, then the sub-generator), the only difference
  * is the extra `family` string stamped on the result. Family-PRESERVING
  * regeneration (`@/lib/regenerate`) reads the current item's `family` and calls
  * `generator.families[family]` with a fresh seed.
@@ -48,7 +48,7 @@ export type FamiliedGenerator<T extends Taggable> = Gen<T> & {
  *
  * Priority: an explicit `familyId` property on the generator, else its function
  * `name`, else a positional `family{i}` fallback (anonymous fns). Collisions
- * (two sub-generators sharing a name — e.g. `[genHotelling, genHotelling]`) are
+ * (two sub-generators sharing a name, e.g. `[genHotelling, genHotelling]`) are
  * disambiguated deterministically by appending `#2`, `#3`, … in pool order, so
  * every family in a level is addressable by a unique key.
  */
@@ -121,7 +121,7 @@ export function familyMap<T extends Taggable>(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Typed public wrappers — one per item kind. Each per-topic `mix*` wrapper   */
+/*  Typed public wrappers, one per item kind. Each per-topic `mix*` wrapper   */
 /*  (`mix`, `mixQuiz`, `mixNumeric`, `mixEV`, `mixed`) delegates to these so    */
 /*  the family mechanism is defined in exactly ONE place.                      */
 /* -------------------------------------------------------------------------- */

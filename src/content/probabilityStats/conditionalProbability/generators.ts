@@ -44,17 +44,17 @@ import { MISCONCEPTION } from "@/lib/tutor/misconception";
  * distinct and ≠ the answer.
  *
  * Mode per family (see `./levels.ts`):
- *   • `quiz`      — where NAMING the misconception teaches: reduced-sample-space
+ *   • `quiz`: NAMING the misconception teaches: reduced-sample-space
  *                   (reversed conditional / ordered-vs-unordered / faces-not-
  *                   objects), Bayes (base-rate neglect / likelihood-as-posterior),
  *                   and the Russian-Roulette decisions.
- *   • `numeric`   — where a clean probability is the point: law of total
+ *   • `numeric`: a clean probability is the point: law of total
  *                   probability, continuous conditioning, and race conditioning.
- *   • `flashcard` — the framing paradoxes whose answer is two-part or a
+ *   • `flashcard`: the framing paradoxes whose answer is two-part or a
  *                   decision + probability (Child's Gender, Monty Hall, Bertrand,
- *                   Vacant Room) — never scalar-graded.
+ *                   Vacant Room), never scalar-graded.
  *
- * NONE of the 45 source-dataset questions are user-facing — they live only in
+ * NONE of the 45 source-dataset questions are user-facing, they live only in
  * `./conditionalProbability.test.ts` as hidden fixtures; every playable item is
  * freshly generated with different names/numbers/framing.
  */
@@ -159,8 +159,8 @@ export const mixNumeric = (
 ): NumericQuestionGenerator => mixNumericGenerators(pool);
 
 /* ========================================================================== */
-/* =======================  LEVEL 1 — REDUCED SAMPLE SPACE  ================== */
-/* ==========================  (quiz — name the mistake)  ==================== */
+/* =======================  LEVEL 1. REDUCED SAMPLE SPACE  ================== */
+/* ==========================  (quiz, name the mistake)  ==================== */
 /* ========================================================================== */
 
 // Scenario entities are deliberately DISTINCT from the source banks (which use
@@ -208,12 +208,12 @@ export function buildTableInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — of the ${total} figures above ${threshold.toLocaleString("en-US")}, ${favorable} are ${sc.cols[targetCol]}: P = ${favorable}/${total}.`,
+    rationale: `Correct, of the ${total} figures above ${threshold.toLocaleString("en-US")}, ${favorable} are ${sc.cols[targetCol]}: P = ${favorable}/${total}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(F(favorable, 4)),
-      rationale: `The REVERSED conditional: ${favorable}/4 is P(above | ${sc.cols[targetCol]}) — the chance a ${sc.cols[targetCol]} figure is high — not the asked P(${sc.cols[targetCol]} | above), which divides by the ${total} survivors.`,
+      rationale: `The REVERSED conditional: ${favorable}/4 is P(above | ${sc.cols[targetCol]}), the chance a ${sc.cols[targetCol]} figure is high, not the asked P(${sc.cols[targetCol]} | above), which divides by the ${total} survivors.`,
       misconception: MISCONCEPTION.reversedConditional,
     },
     {
@@ -228,7 +228,7 @@ export function buildTableInstance(
 
   const prompt =
     `A 4×4 grid records the ${sc.metric} of four ${sc.unit}s (${sc.cols.join(", ")}) over four periods. ` +
-    `One of the 16 entries is picked uniformly at random, and you learn it tops ${threshold.toLocaleString("en-US")} dollars — ${total} of the entries clear that bar, and ${favorable} of those come from ${sc.cols[targetCol]}. ` +
+    `One of the 16 entries is picked uniformly at random, and you learn it tops ${threshold.toLocaleString("en-US")} dollars, ${total} of the entries clear that bar, and ${favorable} of those come from ${sc.cols[targetCol]}. ` +
     `What is the probability the chosen entry belongs to ${sc.cols[targetCol]}?`;
   const explanation =
     `Conditioning shrinks the sample space to the ${total} above-threshold figures (P(A|B) = #(A∩B)/#B). ` +
@@ -260,12 +260,12 @@ export function buildBothInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — ${2 * N - 1} ordered pairs contain a ${face}; only (${face},${face}) has two, so 1/${2 * N - 1}.`,
+    rationale: `Correct, ${2 * N - 1} ordered pairs contain a ${face}; only (${face},${face}) has two, so 1/${2 * N - 1}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(F(1, N)),
-      rationale: `The naive answer: treating the "other" die as free (1/${N}). But "at least one is a ${face}" already rules out the ${2 * N - 1} no-${face} pairs and keeps the (${face},x)/(x,${face}) overlap in one pool — the denominator is ${2 * N - 1}, not ${N}.`,
+      rationale: `The naive answer: treating the "other" die as free (1/${N}). But "at least one is a ${face}" already rules out the ${2 * N - 1} no-${face} pairs and keeps the (${face},x)/(x,${face}) overlap in one pool, the denominator is ${2 * N - 1}, not ${N}.`,
     },
     {
       text: fracText(F(1, N * N)),
@@ -281,7 +281,7 @@ export function buildBothInstance(
     `Two fair ${N}-sided dice are rolled where you cannot see them, and an honest referee reveals only that a ${face} appeared on at least one of the two. ` +
     `Given that, what is the probability that ${face} came up on BOTH dice?`;
   const explanation =
-    `Enumerate the ordered pairs that contain a ${face}: (${face},1…${N}) together with (1…${N},${face}) — ${2 * N - 1} distinct pairs in all. ` +
+    `Enumerate the ordered pairs that contain a ${face}: (${face},1…${N}) together with (1…${N},${face}), ${2 * N - 1} distinct pairs in all. ` +
     `Just one of them, (${face},${face}), has two, so P = 1/${2 * N - 1} = ${fracText(correctF)}. The trap 1/${N} overlooks that the conditioning pools the two overlapping single-${face} pairs.`;
 
   return {
@@ -319,12 +319,12 @@ export function buildGivenSumInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — ${survivors} ordered pairs sum to ${s}; ${favorable} of them contain a ${face}: ${favorable}/${survivors}.`,
+    rationale: `Correct, ${survivors} ordered pairs sum to ${s}; ${favorable} of them contain a ${face}: ${favorable}/${survivors}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(F(favorable, 2 * survivors)),
-      rationale: `You halved by treating the pairs as UNORDERED. The sample space of two distinct dice is ordered — there are ${survivors} ordered survivors, not ${survivors / 2}.`,
+      rationale: `You halved by treating the pairs as UNORDERED. The sample space of two distinct dice is ordered, there are ${survivors} ordered survivors, not ${survivors / 2}.`,
       misconception: MISCONCEPTION.orderedVsUnordered,
     },
     {
@@ -373,21 +373,21 @@ export function buildBertrandInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — count FACES: ${2 * g} red faces sit on all-red chips (red backs) and ${m} on two-tone chips (white backs): ${2 * g}/${2 * g + m}.`,
+    rationale: `Correct, count FACES: ${2 * g} red faces sit on all-red chips (red backs) and ${m} on two-tone chips (white backs): ${2 * g}/${2 * g + m}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(naive),
-      rationale: `The naive answer counts CHIPS not faces: ${g}/(${g}+${m}). But an all-red chip flashes red twice as often, so a red sighting is evidence for it — weight by faces: ${2 * g}/${2 * g + m}.`,
+      rationale: `The naive answer counts CHIPS not faces: ${g}/(${g}+${m}). But an all-red chip flashes red twice as often, so a red sighting is evidence for it, weight by faces: ${2 * g}/${2 * g + m}.`,
       misconception: MISCONCEPTION.facesNotObjects,
     },
     {
       text: fracText(F(1, 2)),
-      rationale: `The "must be 50/50" hunch. Seeing a red face is not neutral evidence — the all-red chips surface red more often, pushing the posterior above ½.`,
+      rationale: `The "must be 50/50" hunch. Seeing a red face is not neutral evidence, the all-red chips surface red more often, pushing the posterior above ½.`,
     },
     {
       text: fracText(F(m, 2 * g + m)),
-      rationale: `That's the complement — P(the concealed side is WHITE) among the red-up faces. The question asks for a red underside.`,
+      rationale: `That's the complement. P(the concealed side is WHITE) among the red-up faces. The question asks for a red underside.`,
     },
   ];
 
@@ -396,7 +396,7 @@ export function buildBertrandInstance(
     `You shake out a single chip and it settles red-side up. How likely is it that its concealed underside is red as well?`;
   const explanation =
     `Condition on FACES rather than chips. There are ${2 * g} red faces belonging to all-red chips (their undersides are red) and ${m} red faces on two-tone chips (undersides white). ` +
-    `Given a red face on top, P(underside also red) = ${2 * g}/${2 * g + m} = ${fracText(correctF)} — well above the naive ${fracText(naive)}.`;
+    `Given a red face on top, P(underside also red) = ${2 * g}/${2 * g + m} = ${fracText(correctF)}, well above the naive ${fracText(naive)}.`;
 
   return {
     answer: fracText(correctF),
@@ -422,7 +422,7 @@ export function buildAllOnInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — P(all on)/P(≥1 on) = (1/2^${n})/(1 − 1/2^${n}) = 1/(2^${n} − 1) = 1/${2 ** n - 1}.`,
+    rationale: `Correct. P(all on)/P(≥1 on) = (1/2^${n})/(1 − 1/2^${n}) = 1/(2^${n} − 1) = 1/${2 ** n - 1}.`,
   };
   const distractors: Choice[] = [
     {
@@ -435,7 +435,7 @@ export function buildAllOnInstance(
     },
     {
       text: fracText(F(1, 2 ** n + 1)),
-      rationale: `Off by the sign of the correction — conditioning DROPS the impossible all-off case, so divide by 2^${n} − 1, not 2^${n} + 1.`,
+      rationale: `Off by the sign of the correction, conditioning DROPS the impossible all-off case, so divide by 2^${n} − 1, not 2^${n} + 1.`,
     },
   ];
 
@@ -461,8 +461,8 @@ export function buildAllOnInstance(
 }
 
 /* ========================================================================== */
-/* ===========================  LEVEL 2 — BAYES  ============================ */
-/* ==========================  (quiz — name the mistake)  ==================== */
+/* ===========================  LEVEL 2. BAYES  ============================ */
+/* ==========================  (quiz, name the mistake)  ==================== */
 /* ========================================================================== */
 
 /** Classic test/disease Bayes: prevalence, sensitivity, false-positive → P(D|+). */
@@ -482,7 +482,7 @@ export function buildBayesTestInstance(
 
   const correct: Choice = {
     text: decText(correctF, dp),
-    rationale: `Correct — posterior = prior·sens / (prior·sens + (1−prior)·fpr) = ${sensPct}%·${prevPct}% / total.`,
+    rationale: `Correct, posterior = prior·sens / (prior·sens + (1−prior)·fpr) = ${sensPct}%·${prevPct}% / total.`,
   };
   const distractors: Choice[] = [
     {
@@ -496,7 +496,7 @@ export function buildBayesTestInstance(
     },
     {
       text: decText(prev.mul(sens), dp),
-      rationale: `That's the JOINT P(disease AND +) = prior·sensitivity — you forgot to normalise by the total probability of a positive test.`,
+      rationale: `That's the JOINT P(disease AND +) = prior·sensitivity, you forgot to normalise by the total probability of a positive test.`,
     },
   ];
 
@@ -533,7 +533,7 @@ export function buildWhichDieInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — equal priors, likelihoods 1/${N1} and 1/${N2}: posterior = (1/${N1})/(1/${N1}+1/${N2}) = ${N2}/${N1 + N2}.`,
+    rationale: `Correct, equal priors, likelihoods 1/${N1} and 1/${N2}: posterior = (1/${N1})/(1/${N1}+1/${N2}) = ${N2}/${N1 + N2}.`,
   };
   const distractors: Choice[] = [
     {
@@ -543,7 +543,7 @@ export function buildWhichDieInstance(
     },
     {
       text: fracText(F(1, 2)),
-      rationale: `That's the PRIOR (each die equally likely). Rolling a ${r} is evidence — the smaller die makes low rolls more likely, so the posterior tilts to it.`,
+      rationale: `That's the PRIOR (each die equally likely). Rolling a ${r} is evidence, the smaller die makes low rolls more likely, so the posterior tilts to it.`,
     },
     {
       text: fracText(F(N1, N1 + N2)),
@@ -552,7 +552,7 @@ export function buildWhichDieInstance(
   ];
 
   const prompt =
-    `Two dice lie on the table — one with ${N1} faces, the other with ${N2} faces. A friend secretly chooses one of them uniformly at random, rolls it out of sight, and announces the outcome is ${r}. ` +
+    `Two dice lie on the table, one with ${N1} faces, the other with ${N2} faces. A friend secretly chooses one of them uniformly at random, rolls it out of sight, and announces the outcome is ${r}. ` +
     `How probable is it that the die actually rolled was the ${N1}-faced one?`;
   const explanation =
     `Equal priors of ½. The likelihoods are P(${r}|${N1}-faced) = 1/${N1} and P(${r}|${N2}-faced) = 1/${N2}. ` +
@@ -605,7 +605,7 @@ export function buildCheerLoserInstance(
     guard++;
     // Require all four candidate options (answer, prior ⅓, win-weighted,
     // un-normalised likelihood) to be DISTINCT so the item always ships four
-    // misconception-grounded choices — never a degenerate 2-option quiz.
+    // misconception-grounded choices, never a degenerate 2-option quiz.
     const cand = new Set(
       [correctF, F(1, 3), winW, losses[target]].map((f) => fracText(f)),
     );
@@ -621,12 +621,12 @@ export function buildCheerLoserInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — posterior ∝ P(loss). ${names[target]} loses w.p. ${fracText(losses[target])}; normalise by the three loss-probabilities.`,
+    rationale: `Correct, posterior ∝ P(loss). ${names[target]} loses w.p. ${fracText(losses[target])}; normalise by the three loss-probabilities.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(F(1, 3)),
-      rationale: `That's the PRIOR (you picked one of three at random). The fact it LOST is evidence — the more likely winners are now less likely to be your pick.`,
+      rationale: `That's the PRIOR (you picked one of three at random). The fact it LOST is evidence, the more likely winners are now less likely to be your pick.`,
     },
     {
       text: fracText(bayesPosterior([F(1, 3), F(1, 3), F(1, 3)], wins, target)),
@@ -639,7 +639,7 @@ export function buildCheerLoserInstance(
   ];
 
   const prompt =
-    `Three teams — ${names.join(", ")} — carry chances of ${fracText(wins[0])}, ${fracText(wins[1])}, and ${fracText(wins[2])} of prevailing in their respective upcoming matches. ` +
+    `Three teams, ${names.join(", ")}, carry chances of ${fracText(wins[0])}, ${fracText(wins[1])}, and ${fracText(wins[2])} of prevailing in their respective upcoming matches. ` +
     `You throw your support behind one of them chosen at random, and that team then goes on to LOSE. How probable is it that the side you had chosen was ${names[target]}?`;
   const explanation =
     `Equal priors of ⅓. Reweight by the LOSS likelihood 1 − win: ${losses.map(fracText).join(", ")}. ` +
@@ -676,7 +676,7 @@ export function buildInversionInstance(
 
   const correct: Choice = {
     text: decText(correctF, dp),
-    rationale: `Correct — P(A|B) = P(B|A)·P(A)/P(B) = ${pBApct/100}·${pApct/100}/${pBpct/100}.`,
+    rationale: `Correct. P(A|B) = P(B|A)·P(A)/P(B) = ${pBApct/100}·${pApct/100}/${pBpct/100}.`,
   };
   const distractors: Choice[] = [
     {
@@ -696,7 +696,7 @@ export function buildInversionInstance(
 
   const prompt =
     `In a population, P(A) = ${pApct}%, P(B) = ${pBpct}%, and among those with A, ${pBApct}% also have B. ` +
-    `Pick a random member WITH B — what is the probability they have A? (Round to ${dp} decimals.)`;
+    `Pick a random member WITH B, what is the probability they have A? (Round to ${dp} decimals.)`;
   const explanation =
     `Bayes by inversion: P(A|B) = P(B|A)·P(A)/P(B) = (${pBApct/100})(${pApct/100})/(${pBpct/100}) = ${decText(correctF, dp)}. ` +
     `Reporting the given P(B|A) = ${pBApct}% is the reversed-conditional (prosecutor's-fallacy) error.`;
@@ -716,7 +716,7 @@ export function buildInversionInstance(
 }
 
 /* ========================================================================== */
-/* ==========  LEVEL 1 & 2 — FREE-RESPONSE (numeric) CONVERSIONS  ============ */
+/* ==========  LEVEL 1 & 2. FREE-RESPONSE (numeric) CONVERSIONS  ============ */
 /* ==  MCQ→numeric conversions of the reduced-sample-space and Bayes families  */
 /* ==  (mirrors the geo-1 pattern): the SAME exact solver + the SAME genuine    */
 /* ==  error modes, now as a parametric error-mode catalog carrying a machine-  */
@@ -725,7 +725,7 @@ export function buildInversionInstance(
 /* ==  The quiz builders above are KEPT (still used by the verification tests). */
 /* ========================================================================== */
 
-/** FREE-RESPONSE table conditioning — numeric conversion of `buildTableInstance`. */
+/** FREE-RESPONSE table conditioning, numeric conversion of `buildTableInstance`. */
 export function buildTableNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -756,28 +756,28 @@ export function buildTableNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(favorable, 4),
-    `Close! Dividing by 4 gives P(above | ${sc.cols[targetCol]}) — the REVERSED conditional. Which event were you told has ALREADY happened, and so belongs in the denominator?`,
+    `Close! Dividing by 4 gives P(above | ${sc.cols[targetCol]}), the REVERSED conditional. Which event were you told has ALREADY happened, and so belongs in the denominator?`,
     MISCONCEPTION.reversedConditional,
   );
   push(
     F(favorable, 16),
-    `It looks like you divided by all 16 cells. You were TOLD the entry tops ${threshold.toLocaleString("en-US")} — doesn't that shrink the pool you should count within?`,
+    `It looks like you divided by all 16 cells. You were TOLD the entry tops ${threshold.toLocaleString("en-US")}, doesn't that shrink the pool you should count within?`,
     "ignored_conditioning",
   );
   push(
     F(total, 16),
-    `That's the chance a random entry beats the threshold at all. But you already KNOW this one did — so what should the denominator be now?`,
+    `That's the chance a random entry beats the threshold at all. But you already KNOW this one did, so what should the denominator be now?`,
     "conditioning_event_prob",
   );
   push(
     F(total - favorable, total),
-    `Careful — that's the chance the above-threshold entry is NOT a ${sc.cols[targetCol]} figure. Which side of the split did the question ask for?`,
+    `Careful, that's the chance the above-threshold entry is NOT a ${sc.cols[targetCol]} figure. Which side of the split did the question ask for?`,
     MISCONCEPTION.complementConfusion,
   );
 
   const prompt =
     `A 4×4 grid records the ${sc.metric} of four ${sc.unit}s (${sc.cols.join(", ")}) over four periods. ` +
-    `One of the 16 entries is picked uniformly at random, and you learn it tops ${threshold.toLocaleString("en-US")} dollars — ${total} of the entries clear that bar, and ${favorable} of those come from ${sc.cols[targetCol]}. ` +
+    `One of the 16 entries is picked uniformly at random, and you learn it tops ${threshold.toLocaleString("en-US")} dollars, ${total} of the entries clear that bar, and ${favorable} of those come from ${sc.cols[targetCol]}. ` +
     `What is the probability the chosen entry belongs to ${sc.cols[targetCol]}? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `Conditioning shrinks the sample space to the ${total} above-threshold figures (P(A|B) = #(A∩B)/#B). ` +
@@ -801,7 +801,7 @@ export function buildTableNumericInstance(
   };
 }
 
-/** FREE-RESPONSE "both given at least one" — numeric conversion of `buildBothInstance`. */
+/** FREE-RESPONSE "both given at least one", numeric conversion of `buildBothInstance`. */
 export function buildBothNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -815,12 +815,12 @@ export function buildBothNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(1, N),
-    `Close! 1/${N} treats the other die as free. But "at least one is a ${face}" already pooled the two overlapping single-${face} rolls — how many ordered pairs contain a ${face}?`,
+    `Close! 1/${N} treats the other die as free. But "at least one is a ${face}" already pooled the two overlapping single-${face} rolls, how many ordered pairs contain a ${face}?`,
     "naive_independent_second",
   );
   push(
     F(1, N * N),
-    `That's the UNconditional chance both dice show ${face}. The clue "at least one is a ${face}" rules out many outcomes — shouldn't that raise the probability?`,
+    `That's the UNconditional chance both dice show ${face}. The clue "at least one is a ${face}" rules out many outcomes, shouldn't that raise the probability?`,
     "unconditional_joint",
   );
   push(
@@ -833,7 +833,7 @@ export function buildBothNumericInstance(
     `Two fair ${N}-sided dice are rolled where you cannot see them, and an honest referee reveals only that a ${face} appeared on at least one of the two. ` +
     `Given that, what is the probability that ${face} came up on BOTH dice? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
-    `Enumerate the ordered pairs that contain a ${face}: (${face},1…${N}) together with (1…${N},${face}) — ${2 * N - 1} distinct pairs in all. ` +
+    `Enumerate the ordered pairs that contain a ${face}: (${face},1…${N}) together with (1…${N},${face}), ${2 * N - 1} distinct pairs in all. ` +
     `Just one of them, (${face},${face}), has two, so P = 1/${2 * N - 1} = ${fracText(value)} ≈ ${decText(value, dp)}. The trap 1/${N} overlooks that the conditioning pools the two overlapping single-${face} pairs.`;
 
   return {
@@ -853,7 +853,7 @@ export function buildBothNumericInstance(
   };
 }
 
-/** FREE-RESPONSE "sum → at least one face" — numeric conversion of `buildGivenSumInstance`. */
+/** FREE-RESPONSE "sum → at least one face", numeric conversion of `buildGivenSumInstance`. */
 export function buildGivenSumNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -874,7 +874,7 @@ export function buildGivenSumNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(favorable, 2 * survivors),
-    `Close! Halving treats (a,b) and (b,a) as the same roll. Two distinct dice give ORDERED outcomes — how many ordered pairs sum to ${s}?`,
+    `Close! Halving treats (a,b) and (b,a) as the same roll. Two distinct dice give ORDERED outcomes, how many ordered pairs sum to ${s}?`,
     MISCONCEPTION.orderedVsUnordered,
   );
   push(
@@ -913,7 +913,7 @@ export function buildGivenSumNumericInstance(
   };
 }
 
-/** FREE-RESPONSE Bertrand's box — numeric conversion of `buildBertrandInstance`. */
+/** FREE-RESPONSE Bertrand's box, numeric conversion of `buildBertrandInstance`. */
 export function buildBertrandNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -928,17 +928,17 @@ export function buildBertrandNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     naive,
-    `Close! You counted CHIPS, not faces. An all-red chip flashes red twice as often — should a red sighting be weighted by chips or by faces?`,
+    `Close! You counted CHIPS, not faces. An all-red chip flashes red twice as often, should a red sighting be weighted by chips or by faces?`,
     MISCONCEPTION.facesNotObjects,
   );
   push(
     F(1, 2),
-    `That's the "it must be 50/50" hunch. Seeing a red face isn't neutral evidence — which chips surface red more often?`,
+    `That's the "it must be 50/50" hunch. Seeing a red face isn't neutral evidence, which chips surface red more often?`,
     "must_be_half",
   );
   push(
     F(m, 2 * g + m),
-    `That's the chance the hidden side is WHITE — the opposite event. Which underside did the question ask about?`,
+    `That's the chance the hidden side is WHITE, the opposite event. Which underside did the question ask about?`,
     MISCONCEPTION.complementConfusion,
   );
 
@@ -947,7 +947,7 @@ export function buildBertrandNumericInstance(
     `You shake out a single chip and it settles red-side up. How likely is it that its concealed underside is red as well? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `Condition on FACES rather than chips. There are ${2 * g} red faces belonging to all-red chips (their undersides are red) and ${m} red faces on two-tone chips (undersides white). ` +
-    `Given a red face on top, P(underside also red) = ${2 * g}/${2 * g + m} = ${fracText(value)} ≈ ${decText(value, dp)} — well above the naive ${fracText(naive)}.`;
+    `Given a red face on top, P(underside also red) = ${2 * g}/${2 * g + m} = ${fracText(value)} ≈ ${decText(value, dp)}, well above the naive ${fracText(naive)}.`;
 
   return {
     answer,
@@ -966,7 +966,7 @@ export function buildBertrandNumericInstance(
   };
 }
 
-/** FREE-RESPONSE "all on given at least one" — numeric conversion of `buildAllOnInstance`. */
+/** FREE-RESPONSE "all on given at least one", numeric conversion of `buildAllOnInstance`. */
 export function buildAllOnNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -979,17 +979,17 @@ export function buildAllOnNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(1, 2 ** n),
-    `Close! That's the UNconditional chance all ${n} are on. The health check "at least one is on" removes the all-off outcome — does that raise or lower the probability?`,
+    `Close! That's the UNconditional chance all ${n} are on. The health check "at least one is on" removes the all-off outcome, does that raise or lower the probability?`,
     "unconditional_joint",
   );
   push(
     F(1, n),
-    `It looks like you used the number of servers directly. The events live over 2^${n} on/off configurations — what is the conditioned denominator?`,
+    `It looks like you used the number of servers directly. The events live over 2^${n} on/off configurations, what is the conditioned denominator?`,
     "naive_one_over_n",
   );
   push(
     F(1, 2 ** n + 1),
-    `So close — you adjusted the denominator the wrong way. Conditioning DROPS the impossible all-off case, so do you subtract or add that one configuration?`,
+    `So close, you adjusted the denominator the wrong way. Conditioning DROPS the impossible all-off case, so do you subtract or add that one configuration?`,
     "wrong_conditioning_correction",
   );
 
@@ -1017,7 +1017,7 @@ export function buildAllOnNumericInstance(
   };
 }
 
-/** FREE-RESPONSE test/disease Bayes — numeric conversion of `buildBayesTestInstance`. */
+/** FREE-RESPONSE test/disease Bayes, numeric conversion of `buildBayesTestInstance`. */
 export function buildBayesTestNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -1073,7 +1073,7 @@ export function buildBayesTestNumericInstance(
   };
 }
 
-/** FREE-RESPONSE which-die Bayes — numeric conversion of `buildWhichDieInstance`. */
+/** FREE-RESPONSE which-die Bayes, numeric conversion of `buildWhichDieInstance`. */
 export function buildWhichDieNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -1087,22 +1087,22 @@ export function buildWhichDieNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(1, N1),
-    `Close! 1/${N1} is the LIKELIHOOD of rolling ${r} on the ${N1}-faced die, not the posterior. Bayes flips and normalises this — what do you divide by?`,
+    `Close! 1/${N1} is the LIKELIHOOD of rolling ${r} on the ${N1}-faced die, not the posterior. Bayes flips and normalises this, what do you divide by?`,
     MISCONCEPTION.likelihoodAsPosterior,
   );
   push(
     F(1, 2),
-    `That's the prior (each die equally likely before the roll). But rolling ${r} is evidence — which die makes a low roll more likely?`,
+    `That's the prior (each die equally likely before the roll). But rolling ${r} is evidence, which die makes a low roll more likely?`,
     "prior_ignored_evidence",
   );
   push(
     F(N1, N1 + N2),
-    `You put the wrong die's count on top. The die with FEWER faces makes any single result more likely — which numerator should that give?`,
+    `You put the wrong die's count on top. The die with FEWER faces makes any single result more likely, which numerator should that give?`,
     "swapped_bayes_numerator",
   );
 
   const prompt =
-    `Two dice lie on the table — one with ${N1} faces, the other with ${N2} faces. A friend secretly chooses one of them uniformly at random, rolls it out of sight, and announces the outcome is ${r}. ` +
+    `Two dice lie on the table, one with ${N1} faces, the other with ${N2} faces. A friend secretly chooses one of them uniformly at random, rolls it out of sight, and announces the outcome is ${r}. ` +
     `How probable is it that the die actually rolled was the ${N1}-faced one? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `Equal priors of ½. The likelihoods are P(${r}|${N1}-faced) = 1/${N1} and P(${r}|${N2}-faced) = 1/${N2}. ` +
@@ -1125,7 +1125,7 @@ export function buildWhichDieNumericInstance(
   };
 }
 
-/** FREE-RESPONSE cheer-for-a-loser Bayes — numeric conversion of `buildCheerLoserInstance`. */
+/** FREE-RESPONSE cheer-for-a-loser Bayes, numeric conversion of `buildCheerLoserInstance`. */
 export function buildCheerLoserNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -1172,12 +1172,12 @@ export function buildCheerLoserNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(1, 3),
-    `Close! 1/3 is the prior — the chance you picked ${names[target]} before knowing anything. But your team LOST; how should that shift the odds among the three?`,
+    `Close! 1/3 is the prior, the chance you picked ${names[target]} before knowing anything. But your team LOST; how should that shift the odds among the three?`,
     "prior_ignored_evidence",
   );
   push(
     winW,
-    `It looks like you weighted by each team's WIN probability. Your team lost — should a loss favour the strong favourites or the underdogs?`,
+    `It looks like you weighted by each team's WIN probability. Your team lost, should a loss favour the strong favourites or the underdogs?`,
     "weighted_by_win_not_loss",
   );
   push(
@@ -1187,7 +1187,7 @@ export function buildCheerLoserNumericInstance(
   );
 
   const prompt =
-    `Three teams — ${names.join(", ")} — carry chances of ${fracText(wins[0])}, ${fracText(wins[1])}, and ${fracText(wins[2])} of prevailing in their respective upcoming matches. ` +
+    `Three teams, ${names.join(", ")}, carry chances of ${fracText(wins[0])}, ${fracText(wins[1])}, and ${fracText(wins[2])} of prevailing in their respective upcoming matches. ` +
     `You throw your support behind one of them chosen at random, and that team then goes on to LOSE. How probable is it that the side you had chosen was ${names[target]}? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `Equal priors of ⅓. Reweight by the LOSS likelihood 1 − win: ${losses.map(fracText).join(", ")}. ` +
@@ -1210,7 +1210,7 @@ export function buildCheerLoserNumericInstance(
   };
 }
 
-/** FREE-RESPONSE inversion Bayes — numeric conversion of `buildInversionInstance`. */
+/** FREE-RESPONSE inversion Bayes, numeric conversion of `buildInversionInstance`. */
 export function buildInversionNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -1228,7 +1228,7 @@ export function buildInversionNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     pBA,
-    `Close! You reported the given direction P(B|A) = ${pBApct}%. The question asks the REVERSED conditional P(A|B) — what do you rescale by to flip it?`,
+    `Close! You reported the given direction P(B|A) = ${pBApct}%. The question asks the REVERSED conditional P(A|B), what do you rescale by to flip it?`,
     MISCONCEPTION.reversedConditional,
   );
   push(
@@ -1244,7 +1244,7 @@ export function buildInversionNumericInstance(
 
   const prompt =
     `In a population, P(A) = ${pApct}%, P(B) = ${pBpct}%, and among those with A, ${pBApct}% also have B. ` +
-    `Pick a random member WITH B — what is the probability they have A? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
+    `Pick a random member WITH B, what is the probability they have A? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `Bayes by inversion: P(A|B) = P(B|A)·P(A)/P(B) = (${pBApct / 100})(${pApct / 100})/(${pBpct / 100}) = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
     `Reporting the given P(B|A) = ${pBApct}% is the reversed-conditional (prosecutor's-fallacy) error.`;
@@ -1267,7 +1267,7 @@ export function buildInversionNumericInstance(
 }
 
 /* ========================================================================== */
-/* ==============  LEVEL 3 — TOTAL PROBABILITY & CONTINUOUS  ================= */
+/* ==============  LEVEL 3. TOTAL PROBABILITY & CONTINUOUS  ================= */
 /* ============================  (numeric)  ================================= */
 /* ========================================================================== */
 
@@ -1293,7 +1293,7 @@ export function buildTransferInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(d2, d2 + m2),
-    `You reused the second jar's starting ratio ${d2}/${d2 + m2} and ignored the marble that arrived. The transfer reshapes the jar — condition on which colour moved.`,
+    `You reused the second jar's starting ratio ${d2}/${d2 + m2} and ignored the marble that arrived. The transfer reshapes the jar, condition on which colour moved.`,
   );
   push(
     F(d2 + 1, size2),
@@ -1400,7 +1400,7 @@ export function buildUniformInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(w, b - a),
-    `MEMORYLESS error: w/(b−a) treats the uniform like an exponential. A uniform is NOT memoryless — given it has already passed ${g}, what remains is uniform on (${g}, ${b}), a ${b - g}-second window.`,
+    `MEMORYLESS error: w/(b−a) treats the uniform like an exponential. A uniform is NOT memoryless, given it has already passed ${g}, what remains is uniform on (${g}, ${b}), a ${b - g}-second window.`,
     MISCONCEPTION.memorylessUniform,
   );
   push(
@@ -1416,7 +1416,7 @@ export function buildUniformInstance(
     `A file's download time is uniformly distributed between ${a} and ${b} seconds. It is ${g} seconds in and still transferring. ` +
     `What is the probability the download completes within the next ${w} second(s)? (Round to ${dp} decimals.)`;
   const explanation =
-    `Because the download has already survived to ${g} seconds, its total time is now uniform on (${g}, ${b}) — a window of just ${b - g} seconds. ` +
+    `Because the download has already survived to ${g} seconds, its total time is now uniform on (${g}, ${b}), a window of just ${b - g} seconds. ` +
     `Completing within ${w} more seconds covers ${w} of those, giving P = ${w}/${b - g} = ${fracText(value)} ≈ ${decText(value, dp)}. ` +
     `(A uniform is NOT memoryless: the fixed upper cap makes finishing soon steadily MORE likely as time elapses.)`;
 
@@ -1438,7 +1438,7 @@ export function buildUniformInstance(
 }
 
 /* ========================================================================== */
-/* ====================  LEVEL 4 — RACES & RECURSION  ======================= */
+/* ====================  LEVEL 4. RACES & RECURSION  ======================= */
 /* ============================  (numeric)  ================================= */
 /* ========================================================================== */
 
@@ -1486,11 +1486,11 @@ export function buildSumRaceInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(unord(s1), unord(s1) + unord(s2)),
-    `The ORDERED-vs-UNORDERED trap: counting unordered pairs gives ${unord(s1)} and ${unord(s2)} ways. But (a,b) and (b,a) are distinct rolls — use ordered counts ${w1} and ${w2}.`,
+    `The ORDERED-vs-UNORDERED trap: counting unordered pairs gives ${unord(s1)} and ${unord(s2)} ways. But (a,b) and (b,a) are distinct rolls, use ordered counts ${w1} and ${w2}.`,
   );
   push(
     F(w1, 36),
-    `That's P(sum ${s1} on a single roll) = ${w1}/36. The race ignores rolls that hit NEITHER target — divide by ${w1} + ${w2}, the deciding rolls.`,
+    `That's P(sum ${s1} on a single roll) = ${w1}/36. The race ignores rolls that hit NEITHER target, divide by ${w1} + ${w2}, the deciding rolls.`,
   );
   push(
     F(1, 2),
@@ -1547,7 +1547,7 @@ export function buildFirstTossInstance(
   );
   push(
     bobWins,
-    `That's P(the second mover wins at all), the DENOMINATOR of the conditional — not the numerator restricted to a first-toss win.`,
+    `That's P(the second mover wins at all), the DENOMINATOR of the conditional, not the numerator restricted to a first-toss win.`,
   );
 
   const prompt =
@@ -1590,7 +1590,7 @@ export function buildTieInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     F(ties, N * N),
-    `That's P(tie) = ${ties}/${N * N} on one round. But rerolls (when the first player leads) don't decide anything — condition on the ${ties + decisiveAgainst} decisive outcomes.`,
+    `That's P(tie) = ${ties}/${N * N} on one round. But rerolls (when the first player leads) don't decide anything, condition on the ${ties + decisiveAgainst} decisive outcomes.`,
   );
   push(
     F(1, 2),
@@ -1645,11 +1645,11 @@ export function buildFirstStepInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     w,
-    `That's just the per-turn win probability w = ${fracText(w)}. Going FIRST is worth more than one turn — solve p = w + (1−w)(1−p).`,
+    `That's just the per-turn win probability w = ${fracText(w)}. Going FIRST is worth more than one turn, solve p = w + (1−w)(1−p).`,
   );
   push(
     F(1, 2),
-    `Not ½ — the first mover has an edge: they get the first chance to win each cycle, giving 1/(2−w).`,
+    `Not ½, the first mover has an edge: they get the first chance to win each cycle, giving 1/(2−w).`,
   );
   push(
     w.div(F(1).add(w)),
@@ -1681,8 +1681,8 @@ export function buildFirstStepInstance(
 }
 
 /* ========================================================================== */
-/* ====================  LEVEL 5 — RUSSIAN ROULETTE  ======================== */
-/* ==============  (quiz — probabilities AND spin/no-spin decisions)  ======= */
+/* ====================  LEVEL 5. RUSSIAN ROULETTE  ======================== */
+/* ==============  (quiz, probabilities AND spin/no-spin decisions)  ======= */
 /* ========================================================================== */
 
 /** Fixed cylinder: one bullet, spun once, alternate → P(first player survives). */
@@ -1692,7 +1692,7 @@ export function buildRRFixedInstance(
 ): { answer: string; question: Question } {
   // ODD chamber counts only: the ½-symmetry answer is then genuinely WRONG (the
   // opener pulls the extra chamber), so it stays a real distractor and all four
-  // options are distinct — and it also keeps us off the source's even 6-chamber
+  // options are distinct, and it also keeps us off the source's even 6-chamber
   // ½ case. (Even counts would make ½ the correct answer, collapsing the trap.)
   const c = rng.pick([5, 7, 9]);
   const correctF = rrFixedFirstSurvives(c); // ⌊c/2⌋/c
@@ -1700,12 +1700,12 @@ export function buildRRFixedInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — the cylinder is FIXED after one spin; the first player fires ${Math.ceil(c / 2)} of the ${c} chambers, surviving w.p. ${Math.floor(c / 2)}/${c}.`,
+    rationale: `Correct, the cylinder is FIXED after one spin; the first player fires ${Math.ceil(c / 2)} of the ${c} chambers, surviving w.p. ${Math.floor(c / 2)}/${c}.`,
   };
   const distractors: Choice[] = [
     {
       text: fracText(F(1, 2)),
-      rationale: `The symmetry guess. With ${c} chambers (odd count) the first player pulls the extra chamber, so it isn't exactly ½ — it's ${fracText(correctF)}.`,
+      rationale: `The symmetry guess. With ${c} chambers (odd count) the first player pulls the extra chamber, so it isn't exactly ½, it's ${fracText(correctF)}.`,
     },
     {
       text: fracText(shot),
@@ -1721,7 +1721,7 @@ export function buildRRFixedInstance(
     `A cylinder of ${c} chambers is loaded with a single round and spun exactly once; after that two players take alternating turns squeezing the trigger with no more spins, and you take the very first turn. ` +
     `With what probability do you come through unharmed (never meeting the loaded chamber)?`;
   const explanation =
-    `That one spin fixes where the round sits. As the opener you cover chambers 1, 3, 5, … — ${Math.ceil(c / 2)} of the ${c} — and are hit only if the round lies in one of them. ` +
+    `That one spin fixes where the round sits. As the opener you cover chambers 1, 3, 5, …, ${Math.ceil(c / 2)} of the ${c}, and are hit only if the round lies in one of them. ` +
     `So P(unharmed) = ${Math.floor(c / 2)}/${c} = ${fracText(correctF)}.`;
 
   return {
@@ -1752,7 +1752,7 @@ export function buildRRRespunInstance(
 
   const correct: Choice = {
     text: fracText(correctF),
-    rationale: `Correct — memoryless pulls (p = 1/${c}). P(player 1 eventually shot) = 1/(2 − 1/${c}) = ${c}/${2 * c - 1}, which is also player 2's survival probability.`,
+    rationale: `Correct, memoryless pulls (p = 1/${c}). P(player 1 eventually shot) = 1/(2 − 1/${c}) = ${c}/${2 * c - 1}, which is also player 2's survival probability.`,
   };
   const distractors: Choice[] = [
     {
@@ -1761,7 +1761,7 @@ export function buildRRRespunInstance(
     },
     {
       text: fracText(F(1, 2)),
-      rationale: `Not ½ — re-spinning makes pulls independent, and the first player faces the bullet first, so player 2 is strictly safer.`,
+      rationale: `Not ½, re-spinning makes pulls independent, and the first player faces the bullet first, so player 2 is strictly safer.`,
     },
     {
       text: fracText(p),
@@ -1774,7 +1774,7 @@ export function buildRRRespunInstance(
     `With what probability does the SECOND player come through safely?`;
   const explanation =
     `Every pull is an independent 1/${c} risk. Writing x = P(the opener is eventually hit): x = p + (1 − p)²·x ⇒ x = 1/(2 − p) = ${c}/${2 * c - 1}. ` +
-    `The second player walks away precisely when the opener is the one hit, so their survival probability is ${fracText(correctF)} — the safer seat.`;
+    `The second player walks away precisely when the opener is the one hit, so their survival probability is ${fracText(correctF)}, the safer seat.`;
 
   return {
     answer: fracText(correctF),
@@ -1793,6 +1793,8 @@ export function buildRRRespunInstance(
 export const RR_SPIN = "Spin again (re-randomize the cylinder)";
 export const RR_KEEP = "Do not spin (keep pulling the same cylinder)";
 export const RR_SAME = "It makes no difference either way";
+export const RR_NEEDINFO =
+  "You can't decide without knowing which chamber just fired";
 
 /** Two RANDOM bullets, first player survived → should the second player spin? */
 export function buildRRTwoRandomInstance(
@@ -1806,7 +1808,7 @@ export function buildRRTwoRandomInstance(
 
   const correct: Choice = {
     text: answer,
-    rationale: `Correct — spinning resets loss risk to ${fracText(dec.spinLose)}, while not spinning leaves the ${b} bullets among the other ${c - 1} chambers → ${fracText(dec.noSpinLose)} > ${fracText(dec.spinLose)}.`,
+    rationale: `Correct, spinning resets loss risk to ${fracText(dec.spinLose)}, while not spinning leaves the ${b} bullets among the other ${c - 1} chambers → ${fracText(dec.noSpinLose)} > ${fracText(dec.spinLose)}.`,
   };
   const distractors: Choice[] = [
     {
@@ -1816,6 +1818,10 @@ export function buildRRTwoRandomInstance(
     {
       text: RR_SAME,
       rationale: `It does differ: spinning gives ${fracText(dec.spinLose)}, not spinning gives ${fracText(dec.noSpinLose)}. The survival evidence changes the conditional risk.`,
+    },
+    {
+      text: RR_NEEDINFO,
+      rationale: `You don't need the exact chamber. By symmetry, surviving means the two rounds sit among the ${c - 1} untried chambers, giving loss ${fracText(dec.noSpinLose)} vs ${fracText(dec.spinLose)} on a re-spin.`,
     },
   ];
 
@@ -1851,16 +1857,20 @@ export function buildRRTwoConsecutiveInstance(
 
   const correct: Choice = {
     text: answer,
-    rationale: `Correct — given survival, the hammer is on one of ${c - 2} empty chambers and only one is followed by the bullet block, so NOT spinning survives w.p. ${fracText(dec.noSpinSurvive)} > ${fracText(dec.spinSurvive)} (spin).`,
+    rationale: `Correct, given survival, the hammer is on one of ${c - 2} empty chambers and only one is followed by the bullet block, so NOT spinning survives w.p. ${fracText(dec.noSpinSurvive)} > ${fracText(dec.spinSurvive)} (spin).`,
   };
   const distractors: Choice[] = [
     {
       text: RR_SPIN,
-      rationale: `Spinning resets survival to ${c - 2}/${c} = ${fracText(dec.spinSurvive)}, which is LOWER than the ${fracText(dec.noSpinSurvive)} you keep by not spinning — the two bullets being adjacent helps you.`,
+      rationale: `Spinning resets survival to ${c - 2}/${c} = ${fracText(dec.spinSurvive)}, which is LOWER than the ${fracText(dec.noSpinSurvive)} you keep by not spinning, the two bullets being adjacent helps you.`,
     },
     {
       text: RR_SAME,
       rationale: `It does differ: not spinning survives w.p. ${fracText(dec.noSpinSurvive)} vs ${fracText(dec.spinSurvive)} for spinning. Adjacency of the bullets makes the conditional favourable.`,
+    },
+    {
+      text: RR_NEEDINFO,
+      rationale: `You don't need the exact chamber. Because the previous player survived, the hammer sits on one of the ${c - 2} empty chambers by symmetry, so firing on survives w.p. ${fracText(dec.noSpinSurvive)} vs ${fracText(dec.spinSurvive)}.`,
     },
   ];
 
@@ -1886,7 +1896,7 @@ export function buildRRTwoConsecutiveInstance(
 }
 
 /* ========================================================================== */
-/* ==================  LEVEL 6 — PARADOXES & CLASSICS  ====================== */
+/* ==================  LEVEL 6. PARADOXES & CLASSICS  ====================== */
 /* ==========================  (flashcard)  ================================= */
 /* ========================================================================== */
 
@@ -1897,7 +1907,7 @@ export function buildRRTwoConsecutiveInstance(
  *   • Monty Hall: a DECISION (switch) plus the probability 2/3 (trap: ½).
  *   • Bertrand's box: 2/3, not the naive ½ (condition on faces).
  *   • Vacant Room: a multi-stage conditional resolving to 4/5.
- * All freshly worded — no verbatim source-dataset text.
+ * All freshly worded, no verbatim source-dataset text.
  */
 export const conditionalProbabilityFlashcards: Flashcard[] = [
   {
@@ -1907,7 +1917,7 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
     answer:
       "(a) 1/3.  (b) 1/2.  The setups sound identical but the information arises differently, so they condition differently.",
     explanation:
-      "Sample space for two kids: {bb, bg, gb, gg}, each 1/4. (a) 'At least one boy' keeps {bb, bg, gb}; among these P(bb) = (1/4)/(3/4) = 1/3. (b) Seeing one SPECIFIC child be a boy fixes that child and leaves the other child's sex independent, so P(other is a boy) = 1/2. The difference is not the wording but HOW the boy was revealed — a class fact ('at least one') versus observing a particular child. Collapsing both to one number is the whole trap.",
+      "Sample space for two kids: {bb, bg, gb, gg}, each 1/4. (a) 'At least one boy' keeps {bb, bg, gb}; among these P(bb) = (1/4)/(3/4) = 1/3. (b) Seeing one SPECIFIC child be a boy fixes that child and leaves the other child's sex independent, so P(other is a boy) = 1/2. The difference is not the wording but HOW the boy was revealed, a class fact ('at least one') versus observing a particular child. Collapsing both to one number is the whole trap.",
     difficulty: "medium",
     concept: "Two-child paradox (conditioning on how info arose)",
     source: "Conditional Probability · Two-child paradox",
@@ -1915,11 +1925,11 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
   {
     id: "cp-fc-montyhall",
     prompt:
-      "A quiz show sets out three sealed boxes, a cash prize tucked inside exactly one of them. After you point to a box, the presenter — who is fully aware of where the prize sits — lifts the lid on a different box to show it is empty, then invites you to abandon your original choice for the one box still shut. Is trading up worthwhile, and if you do it, how often will you walk away with the prize?",
+      "A quiz show sets out three sealed boxes, a cash prize tucked inside exactly one of them. After you point to a box, the presenter, who is fully aware of where the prize sits, lifts the lid on a different box to show it is empty, then invites you to abandon your original choice for the one box still shut. Is trading up worthwhile, and if you do it, how often will you walk away with the prize?",
     answer:
-      "Yes — SWITCH. Switching wins with probability 2/3 (staying wins only 1/3). The trap answer is 1/2.",
+      "Yes. SWITCH. Switching wins with probability 2/3 (staying wins only 1/3). The trap answer is 1/2.",
     explanation:
-      "Your first pick is right with probability 1/3 and wrong with probability 2/3. If your first pick was wrong (2/3), the host is FORCED to reveal the other empty box, so the remaining box holds the prize and switching wins. If your first pick was right (1/3), switching loses. Hence P(win | switch) = 2/3. The host's action is not random — it is constrained by his knowledge — which is exactly the information that breaks the naive '2 boxes left, so 1/2' reasoning.",
+      "Your first pick is right with probability 1/3 and wrong with probability 2/3. If your first pick was wrong (2/3), the host is FORCED to reveal the other empty box, so the remaining box holds the prize and switching wins. If your first pick was right (1/3), switching loses. Hence P(win | switch) = 2/3. The host's action is not random, it is constrained by his knowledge, which is exactly the information that breaks the naive '2 boxes left, so 1/2' reasoning.",
     difficulty: "easy",
     concept: "Monty Hall (conditioning on the host's constrained action)",
     source: "Conditional Probability · Counterintuitive classics",
@@ -1929,9 +1939,9 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
     prompt:
       "A drawer holds three two-sided cards: one red on both sides, one blue on both sides, and one red/blue. You pull a card at random and lay it down; the visible side is red. What is the probability the OTHER side is also red?",
     answer:
-      "2/3 — not the intuitive 1/2.",
+      "2/3, not the intuitive 1/2.",
     explanation:
-      "Count FACES, not cards. There are three red faces: two on the red/red card and one on the mixed card. Each is equally likely to be the visible red side. Of those three, two (the red/red card's faces) have a red back; only one (the mixed card) has a blue back. So P(other side red) = 2/3. The naive 1/2 wrongly conditions on the CARD; but a card that is red on both sides shows red twice as often, so a red sighting is evidence for it — the same faces-not-objects lesson as the coin/disc version.",
+      "Count FACES, not cards. There are three red faces: two on the red/red card and one on the mixed card. Each is equally likely to be the visible red side. Of those three, two (the red/red card's faces) have a red back; only one (the mixed card) has a blue back. So P(other side red) = 2/3. The naive 1/2 wrongly conditions on the CARD; but a card that is red on both sides shows red twice as often, so a red sighting is evidence for it, the same faces-not-objects lesson as the coin/disc version.",
     difficulty: "medium",
     concept: "Bertrand's box paradox (faces, not objects)",
     source: "Conditional Probability · Counterintuitive classics",
@@ -1943,7 +1953,7 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
     answer:
       "3/4 (= 0.75).",
     explanation:
-      "The flag can read 'Available' only if the last driver who actually touched it was a proper (both-ways) setter — the forget-on-exit drivers would have left it on 'In Use', and the never-touch drivers change nothing. Among flag-touching drivers, P(proper) = (2/5)/(2/5 + 1/10) = 4/5, a common factor of both 'Available' worlds, so it cancels: P(free | 'Available') = P(free)/[P(free) + P(in use)·P(never-touch)] = (3/5)/[(3/5) + (2/5)(1/2)] = (3/5)/(4/5) = 3/4. The subtlety is that a never-touch driver can occupy the stall while the flag still reads 'Available' from an earlier proper user — which is exactly why the answer sits below 1.",
+      "The flag can read 'Available' only if the last driver who actually touched it was a proper (both-ways) setter, the forget-on-exit drivers would have left it on 'In Use', and the never-touch drivers change nothing. Among flag-touching drivers, P(proper) = (2/5)/(2/5 + 1/10) = 4/5, a common factor of both 'Available' worlds, so it cancels: P(free | 'Available') = P(free)/[P(free) + P(in use)·P(never-touch)] = (3/5)/[(3/5) + (2/5)(1/2)] = (3/5)/(4/5) = 3/4. The subtlety is that a never-touch driver can occupy the stall while the flag still reads 'Available' from an earlier proper user, which is exactly why the answer sits below 1.",
     difficulty: "hard",
     concept: "Multi-stage conditional over user types",
     source: "Conditional Probability · Multi-stage conditional",
@@ -1953,7 +1963,7 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
     prompt:
       "Three cards go into a hat: one black on both faces, one white on both faces, one black/white. A card is drawn and slapped on the table showing BLACK. A friend bets you even money that the underside is white, arguing 'it's obviously one of the two cards with a black face, so 50/50'. Is this a fair bet?",
     answer:
-      "No — the bet favours you. P(underside is black) = 2/3, so P(white) is only 1/3; even money is a losing bet for your friend.",
+      "No, the bet favours you. P(underside is black) = 2/3, so P(white) is only 1/3; even money is a losing bet for your friend.",
     explanation:
       "This is Bertrand's box in disguise. Given a black face is showing, condition on the three equally-likely black FACES: two belong to the black/black card (black underside) and one to the mixed card (white underside). So the underside is black with probability 2/3 and white with only 1/3. Your friend's '50/50' counts CARDS, ignoring that the double-black card is twice as likely to have produced a black face. At even money you should take the 'underside is black' side and expect to win 2/3 of the time.",
     difficulty: "medium",
@@ -1966,44 +1976,44 @@ export const conditionalProbabilityFlashcards: Flashcard[] = [
 /*  Named generators (adapters used by the levels + verification tests)        */
 /* ========================================================================== */
 
-// Level 1 — Reduced sample space (quiz)
+// Level 1. Reduced sample space (quiz)
 export const genTable = (rng: Rng): Question => buildTableInstance(rng, "easy").question;
 export const genBoth = (rng: Rng): Question => buildBothInstance(rng, "easy").question;
 export const genGivenSum = (rng: Rng): Question => buildGivenSumInstance(rng, "easy").question;
 export const genBertrand = (rng: Rng): Question => buildBertrandInstance(rng, "easy").question;
 export const genAllOn = (rng: Rng): Question => buildAllOnInstance(rng, "easy").question;
 
-// Level 2 — Bayes (quiz)
+// Level 2. Bayes (quiz)
 export const genBayesTest = (rng: Rng): Question => buildBayesTestInstance(rng, "medium").question;
 export const genWhichDie = (rng: Rng): Question => buildWhichDieInstance(rng, "medium").question;
 export const genCheerLoser = (rng: Rng): Question => buildCheerLoserInstance(rng, "medium").question;
 export const genInversion = (rng: Rng): Question => buildInversionInstance(rng, "medium").question;
 
-// Level 1 — Reduced sample space (numeric — MCQ→free-response conversions)
+// Level 1. Reduced sample space (numeric. MCQ→free-response conversions)
 export const genTableNumeric = (rng: Rng): NumericQuestion => buildTableNumericInstance(rng, "easy").numeric;
 export const genBothNumeric = (rng: Rng): NumericQuestion => buildBothNumericInstance(rng, "easy").numeric;
 export const genGivenSumNumeric = (rng: Rng): NumericQuestion => buildGivenSumNumericInstance(rng, "easy").numeric;
 export const genBertrandNumeric = (rng: Rng): NumericQuestion => buildBertrandNumericInstance(rng, "easy").numeric;
 export const genAllOnNumeric = (rng: Rng): NumericQuestion => buildAllOnNumericInstance(rng, "easy").numeric;
 
-// Level 2 — Bayes (numeric — MCQ→free-response conversions)
+// Level 2. Bayes (numeric. MCQ→free-response conversions)
 export const genBayesTestNumeric = (rng: Rng): NumericQuestion => buildBayesTestNumericInstance(rng, "medium").numeric;
 export const genWhichDieNumeric = (rng: Rng): NumericQuestion => buildWhichDieNumericInstance(rng, "medium").numeric;
 export const genCheerLoserNumeric = (rng: Rng): NumericQuestion => buildCheerLoserNumericInstance(rng, "medium").numeric;
 export const genInversionNumeric = (rng: Rng): NumericQuestion => buildInversionNumericInstance(rng, "medium").numeric;
 
-// Level 3 — Total probability & continuous (numeric)
+// Level 3. Total probability & continuous (numeric)
 export const genTransfer = (rng: Rng): NumericQuestion => buildTransferInstance(rng, "medium").numeric;
 export const genLotpLine = (rng: Rng): NumericQuestion => buildLotpLineInstance(rng, "easy").numeric;
 export const genUniform = (rng: Rng): NumericQuestion => buildUniformInstance(rng, "medium").numeric;
 
-// Level 4 — Races & recursion (numeric)
+// Level 4. Races & recursion (numeric)
 export const genSumRace = (rng: Rng): NumericQuestion => buildSumRaceInstance(rng, "medium").numeric;
 export const genFirstToss = (rng: Rng): NumericQuestion => buildFirstTossInstance(rng, "medium").numeric;
 export const genTie = (rng: Rng): NumericQuestion => buildTieInstance(rng, "medium").numeric;
 export const genFirstStep = (rng: Rng): NumericQuestion => buildFirstStepInstance(rng, "medium").numeric;
 
-// Level 5 — Russian Roulette (quiz: probabilities + decisions)
+// Level 5. Russian Roulette (quiz: probabilities + decisions)
 export const genRRFixed = (rng: Rng): Question => buildRRFixedInstance(rng, "medium").question;
 export const genRRRespun = (rng: Rng): Question => buildRRRespunInstance(rng, "medium").question;
 export const genRRTwoRandom = (rng: Rng): Question => buildRRTwoRandomInstance(rng, "medium").question;

@@ -15,10 +15,28 @@ import type { MathStep } from "./types";
 const step = (over: Partial<MathStep> = {}): MathStep => ({
   kind: "math",
   id: "s",
+  qtype: "mental-math",
+  regime: "sprint",
   prompt: "12 x 12 = ?",
   answer: 144,
   explanation: "",
   followUps: [],
+  authoredProbe: {
+    prompt: "Halve it?",
+    source: "authored",
+    role: "probe",
+    label: "Follow-up 1 of 2 · Probe",
+    answer: 72,
+    targetMs: 10000,
+  },
+  authoredAdversarial: {
+    prompt: "Double it?",
+    source: "authored",
+    role: "adversarial",
+    label: "Follow-up 2 of 2 · Adversarial",
+    answer: 288,
+    targetMs: 12000,
+  },
   targetMs: 15000,
   ...over,
 });

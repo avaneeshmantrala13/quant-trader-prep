@@ -3,7 +3,7 @@ import Fraction from "fraction.js";
 /**
  * Exact, rational solvers for a PURE no-arbitrage / odds-normalization / de-vig
  * REASONING drill. This is a math + logic drill (converting quoted odds to
- * implied probabilities, stripping the vig, and detecting a Dutch-book) — NOT a
+ * implied probabilities, stripping the vig, and detecting a Dutch-book). NOT a
  * finance lesson. There is deliberately NO put-call-parity / options / synthetic
  * content here; every function below is elementary probability + arithmetic done
  * with EXACT rationals (`fraction.js`) so every ground-truth answer a generator
@@ -28,7 +28,7 @@ export const F = (n: number | string, d?: number): Fraction =>
   d === undefined ? new Fraction(n as never) : new Fraction(n as never, d);
 
 /* -------------------------------------------------------------------------- */
-/*  Odds-format conversion — decimal / fractional / American moneyline         */
+/*  Odds-format conversion, decimal / fractional / American moneyline         */
 /* -------------------------------------------------------------------------- */
 
 /** The three odds formats a book may be quoted in. */
@@ -69,7 +69,7 @@ export function impliedFromMoneyline(m: number): Fraction {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Booksum, overround, de-vig — the core normalization                        */
+/*  Booksum, overround, de-vig, the core normalization                        */
 /* -------------------------------------------------------------------------- */
 
 /** Coerce a decimal-odds input (string like "1.90", number, or Fraction). */
@@ -89,7 +89,7 @@ export function overround(odds: (Fraction | string | number)[]): Fraction {
 
 /**
  * De-vigged (arbitrage-free) fair probability of leg `idx`:
- * (1/oᵢ) / Σ(1/oⱼ) — normalize the raw implied probs so they sum to exactly 1.
+ * (1/oᵢ) / Σ(1/oⱼ), normalize the raw implied probs so they sum to exactly 1.
  */
 export function fairProb(
   odds: (Fraction | string | number)[],
@@ -166,7 +166,7 @@ export function valueBetIndex(
   return best;
 }
 
-/** Index of the shortest-odds (book's favorite) leg — the highest implied prob. */
+/** Index of the shortest-odds (book's favorite) leg, the highest implied prob. */
 export function favoriteIndex(
   odds: (Fraction | string | number)[],
 ): number {
@@ -189,7 +189,7 @@ export function favoriteIndex(
 /**
  * Stakes that lock an EQUAL payout on every outcome for a total outlay `total`:
  * stakeᵢ = total · (1/oᵢ) / booksum. Each outcome then returns
- * stakeᵢ·oᵢ = total / booksum — identical whichever result lands. When
+ * stakeᵢ·oᵢ = total / booksum, identical whichever result lands. When
  * booksum < 1 that common return exceeds the outlay ⇒ a guaranteed profit.
  */
 export function arbStakes(
@@ -223,7 +223,7 @@ export function guaranteedProfit(
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Basket / NAV — weighted-sum mispricing (parts vs whole)                     */
+/*  Basket / NAV, weighted-sum mispricing (parts vs whole)                     */
 /* -------------------------------------------------------------------------- */
 
 export interface BasketLeg {
@@ -237,7 +237,7 @@ export function basketNAV(legs: BasketLeg[]): number {
   return legs.reduce((s, l) => s + l.qty * l.price, 0);
 }
 
-/** The UNWEIGHTED price sum Σ priceᵢ — the classic "ignored the quantities" error. */
+/** The UNWEIGHTED price sum Σ priceᵢ, the classic "ignored the quantities" error. */
 export function unweightedSum(legs: BasketLeg[]): number {
   return legs.reduce((s, l) => s + l.price, 0);
 }

@@ -126,7 +126,7 @@ export function CommunityPage() {
         masked
           ? {
               kind: "info",
-              text: "Posted — some language was masked to meet the content policy.",
+              text: "Posted: some language was masked to meet the content policy.",
             }
           : { kind: "success", text: "Posted. Thanks for contributing!" },
       );
@@ -172,7 +172,7 @@ export function CommunityPage() {
       setFlaggedIds((prev) => new Set(prev).add(reportId));
       setNotice({
         kind: "info",
-        text: "Thanks — this post was reported and will be reviewed.",
+        text: "Thanks. This post was reported and will be reviewed.",
       });
     } catch {
       setNotice({ kind: "error", text: "Could not submit your report." });
@@ -200,11 +200,11 @@ export function CommunityPage() {
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-secondary">
           Crowd-sourced, PII-free write-ups of real superdays and screens, ranked
           by community quality votes. Reputation is a durable, reconstructable
-          karma ledger — no mutable counters. All content here comes from real
+          karma ledger, not mutable counters. All content here comes from real
           contributors.
         </p>
         <p className="mt-3 max-w-2xl rounded border border-subtle px-3 py-2 text-xs leading-relaxed text-muted">
-          Be respectful and keep it PII-free (public handles only — no names,
+          Be respectful and keep it PII-free (public handles only, no names,
           emails, or contact info). User content is moderated; profanity is masked
           and violations may be removed. Report anything that breaks the rules.
         </p>
@@ -258,7 +258,7 @@ export function CommunityPage() {
                 className="input w-full"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Optiver onsite — market-making round"
+                placeholder="e.g. Optiver onsite, market-making round"
               />
             </label>
           </div>

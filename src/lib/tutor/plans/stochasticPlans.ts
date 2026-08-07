@@ -58,6 +58,11 @@ const CHEBYSHEV: AttackPlan =
   "(2) How far from the center is the range you care about, counted in those spread-units? " +
   "(3) Are you bounding the chance of being far away, or the chance of staying close?";
 
+const CONCENTRATION: AttackPlan =
+  "Let's make a plan. (1) What single summary of the quantity are you handed to work from — its typical size, its spread, or both? " +
+  "(2) How far past that center is the threshold the question asks about? " +
+  "(3) Are you bounding the chance of landing beyond that threshold, and in which direction?";
+
 const ORDER: AttackPlan =
   "Let's make a plan. (1) Are you asked about the smallest value, the largest, or one at a particular ranked position? " +
   "(2) For that extreme or ranked value, what has to hold for all the other observations? " +
@@ -81,13 +86,30 @@ const DISTRIBUTION: AttackPlan =
 /** Family (generator/template) name → plan, when recognized within this domain. */
 function byFamily(family: string): AttackPlan | null {
   const f = family.toLowerCase();
+  // Markov's INEQUALITY (a mean-based tail bound) — NOT a Markov chain. Must be
+  // caught before the generic `markov` branch below, which used to hand it the
+  // chain "states / next-step-vs-long-run" plan.
+  if (f.includes("markovbound") || (f.includes("markov") && f.includes("bound"))) {
+    return CONCENTRATION;
+  }
   if (f === "genchebyshev") return CHEBYSHEV;
-  if (f === "gencltstatement" || f === "gencltcondition") return CLT;
+  // Genuine sample-mean / difference-of-means CLT families (they live in the
+  // Variance/Cov/CLT section but ARE about the CLT, unlike its cov/corr siblings).
+  if (
+    f === "gencltstatement" ||
+    f === "gencltcondition" ||
+    f === "genclttail" ||
+    f === "gencltdiffz" ||
+    f === "gencltdiffznumeric"
+  ) {
+    return CLT;
+  }
   if (f === "genllnstatement") return LLN;
   if (f.includes("stationary")) return STATIONARY;
   if (f.includes("branching")) return BRANCHING;
   if (f.includes("walk") || f.includes("ruin")) return WALK;
-  if (f.includes("markov")) return MARKOV_STEP;
+  // A Markov CHAIN family (exclude the inequality, handled above).
+  if (f.includes("markov") && !f.includes("bound")) return MARKOV_STEP;
   return null;
 }
 
@@ -108,9 +130,15 @@ function bySectionKeyword(haystack: string): AttackPlan | null {
   if (has("branching")) return BRANCHING;
   if (has("random walk") || has("gambler") || has("ruin")) return WALK;
   if (has("markov")) return MARKOV_STEP;
+  // Covariance / variance BEFORE the CLT keyword: the section string
+  // "Variance, Covariance & the CLT" literally contains "CLT", so a bare
+  // `has("clt")` used to hand EVERY covariance / correlation / variance-
+  // combination item the CLT plan. Those want the spread/variance plan; only a
+  // genuinely central-limit item (matched by family above, or a section whose
+  // primary topic is CLT/LLN) should get the CLT plan.
+  if (has("covariance") || has("variance")) return VARIANCE_CLT;
   if (has("central limit") || has("clt")) return CLT;
   if (has("law of large") || has("lln")) return LLN;
-  if (has("covariance") || has("variance")) return VARIANCE_CLT;
   if (has("moment generating") || has("mgf")) return MGF;
   if (
     has("poisson") ||

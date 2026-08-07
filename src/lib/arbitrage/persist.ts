@@ -15,8 +15,18 @@
  * completed run starts fresh.
  */
 
-/** localStorage key (device-level; this drill is disjoint from per-user progress). */
+import { userScopedKey } from "@/lib/userScope";
+
+/**
+ * BASE localStorage key. The real key is per-user (see {@link arbitrageRunKey})
+ * so two accounts on the same browser never resume each other's in-progress run.
+ */
 export const ARBITRAGE_STORAGE_KEY = "qtp.arbitrage.run";
+
+/** Per-user storage key for the in-progress run (anon namespace when logged out). */
+export function arbitrageRunKey(userId: string | null | undefined): string {
+  return userScopedKey(ARBITRAGE_STORAGE_KEY, userId);
+}
 
 /** The minimal surface of `Storage` we use — injectable for tests. */
 export interface StorageLike {
@@ -51,31 +61,34 @@ function resolveStore(store?: StorageLike): StorageLike | null {
   }
 }
 
-/** Persist the in-progress run (overwrites any prior one). Non-fatal on failure. */
+/** Persist the CURRENT user's in-progress run (overwrites any prior one). Non-fatal. */
 export function saveArbitrageRun(
   run: ArbitrageRunState,
+  userId: string | null | undefined,
   store?: StorageLike,
 ): void {
   const s = resolveStore(store);
   if (!s) return;
   try {
-    s.setItem(ARBITRAGE_STORAGE_KEY, JSON.stringify(run));
+    s.setItem(arbitrageRunKey(userId), JSON.stringify(run));
   } catch {
     /* storage full / unavailable — non-fatal */
   }
 }
 
 /**
- * Read the persisted run, or `undefined` when absent/corrupt. Performs a light
- * structural check so a malformed blob is treated as "no resume".
+ * Read the CURRENT user's persisted run, or `undefined` when absent/corrupt. The
+ * key is user-scoped, so one account never reads another account's run. Performs
+ * a light structural check so a malformed blob is treated as "no resume".
  */
 export function loadArbitrageRun(
+  userId: string | null | undefined,
   store?: StorageLike,
 ): ArbitrageRunState | undefined {
   const s = resolveStore(store);
   if (!s) return undefined;
   try {
-    const raw = s.getItem(ARBITRAGE_STORAGE_KEY);
+    const raw = s.getItem(arbitrageRunKey(userId));
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as ArbitrageRunState | null;
     if (
@@ -92,12 +105,15 @@ export function loadArbitrageRun(
   }
 }
 
-/** Clear the persisted run (on finish or explicit restart). Non-fatal. */
-export function clearArbitrageRun(store?: StorageLike): void {
+/** Clear the CURRENT user's persisted run (on finish or explicit restart). Non-fatal. */
+export function clearArbitrageRun(
+  userId: string | null | undefined,
+  store?: StorageLike,
+): void {
   const s = resolveStore(store);
   if (!s) return;
   try {
-    s.removeItem(ARBITRAGE_STORAGE_KEY);
+    s.removeItem(arbitrageRunKey(userId));
   } catch {
     /* ignore */
   }

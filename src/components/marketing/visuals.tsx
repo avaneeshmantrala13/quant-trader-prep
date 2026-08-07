@@ -1,10 +1,18 @@
 import { Link } from "react-router-dom";
-import { MOTIF_ICON } from "@/components/icons";
+import {
+  BoltIcon,
+  CardsIcon,
+  GaugeIcon,
+  MOTIF_ICON,
+  SigmaIcon,
+} from "@/components/icons";
 
 /**
  * Bespoke, quant-flavored feature visuals for the landing page. All are pure
- * SVG/DOM built on the app's semantic tokens, so they render correctly in both
- * the newsprint (light) and terminal (dark) themes and stay crisp at any size.
+ * SVG/DOM built on the app's semantic tokens, so they render correctly in every
+ * theme (minimalist, broadsheet, and the rest) and stay crisp at any size. Each
+ * visual depicts a REAL, playable surface — nothing here implies a feature the
+ * product doesn't actually ship (see visuals.test.tsx).
  */
 
 function PanelHead({ tag, right }: { tag: string; right?: string }) {
@@ -12,6 +20,92 @@ function PanelHead({ tag, right }: { tag: string; right?: string }) {
     <div className="flex items-center justify-between border-b border-subtle px-3 py-2">
       <span className="label">{tag}</span>
       {right && <span className="label text-[9px]">{right}</span>}
+    </div>
+  );
+}
+
+/* ---------- 0. The hiring-funnel path (calm hero visual) ---------- */
+/**
+ * A quiet, honest depiction of the actual product path: the diagnostic
+ * (/diagnostic) places you, adaptive practice across the real tracks builds
+ * mastery, timed OA sections (/oa) and firm-style mock interviews (/mock,
+ * /trading-floor) rehearse the real gates, and a readiness meter (/roadmap)
+ * tracks how close you are. No fake tickers or "live" badges — just the route
+ * a student actually walks.
+ */
+export function FunnelVisual() {
+  const steps = [
+    {
+      Icon: GaugeIcon,
+      label: "Diagnostic",
+      sub: "A short placement finds your level",
+      state: "done" as const,
+    },
+    {
+      Icon: SigmaIcon,
+      label: "Adaptive practice",
+      sub: "Probability, EV, mental math, brainteasers, market-making",
+      state: "live" as const,
+    },
+    {
+      Icon: BoltIcon,
+      label: "Timed OA sections",
+      sub: "Firm-style sections, against the clock",
+      state: "next" as const,
+    },
+    {
+      Icon: CardsIcon,
+      label: "Mock interviews",
+      sub: "Two-sided markets and superday games",
+      state: "next" as const,
+    },
+  ];
+  return (
+    <div className="panel overflow-hidden">
+      <PanelHead tag="Your Path" right="Diagnostic → Interview" />
+      <ul className="divide-y divide-subtle">
+        {steps.map(({ Icon, label, sub, state }, i) => (
+          <li key={label} className="flex items-center gap-3 px-4 py-3">
+            <span
+              className={`grid h-9 w-9 shrink-0 place-items-center border ${
+                state === "next"
+                  ? "border-subtle text-muted"
+                  : "border-border-strong text-primary"
+              }`}
+            >
+              <Icon width={18} height={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="num text-[11px] text-muted">
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="font-display text-sm font-semibold text-primary">
+                  {label}
+                </span>
+                {state === "done" && (
+                  <span className="label text-[8px] text-bull">✓ Done</span>
+                )}
+                {state === "live" && (
+                  <span className="label text-[8px] text-accent">Now</span>
+                )}
+              </div>
+              <div className="mt-0.5 truncate text-[12px] leading-snug text-secondary">
+                {sub}
+              </div>
+            </div>
+          </li>
+        ))}
+      </ul>
+      <div className="border-t border-subtle px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="label text-[9px]">Interview readiness</span>
+          <span className="num text-[11px] font-semibold text-primary">42%</span>
+        </div>
+        <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+          <div className="h-full w-[42%] rounded-full bg-accent" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -92,9 +186,9 @@ export function HintLadderVisual() {
   // Mirrors the REAL 5-rung ladder in `src/lib/tutor/hintLadder.ts`: coaching
   // escalates while the final answer stays withheld until the last rung.
   const rungs = [
-    { n: 1, label: "Name the trap", t: "You subtracted where the events overlap — that's the miss." },
+    { n: 1, label: "Name the trap", t: "You subtracted where the events overlap; that's the miss." },
     { n: 2, label: "Make a plan of attack", t: "First find P(none). What does “at least one” become then?" },
-    { n: 3, label: "Study a worked sibling", t: "Same problem, fresh numbers — worked one step at a time." },
+    { n: 3, label: "Study a worked sibling", t: "Same problem, fresh numbers, worked one step at a time." },
     { n: 4, label: "Confront it", t: "Open the dice simulation and watch the frequency settle.", sim: true },
   ] as const;
   return (
@@ -214,7 +308,7 @@ export function MentalMathVisual() {
   const sums = ["47 × 8", "816 ÷ 12", "23 × 41", "18% of 250", "3/8 = ?", "7:1 → P?"];
   return (
     <div className="panel overflow-hidden">
-      <PanelHead tag="Speed Drill" right="80 in 8:00" />
+      <PanelHead tag="Speed Drill" right="Against the clock" />
       <div className="flex items-center gap-4 p-4">
         {/* countdown ring */}
         <div className="relative grid h-20 w-20 shrink-0 place-items-center">

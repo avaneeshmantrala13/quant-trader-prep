@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { migrateProgress } from "./migrate";
 import { emptyProgress } from "@/types/progress";
 
-describe("migrateProgress (v1 → v2 → v3)", () => {
-  it("upgrades a v1 blob (no mastery fields) non-destructively to v3", () => {
+describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
+  it("upgrades a v1 blob (no mastery fields) non-destructively to v5", () => {
     const v1 = {
       version: 1,
       levelProgress: {
@@ -16,7 +16,7 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
       createdAt: "2025-01-01T00:00:00.000Z",
     };
     const v3 = migrateProgress(v1);
-    expect(v3.version).toBe(3);
+    expect(v3.version).toBe(5);
     // preserved
     expect(v3.levelProgress["p-1"].mastered).toBe(true);
     expect(v3.xp).toBe(420);
@@ -54,7 +54,7 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
       diagnosticDoneAt: "2026-01-01T00:00:00.000Z",
     };
     const out = migrateProgress(v2in);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(5);
     // θ/α/β preserved VALID and UNCHANGED.
     expect(out.topicMastery?.["t::_core"].theta).toBe(0.5);
     expect(out.topicMastery?.["t::_core"].alpha).toBe(3);
@@ -86,7 +86,7 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
       },
     };
     const out = migrateProgress(withT12);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(5);
     // The new estimator signals ride along, preserved-if-present.
     expect(out.topicMastery?.["t::_core"].irtAbility).toBe(0.73);
     expect(out.topicMastery?.["t::_core"].irtAbilitySe).toBe(0.4);
@@ -101,7 +101,7 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
       oaTimed: { active: undefined, results: [{ id: "oa-x" }] },
     } as unknown;
     const out = migrateProgress(withOa);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(5);
     expect(out.oaTimed).toEqual({ active: undefined, results: [{ id: "oa-x" }] });
   });
 
@@ -130,7 +130,7 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
       createdAt: "2025-01-01T00:00:00.000Z",
     };
     const out = migrateProgress(legacy);
-    expect(out.version).toBe(3);
+    expect(out.version).toBe(5);
     expect(out.levelProgress.x.mastered).toBe(true);
     expect(out.topicMastery).toEqual({});
   });
@@ -152,9 +152,27 @@ describe("migrateProgress (v1 → v2 → v3)", () => {
     expect(out.calibrationLog?.[0].pred).toBe(0.8);
   });
 
-  it("returns a fresh empty (v3) progress for garbage input", () => {
-    expect(migrateProgress(null).version).toBe(3);
+  it("returns a fresh empty (v5) progress for garbage input", () => {
+    expect(migrateProgress(null).version).toBe(5);
     expect(migrateProgress(undefined).topicMastery).toEqual({});
     expect(migrateProgress("nope").tierDifficulty).toEqual({});
+  });
+
+  it("leaves `misconceptionsByTopic` absent for a pre-v5 save, and preserves it when present", () => {
+    // Pre-v5 save never carried the tally ⇒ stays absent (older rows load fine).
+    expect(migrateProgress({ ...emptyProgress(), version: 4 }).misconceptionsByTopic).toBeUndefined();
+    // An explicit tally is preserved EXACTLY across the migration.
+    const saved = {
+      ...emptyProgress(),
+      version: 4,
+      misconceptionsByTopic: {
+        "probability::Core Probability": { or_means_add_no_overlap: 4, and_means_add: 1 },
+      },
+    };
+    const out = migrateProgress(saved);
+    expect(out.version).toBe(5);
+    expect(out.misconceptionsByTopic).toEqual({
+      "probability::Core Probability": { or_means_add_no_overlap: 4, and_means_add: 1 },
+    });
   });
 });

@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { storage } from "@/lib/storage";
+import { meetsMasteryGate } from "@/lib/score";
 import {
   bumpStreakInPlace,
   completeFlashcardLevelInPlace,
@@ -42,9 +43,32 @@ import {
   applyItemAttempt,
   applyReviewSchedule,
 } from "@/lib/mastery/mastery";
+import { betaMean } from "@/lib/mastery/beta";
 import { deriveVerdict, type TopicVerdict } from "@/lib/mastery/verdict";
 import { tierDifficultyKey, tierExposureKey } from "@/lib/mastery/topicKey";
+import { misconceptionTagOf } from "@/content/remediation/prereqDAG";
+import type { RemediationAction } from "@/lib/remediation/policy";
+import { didRelock, planRelockRemediation } from "@/lib/remediation/relock";
+import { bumpTopicMisconceptions } from "@/lib/remediation/misconceptionTally";
+import {
+  applyReview,
+  coerceSrsStore,
+  ensureCardsSeeded,
+  type SrsGrade,
+} from "@/lib/srs/store";
 import { useAuth } from "./AuthContext";
+
+/**
+ * The result of folding ONE graded item (Part B relock-aware). `mastery` is the
+ * topic's mastery AFTER the fold (the caller's synchronous "AFTER" snapshot);
+ * `relock` is the planned ~85% prerequisite-probe action when this fold swung a
+ * diagnostic-seeded LOW-CONFIDENCE unlock back under the unlock bar and RE-LOCKED
+ * it (else `null`). Additive: pre-existing callers ignore the return.
+ */
+export interface ItemAttemptResult {
+  mastery: TopicMastery;
+  relock: RemediationAction | null;
+}
 
 interface ProgressContextValue {
   progress: UserProgress;
@@ -55,19 +79,20 @@ interface ProgressContextValue {
   /**
    * Record a finished level attempt; updates mastery, xp, and streak.
    *
-   * `scoreFraction` is the CREDIT-WEIGHTED VISIBLE score (mean of per-item
-   * hint-credit) — it is stored as `bestScore` (what the map/summary show) and
-   * drives `xpGained`. The pass/advance/unlock decision instead uses the
-   * optional lenient `gateFraction` (the binary "ultimately correct" fraction),
-   * so using hints lowers the displayed % but can NEVER bounce a learner below
-   * the pass bar. Back-compat: when `gateFraction` is omitted the gate falls
-   * back to `scoreFraction`, preserving the original behavior for other callers.
+   * `scoreFraction` is the CREDIT-WEIGHTED VISIBLE mastery (mean of per-item
+   * hint-credit) — the SAME number the map/summary show as "Mastery %". It is
+   * stored as `bestScore`, drives `xpGained`, AND is THE value gated against
+   * `masteryThreshold` to decide `mastered` (and therefore the unlock + the
+   * celebratory settlement stamp). Gating on the credit-weighted mastery (rather
+   * than a lenient binary "ultimately correct" fraction) means a hint-heavy round
+   * — e.g. answers only reached after the final hint (≈22% credit) — reads NOT
+   * mastered even though 4/5 were eventually correct, while a clean few/no-hint
+   * round still earns near-full credit and masters exactly as before.
    */
   recordAttempt: (
     levelId: string,
     scoreFraction: number,
     masteryThreshold: number,
-    gateFraction?: number,
   ) => { mastered: boolean; xpGained: number; isNewMastery: boolean };
   // ---- flashcard (integrity-based) levels ----
   /** The set of problem ids marked "Got it" for a flashcard level. */
@@ -86,8 +111,14 @@ interface ProgressContextValue {
    * Fold ONE graded item into topic mastery + tier difficulty. Additive and
    * INDEPENDENT of `recordAttempt` — it never touches `LevelProgress.mastered`
    * (the unlock gate). Pure logic lives in `src/lib/mastery`.
+   *
+   * Returns the folded mastery (the caller's synchronous "AFTER" snapshot) plus,
+   * for Part B, a `relock` remediation action when this fold RE-LOCKED a
+   * diagnostic-seeded low-confidence unlock (see {@link ItemAttemptResult}). The
+   * live lesson players read `relock` to route the learner to the ~0.85
+   * prerequisite probe; every other caller can ignore the return.
    */
-  recordItemAttempt: (a: ItemAttempt) => void;
+  recordItemAttempt: (a: ItemAttempt) => ItemAttemptResult;
   /** Read the current (possibly undefined) mastery for a topic. */
   getTopicMastery: (topicKey: string) => TopicMastery | undefined;
   /** Derived, calibration-aware verdict for the dashboard/adaptivity (Phase 5). */
@@ -166,6 +197,22 @@ interface ProgressContextValue {
    * `appendOaResult`). Additive & independent of mastery/scoring/locking.
    */
   recordOaResult: (result: OaSessionResult) => void;
+  // ---- SRS / Spaced Repetition (T14 retention) — its OWN lane ----
+  /**
+   * Ensure every id in `cardIds` has a scheduling row (missing ids seed a fresh
+   * card due immediately at `nowMs`), so a newly-generated deck is reviewable.
+   * Existing rows are untouched. Additive & INDEPENDENT of mastery/scoring/
+   * locking — the SRS store NEVER gates content or affects the fold/relock.
+   */
+  ensureSrsCardsSeeded: (cardIds: string[], nowMs?: number) => void;
+  /**
+   * Grade ONE SRS card (recall grade 0–5) and reschedule it via the pure SM-2
+   * scheduler (`src/lib/srs`), persisting the new absolute-due state. Its OWN
+   * lane BY DESIGN: it NEVER calls `recordItemAttempt` / touches topic mastery,
+   * tier/Glicko difficulty, the confident-mastery + unlock bars, relock, or the
+   * v-migration. See the review page for the rationale.
+   */
+  gradeSrsCard: (cardId: string, grade: SrsGrade, nowMs?: number) => void;
 }
 
 /**
@@ -180,6 +227,14 @@ export interface DiagnosticSeed {
   thetaSeed?: number;
   /** Namespaced misconception keys tripped during the diagnostic. */
   misconceptions?: string[];
+  /**
+   * True for a seed DERIVED from KST-prereq expansion (not directly assessed).
+   * A derived low-confidence unlock is applied ONLY when the topic has NO prior
+   * evidence (`n === 0`), so it can never overwrite real graded/diagnostic
+   * history — a prereq the learner already has good OR bad signal on is left
+   * exactly as-is. See `withPrereqUnlocks`.
+   */
+  derived?: boolean;
 }
 
 const ProgressContext = createContext<ProgressContextValue | null>(null);
@@ -232,6 +287,30 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [persist],
   );
 
+  // SYNCHRONOUS mirror of the mastery-fold sub-state. `recordItemAttempt` folds
+  // ONE item exactly once (the flashcard-runtime guard counts `applyItemAttempt`
+  // calls) yet must (a) return the AFTER mastery synchronously for the Part-B
+  // relock check and (b) accumulate when several items fold in a single tick
+  // (the adaptive-engine live guard fires a batch). Reading/advancing this ref in
+  // lockstep gives both without a second fold; it is re-synced from committed
+  // `progress` on every render.
+  const foldBaseRef = useRef<{
+    topicMastery: NonNullable<UserProgress["topicMastery"]>;
+    tierDifficulty: NonNullable<UserProgress["tierDifficulty"]>;
+    glickoDifficulty: NonNullable<UserProgress["glickoDifficulty"]>;
+  }>({
+    topicMastery: progress.topicMastery ?? {},
+    tierDifficulty: progress.tierDifficulty ?? {},
+    glickoDifficulty: progress.glickoDifficulty ?? {},
+  });
+  useEffect(() => {
+    foldBaseRef.current = {
+      topicMastery: progress.topicMastery ?? {},
+      tierDifficulty: progress.tierDifficulty ?? {},
+      glickoDifficulty: progress.glickoDifficulty ?? {},
+    };
+  }, [progress]);
+
   const getLevelProgress = useCallback(
     (levelId: string) => progress.levelProgress[levelId],
     [progress],
@@ -263,18 +342,13 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   );
 
   const recordAttempt = useCallback(
-    (
-      levelId: string,
-      scoreFraction: number,
-      masteryThreshold: number,
-      gateFraction?: number,
-    ) => {
-      // Split the two concerns: `scoreFraction` is the credit-weighted VISIBLE
-      // score (bestScore + xp), while the pass/advance decision uses the lenient
-      // binary `gateFraction` (falling back to `scoreFraction` for back-compat)
-      // so hint use never bounces a learner below the pass bar.
-      const gate = gateFraction ?? scoreFraction;
-      const mastered = gate >= masteryThreshold;
+    (levelId: string, scoreFraction: number, masteryThreshold: number) => {
+      // `scoreFraction` is the credit-weighted VISIBLE mastery (bestScore + xp +
+      // the shown "Mastery %"). The pass/unlock/stamp decision gates on THIS
+      // number, so a hint-heavy low-credit round (e.g. 22%) reads NOT mastered
+      // even if most items were eventually correct — the honest signal — while a
+      // clean few/no-hint round earns near-full credit and still masters.
+      const mastered = meetsMasteryGate(scoreFraction, masteryThreshold);
       const prior = progress.levelProgress[levelId];
       const isNewMastery = mastered && !prior?.mastered;
       const xpGained = Math.round(scoreFraction * 100) + (isNewMastery ? 50 : 0);
@@ -334,24 +408,86 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   );
 
   const recordItemAttempt = useCallback(
-    (a: ItemAttempt) => {
+    (a: ItemAttempt): ItemAttemptResult => {
+      const dKey = tierDifficultyKey(a.topicKey, a.tier);
+      const expKey = tierExposureKey(a.topicKey, a.tier);
+
+      // The ONE pure fold (T12 adaptive engine included). Folding from the
+      // synchronous `foldBaseRef` mirror gives the AFTER mastery immediately and
+      // accumulates across a same-tick batch — see the ref's doc.
+      const base = foldBaseRef.current;
+      const prevMastery = base.topicMastery[a.topicKey];
+      const dExposures = base.tierDifficulty[expKey] ?? 0;
+      const { mastery, tierD, glicko } = applyItemAttempt(
+        prevMastery,
+        base.tierDifficulty[dKey],
+        a,
+        dExposures,
+        base.glickoDifficulty[dKey],
+      );
+
+      // Advance the mirror so the next fold in this tick sees this one.
+      foldBaseRef.current = {
+        topicMastery: { ...base.topicMastery, [a.topicKey]: mastery },
+        tierDifficulty: {
+          ...base.tierDifficulty,
+          [dKey]: tierD,
+          [expKey]: dExposures + 1,
+        },
+        glickoDifficulty: { ...base.glickoDifficulty, [dKey]: glicko },
+      };
+
+      // Part B — SWING-AND-RELOCK: this is the single mastery-fold hook EVERY
+      // graded quiz/numeric/remediation attempt flows through, so it is where we
+      // detect a diagnostic-seeded LOW-CONFIDENCE unlock swinging back under the
+      // unlock bar. When `didRelock`, plan the ~85% ZPD prerequisite probe from
+      // the UPDATED θ/α/β and hand it to the caller to surface through the live
+      // remediation UI. Pure + additive: never mutates mastery, never re-locks
+      // the level gate, and callers that ignore `relock` are unaffected.
+      let relock: RemediationAction | null = null;
+      if (didRelock(prevMastery, mastery)) {
+        const action = planRelockRemediation({
+          topicKey: a.topicKey,
+          mastery,
+          misconceptionTag: misconceptionTagOf(a.misconceptions?.[0]),
+          masteryOf: (k) => {
+            const mm = foldBaseRef.current.topicMastery[k];
+            return mm
+              ? { mean: betaMean(mm.alpha, mm.beta), theta: mm.theta }
+              : undefined;
+          },
+        });
+        if (action.kind !== "exit") relock = action;
+      }
+
+      // Persist by ASSIGNING the already-computed fold (no second
+      // `applyItemAttempt`); `update` still runs through `setProgress` so the
+      // debounced save + immutable snapshot semantics are unchanged.
       update((p) => {
         if (!p.topicMastery) p.topicMastery = {};
         if (!p.tierDifficulty) p.tierDifficulty = {};
-        const dKey = tierDifficultyKey(a.topicKey, a.tier);
-        const expKey = tierExposureKey(a.topicKey, a.tier);
-        const dExposures = p.tierDifficulty[expKey] ?? 0;
-        const { mastery, tierD } = applyItemAttempt(
-          p.topicMastery[a.topicKey],
-          p.tierDifficulty[dKey],
-          a,
-          dExposures,
-        );
+        // T12 adaptive engine: the per-(topic,tier) Glicko difficulty map is a
+        // PARALLEL signal the fold updates alongside Elo/Beta — same key
+        // convention as tierDifficulty so the two difficulty views line up 1:1.
+        if (!p.glickoDifficulty) p.glickoDifficulty = {};
         p.topicMastery[a.topicKey] = mastery;
         p.tierDifficulty[dKey] = tierD;
         p.tierDifficulty[expKey] = dExposures + 1;
+        p.glickoDifficulty[dKey] = glicko;
+        // ZPD (v5): accumulate the RAW, decay-free per-topic misconception tally
+        // that powers the "you made this specific mistake N times" feedback + its
+        // targeted (unscored) re-prep. Its OWN lane — this NEVER changes θ/α/β,
+        // the mastery misconception flags, difficulty, the unlock/mastery bars,
+        // or relock; a correct answer (empty `misconceptions`) leaves it untouched.
+        p.misconceptionsByTopic = bumpTopicMisconceptions(
+          p.misconceptionsByTopic,
+          a.topicKey,
+          a.misconceptions,
+        );
         return p;
       });
+
+      return { mastery, relock };
     },
     [update],
   );
@@ -388,6 +524,11 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         if (!p.topicMastery) p.topicMastery = {};
         const stamp = at ?? new Date().toISOString();
         for (const s of seeds) {
+          // A DERIVED (KST-prereq) low-confidence unlock must never clobber real
+          // evidence: skip it when the learner already has ANY history on that
+          // topic (direct diagnostic or graded practice), so a prereq they've
+          // done badly on stays locked and one they've earned stays as-is.
+          if (s.derived && (p.topicMastery[s.topicKey]?.n ?? 0) > 0) continue;
           const seeded = applyDiagnosticSeed(p.topicMastery[s.topicKey], {
             successes: s.successes,
             failures: s.failures,
@@ -484,6 +625,28 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const ensureSrsCardsSeeded = useCallback(
+    (cardIds: string[], nowMs: number = Date.now()) => {
+      update((p) => {
+        p.srs = ensureCardsSeeded(coerceSrsStore(p.srs), cardIds, nowMs);
+        return p;
+      });
+    },
+    [update],
+  );
+
+  const gradeSrsCard = useCallback(
+    (cardId: string, grade: SrsGrade, nowMs: number = Date.now()) => {
+      update((p) => {
+        // OWN LANE: reschedule the card only. Deliberately does NOT fold into
+        // recordItemAttempt / mastery / difficulty / relock.
+        p.srs = applyReview(coerceSrsStore(p.srs), cardId, grade, nowMs);
+        return p;
+      });
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -507,6 +670,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       saveOaSession,
       clearOaActiveSession,
       recordOaResult,
+      ensureSrsCardsSeeded,
+      gradeSrsCard,
     }),
     [
       progress,
@@ -530,6 +695,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       saveOaSession,
       clearOaActiveSession,
       recordOaResult,
+      ensureSrsCardsSeeded,
+      gradeSrsCard,
     ],
   );
 

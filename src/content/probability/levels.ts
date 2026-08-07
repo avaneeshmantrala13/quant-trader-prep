@@ -26,7 +26,7 @@ import { probabilityStatsSubcategoryLevels } from "../probabilityStats";
  * mined from the original distractor rationales. The hardest are flagged
  * `needsVerification` for expert review (see CONTENT_NOTES.md). NOTE: being
  * static (no generator/family), these items get rungs 1/2/4/5 but NOT the
- * rung-3 "different-numbers" auto-sibling — an accepted non-parametric limit.
+ * rung-3 "different-numbers" auto-sibling, an accepted non-parametric limit.
  */
 
 const hardProblemsNumeric: NumericQuestion[] = [
@@ -50,13 +50,13 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 3,
         feedback:
-          "Not quite — that looks like a guess near the pattern's length. Try splitting the wait into 'time to the first H' plus 'time from that H to the next T'; what does each piece average?",
+          "Not quite, that looks like a guess near the pattern's length. Try splitting the wait into 'time to the first H' plus 'time from that H to the next T'; what does each piece average?",
         misconception: "guessed_pattern_length",
       },
       {
         value: 2,
         feedback:
-          "That's just the wait for a single head. The pattern needs an H followed by a T — what extra wait happens after that first head lands?",
+          "That's just the wait for a single head. The pattern needs an H followed by a T, what extra wait happens after that first head lands?",
         misconception: "single_symbol_wait_only",
       },
     ],
@@ -83,13 +83,13 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 3,
         feedback:
-          "Not quite — this ignores how costly a reset is. When you're one head in and then flip tails, how many flips of progress do you actually lose?",
+          "Not quite, this ignores how costly a reset is. When you're one head in and then flip tails, how many flips of progress do you actually lose?",
         misconception: "reset_cost_ignored",
       },
       {
         value: 8,
         feedback:
-          "That's too high. Set up the state recursion E = ½(1+E) + ¼·2 + ¼(2+E) and solve it — does the wait really climb that far?",
+          "That's too high. Set up the state recursion E = ½(1+E) + ¼·2 + ¼(2+E) and solve it, does the wait really climb that far?",
         misconception: "overestimated_reset_cost",
       },
     ],
@@ -116,13 +116,13 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 8,
         feedback:
-          "Not quite — that underestimates by ignoring how often the ant wanders back toward the start. Do your state equations allow for steps that move away from the target?",
+          "Not quite, that underestimates by ignoring how often the ant wanders back toward the start. Do your state equations allow for steps that move away from the target?",
         misconception: "ignored_backtracking",
       },
       {
         value: 12,
         feedback:
-          "That's an overestimate. Group the vertices by distance and solve E_A=1+E_B, E_B=1+⅓E_A+⅔E_C, … — where does the system actually settle?",
+          "That's an overestimate. Group the vertices by distance and solve E_A=1+E_B, E_B=1+⅓E_A+⅔E_C, …, where does the system actually settle?",
         misconception: "overestimated_hitting_time",
       },
     ],
@@ -150,13 +150,13 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 0.7,
         feedback:
-          "Careful — that's the probability of going broke, (N−i)/N, not of reaching the goal. Which direction does the i/N formula actually measure?",
+          "Careful, that's the probability of going broke, (N−i)/N, not of reaching the goal. Which direction does the i/N formula actually measure?",
         misconception: "complement_confusion",
       },
       {
         value: 0.03,
         feedback:
-          "Check your decimal placement — recompute i/N and count the decimal places carefully. Is 3 out of 10 really that small?",
+          "Check your decimal placement, recompute i/N and count the decimal places carefully. Is 3 out of 10 really that small?",
         misconception: "misplaced_decimal",
       },
     ],
@@ -184,13 +184,13 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 1 / 3,
         feedback:
-          "Not quite — this assumes three orderings are equally likely by symmetry, which they aren't here. Have you mapped the two cut points to the unit square and measured the valid area directly?",
+          "Not quite, this assumes three orderings are equally likely by symmetry, which they aren't here. Have you mapped the two cut points to the unit square and measured the valid area directly?",
         misconception: "false_symmetry_thirds",
       },
       {
         value: 1 / 8,
         feedback:
-          "Careful — that halves things one time too many, double-counting the excluded corners. When you remove the regions where some piece exceeds ½, do those regions actually overlap?",
+          "Careful, that halves things one time too many, double-counting the excluded corners. When you remove the regions where some piece exceeds ½, do those regions actually overlap?",
         misconception: "double_counted_excluded_region",
       },
     ],
@@ -211,19 +211,19 @@ const hardProblemsNumeric: NumericQuestion[] = [
       {
         value: 183,
         feedback:
-          "That's the 'about half of 365' instinct, but that compares each person to one fixed date. Here we count matches among all PAIRS of people — how fast does the number of pairs grow with group size?",
+          "That's the 'about half of 365' instinct, but that compares each person to one fixed date. Here we count matches among all PAIRS of people, how fast does the number of pairs grow with group size?",
         misconception: "pairs_vs_people",
       },
       {
         value: 30,
         feedback:
-          "A bit high — you're over-guessing. Track the product 365/365 · 364/365 · … and find where it first dips below ½; is 30 really the earliest such size?",
+          "A bit high, you're over-guessing. Track the product 365/365 · 364/365 · … and find where it first dips below ½; is 30 really the earliest such size?",
         misconception: "birthday_overguess",
       },
       {
         value: 20,
         feedback:
-          "Close, but a touch low. Multiply the 'all distinct' probabilities one person at a time — has the collision probability already crossed ½ by 20 people?",
+          "Close, but a touch low. Multiply the 'all distinct' probabilities one person at a time, has the collision probability already crossed ½ by 20 people?",
         misconception: "birthday_underguess",
       },
     ],
@@ -247,19 +247,19 @@ const latticeProblemsNumeric: NumericQuestion[] = [
       {
         value: 12,
         feedback:
-          "Close! Multiplying 4·3 counts something else entirely. A path is a sequence of R's and U's — in how many ways can you choose which of the steps are the up-moves?",
+          "Close! Multiplying 4·3 counts something else entirely. A path is a sequence of R's and U's, in how many ways can you choose which of the steps are the up-moves?",
         misconception: "multiplied_coordinates",
       },
       {
         value: 7,
         feedback:
-          "That's just 4+3, the total number of steps, not the number of orderings. Of those 7 steps, which are the up-moves — how many ways to pick them?",
+          "That's just 4+3, the total number of steps, not the number of orderings. Of those 7 steps, which are the up-moves, how many ways to pick them?",
         misconception: "added_coordinates",
       },
       {
         value: 343,
         feedback:
-          "Careful — 7³ counts ordered choices with replacement, but here you have a fixed number of each step. Shouldn't you instead choose positions for the 3 U's among 7 slots?",
+          "Careful, 7³ counts ordered choices with replacement, but here you have a fixed number of each step. Shouldn't you instead choose positions for the 3 U's among 7 slots?",
         misconception: "ordered_with_replacement",
       },
     ],
@@ -286,7 +286,7 @@ const latticeProblemsNumeric: NumericQuestion[] = [
       {
         value: 2 / 5,
         feedback:
-          "Not quite — that looks like a miscount of the favorable orderings. Try the ballot formula built directly from a and b rather than enumerating sequences.",
+          "Not quite, that looks like a miscount of the favorable orderings. Try the ballot formula built directly from a and b rather than enumerating sequences.",
         misconception: "miscounted_favorable_orderings",
       },
       {
@@ -319,13 +319,13 @@ const latticeProblemsNumeric: NumericQuestion[] = [
       {
         value: 6,
         feedback:
-          "Not quite — that's a small miscount. Take the total monotone paths C(6,3) and divide by (n+1); what does that give for a 3×3 grid?",
+          "Not quite, that's a small miscount. Take the total monotone paths C(6,3) and divide by (n+1); what does that give for a 3×3 grid?",
         misconception: "catalan_miscount",
       },
       {
         value: 10,
         feedback:
-          "Careful — that's a different Catalan number than the one for this grid. Which index n applies when you travel from (0,0) to (3,3)?",
+          "Careful, that's a different Catalan number than the one for this grid. Which index n applies when you travel from (0,0) to (3,3)?",
         misconception: "wrong_catalan_index",
       },
     ],
@@ -347,19 +347,19 @@ const latticeProblemsNumeric: NumericQuestion[] = [
       {
         value: 6,
         feedback:
-          "Close, but 6 is just the number of faces — it ignores how the wait for each NEW face grows. After you've already seen 5 faces, how long on average until the last one?",
+          "Close, but 6 is just the number of faces, it ignores how the wait for each NEW face grows. After you've already seen 5 faces, how long on average until the last one?",
         misconception: "count_faces_not_wait",
       },
       {
         value: 21,
         feedback:
-          "That's 1+2+…+6, a tempting shortcut. Coupon collector sums the RECIPROCALS 1/k, not the integers — what is 6·(1 + 1/2 + … + 1/6)?",
+          "That's 1+2+…+6, a tempting shortcut. Coupon collector sums the RECIPROCALS 1/k, not the integers, what is 6·(1 + 1/2 + … + 1/6)?",
         misconception: "summed_1_to_n",
       },
       {
         value: 36,
         feedback:
-          "6² over-counts. The expected total is n times a harmonic sum, not n·n — which harmonic terms should you be adding?",
+          "6² over-counts. The expected total is n times a harmonic sum, not n·n, which harmonic terms should you be adding?",
         misconception: "n_squared_overcount",
       },
     ],
@@ -381,13 +381,13 @@ const latticeProblemsNumeric: NumericQuestion[] = [
       {
         value: 1 / 3,
         feedback:
-          "Close! But the three middle anti-diagonal points aren't equally likely. What's the actual landing distribution — is reaching (1,1) as likely as reaching a corner?",
+          "Close! But the three middle anti-diagonal points aren't equally likely. What's the actual landing distribution, is reaching (1,1) as likely as reaching a corner?",
         misconception: "uniform_midpoint_assumption",
       },
       {
         value: 4 / 9,
         feedback:
-          "Not quite — that counts only the center-to-center meeting and skips the two corner meetings. Shouldn't you add the matching-probability products over ALL points on the middle diagonal?",
+          "Not quite, that counts only the center-to-center meeting and skips the two corner meetings. Shouldn't you add the matching-probability products over ALL points on the middle diagonal?",
         misconception: "center_meeting_only",
       },
       {
@@ -423,7 +423,7 @@ const levels: Level[] = [
     lesson: {
       paragraphs: [
         "Probability starts with a sample space of equally likely outcomes. P(event) = favorable / total. Two rules do most of the early work: for 'A OR B' use inclusion–exclusion P(A)+P(B)−P(A∩B); for independent 'A AND B' multiply P(A)·P(B).",
-        "The classic trap: adding probabilities for 'or' without subtracting the overlap, or multiplying for 'or'. And when counting, decide whether ORDER matters — combinations C(n,r) if not, permutations if it does.",
+        "The classic trap: adding probabilities for 'or' without subtracting the overlap, or multiplying for 'or'. And when counting, decide whether ORDER matters, combinations C(n,r) if not, permutations if it does.",
       ],
       keyIdea: "P(A∪B) = P(A)+P(B)−P(A∩B); independent P(A∩B)=P(A)P(B).",
       whyInterviewers:
@@ -465,8 +465,8 @@ const levels: Level[] = [
     questionCount: 5,
     lesson: {
       paragraphs: [
-        "Conditional probability P(A|B) = P(A∩B)/P(B) — the probability of A within the world where B happened. Do NOT confuse P(A|B) with P(B|A); that inversion is the 'prosecutor's fallacy.'",
-        "Bayes' theorem formalizes updating: P(H|E) = P(E|H)P(H) / P(E). With a rare condition, a low PRIOR dominates even an accurate test — the base rate matters. For 'at least one', use the complement: 1 − P(none).",
+        "Conditional probability P(A|B) = P(A∩B)/P(B), the probability of A within the world where B happened. Do NOT confuse P(A|B) with P(B|A); that inversion is the 'prosecutor's fallacy.'",
+        "Bayes' theorem formalizes updating: P(H|E) = P(E|H)P(H) / P(E). With a rare condition, a low PRIOR dominates even an accurate test, the base rate matters. For 'at least one', use the complement: 1 − P(none).",
       ],
       keyIdea: "Bayes: posterior ∝ likelihood × prior; never drop the base rate.",
       whyInterviewers:
@@ -482,7 +482,7 @@ const levels: Level[] = [
           "For 'at least one', compute one minus the probability of none.",
         ],
         pitfalls: [
-          "Confusing P(A|B) with P(B|A) — the prosecutor's fallacy.",
+          "Confusing P(A|B) with P(B|A), the prosecutor's fallacy.",
           "Ignoring the base rate/prior when the condition is rare.",
           "Forgetting to renormalize by the probability of the evidence.",
           "Adding per-trial probabilities instead of using the complement for 'at least one'.",
@@ -508,7 +508,7 @@ const levels: Level[] = [
     questionCount: 5,
     lesson: {
       paragraphs: [
-        "Expected value weights each payoff by its probability: E = Σ p·x. The #1 mistake is averaging payoffs without weighting. For k successes in n independent trials, the binomial gives C(n,k)pᵏ(1−p)ⁿ⁻ᵏ — the C(n,k) counts the arrangements you must not forget.",
+        "Expected value weights each payoff by its probability: E = Σ p·x. The #1 mistake is averaging payoffs without weighting. For k successes in n independent trials, the binomial gives C(n,k)pᵏ(1−p)ⁿ⁻ᵏ, the C(n,k) counts the arrangements you must not forget.",
         "Waiting-time intuition: if each trial succeeds with probability p, the expected number of trials to the first success is 1/p (geometric). A fair coin's first head takes 2 flips on average.",
       ],
       keyIdea: "E = Σ p·x; binomial needs the C(n,k); geometric mean is 1/p.",
@@ -564,7 +564,7 @@ const levels: Level[] = [
         ],
         pitfalls: [
           "Assuming a wrong step costs only one move instead of resetting progress (why HH is slower than HT).",
-          "Ignoring the starting position in gambler's ruin — the answer is i/N, not ½.",
+          "Ignoring the starting position in gambler's ruin, the answer is i/N, not ½.",
           "Comparing people to one fixed date instead of comparing all pairs (birthday problem).",
           "Forgetting one of the triangle inequalities when carving a geometric-probability region.",
         ],
@@ -591,10 +591,10 @@ const levels: Level[] = [
       keyIdea:
         "Paths ⇒ C(m+n,n); constraints ⇒ Catalan/reflection; collisions ⇒ conserved sums.",
       whyInterviewers:
-        "The 'two walkers on a grid' family is a favorite hard screen — it rewards structure over brute force.",
+        "The 'two walkers on a grid' family is a favorite hard screen, it rewards structure over brute force.",
       deepDive: {
         whyItWorks:
-          "A monotone lattice path is just a sequence of right/up steps, so counting paths reduces to choosing which steps go one way — a combination. A boundary constraint (stay below the diagonal) is handled by the reflection principle, giving Catalan/ballot counts, and colliding walkers are tamed by a conserved coordinate-sum that pins down when they can meet.",
+          "A monotone lattice path is just a sequence of right/up steps, so counting paths reduces to choosing which steps go one way, a combination. A boundary constraint (stay below the diagonal) is handled by the reflection principle, giving Catalan/ballot counts, and colliding walkers are tamed by a conserved coordinate-sum that pins down when they can meet.",
         approach: [
           "Encode each path as a sequence of steps and count it with a binomial coefficient.",
           "For a boundary constraint, subtract the reflected 'bad' paths (reflection principle).",
@@ -617,7 +617,7 @@ export const probabilityTrack: Track = {
   title: "Probability & Statistics",
   tagline: "Probability from the ground up to interview-hard",
   description:
-    "Reason under uncertainty — sample spaces, Bayes, and expectation up to Kelly sizing, Markov chains, and game theory, with fresh, exactly-verified problems.",
+    "Reason under uncertainty, sample spaces, Bayes, and expectation up to Kelly sizing, Markov chains, and game theory, with fresh, exactly-verified problems.",
   motif: "probability",
   // Core probability route, then the Betting & Sizing subcategory (numeric
   // free-entry Kelly factory). Future Probability & Statistics subcategories

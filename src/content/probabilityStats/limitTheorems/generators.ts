@@ -4,21 +4,26 @@ import { F, fracText } from "../coreSolvers";
 import { type Choice, assembleChoices } from "../coreScaffold";
 
 /**
- * Quiz generators for the **formal limit theorems** — Chebyshev's inequality, the
+ * Quiz generators for the **formal limit theorems**. Chebyshev's inequality, the
  * Law of Large Numbers, and the Central Limit Theorem statements/conditions
  * (Bucket 2 "Extra Relevant Knowledge"; UT M362K ch. 8). Conceptual/theorem
  * content ⇒ multiple-choice with NAMED misconception distractors (Chebyshev's a²
  * vs a; LLN-vs-CLT confusion; the "data must be normal / n<30" CLT myths).
  */
 
-// (varV = σ², a threshold) with a² > σ² so the bound is < 1, and a ≠ σ².
+// (varV = σ², a threshold). We require a > σ² (not just a² > σ²) so that the
+// "forgot to square" distractor σ²/a is itself a VALID probability (≤ 1) and
+// stays genuinely tricky. That leaves the a²/σ² inversion as the SINGLE, and
+// deliberately-taught, out-of-range (> 1) trap, never letting the correct
+// answer be the only in-range option.
 const CHEB_POOL: [number, number][] = [
-  [4, 3],
-  [9, 4],
-  [9, 5],
+  [1, 2],
+  [1, 3],
+  [2, 3],
+  [2, 4],
+  [3, 4],
+  [3, 5],
   [4, 5],
-  [9, 6],
-  [16, 5],
 ];
 
 /** Chebyshev upper bound P(|X−μ| ≥ a) ≤ σ²/a². */
@@ -31,7 +36,7 @@ export function buildChebyshevInstance(
 
   const correct: Choice = {
     text: fracText(value),
-    rationale: `Correct — Chebyshev: P(|X−μ| ≥ a) ≤ σ²/a² = ${v}/${a * a} = ${fracText(value)}.`,
+    rationale: `Correct. Chebyshev: P(|X−μ| ≥ a) ≤ σ²/a² = ${v}/${a * a} = ${fracText(value)}.`,
   };
   const distractors: Choice[] = [
     {
@@ -74,7 +79,7 @@ export function buildCltStatementInstance(
 ): { answer: string; question: Question } {
   const correct: Choice = {
     text: "The standardised sum/mean converges in distribution to N(0,1)",
-    rationale: `Correct — the CLT says (S_n − nμ)/(σ√n) → N(0,1) in distribution, regardless of the original shape (given finite variance).`,
+    rationale: `Correct, the CLT says (S_n − nμ)/(σ√n) → N(0,1) in distribution, regardless of the original shape (given finite variance).`,
   };
   const distractors: Choice[] = [
     {
@@ -83,7 +88,7 @@ export function buildCltStatementInstance(
     },
     {
       text: "The individual observations become normally distributed",
-      rationale: `The CLT is about the SUM/mean, not the raw data — the observations keep their own distribution.`,
+      rationale: `The CLT is about the SUM/mean, not the raw data, the observations keep their own distribution.`,
     },
     {
       text: "The variance of the sum goes to 0",
@@ -117,7 +122,7 @@ export function buildLlnStatementInstance(
 ): { answer: string; question: Question } {
   const correct: Choice = {
     text: "The sample mean converges to the true mean μ",
-    rationale: `Correct — the LLN says the average of n iid observations converges to μ as n grows.`,
+    rationale: `Correct, the LLN says the average of n iid observations converges to μ as n grows.`,
   };
   const distractors: Choice[] = [
     {
@@ -136,7 +141,7 @@ export function buildLlnStatementInstance(
 
   const prompt = `What does the Law of Large Numbers assert for the average of n iid observations as n → ∞?`;
   const explanation =
-    `The LLN: the sample mean X̄_n → μ (the population mean) as n → ∞. It justifies "long-run averages equal expectations" — distinct from the CLT, which describes the DISTRIBUTION of the fluctuations.`;
+    `The LLN: the sample mean X̄_n → μ (the population mean) as n → ∞. It justifies "long-run averages equal expectations", distinct from the CLT, which describes the DISTRIBUTION of the fluctuations.`;
 
   return {
     answer: correct.text,
@@ -159,16 +164,16 @@ export function buildCltConditionInstance(
 ): { answer: string; question: Question } {
   const correct: Choice = {
     text: "The variables are iid with finite variance",
-    rationale: `Correct — the classical CLT needs independence, identical distribution, and a FINITE variance; the shape is otherwise unrestricted.`,
+    rationale: `Correct, the classical CLT needs independence, identical distribution, and a FINITE variance; the shape is otherwise unrestricted.`,
   };
   const distractors: Choice[] = [
     {
       text: "The underlying distribution must itself be Normal",
-      rationale: `No — the power of the CLT is that ANY finite-variance distribution works; if the data were already Normal there'd be nothing to prove.`,
+      rationale: `No, the power of the CLT is that ANY finite-variance distribution works; if the data were already Normal there'd be nothing to prove.`,
     },
     {
       text: "The sample size must be less than 30",
-      rationale: `Backwards — n ≥ 30 is a rough rule of thumb for the approximation to be GOOD; the theorem is a large-n limit.`,
+      rationale: `Backwards, n ≥ 30 is a rough rule of thumb for the approximation to be GOOD; the theorem is a large-n limit.`,
     },
     {
       text: "The mean must be exactly 0",
@@ -178,7 +183,7 @@ export function buildCltConditionInstance(
 
   const prompt = `Which condition is required for the classical Central Limit Theorem to apply?`;
   const explanation =
-    `The classical CLT requires iid variables with FINITE variance. It does NOT require the data to be Normal, a small sample, or a zero mean — those are common myths.`;
+    `The classical CLT requires iid variables with FINITE variance. It does NOT require the data to be Normal, a small sample, or a zero mean, those are common myths.`;
 
   return {
     answer: correct.text,

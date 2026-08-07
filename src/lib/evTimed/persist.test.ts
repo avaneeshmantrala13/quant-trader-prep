@@ -3,6 +3,7 @@ import { createEvTimedSession } from "./engine";
 import {
   EV_TIMED_STORAGE_KEY,
   clearEvTimedSession,
+  evTimedSessionKey,
   loadEvTimedSession,
   saveEvTimedSession,
   type StorageLike,
@@ -24,35 +25,56 @@ describe("evTimed/persist", () => {
     const store = memStore();
     const session = createEvTimedSession({ seed: 42, nowTs: 1_700_000_000_000 });
 
-    saveEvTimedSession(session, store);
-    const loaded = loadEvTimedSession(store);
+    saveEvTimedSession(session, "alice", store);
+    const loaded = loadEvTimedSession("alice", store);
 
     expect(loaded).toEqual(session);
     // The absolute deadline (the reload-proof anchor) survives byte-for-byte.
     expect(loaded?.questionDeadlineTs).toBe(session.questionDeadlineTs);
-    expect(store.map.has(EV_TIMED_STORAGE_KEY)).toBe(true);
+    expect(store.map.has(evTimedSessionKey("alice"))).toBe(true);
   });
 
   it("returns undefined when nothing is persisted", () => {
-    expect(loadEvTimedSession(memStore())).toBeUndefined();
+    expect(loadEvTimedSession("alice", memStore())).toBeUndefined();
   });
 
   it("clear removes the persisted session so re-entry starts fresh", () => {
     const store = memStore();
     saveEvTimedSession(
       createEvTimedSession({ seed: 7, nowTs: 1_700_000_000_000 }),
+      "alice",
       store,
     );
-    clearEvTimedSession(store);
-    expect(loadEvTimedSession(store)).toBeUndefined();
+    clearEvTimedSession("alice", store);
+    expect(loadEvTimedSession("alice", store)).toBeUndefined();
   });
 
   it("treats a corrupt blob as no-resume rather than throwing", () => {
     const store = memStore();
-    store.setItem(EV_TIMED_STORAGE_KEY, "{not json");
-    expect(loadEvTimedSession(store)).toBeUndefined();
+    store.setItem(evTimedSessionKey("alice"), "{not json");
+    expect(loadEvTimedSession("alice", store)).toBeUndefined();
 
-    store.setItem(EV_TIMED_STORAGE_KEY, JSON.stringify({ version: 1 }));
-    expect(loadEvTimedSession(store)).toBeUndefined();
+    store.setItem(evTimedSessionKey("alice"), JSON.stringify({ version: 1 }));
+    expect(loadEvTimedSession("alice", store)).toBeUndefined();
+  });
+
+  it("does NOT leak a session across different users (per-user scoping)", () => {
+    const store = memStore();
+    const aliceSession = createEvTimedSession({
+      seed: 42,
+      nowTs: 1_700_000_000_000,
+    });
+    saveEvTimedSession(aliceSession, "alice", store);
+
+    // Bob logs in on the same browser and starts fresh.
+    expect(loadEvTimedSession("bob", store)).toBeUndefined();
+    expect(loadEvTimedSession(null, store)).toBeUndefined();
+    // Alice still resumes her own session.
+    expect(loadEvTimedSession("alice", store)).toEqual(aliceSession);
+  });
+
+  it("derives per-user keys from the base key", () => {
+    expect(evTimedSessionKey("alice")).toBe(`${EV_TIMED_STORAGE_KEY}::alice`);
+    expect(evTimedSessionKey(null)).toBe(`${EV_TIMED_STORAGE_KEY}::anon`);
   });
 });

@@ -4,7 +4,7 @@ import Fraction from "fraction.js";
  * Exact solvers for the Probability & Statistics → Conditional Probability
  * subcategory.
  *
- * Conditional Probability is NOT one repeating formula — it is a cluster of
+ * Conditional Probability is NOT one repeating formula, it is a cluster of
  * solution-method "families": reduced sample space / equally-likely counting,
  * Bayes' theorem, law of total probability, continuous conditioning, competing
  * events / race conditioning, first-step recursion, the Russian-Roulette series,
@@ -15,7 +15,7 @@ import Fraction from "fraction.js";
  * parts, Monty Hall's decision + probability) return structured results, never a
  * forced scalar.
  *
- * NONE of the 45 source-dataset questions are user-facing — they live only in
+ * NONE of the 45 source-dataset questions are user-facing, they live only in
  * `./conditionalProbability.test.ts` as hidden fixtures (`SEED_ANSWERS`), and
  * this solver is asserted to reproduce them there.
  */
@@ -48,8 +48,8 @@ export function comb(n: number, k: number): number {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Reduced sample space / equally-likely counting                    */
-/*  Method: P(A|B) = #(A∩B)/#B — discard outcomes inconsistent with B.          */
+/*  FAMILY. Reduced sample space / equally-likely counting                    */
+/*  Method: P(A|B) = #(A∩B)/#B, discard outcomes inconsistent with B.          */
 /* ========================================================================== */
 
 /** The defining reduced-sample-space ratio #(A∩B)/#B (exact). */
@@ -179,7 +179,7 @@ export function chipChainProb(total: number, odd: number, hand: number): Fractio
 }
 
 /* ========================================================================== */
-/*  FAMILY — Bayes' theorem                                                     */
+/*  FAMILY. Bayes' theorem                                                     */
 /*  Method: P(H|E) = P(E|H)P(H) / Σ P(E|Hⱼ)P(Hⱼ). Prior × likelihood, normed.   */
 /* ========================================================================== */
 
@@ -231,8 +231,8 @@ export function posteriorWeightedNextSuccess(probs: Fraction[]): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Law of total probability                                          */
-/*  Method: P(A) = Σ P(A|Bᵢ)P(Bᵢ) — condition on an intermediate scenario.      */
+/*  FAMILY. Law of total probability                                          */
+/*  Method: P(A) = Σ P(A|Bᵢ)P(Bᵢ), condition on an intermediate scenario.      */
 /* ========================================================================== */
 
 /** Σ P(Bᵢ)·P(A|Bᵢ) over parallel weights and conditional probabilities. Exact. */
@@ -242,7 +242,7 @@ export function lawTotalProb(weights: Fraction[], conds: Fraction[]): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Continuous conditioning (uniform, NOT memoryless)                 */
+/*  FAMILY. Continuous conditioning (uniform, NOT memoryless)                 */
 /* ========================================================================== */
 
 /**
@@ -262,7 +262,7 @@ export function uniformConditional(
 }
 
 /* ========================================================================== */
-/*  FAMILY — Competing events / race conditioning & first-step recursion       */
+/*  FAMILY. Competing events / race conditioning & first-step recursion       */
 /* ========================================================================== */
 
 /**
@@ -327,7 +327,7 @@ export function htTailWinnerFirstPlayer(): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Russian-Roulette series                                           */
+/*  FAMILY. Russian-Roulette series                                           */
 /*  Fixed cylinder → positions dependent; re-spun → memoryless; two-bullet      */
 /*  variants condition on survival. #3/#4 return DECISIONS, never scalars.      */
 /* ========================================================================== */
@@ -393,7 +393,7 @@ export function rrTwoConsecutiveDecision(
 }
 
 /* ========================================================================== */
-/*  FAMILY — Two-child / framing paradoxes                                     */
+/*  FAMILY. Two-child / framing paradoxes                                     */
 /* ========================================================================== */
 
 /**
@@ -416,7 +416,7 @@ export function specificChildBothProb(): Fraction {
 }
 
 /* ========================================================================== */
-/*  FAMILY — Multi-stage conditional (Vacant Room)                             */
+/*  FAMILY. Multi-stage conditional (Vacant Room)                             */
 /* ========================================================================== */
 
 /**
@@ -433,7 +433,7 @@ export function vacantRoomProb(pOccupied: Fraction, ignore: Fraction): Fraction 
 }
 
 /* ========================================================================== */
-/*  FAMILY — Counterintuitive classics (Monty Hall)                            */
+/*  FAMILY. Counterintuitive classics (Monty Hall)                            */
 /* ========================================================================== */
 
 /**

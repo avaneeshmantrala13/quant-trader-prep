@@ -285,6 +285,63 @@ export function topicDisplayName(topicKey: string, fallback: string): string {
 }
 
 /**
+ * Concrete, learner-facing CORE SUB-SKILL per topic (keyed by topicKey). This is
+ * the graceful fallback for the weakness surfaces when a specific misconception
+ * tag is NOT available (untagged distractor → `idx:`/`err:` key, or no tracked
+ * misconception yet). It names the actual skill to drill — NEVER a bare topic
+ * restatement like "Recurring mistakes in X" (the useless copy this replaces).
+ */
+export const TOPIC_SUBSKILLS: Record<string, string> = {
+  "mental-math::_core": "Fast, accurate arithmetic without slips",
+  "math-questions::Rates, Algebra & Word Problems":
+    "Translating word problems into equations",
+  "math-questions::Number Theory & Counting":
+    "Counting without double-counting or off-by-ones",
+  "math-questions::Geometry & Derivations":
+    "Setting up the geometry before you compute",
+  "probability::Core Probability":
+    "Building the sample space and combining events with and/or rules",
+  "probability::Combinatorial Analysis":
+    "Choosing permutations vs. combinations and counting cleanly",
+  "probability::Conditional Probability":
+    "Conditioning on the right event and applying Bayes' rule",
+  "probability::Expected Value":
+    "Weighting every outcome by its probability in E[X]",
+  "probability::Conditional Expectation":
+    "Splitting E[X] by conditioning on the first step",
+  "probability::Variance, Covariance & the CLT":
+    "Adding variances (not SDs) and tracking covariance",
+  "probability::Continuous Distributions":
+    "Integrating densities and using the right moments",
+  "probability::Poisson Distribution & Process":
+    "Using the right λ and the Poisson/exponential link",
+  "probability::Order Statistics":
+    "Reasoning about the max/min of several draws",
+  "probability::Geometric Probability":
+    "Turning a probability into an area or length ratio",
+  "probability::Markov Chains":
+    "Setting up transition and hitting-time equations",
+  "probability::Game Theory & Puzzles":
+    "Optimizing your choice against a best-responding rival",
+  "probability::Brownian Motion":
+    "Working with drift, variance, and scaling over time",
+  "probability::Betting & Sizing":
+    "Turning odds into probabilities and sizing bets",
+  "interview-games::_core": "Valuing the option to re-roll or stop optimally",
+  "brainteasers::Core Puzzles":
+    "Finding the invariant or symmetry that cracks the puzzle",
+};
+
+/**
+ * The concrete core sub-skill for a topic (its {@link TOPIC_SUBSKILLS} entry),
+ * or a generic-but-actionable phrasing when the topic isn't mapped. Never a bare
+ * "recurring mistakes" restatement.
+ */
+export function topicSubskill(topicKey: string, topicName: string): string {
+  return TOPIC_SUBSKILLS[topicKey] ?? `Core problem-setups in ${topicName}`;
+}
+
+/**
  * Strip the `${topicKey}::` prefix from a namespaced misconception KEY to
  * recover its TAG. A bare tag (no `::`) is returned unchanged. Mirrors
  * `misconceptionTagOf` in `@/content/remediation/prereqDAG` but kept local so
@@ -296,13 +353,25 @@ export function misconceptionTag(key: string): string {
 }
 
 /**
+ * Recover the topicKey prefix from a namespaced misconception KEY
+ * (`${topicKey}::${tag}`), or `undefined` for a bare tag. Used so the fallback
+ * can name the topic's concrete sub-skill.
+ */
+export function misconceptionTopicKey(key: string): string | undefined {
+  const idx = key.lastIndexOf("::");
+  return idx >= 0 ? key.slice(0, idx) : undefined;
+}
+
+/**
  * Resolve a namespaced misconception KEY (or bare tag) to a SHORT, human-readable
  * description of the concept the learner struggles with. The core Task-1 ask.
  *
  *  - A canonical SEMANTIC tag returns its {@link MISCONCEPTION_LABELS} description.
  *  - Anything else — a deterministic `idx:<i>` / `err:<value>` fallback key, or
- *    an unknown tag — degrades to a topic-level phrasing
- *    ("Recurring mistakes in {topicName}").
+ *    an unknown tag — degrades to the topic's concrete CORE SUB-SKILL
+ *    ({@link topicSubskill}), e.g. "Choosing permutations vs. combinations and
+ *    counting cleanly" — an actionable pointer, NEVER a bare "recurring mistakes
+ *    in {topic}" restatement.
  *
  * It NEVER surfaces a raw key ("option 0", "idx:1", "<topicKey>::option 0").
  */
@@ -311,5 +380,10 @@ export function describeMisconception(
   opts: { topicName: string },
 ): string {
   const tag = misconceptionTag(key);
-  return MISCONCEPTION_LABELS[tag] ?? `Recurring mistakes in ${opts.topicName}`;
+  const specific = MISCONCEPTION_LABELS[tag];
+  if (specific) return specific;
+  const topicKey = misconceptionTopicKey(key);
+  return topicKey
+    ? topicSubskill(topicKey, opts.topicName)
+    : `Core problem-setups in ${opts.topicName}`;
 }

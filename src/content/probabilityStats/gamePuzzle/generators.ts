@@ -55,7 +55,7 @@ function roundedErrorPusher(
 }
 
 /* ========================================================================== */
-/*  FAMILY 1 — Rig the Bags (probability optimization)  (numeric)             */
+/*  FAMILY 1. Rig the Bags (probability optimization)  (numeric)             */
 /* ========================================================================== */
 
 // NOTE: deliberately avoids the source GP4 "Rig the Bags" framing (TV game show
@@ -81,7 +81,7 @@ export function buildRigBagsInstance(
   // Keep 26 tokens total (gold + black) so the optimum P = ½ + (gold−1)/50 is a
   // clean 2-dp terminating decimal; vary the gold/black split for variety.
   // Exclude gold = 13: the source GP4 uses the 13/13 split (answer 0.74), which
-  // we must not reproduce — every other split gives a different answer.
+  // we must not reproduce, every other split gives a different answer.
   const gold = rng.pick([6, 8, 11, 16, 21]);
   const black = 26 - gold;
   const p = rigBagsClosedForm(gold, black); // exact optimum via the lone-gold trick
@@ -91,11 +91,11 @@ export function buildRigBagsInstance(
   const { errors, push } = roundedErrorPusher(answer);
   push(
     F(1, 2),
-    "That's the mirror split (or full separation) — both give a coin flip. The trick is to isolate ONE winning token in its own bag so that bag wins with certainty.",
+    "That's the mirror split (or full separation), both give a coin flip. The trick is to isolate ONE winning token in its own bag so that bag wins with certainty.",
   );
   push(
     F(gold, gold + black),
-    `You reported the overall ${sc.good}-fraction (${gold}/${gold + black}). But you get to RIG the bags — the whole point is to beat the raw fraction.`,
+    `You reported the overall ${sc.good}-fraction (${gold}/${gold + black}). But you get to RIG the bags, the whole point is to beat the raw fraction.`,
   );
   push(
     F(gold - 1, gold + black - 1),
@@ -103,7 +103,7 @@ export function buildRigBagsInstance(
   );
   push(
     F(gold, 2 * (gold + black - 1)),
-    `You isolated a LOSING token instead of a winning one — that's the worst split, giving ½·0 + ½·(${gold}/${gold + black - 1}).`,
+    `You isolated a LOSING token instead of a winning one, that's the worst split, giving ½·0 + ½·(${gold}/${gold + black - 1}).`,
   );
 
   const prompt =
@@ -114,8 +114,8 @@ export function buildRigBagsInstance(
 
   const explanation =
     `Law of total probability: P(win) = ½·f₁ + ½·f₂, the average of the two bags' ${sc.good}-fractions. ` +
-    `To maximize, put exactly ONE ${sc.good} token alone in bag 1 (f₁ = 1) and everything else — ` +
-    `${gold - 1} ${sc.good} + ${black} ${sc.bad} = ${gold + black - 1} tokens — in bag 2 (f₂ = ${gold - 1}/${gold + black - 1}). ` +
+    `To maximize, put exactly ONE ${sc.good} token alone in bag 1 (f₁ = 1) and everything else, ` +
+    `${gold - 1} ${sc.good} + ${black} ${sc.bad} = ${gold + black - 1} tokens, in bag 2 (f₂ = ${gold - 1}/${gold + black - 1}). ` +
     `Then P(win) = ½·1 + ½·(${gold - 1}/${gold + black - 1}) = ${fracText(p)} ≈ ${decText(p, DP)}. ` +
     `Half the time you grab the sure-win bag; the other half you still win almost half the time.`;
 
@@ -139,7 +139,7 @@ export function buildRigBagsInstance(
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — Arbitrage detection (implied-probability sum)  (numeric)       */
+/*  FAMILY 2. Arbitrage detection (implied-probability sum)  (numeric)       */
 /* ========================================================================== */
 
 // NOTE: avoids the source GP2 "Tennis Odds" quote pair (1.29 / 4.70). The
@@ -177,7 +177,7 @@ export function buildArbitrageInstance(
   const { errors, push } = roundedErrorPusher(answer);
   push(
     F(o1).add(F(o2)),
-    "You added the decimal ODDS themselves. Implied probability is the RECIPROCAL 1/o, not o — add 1/o₁ + 1/o₂.",
+    "You added the decimal ODDS themselves. Implied probability is the RECIPROCAL 1/o, not o, add 1/o₁ + 1/o₂.",
   );
   push(
     F(1).div(F(o1).sub(1)).add(F(1).div(F(o2).sub(1))),
@@ -198,7 +198,7 @@ export function buildArbitrageInstance(
     `1/${o2} = ${decText(F(1).div(F(o2)), 4)}. Their sum is ${fracText(sumFrac)} ≈ ${decText(sumFrac, DP)}. ` +
     (isArb
       ? `Because the sum is BELOW 1, an arbitrage exists: stake inversely to the odds and every outcome returns more than you staked.`
-      : `Because the sum is AT/ABOVE 1, there is NO arbitrage — the extra above 1 is the bookmaker's overround (their margin).`);
+      : `Because the sum is AT/ABOVE 1, there is NO arbitrage, the extra above 1 is the bookmaker's overround (their margin).`);
 
   return {
     o1,
@@ -235,13 +235,13 @@ export const mixNumeric = (
 ): NumericQuestionGenerator => mixNumericGenerators(pool);
 
 /* ========================================================================== */
-/*  FAMILY 3 — Arbitrage construction / value betting / parimutuel (flashcards)*/
+/*  FAMILY 3. Arbitrage construction / value betting / parimutuel (flashcards)*/
 /* ========================================================================== */
 
 /**
  * The open-ended families: the "answer" is a strategy + a representative
  * winning book, not a unique vector. Company tags from the source dataset are
- * preserved verbatim in each card's `source` (metadata only — not synthesized).
+ * preserved verbatim in each card's `source` (metadata only, not synthesized).
  */
 export const gamePuzzleFlashcards: Flashcard[] = [
   {
@@ -249,9 +249,9 @@ export const gamePuzzleFlashcards: Flashcard[] = [
     prompt:
       "A bookmaker offers a two-horse race: Storm at 9:4 and Dash at 3:5 (m:n means a €n winning bet returns your €n plus €m). You have €100 (whole-euro bets, need not bet it all). Is there a guaranteed profit, and how would you stake it?",
     answer:
-      "Yes — an arbitrage. Payout multiples are Storm (9+4)/4 = 3.25 and Dash (3+5)/5 = 1.6. To guarantee ≥ €100 back you need ≥ 100/3.25 ≈ €30.8 on Storm and ≥ 100/1.6 = €62.5 on Dash; those sum below €100, so e.g. €32 on Storm (→ €104) and €65 on Dash (→ €104) wins whichever horse wins.",
+      "Yes, an arbitrage. Payout multiples are Storm (9+4)/4 = 3.25 and Dash (3+5)/5 = 1.6. To guarantee ≥ €100 back you need ≥ 100/3.25 ≈ €30.8 on Storm and ≥ 100/1.6 = €62.5 on Dash; those sum below €100, so e.g. €32 on Storm (→ €104) and €65 on Dash (→ €104) wins whichever horse wins.",
     explanation:
-      "Convert each quote to a payout multiple (stake × multiple = total return): Storm 13/4 = 3.25, Dash 8/5 = 1.6. Equivalently implied probabilities 1/3.25 ≈ 0.308 and 1/1.6 = 0.625 sum to 0.933 < 1 — a sub-100% book, the signature of an arbitrage. Size each stake so its return covers the whole outlay: ≥100/3.25 ≈ €30.8 on Storm and ≥100/1.6 = €62.5 on Dash. Since €30.8 + €62.5 < €100 you have slack, so any split respecting both minimums (e.g. €32 / €65, €3 unbet) returns more than €100 regardless of outcome. The answer is the STRATEGY plus one representative book — there's no unique vector.",
+      "Convert each quote to a payout multiple (stake × multiple = total return): Storm 13/4 = 3.25, Dash 8/5 = 1.6. Equivalently implied probabilities 1/3.25 ≈ 0.308 and 1/1.6 = 0.625 sum to 0.933 < 1, a sub-100% book, the signature of an arbitrage. Size each stake so its return covers the whole outlay: ≥100/3.25 ≈ €30.8 on Storm and ≥100/1.6 = €62.5 on Dash. Since €30.8 + €62.5 < €100 you have slack, so any split respecting both minimums (e.g. €32 / €65, €3 unbet) returns more than €100 regardless of outcome. The answer is the STRATEGY plus one representative book, there's no unique vector.",
     difficulty: "hard",
     concept: "Single-book arbitrage / value betting",
     source: "Game Puzzle · Arbitrage · Citadel Securities",
@@ -261,7 +261,7 @@ export const gamePuzzleFlashcards: Flashcard[] = [
     prompt:
       "Two bookmakers price a one-on-one final. Book A: Alice 1.25, Bob 4.5. Book B: Alice 1.20, Bob 5.0 (decimal odds). Each book alone has implied probabilities summing above 1. With €100, can you still lock in a profit?",
     answer:
-      "Yes — a CROSS-book arbitrage. Take the best price for each outcome across books: Alice @ Book A (1.25) and Bob @ Book B (5.0). Implied sum 1/1.25 + 1/5.0 = 0.80 + 0.20 = 1.00 — break-even here, so widen: Alice @ A (1.25) and Bob @ B (5.0) with any book combo whose implied sum < 1 guarantees profit; stake in the ratio of the odds (~€80 Alice, ~€20 Bob) so both legs return the same.",
+      "Yes, a CROSS-book arbitrage. Take the best price for each outcome across books: Alice @ Book A (1.25) and Bob @ Book B (5.0). Implied sum 1/1.25 + 1/5.0 = 0.80 + 0.20 = 1.00, break-even here, so widen: Alice @ A (1.25) and Bob @ B (5.0) with any book combo whose implied sum < 1 guarantees profit; stake in the ratio of the odds (~€80 Alice, ~€20 Bob) so both legs return the same.",
     explanation:
       "Within each book the implied probabilities exceed 1 (the overround), so no single-book arb. But you may mix books, taking the highest odds for each outcome. Compare combinations: Alice@A (1.25) + Bob@B (5.0) gives 1/1.25 + 1/5.0 = 0.80 + 0.20 = 1.00. If instead Book B quoted Alice higher or Bob at 5.2 the sum drops below 1 and the arb is strict; the method is: for each mutually-exclusive outcome pick the best cross-book price, sum the implied probabilities, and if < 1 stake each leg proportional to its odds so every outcome returns the same total. Represent the plan (which book for which side + the stake ratio), not a single number.",
     difficulty: "hard",
@@ -273,9 +273,9 @@ export const gamePuzzleFlashcards: Flashcard[] = [
     prompt:
       "No pure arbitrage is available. A bookmaker offers Team X at 3:1 (payout multiple 4.0) and you believe Team X's TRUE win probability is 30%. Should you bet, and on what principle?",
     answer:
-      "Yes — it's a positive-expected-value (value) bet: expected payout = true prob × multiple = 0.30 × 4.0 = 1.20 > 1, so each €1 staked returns €1.20 on average. Bet where true probability × payout multiple exceeds 1; avoid outcomes where it's below 1 (the book is charging more than the risk is worth).",
+      "Yes, it's a positive-expected-value (value) bet: expected payout = true prob × multiple = 0.30 × 4.0 = 1.20 > 1, so each €1 staked returns €1.20 on average. Bet where true probability × payout multiple exceeds 1; avoid outcomes where it's below 1 (the book is charging more than the risk is worth).",
     explanation:
-      "When implied probabilities sum above 1 there's no guaranteed arb, so you switch to VALUE betting: compare the bookmaker's payout to your own probability estimate. Expected return per €1 = p_true × payout_multiple. Here 0.30 × 4.0 = 1.20 (a 20% edge), so betting Team X is +EV. The discipline is exactly Kelly's precondition — only bet when your edge is positive — and then (separately) size it. Contrast an outcome priced at 1.5 that you think is 50% likely: 0.50 × 1.5 = 0.75 < 1, a losing bet you should skip. The 'answer' is the EV rule and the sign of the edge, not a unique stake.",
+      "When implied probabilities sum above 1 there's no guaranteed arb, so you switch to VALUE betting: compare the bookmaker's payout to your own probability estimate. Expected return per €1 = p_true × payout_multiple. Here 0.30 × 4.0 = 1.20 (a 20% edge), so betting Team X is +EV. The discipline is exactly Kelly's precondition, only bet when your edge is positive, and then (separately) size it. Contrast an outcome priced at 1.5 that you think is 50% likely: 0.50 × 1.5 = 0.75 < 1, a losing bet you should skip. The 'answer' is the EV rule and the sign of the edge, not a unique stake.",
     difficulty: "medium",
     concept: "Expected-payout value betting",
     source: "Game Puzzle · Value betting · Citadel Securities",
@@ -283,11 +283,11 @@ export const gamePuzzleFlashcards: Flashcard[] = [
   {
     id: "gp-fc-parimutuel-1",
     prompt:
-      "Parimutuel pool: you, Mia, and Leo each stake €100 (pot €300); backers of the winning team split the pot pro-rata. Mia and Leo have already bet — Falcons: Mia €60/Leo €50; Hawks: Mia €40/Leo €50; Eagles: €0/€0; Owls: €0/€10. How do you allocate your €100 to make more than €100?",
+      "Parimutuel pool: you, Mia, and Leo each stake €100 (pot €300); backers of the winning team split the pot pro-rata. Mia and Leo have already bet. Falcons: Mia €60/Leo €50; Hawks: Mia €40/Leo €50; Eagles: €0/€0; Owls: €0/€10. How do you allocate your €100 to make more than €100?",
     answer:
       "Exploit the empty/thin teams. Put €1 on Eagles (nobody else → you'd own the whole €300 if they win), €3 on Owls (3/(3+10)×300 ≈ €69 if they win), and split the remaining €96 across the crowded Falcons/Hawks (~€48/€48) so you recover close to €100 if a favourite wins. Caps downside, huge upside on a longshot.",
     explanation:
-      "In parimutuel there are no fixed odds — your payout depends only on how the pot splits against KNOWN opponent bets. Team totals from opponents: Falcons €110, Hawks €90, Eagles €0, Owls €10. Betting a thin/empty team means you own most of its share of the €300 pot: €1 on Eagles alone returns the full €300; €3 on Owls returns 3/13×300 ≈ €69. Cover the crowded favourites lightly so that if one wins you still get roughly your money back: e.g. €48 on Falcons → 48/158×300 ≈ €91. Total spend €1+€3+€48+€48 = €100. The point is the STRATEGY (load empty/thin teams, cover the crowd) — many whole-euro allocations work, so there's no unique answer.",
+      "In parimutuel there are no fixed odds, your payout depends only on how the pot splits against KNOWN opponent bets. Team totals from opponents: Falcons €110, Hawks €90, Eagles €0, Owls €10. Betting a thin/empty team means you own most of its share of the €300 pot: €1 on Eagles alone returns the full €300; €3 on Owls returns 3/13×300 ≈ €69. Cover the crowded favourites lightly so that if one wins you still get roughly your money back: e.g. €48 on Falcons → 48/158×300 ≈ €91. Total spend €1+€3+€48+€48 = €100. The point is the STRATEGY (load empty/thin teams, cover the crowd), many whole-euro allocations work, so there's no unique answer.",
     difficulty: "medium",
     concept: "Parimutuel pot-splitting against known opponents",
     source: "Game Puzzle · Parimutuel · Citadel Securities",
@@ -299,7 +299,7 @@ export const gamePuzzleFlashcards: Flashcard[] = [
     answer:
       "Load the empty teams. €1 on Gamma and €1 on Delta each win the whole €300 outright if that team comes in (nobody else backs them). Put a modest cover on Beta (thin) and only a token on the crowded Alpha. E.g. Gamma €1, Delta €1, Beta €40 (→ 40/90×300 ≈ €133), Alpha €58 (→ 58/208×300 ≈ €84). Minimises loss probability, big upside on any longshot.",
     explanation:
-      "Payout = (your stake on winner)/(total stake on winner) × €300. Empty teams are gold: €1 on Gamma or Delta returns the entire €300 if they win, because you're the only backer. Thin Beta (opponents €50) lets a €40 stake capture 40/90 ≈ 44% of the pot ≈ €133. The crowded Alpha (opponents €150) is a poor per-euro return, so only cover it enough to blunt the most likely outcome. Spend €1+€1+€40+€58 = €100. As with all parimutuel questions the deliverable is the reasoning and a representative allocation — many valid spreads exist, so it's routed as open-ended reasoning, not a single scalar.",
+      "Payout = (your stake on winner)/(total stake on winner) × €300. Empty teams are gold: €1 on Gamma or Delta returns the entire €300 if they win, because you're the only backer. Thin Beta (opponents €50) lets a €40 stake capture 40/90 ≈ 44% of the pot ≈ €133. The crowded Alpha (opponents €150) is a poor per-euro return, so only cover it enough to blunt the most likely outcome. Spend €1+€1+€40+€58 = €100. As with all parimutuel questions the deliverable is the reasoning and a representative allocation, many valid spreads exist, so it's routed as open-ended reasoning, not a single scalar.",
     difficulty: "hard",
     concept: "Parimutuel pot-splitting against known opponents",
     source: "Game Puzzle · Parimutuel · Citadel Securities",

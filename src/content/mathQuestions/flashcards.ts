@@ -6,7 +6,7 @@ import type { Flashcard } from "@/types/content";
  * free-entry or clean multiple choice:
  *
  *   • Linear Diophantine puzzles (SU1–SU4 shape) whose answer is a full 5-tuple
- *     (A,B,C,D,E), each a distinct digit 1–5 — graded as a permutation, so a
+ *     (A,B,C,D,E), each a distinct digit 1–5, graded as a permutation, so a
  *     single-number checker can't score them. Every puzzle here is BRAND NEW
  *     (fresh equations, distinct from the source dataset's tuples) and its
  *     uniqueness is asserted by the brute-force solver in the test suite.
@@ -27,7 +27,7 @@ export const solvingUnknownsFlashcards: Flashcard[] = [
       "A, B, C, D, E are five DIFFERENT whole numbers, each from 1 to 5 (used once each). They satisfy: (1) A + E = C, (2) B = D + E, (3) A = 2·D, and (4) E > A. Find A, B, C, D, E.",
     answer: "A = 2, B = 4, C = 5, D = 1, E = 3.",
     explanation:
-      "From (3) A = 2·D the options are (D, A) = (1, 2) or (2, 4). Branch D = 1, A = 2: (1) gives C = 2 + E and (2) gives B = 1 + E over the remaining {3, 4, 5}; E = 3 yields C = 5, B = 4 — exactly {3, 4, 5} — and (4) E = 3 > A = 2 holds. Branch D = 2, A = 4 also solves (1)–(3) (as A4 B3 C5 D2 E1) but there E = 1 < A = 4, violating (4). So constraint (4) pins the unique answer A2 B4 C5 D1 E3.",
+      "From (3) A = 2·D the options are (D, A) = (1, 2) or (2, 4). Branch D = 1, A = 2: (1) gives C = 2 + E and (2) gives B = 1 + E over the remaining {3, 4, 5}; E = 3 yields C = 5, B = 4, exactly {3, 4, 5}, and (4) E = 3 > A = 2 holds. Branch D = 2, A = 4 also solves (1)–(3) (as A4 B3 C5 D2 E1) but there E = 1 < A = 4, violating (4). So constraint (4) pins the unique answer A2 B4 C5 D1 E3.",
     difficulty: "medium",
     concept: "Linear Diophantine system (unique permutation)",
     source: "Math Questions · Solving Unknowns",
@@ -38,7 +38,7 @@ export const solvingUnknownsFlashcards: Flashcard[] = [
       "A, B, C, D, E are five DIFFERENT whole numbers, each from 1 to 5 (used once each). They satisfy: (1) B = A + C, (2) A + E = D, and (3) B = 5·E. Find A, B, C, D, E.",
     answer: "A = 3, B = 5, C = 2, D = 4, E = 1.",
     explanation:
-      "From (3) B = 5·E with both in 1..5 forces E = 1 and B = 5. Then (1) A + C = 5 and (2) D = A + 1, with {A, C, D} drawn from the remaining {2, 3, 4}. If A = 3 then C = 2 and D = 4 — exactly {2, 3, 4}. A = 2 gives C = 3, D = 3 (a clash); A = 4 gives D = 5 (already B) and C = 1 (already E). So the unique solution is A3 B5 C2 D4 E1.",
+      "From (3) B = 5·E with both in 1..5 forces E = 1 and B = 5. Then (1) A + C = 5 and (2) D = A + 1, with {A, C, D} drawn from the remaining {2, 3, 4}. If A = 3 then C = 2 and D = 4, exactly {2, 3, 4}. A = 2 gives C = 3, D = 3 (a clash); A = 4 gives D = 5 (already B) and C = 1 (already E). So the unique solution is A3 B5 C2 D4 E1.",
     difficulty: "medium",
     concept: "Linear Diophantine system (unique permutation)",
     source: "Math Questions · Solving Unknowns",
@@ -60,7 +60,7 @@ export const solvingUnknownsFlashcards: Flashcard[] = [
       "A full glass is shared by alternating pours. First Ana pours out and drinks exactly HALF of what is in the glass; then Ben drinks half of what REMAINS; then Ana drinks half of the new remainder; and so on forever, always halving whatever is left. In the limit, what fraction of the original glass does EACH of them drink?",
     answer: "Ana drinks 2/3 of the glass and Ben drinks 1/3.",
     explanation:
-      "Ana's sips are 1/2, then 1/8, then 1/32, … — a geometric series with first term 1/2 and ratio 1/4, summing to (1/2)/(1 − 1/4) = 2/3. Ben's sips are 1/4, 1/16, 1/64, … — first term 1/4, ratio 1/4, summing to (1/4)/(1 − 1/4) = 1/3. They total 2/3 + 1/3 = 1 (the whole glass), and the 2:1 split is the invariant: whoever goes first always ends with twice the other's share.",
+      "Ana's sips are 1/2, then 1/8, then 1/32, …, a geometric series with first term 1/2 and ratio 1/4, summing to (1/2)/(1 − 1/4) = 2/3. Ben's sips are 1/4, 1/16, 1/64, …, first term 1/4, ratio 1/4, summing to (1/4)/(1 − 1/4) = 1/3. They total 2/3 + 1/3 = 1 (the whole glass), and the 2:1 split is the invariant: whoever goes first always ends with twice the other's share.",
     difficulty: "easy",
     concept: "Alternating geometric series (two-part answer)",
     source: "Math Questions · Solving Unknowns",

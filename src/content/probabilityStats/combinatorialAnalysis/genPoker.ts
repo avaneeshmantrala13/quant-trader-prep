@@ -12,7 +12,7 @@ import { type PokerHand, pokerHandCount, pokerHandPercent } from "./solvers";
  *
  * The teaching point is the SUIT-COMBINATION misconception: every distractor is
  * a re-derived WRONG hand-count that drops (or double-counts) a specific suit /
- * rank factor — forgetting a C(4,2)/C(4,3) suit choice, omitting the kicker, or
+ * rank factor, forgetting a C(4,2)/C(4,3) suit choice, omitting the kicker, or
  * treating distinguishable ranks as an unordered pair. Naming that exact slip is
  * what the item is designed to teach.
  *
@@ -20,7 +20,7 @@ import { type PokerHand, pokerHandCount, pokerHandPercent } from "./solvers";
  * distractor percent is the misconception's wrong count divided by the true
  * C(52,5) = 2,598,960 hands and scaled to a percent, formatted identically to
  * "X.XXX%" so nothing about the option text leaks the answer. All wording is
- * fresh — no source-dataset titles ("Poker - Four of a Kind", …) appear.
+ * fresh, no source-dataset titles ("Poker - Four of a Kind", …) appear.
  */
 
 /** Total five-card hands from a standard 52-card deck: C(52,5) = 2,598,960. */
@@ -57,7 +57,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n, // forgot the 5th (kicker) card entirely
         rationale:
-          "You forgot the fifth card. After fixing the quad rank you still choose 1 of the 48 remaining cards, so it's 13·48 — not 13 alone.",
+          "You forgot the fifth card. After fixing the quad rank you still choose 1 of the 48 remaining cards, so it's 13·48, not 13 alone.",
         coach:
           "It looks like you counted only the quad rank and left out the fifth card of the hand.",
         tag: "forgot_kicker_card",
@@ -65,7 +65,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * 52n, // drew the kicker from all 52 cards
         rationale:
-          "You drew the kicker from all 52 cards, but 4 are already committed to the quad — only 48 remain, so multiply by 48, not 52.",
+          "You drew the kicker from all 52 cards, but 4 are already committed to the quad, only 48 remain, so multiply by 48, not 52.",
         coach:
           "It looks like you drew the fifth card as if all 52 cards were still available, ignoring the four already committed to the quad.",
         tag: "overcount_committed_cards",
@@ -73,7 +73,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * 4n * 48n, // invented a C(4,1) suit choice for the quad
         rationale:
-          "A quad uses ALL four suits, so C(4,4)=1 — there is no suit to pick. Multiplying by C(4,1)=4 invents a suit selection that doesn't exist.",
+          "A quad uses ALL four suits, so C(4,4)=1, there is no suit to pick. Multiplying by C(4,1)=4 invents a suit selection that doesn't exist.",
         coach:
           "It looks like you added an extra suit choice for the quad, even though a four-of-a-kind already uses every suit of its rank.",
         tag: "invented_suit_choice",
@@ -89,7 +89,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * 12n, // dropped BOTH suit-combo factors
         rationale:
-          "You picked the triple rank (13) and the pair rank (12) but forgot which suits fill them — multiply by C(4,3)=4 and C(4,2)=6.",
+          "You picked the triple rank (13) and the pair rank (12) but forgot which suits fill them, multiply by C(4,3)=4 and C(4,2)=6.",
         coach:
           "It looks like you chose the triple and pair ranks without choosing which suits fill each of them.",
         tag: "forgot_suit_combo",
@@ -105,7 +105,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: C(13, 2) * 4n * 6n, // treated the two ranks as unordered, halving 13·12
         rationale:
-          "Triple and pair ranks are distinguishable, so it's 13·12 ordered choices — collapsing them into an unordered C(13,2)=78 halves the count.",
+          "Triple and pair ranks are distinguishable, so it's 13·12 ordered choices, collapsing them into an unordered C(13,2)=78 halves the count.",
         coach:
           "It looks like you treated the triple rank and the pair rank as interchangeable, collapsing two distinct role choices into one.",
         tag: MISCONCEPTION.forgotDivideByTwo,
@@ -137,7 +137,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * 12n * 6n * 6n * 44n, // ordered pair ranks (P(13,2)), doubling
         rationale:
-          "The two pair ranks are unordered — use C(13,2)=78. Using ordered 13·12=156 counts every two-pair hand twice.",
+          "The two pair ranks are unordered, use C(13,2)=78. Using ordered 13·12=156 counts every two-pair hand twice.",
         coach:
           "It looks like you counted the two pair ranks in order, treating an unordered choice as if it were ordered.",
         tag: MISCONCEPTION.orderedVsUnordered,
@@ -153,7 +153,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * C(12, 2) * 4n * 4n, // forgot the triple's C(4,3)
         rationale:
-          "You forgot to choose which 3 of the 4 suits form the triple — multiply by C(4,3)=4.",
+          "You forgot to choose which 3 of the 4 suits form the triple, multiply by C(4,3)=4.",
         coach:
           "It looks like you counted the kickers yet skipped choosing which suits form the triple.",
         tag: "forgot_suit_combo",
@@ -169,7 +169,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 13n * 4n * (12n * 11n) * 4n * 4n, // ordered kickers, doubling
         rationale:
-          "The two kickers are unordered — use C(12,2)=66. Ordered 12·11=132 double-counts each hand.",
+          "The two kickers are unordered, use C(12,2)=66. Ordered 12·11=132 double-counts each hand.",
         coach:
           "It looks like you counted the two kicker ranks in order, treating an unordered pair as if it were ordered.",
         tag: MISCONCEPTION.orderedVsUnordered,
@@ -224,7 +224,7 @@ const HANDS: Record<PokerHand, HandSpec> = {
       {
         count: 4n * 13n * C(12, 4), // 'lead card' overcount by a factor of 5
         rationale:
-          "Choosing a 'lead' card (13) then 4 more of the suit (C(12,4)) counts each flush 5 times — divide by 5, i.e. use C(13,5).",
+          "Choosing a 'lead' card (13) then 4 more of the suit (C(12,4)) counts each flush 5 times, divide by 5, i.e. use C(13,5).",
         coach:
           "It looks like you picked a 'lead' card and then four more of the same suit, which names the same five-card set more than once.",
         tag: MISCONCEPTION.orderedVsUnordered,
@@ -263,7 +263,7 @@ export function genPokerHand(rng: Rng): Question {
 
   const correct: Choice = {
     text: `${pct}%`,
-    rationale: `Correct — ${spec.derivation} = ${count} hands, and ${count}/2,598,960 × 100 = ${pct}%.`,
+    rationale: `Correct, ${spec.derivation} = ${count} hands, and ${count}/2,598,960 × 100 = ${pct}%.`,
   };
 
   const distractors: Choice[] = spec.distractors.map((d) => ({
@@ -293,7 +293,7 @@ export function genPokerHand(rng: Rng): Question {
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the poker-hand family — the MCQ→free
+ * FREE-RESPONSE (numeric) form of the poker-hand family, the MCQ→free
  * conversion of `genPokerHand`. The learner types the percentage of the
  * 2,598,960 five-card hands that form a randomly chosen category; the value is
  * the SAME `pokerHandPercent` solver, to three decimals (the dataset's poker
@@ -324,7 +324,7 @@ export function buildPokerHandNumericInstance(
   const prompt =
     `A single five-card hand is dealt from a well-shuffled standard 52-card deck. ` +
     `Of all 2,598,960 equally likely hands, what percentage form ${spec.label}? ` +
-    `(Give the percentage to three decimals — enter the number only, e.g. 4.754.)`;
+    `(Give the percentage to three decimals, enter the number only, e.g. 4.754.)`;
   const explanation =
     `There are C(52,5) = 2,598,960 equally likely five-card hands. Exactly ${count} of them ` +
     `form ${spec.label} (${spec.derivation}). So the probability is ${count}/2,598,960 × 100 = ${decText(value, dp)}%. ` +

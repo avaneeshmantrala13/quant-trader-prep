@@ -55,6 +55,7 @@ import { genRuin } from "@/content/probabilityStats/markovChains/genGeneralWalks
 import { SEQUENCE_QUIZ_GENERATORS } from "@/content/sequences/generators";
 import { ARBITRAGE_QUIZ_GENERATORS } from "@/content/arbitrage/generators";
 import { AUCTION_QUIZ_GENERATORS } from "@/content/auctions/generators";
+import { HARD_OA_GENERATORS } from "./hardContent/generators";
 import { selectSequenceServed } from "./store";
 import type { OaFormatConfig, OaQuestion, OaTimedStore } from "./types";
 
@@ -91,6 +92,16 @@ export const OA_QUESTION_GENERATORS: QuestionGenerator[] = [
  * de-vig (`ARBITRAGE_QUIZ_GENERATORS`), and common-value / winner's-curse
  * auction (`AUCTION_QUIZ_GENERATORS`) archetypes, so those firm-tested skills
  * are FIRST-CLASS rather than approximated by a nearby generator.
+ *
+ * The firm pools (blitz / rapidMixed / derivation / deepSet) are further
+ * anchored by the HARD, exact-verified archetypes in `hardContent/generators`
+ * (built on `hardContent/solvers`) — the flagship lattice path-intersection
+ * (parity trap), biased-ruin duration, secretary optimal-stopping, exact graph
+ * hitting/meeting times, Conway pattern waits, hidden-composition & fair-vs-
+ * biased Bayes, dice order statistics, order-flow adverse selection, the
+ * one-reroll game value, the DRW step-landing recurrence, and Kelly sizing.
+ * These are correct-by-construction (each answer comes from an exact solver) and
+ * are ADDED to the existing curated generators, not replacements.
  *
  *  - `mixed`      — the default interview pool (`OA_QUESTION_GENERATORS`); the
  *                   three original formats draw from it unchanged.
@@ -136,6 +147,12 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     ARBITRAGE_QUIZ_GENERATORS.genArbDetect,
     ARBITRAGE_QUIZ_GENERATORS.genValueLeg,
     ARBITRAGE_QUIZ_GENERATORS.genBasketArb,
+    // Hard, exact-verified quick-quant (dice order stats, DRW recurrence, Kelly,
+    // fair-vs-biased Bayes) — correct-by-construction from `hardContent/solvers`.
+    HARD_OA_GENERATORS.hardDiceOrderStat,
+    HARD_OA_GENERATORS.hardStepLanding,
+    HARD_OA_GENERATORS.hardKelly,
+    HARD_OA_GENERATORS.hardCoinBias,
   ],
   blitz: [
     // Combinatorics (dice-combinatorics).
@@ -159,6 +176,13 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     SEQUENCE_QUIZ_GENERATORS.fibonacciNext,
     SEQUENCE_QUIZ_GENERATORS.alternatingOpNext,
     SEQUENCE_QUIZ_GENERATORS.oddOneOut,
+    // Hard, exact-verified probability + combinatorics anchors (the flagship
+    // lattice path-intersection with its parity trap, optimal stopping, Bayes,
+    // dice order statistics).
+    HARD_OA_GENERATORS.hardPathIntersect,
+    HARD_OA_GENERATORS.hardSecretary,
+    HARD_OA_GENERATORS.hardHiddenComposition,
+    HARD_OA_GENERATORS.hardDiceOrderStat,
   ],
   derivation: [
     EV_GENERATORS.genReRollDie,
@@ -180,6 +204,17 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     AUCTION_QUIZ_GENERATORS.genBidEvDecision,
     AUCTION_QUIZ_GENERATORS.genShadingWithN,
     AUCTION_QUIZ_GENERATORS.genAcquireDecision,
+    // Hard, exact-verified multi-step derivations (flagship path intersection,
+    // biased-ruin duration, secretary, graph hitting time, order-flow Bayes,
+    // one-reroll EV, Conway pattern waits, fair-vs-biased coin).
+    HARD_OA_GENERATORS.hardPathIntersect,
+    HARD_OA_GENERATORS.hardRuinDuration,
+    HARD_OA_GENERATORS.hardSecretary,
+    HARD_OA_GENERATORS.hardGraphHitting,
+    HARD_OA_GENERATORS.hardInformedLift,
+    HARD_OA_GENERATORS.hardOneReroll,
+    HARD_OA_GENERATORS.hardPatternWait,
+    HARD_OA_GENERATORS.hardCoinBias,
   ],
   deepSet: [
     // Markov chains / recursion (the DRW signature).
@@ -198,6 +233,15 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     AUCTION_QUIZ_GENERATORS.genBidEvDecision,
     AUCTION_QUIZ_GENERATORS.genShadingWithN,
     AUCTION_QUIZ_GENERATORS.genAcquireDecision,
+    // Hardest exact-verified deep problems (flagship path intersection,
+    // biased-ruin duration, exact graph hitting times, reset coupon collector,
+    // cycle meeting time with the parity trap, Conway pattern waits).
+    HARD_OA_GENERATORS.hardPathIntersect,
+    HARD_OA_GENERATORS.hardRuinDuration,
+    HARD_OA_GENERATORS.hardGraphHitting,
+    HARD_OA_GENERATORS.hardResetCollector,
+    HARD_OA_GENERATORS.hardCycleMeeting,
+    HARD_OA_GENERATORS.hardPatternWait,
   ],
 };
 

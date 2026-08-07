@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
 import { CardsIcon, BoltIcon, GaugeIcon } from "@/components/icons";
@@ -25,6 +26,7 @@ import {
   resolvePlayerQuote,
   playerTradesBotQuote,
   settle,
+  coachSettlement,
   rankLabel,
   MAX_SPREAD,
   type Card,
@@ -72,6 +74,7 @@ interface MarketOfCardsSession {
 export function MarketOfCardsPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
+  const { username } = useAuth();
 
   /* ---- config ---------------------------------------------------------- */
   const [numBots, setNumBots] = useState(3);
@@ -97,7 +100,12 @@ export function MarketOfCardsPage() {
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-    const env = loadGameSession<MarketOfCardsSession>(browserSessionStore(), GAME_ID);
+    const env = loadGameSession<MarketOfCardsSession>(
+      browserSessionStore(),
+      GAME_ID,
+      undefined,
+      username,
+    );
     if (!env || env.status !== "active" || !env.snapshot.game) return;
     const s = env.snapshot;
     rngRef.current = new Rng(Math.floor(Math.random() * 1e9));
@@ -109,7 +117,7 @@ export function MarketOfCardsPage() {
     setBotMarkets(s.botMarkets);
     setSubPhase(s.subPhase);
     setPhase(s.phase);
-  }, []);
+  }, [username]);
   useEffect(() => {
     if (!hydratedRef.current) return;
     if (phase !== "round") return; // only an in-progress round is resumable
@@ -118,8 +126,10 @@ export function MarketOfCardsPage() {
       GAME_ID,
       { numBots, numRounds, aceHigh, phase, subPhase, game, activity, botMarkets },
       Date.now(),
+      "active",
+      username,
     );
-  }, [phase, subPhase, game, activity, botMarkets, numBots, numRounds, aceHigh]);
+  }, [phase, subPhase, game, activity, botMarkets, numBots, numRounds, aceHigh, username]);
 
   /* ---- lifecycle ------------------------------------------------------- */
   const start = () => {
@@ -148,7 +158,7 @@ export function MarketOfCardsPage() {
     const g2 = addFills(game, fills);
     setGame(g2);
     if (trades.length === 0) {
-      log(game.roundIdx, "You quoted — no bot took it. Your market rests.", "info");
+      log(game.roundIdx, "You quoted; no bot took it. Your market rests.", "info");
     } else {
       trades.forEach((t: BotTrade) => log(game.roundIdx, t.chatter, t.side));
     }
@@ -164,8 +174,8 @@ export function MarketOfCardsPage() {
     log(
       game.roundIdx,
       side === "buy"
-        ? `You lift ${bot.name}'s offer — buy ${size} @ ${quote.ask}.`
-        : `You hit ${bot.name}'s bid — sell ${size} @ ${quote.bid}.`,
+        ? `You lift ${bot.name}'s offer: buy ${size} @ ${quote.ask}.`
+        : `You hit ${bot.name}'s bid: sell ${size} @ ${quote.bid}.`,
       side,
     );
   };
@@ -180,7 +190,7 @@ export function MarketOfCardsPage() {
       // unified leaderboard + optional server board, and clear the session.
       submitLocalScore(browserBoardStore(), GAME_ID, { score: s.markPnl, atMs: Date.now() });
       void submitGameScore(GAME_ID, s.markPnl);
-      clearGameSession(browserSessionStore(), GAME_ID);
+      clearGameSession(browserSessionStore(), GAME_ID, username);
       if (s.markPnl >= 0) setTimeout(themeDef.celebration ?? celebrate, 260);
       return;
     }
@@ -249,7 +259,7 @@ export function MarketOfCardsPage() {
             game={game}
             settlement={settlement}
             onReplay={() => {
-              clearGameSession(browserSessionStore(), GAME_ID);
+              clearGameSession(browserSessionStore(), GAME_ID, username);
               setPhase("setup");
             }}
           />
@@ -320,7 +330,7 @@ function SetupScreen(props: {
           <strong className="text-primary">3 community cards</strong> reveal one per round.{" "}
           {totalCards} signed cards settle the total (numbers ×10, red faces +, black faces −).
           Quote a ≤{MAX_SPREAD}-wide market around your EV, trade against the bots, and re-centre the
-          moment a card flips. Score = your net position marked to the true total — but the real test
+          moment a card flips. Score = your net position marked to the true total, but the real test
           is showing <em>two-sided</em> trading, not one-way risk.
         </p>
       </article>
@@ -465,14 +475,14 @@ function RoundScreen({
         <>
           <BotMarkets game={game} botMarkets={botMarkets} onTake={onTakeBotMarket} />
           <button onClick={onNextRound} className="btn-primary w-full">
-            {isLastRound ? "Settle & reveal all cards →" : "End round — reveal next card →"}
+            {isLastRound ? "Settle & reveal all cards →" : "End round: reveal next card →"}
           </button>
         </>
       )}
 
       {subPhase === "quote" && (
         <button onClick={onProceed} className="btn-ghost w-full">
-          Skip quoting this round (rest — no market)
+          Skip quoting this round (rest, no market)
         </button>
       )}
 
@@ -647,7 +657,7 @@ function BotMarkets({
   const ev = playerEV(game);
   return (
     <article className="panel-ruled p-5">
-      <div className="label text-accent">Bot markets — you have first right to trade</div>
+      <div className="label text-accent">Bot markets: you have first right to trade</div>
       <p className="mt-1 text-[13px] text-muted">
         Lift an offer that's below your EV of <span className="num text-secondary">{ev}</span>; hit a
         bid that's above it. Look to trade the side that <em>closes</em> your position.
@@ -712,6 +722,13 @@ function SettleScreen({
 }) {
   const win = settlement.markPnl >= 0;
   const be = settlement.breakEven;
+  const coaching = coachSettlement(game, settlement);
+  const coachBorder =
+    coaching.tone === "good"
+      ? "border-l-bull"
+      : coaching.tone === "bad"
+        ? "border-l-bear"
+        : "border-l-accent";
   return (
     <div className="animate-print-in space-y-5">
       <article className="panel-ruled relative overflow-hidden p-6 text-center">
@@ -723,13 +740,25 @@ function SettleScreen({
         <p className="mt-1 text-sm text-secondary">
           Net position {signed(settlement.position)} lots
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {settlement.twoSided ? (
-            <span className="chip border-bull text-bull">✓ Two-sided trading — risk-manager pass</span>
+            <span className="chip border-bull text-bull">Two-sided</span>
           ) : (
-            <span className="chip border-bear text-bear">✕ One-way risk — trade both directions next time</span>
+            <span className="chip border-bear text-bear">One-way book</span>
           )}
+          <span
+            className={`chip ${coaching.adverseFrac >= 0.5 ? "border-bear text-bear" : coaching.adverseFrac < 0.2 ? "border-bull text-bull" : "border-accent text-accent"}`}
+          >
+            {Math.round(coaching.adverseFrac * 100)}% picked off
+          </span>
         </div>
+      </article>
+
+      {/* The real "why": pricing quality first, risk second */}
+      <article className={`panel-ruled border-l-4 ${coachBorder} p-4 text-left`}>
+        <div className="label text-accent">Coach · why you {win ? "won" : "lost"}</div>
+        <p className="mt-1 font-display text-lg font-semibold text-primary">{coaching.headline}</p>
+        <p className="mt-1 text-sm leading-relaxed text-secondary">{coaching.detail}</p>
       </article>
 
       {/* Post-game questions */}
@@ -742,7 +771,7 @@ function SettleScreen({
             label="Break-even on the leftover"
             value={
               be.net === 0
-                ? "flat — nothing to break even"
+                ? "flat, nothing to break even"
                 : be.possible
                   ? `${be.side} ${Math.abs(be.net)} @ ${be.price}`
                   : "impossible (price < 0)"

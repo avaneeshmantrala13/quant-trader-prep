@@ -111,6 +111,49 @@ describe("mental-math numeric: each family emits its intended misconception tags
   }
 });
 
+describe("fraction→decimal: coaching + explanation cite the DISPLAYED (reduced) fraction", () => {
+  // Regression for audit D3: the prompt renders a reduced fraction (e.g. "3/5"),
+  // so the rung-1 coaching and rung-5 explanation must reference that SAME
+  // fraction — never the unreduced draw ("the denominator is 10").
+  it("explanation + every commonError reference the shown numerator/denominator", () => {
+    const gen = ALL_MM_NUMERIC_GENERATORS.genFractionToDecimalNumeric;
+    // A wide seed sweep to hit every reducible denominator {4,8,10,16,20,25}.
+    for (const seed of Array.from({ length: 400 }, (_, i) => i * 7 + 1)) {
+      const q = gen(new Rng(seed));
+      const m = q.prompt.match(/Express (\d+)\/(\d+) as a decimal/);
+      expect(m).not.toBeNull();
+      const shownNum = Number(m![1]);
+      const shownDen = Number(m![2]);
+
+      // Displayed fraction is fully reduced.
+      const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a);
+      expect(gcd(shownNum, shownDen)).toBe(1);
+
+      // rung-5 explanation divides the SHOWN numerator by the SHOWN denominator.
+      expect(q.explanation).toContain(
+        `${shownNum}/${shownDen} = ${shownNum} ÷ ${shownDen} =`,
+      );
+
+      for (const ce of q.commonErrors ?? []) {
+        if (ce.misconception === "wrong_denominator") {
+          // Coaching must name the SHOWN denominator, not the raw draw.
+          expect(ce.feedback).toContain(`the denominator is ${shownDen}`);
+          expect(ce.feedback).toContain(`You used ${shownDen + 1} on the bottom`);
+          // The classic bug: citing an unreduced denominator like 10 for "3/5".
+          expect(ce.feedback).not.toMatch(
+            new RegExp(`denominator is (?!${shownDen}\\b)\\d+`),
+          );
+        }
+        if (ce.misconception === "inverted_fraction") {
+          expect(ce.feedback).toContain(
+            `You divided ${shownDen} by ${shownNum}`,
+          );
+        }
+      }
+    }
+  });
+});
+
 describe("mental-math numeric: sample answers reproduce the exact arithmetic", () => {
   it("addition sums the two operands parsed from the prompt", () => {
     for (const seed of SEEDS) {

@@ -179,7 +179,7 @@ function BayesNaturalFrequency(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Of 1000 people, only a few actually have the disease (TP + FN). The bars are the four groups: true/false positives and negatives. Because the healthy group is huge, its false positives (FP) usually outnumber the true positives (TP) — so P(disease | +) = TP ÷ (TP + FP) stays small even with an accurate test."
+      howToRead="Of 1000 people, only a few actually have the disease (TP + FN). The bars are the four groups: true/false positives and negatives. Because the healthy group is huge, its false positives (FP) usually outnumber the true positives (TP), so P(disease | +) = TP ÷ (TP + FP) stays small even with an accurate test."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -255,8 +255,8 @@ function BayesNaturalFrequency(): JSX.Element {
           P(disease | positive) ={" "}
           <span className="num text-primary">
             {(posterior * 100).toFixed(1)}%
-          </span>{" "}
-          — only{" "}
+          </span>
+          , only{" "}
           <span className="num text-accent">{counts.haveAndPos}</span> of{" "}
           <span className="num text-primary">
             {counts.haveAndPos + counts.noAndPos}
@@ -312,7 +312,7 @@ function Dartboard(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Darts land uniformly at random in the unit square. Green dots fall inside the quarter-circle, red dots outside. Since the darts are uniform, the fraction landing inside estimates the shape's area ratio (here π/4) — more darts ⇒ a sharper estimate, so 4× the inside fraction approximates π."
+      howToRead="Darts land uniformly at random in the unit square. Green dots fall inside the quarter-circle, red dots outside. Since the darts are uniform, the fraction landing inside estimates the shape's area ratio (here π/4); more darts ⇒ a sharper estimate, so 4× the inside fraction approximates π."
     >
       <div className="space-y-4">
         <label className="space-y-1 block">
@@ -445,7 +445,7 @@ function GameTheoryMatrix(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Enter the row player's payoffs (the column player gets the negative — it's zero-sum). The game value is the payoff both players can guarantee with optimal play. If there's a pure saddle point, both play one action; otherwise each must MIX their two actions with the probabilities shown so the opponent can't exploit a pattern."
+      howToRead="Enter the row player's payoffs (the column player gets the negative, so it's zero-sum). The game value is the payoff both players can guarantee with optimal play. If there's a pure saddle point, both play one action; otherwise each must MIX their two actions with the probabilities shown so the opponent can't exploit a pattern."
     >
       <div className="space-y-4">
         <div className="flex flex-wrap gap-2">

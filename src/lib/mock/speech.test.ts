@@ -38,7 +38,9 @@ describe("graceful degradation when Web Speech is unavailable (node/SSR)", () =>
       synthesis: false,
     });
 
-    const ctl = createSpeechController();
+    // `tts: null` pins these to the Web-Speech / no-op path under test (the
+    // neural path is covered in speech-tts.test.ts), independent of local env.
+    const ctl = createSpeechController({ tts: null });
     expect(ctl.supported).toBe(false);
     // None of these throw; listen reports it did not start.
     expect(() => ctl.speak("hello")).not.toThrow();
@@ -88,7 +90,7 @@ describe("supported path (stubbed window)", () => {
     expect(isSpeechRecognitionSupported()).toBe(true);
     expect(isSpeechSynthesisSupported()).toBe(true);
 
-    const ctl = createSpeechController({ lang: "en-GB", rate: 1.1 });
+    const ctl = createSpeechController({ lang: "en-GB", rate: 1.1, tts: null });
     expect(ctl.supported).toBe(true);
 
     const results: { text: string; final: boolean }[] = [];
@@ -116,7 +118,7 @@ describe("supported path (stubbed window)", () => {
     };
     expect(isSpeechRecognitionSupported()).toBe(false);
     expect(isSpeechSynthesisSupported()).toBe(true);
-    const ctl = createSpeechController();
+    const ctl = createSpeechController({ tts: null });
     expect(ctl.supported).toBe(true);
     expect(ctl.listen({ onResult: () => {} })).toBe(false); // can't listen
     expect(() => ctl.speak("hi")).not.toThrow(); // but can speak
@@ -259,7 +261,7 @@ describe("synthesis speaks chunked, voiced utterances", () => {
       SpeechSynthesisUtterance: Utter,
     };
 
-    const ctl = createSpeechController();
+    const ctl = createSpeechController({ tts: null });
     ctl.speak("Compute twelve times twelve. Then tell me the remainder.");
 
     // Two sentences → two queued utterances.
@@ -294,7 +296,7 @@ describe("synthesis speaks chunked, voiced utterances", () => {
       },
     };
 
-    const ctl = createSpeechController();
+    const ctl = createSpeechController({ tts: null });
     // First speak: voices empty → controller subscribes to voiceschanged.
     ctl.speak("Hello there.");
     expect(typeof synth.onvoiceschanged).toBe("function");

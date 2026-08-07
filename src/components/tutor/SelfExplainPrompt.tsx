@@ -58,7 +58,7 @@ export function SelfExplainPrompt({
         >
           {picked === mcq.correctIndex
             ? "That's the reasoning that actually justifies it."
-            : "Not quite — re-read the highlighted reasoning above."}
+            : "Not quite. Re-read the highlighted reasoning above."}
         </p>
       )}
     </div>

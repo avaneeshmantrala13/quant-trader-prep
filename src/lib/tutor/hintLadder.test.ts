@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { NumericQuestion, Question } from "@/types/content";
-import { buildHintLadder, nameOnlyCoaching, type HintRung } from "./hintLadder";
+import {
+  buildHintLadder,
+  nameOnlyCoaching,
+  nameTrapWithoutAnswer,
+  type HintRung,
+} from "./hintLadder";
 import { containsFinalAnswer } from "./answerWithholding";
 import { MISCONCEPTION } from "./misconception";
 import type { MonteCarloSpec } from "./monteCarlo";
 import { SIM_BY_ID } from "@/lib/simulations/catalog";
+import { PLAYABLE_TRACKS } from "@/content";
+import { materializeLevel, materializeNumericLevel } from "@/content/materialize";
+import { isFlashcardLevel, isNumericLevel } from "@/types/content";
 
 const bayesQ: Question = {
   id: "cp-bayestest-1-80-9",
@@ -273,6 +281,59 @@ describe("nameOnlyCoaching", () => {
     );
     expect(s.length).toBeGreaterThan(0);
   });
+
+  it("never ships a mid-sentence fragment: an operation word INSIDE the naming clause is backed off to a clean boundary (the committee/P(n,k) trap)", () => {
+    // The rationale contains " divide" INSIDE its second (corrective) clause, so
+    // the old first-marker cut shipped the dangling fragment "…so should you keep or".
+    const out = nameOnlyCoaching(
+      "Close, that's the number of ORDERED arrangements P(7,2). A committee doesn't care about order, so should you keep or divide out the 2! orderings of each group?",
+    );
+    expect(out).toBe(
+      "Close, that's the number of ORDERED arrangements P(7,2). A committee doesn't care about order.",
+    );
+    // No dangling tail, no revealed method, ends cleanly.
+    expect(out).not.toMatch(/keep or/i);
+    expect(out).not.toMatch(/divide/i);
+    expect(out).not.toContain("2!");
+    expect(out.trim()).toMatch(/[.?!]$/);
+  });
+
+  it("drops a trailing imperative-directive SENTENCE that reveals the method (the '…Weight each by its share.' family)", () => {
+    const out = nameOnlyCoaching(
+      "You averaged the two defect rates equally. Weight each by its production SHARE (40% vs 60%), not 50/50.",
+    );
+    expect(out).toBe("You averaged the two defect rates equally.");
+    expect(out.toLowerCase()).not.toContain("weight");
+  });
+
+  it("preserves a COHERENT authored Socratic question that ends on a preposition (no over-stripping)", () => {
+    const q =
+      "That's only the numerator P(+|D)·P(D), the joint. To turn a joint into P(D|+), what total must you normalise by?";
+    // No corrective marker → returned as authored (a complete, grammatical question).
+    expect(nameOnlyCoaching(q)).toBe(q);
+    expect(nameOnlyCoaching(q).trim()).toMatch(/[.?!]$/);
+  });
+
+  it("always terminates with punctuation and never ends on a dangling conjunction", () => {
+    const samples = [
+      "You added P(A)+P(B); some integers are divisible by BOTH 3 and 4 and get counted twice.",
+      "That's only P(A), divisibility by 3 alone. The event is A OR B; how do you fold in B without double-counting?",
+      "You inverted the ratio. P(A|B) puts the joint on top and P(B) on the bottom, which quantity should divide which?",
+      "That's the joint P(A∩B). Conditioning restricts you to the world where B happened, what must you divide the joint by?",
+    ];
+    for (const s of samples) {
+      const out = nameOnlyCoaching(s);
+      expect(out.trim()).toMatch(/[.?!]["')\]]?$/);
+      const lastWord = out
+        .trim()
+        .replace(/[.?!"')\]]+$/g, "")
+        .match(/([\p{L}\p{N}']+)$/u)?.[1];
+      expect(lastWord).toBeTruthy();
+      expect(lastWord!).not.toMatch(
+        /^(or|and|so|but|nor|yet|then|because|thus|hence|the|a|an)$/i,
+      );
+    }
+  });
 });
 
 describe("buildHintLadder rung-1 (prioritised numeric name-trap cases)", () => {
@@ -380,5 +441,374 @@ describe("buildHintLadder rung-1 (prioritised numeric name-trap cases)", () => {
         expect(containsFinalAnswer(rung.text, q.answer, 1e-9)).toBe(false);
       }
     }
+  });
+});
+
+/* ========================================================================== */
+/*  Rung-1 hint-ladder truncation regression (the committee P(n,k) trap +      */
+/*  an exhaustive property sweep over every authored rationale/feedback).      */
+/* ========================================================================== */
+
+/** True iff `s` ends on a terminal `. ? !` (optionally quote/paren-wrapped). */
+function endsTerminal(s: string): boolean {
+  return /[.?!]["')\]]?$/.test(s.trim());
+}
+
+/** The final content word (ignoring trailing terminal punctuation), lowercased. */
+function finalWord(s: string): string {
+  return (
+    s
+      .trim()
+      .replace(/[.?!"')\]]+$/g, "")
+      .match(/([\p{L}\p{N}']+)$/u)?.[1] ?? ""
+  ).toLowerCase();
+}
+
+// A dangling CONJUNCTION/article is the unambiguous fingerprint of a
+// mid-sentence cut. (Coherent Socratic questions may end on a preposition +
+// "?", e.g. "…normalise by?", which is grammatical and intentionally kept.)
+const DANGLING_CONJUNCTION =
+  /^(or|and|so|but|nor|yet|then|because|thus|hence|the|a|an)$/i;
+
+// Rungs 2–4 are GENERIC (guided plan / worked-sibling / sim pointer) — authored
+// never to embed the item's computed answer. They do, however, contain
+// STRUCTURAL integers unrelated to the answer: plan step labels "(1) (2) (3)"
+// and fixed sim titles like "Mixed Strategies (2×2 Zero-Sum)". The purely
+// syntactic numeric scanner can't tell those from a genuine small-integer
+// answer, so for rungs 2–4 we exempt small integer answers (|a| ≤ 12) — the only
+// values that collide with such structural numbers. Rung 1 (the surface this fix
+// touches) is ALWAYS checked strictly, and every non-trivial (decimal / larger)
+// answer is still fully checked on rungs 2–4. Representative per-item rungs-1–4
+// coverage also lives in the targeted tests above.
+function answerAsNumber(a: number | string): number | null {
+  if (typeof a === "number") return a;
+  const frac = /^(-?\d+)\s*\/\s*(\d+)$/.exec(a.trim());
+  if (frac) return Number(frac[2]) === 0 ? null : Number(frac[1]) / Number(frac[2]);
+  const n = Number(a.replace(/[$,%\s]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+function collidesWithStructuralInteger(a: number | string): boolean {
+  const n = answerAsNumber(a);
+  return n !== null && Number.isInteger(n) && Math.abs(n) <= 12;
+}
+
+describe("rung-1 truncation regression (the committee P(n,k) ordered-arrangements trap)", () => {
+  const committeeQ: Question = {
+    id: "ca-committee-7-2",
+    prompt:
+      "How many ways can you choose a committee of 2 from 7 people, where order does NOT matter?",
+    // C(7,2) = 21 is correct; P(7,2) = 42 is the ordered-arrangements trap.
+    choices: ["21", "42", "14", "49"],
+    correctIndex: 0,
+    explanation:
+      "A committee is unordered, so count combinations: C(7,2) = 21. The ordered count P(7,2) = 42 double-counts each pair 2! = 2 ways.",
+    difficulty: "easy",
+    distractorRationale: [
+      "Correct — C(7,2) counts unordered pairs.",
+      "Close, that's the number of ORDERED arrangements P(7,2). A committee doesn't care about order, so should you keep or divide out the 2! orderings of each group?",
+      "That undercounts — you left out some valid committees.",
+      "That's the number of ordered pairs allowing repeats.",
+    ],
+    misconceptions: ["", MISCONCEPTION.orderedVsUnordered, "", ""],
+    family: "genChooseKTrap",
+  };
+
+  it("rung 1 is a COMPLETE thought: ends in punctuation, no 'keep or' dangling, no revealed '2!' method, answer withheld", () => {
+    const ladder = buildHintLadder({
+      question: committeeQ,
+      chosenIndex: 1,
+      misconceptionTag: MISCONCEPTION.orderedVsUnordered,
+      section: "Combinatorial Analysis",
+    });
+    const rung1 = ladder[0].text;
+    expect(endsTerminal(rung1)).toBe(true);
+    expect(DANGLING_CONJUNCTION.test(finalWord(rung1))).toBe(false);
+    expect(rung1).not.toMatch(/keep or/i);
+    expect(rung1).not.toMatch(/divide/i);
+    expect(rung1).not.toContain("2!");
+    // Still NAMES the trap...
+    expect(rung1).toMatch(/ORDERED arrangements/i);
+    expect(rung1).toContain("A committee doesn't care about order");
+    // ...and never reveals the answer (21) on rungs 1–4.
+    const answer = committeeQ.choices[committeeQ.correctIndex];
+    for (const rung of ladder.slice(0, 4)) {
+      expect(containsFinalAnswer(rung.text, answer)).toBe(false);
+    }
+  });
+});
+
+/* ========================================================================== */
+/*  RC3a: rung-1 answer-guard SANITISES (redacts) a quoted answer instead of   */
+/*  silently dropping to the content-free generic nudge.                       */
+/* ========================================================================== */
+
+describe("nameTrapWithoutAnswer (RC3a: redact the leaked answer, keep the diagnosis)", () => {
+  it("keeps the naming clause and redacts a leaked numeric answer (no drop-to-generic)", () => {
+    // A common-error feedback that quotes the CORRECT value (0.9) to contrast.
+    const out = nameTrapWithoutAnswer(
+      "That's the tighter Chebyshev variance bound, not the looser Markov mean bound of 0.9 here.",
+      0.9,
+    );
+    expect(out).not.toBe(""); // did NOT drop to generic
+    expect(out).toMatch(/Chebyshev/i);
+    expect(out).toMatch(/Markov/i);
+    expect(containsFinalAnswer(out, 0.9, 1e-9)).toBe(false);
+    expect(out).not.toContain("0.9");
+    expect(out.trim()).toMatch(/[.?!]$/);
+  });
+
+  it("redacts a leaked fraction answer while preserving the trap name", () => {
+    const out = nameTrapWithoutAnswer(
+      "You reported the complement 1/3 for this streak instead.",
+      "1/3",
+    );
+    // "instead" is a corrective marker → nameOnlyCoaching alone already trims it,
+    // but if the answer survives we must still be answer-free and non-empty.
+    expect(containsFinalAnswer(out, "1/3")).toBe(false);
+  });
+
+  it("returns '' (→ caller uses generic) only when nothing nameable survives redaction", () => {
+    // The whole feedback IS the answer token — nothing nameable remains.
+    expect(nameTrapWithoutAnswer("0.25", 0.25)).toBe("");
+  });
+});
+
+describe("buildHintLadder rung-1 (RC3a: sanitise, don't drop-to-generic)", () => {
+  const GENERIC_FINGERPRINT = /not the right answer/i;
+
+  it("numeric matched feedback quoting the answer keeps the SPECIFIC diagnosis (not generic)", () => {
+    const q: NumericQuestion = {
+      id: "vc-markovbound-leak",
+      prompt: "Markov's inequality upper bound? (Round to 4 decimals.)",
+      answer: 0.9,
+      decimals: 4,
+      difficulty: "medium",
+      explanation: "Markov: bound = E[X]/a = 0.9.",
+      unit: "",
+      commonErrors: [
+        {
+          value: 0.5,
+          // Quotes the correct value 0.9 to contrast — the old guard tripped on
+          // this and silently fell back to the generic nudge.
+          feedback:
+            "That's the tighter Chebyshev variance bound, not the looser Markov mean bound of 0.9 here.",
+          misconception: MISCONCEPTION.nVsNMinusOne,
+        },
+      ],
+    };
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 0.5,
+      section: "Variance, Covariance & the CLT",
+    });
+    const rung1 = ladder[0].text;
+    // Kept the specific trap name...
+    expect(rung1).toMatch(/Chebyshev/i);
+    expect(rung1).toMatch(/Markov/i);
+    // ...did NOT collapse to the content-free generic nudge...
+    expect(rung1).not.toMatch(GENERIC_FINGERPRINT);
+    // ...and is still answer-free on rungs 1–4.
+    for (const rung of ladder.slice(0, 4)) {
+      expect(containsFinalAnswer(rung.text, q.answer, 1e-9)).toBe(false);
+    }
+  });
+
+  it("quiz distractor rationale quoting the answer keeps the diagnosis (answer redacted)", () => {
+    const q: Question = {
+      id: "vc-leak-quiz",
+      prompt: "Which bound applies to this one-sided tail?",
+      choices: ["0.9", "0.5", "0.1", "0.3"],
+      correctIndex: 0,
+      explanation: "Markov gives 0.9.",
+      difficulty: "medium",
+      distractorRationale: [
+        "Correct — Markov's mean-based cap.",
+        "That's the Chebyshev variance bound, not the Markov mean cap of 0.9 for this tail.",
+        "Off by an order of magnitude.",
+        "That mixes up the threshold.",
+      ],
+      family: "genMarkovBound",
+    };
+    const ladder = buildHintLadder({
+      question: q,
+      chosenIndex: 1,
+      section: "Variance, Covariance & the CLT",
+    });
+    const rung1 = ladder[0].text;
+    expect(rung1).toMatch(/Chebyshev/i);
+    expect(rung1).not.toMatch(GENERIC_FINGERPRINT);
+    expect(containsFinalAnswer(rung1, "0.9")).toBe(false);
+    expect(rung1).not.toContain("0.9");
+  });
+});
+
+/* ========================================================================== */
+/*  RC3b: arithmetic-slip nudge is GATED to genuine numeric-arithmetic         */
+/*  contexts (misleading "your logic is spot on" no longer fires on logic).    */
+/* ========================================================================== */
+
+describe("buildHintLadder rung-1 (RC3b: arithmetic-slip gating)", () => {
+  const SLIP_FINGERPRINT = /logic looks spot on/i;
+  const GENERIC_FINGERPRINT = /not the right answer/i;
+
+  const numBase = (over: Partial<NumericQuestion>): NumericQuestion => ({
+    id: "slip-x",
+    prompt: "How many?",
+    answer: 20,
+    decimals: undefined,
+    difficulty: "easy",
+    explanation: "It is 20.",
+    unit: "",
+    commonErrors: [],
+    ...over,
+  });
+
+  it("does NOT fire the arithmetic-slip nudge on a LOGIC/construction puzzle (misleading there)", () => {
+    const q = numBase({});
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 19, // close → would look like an arithmetic slip
+      section: "Core Puzzles",
+      // note: family threaded via question; pigeonhole is a logic construction
+    });
+    // Sanity: 19 vs 20 IS within the arithmetic-slip band.
+    const rung1 = ladder[0].text;
+    expect(rung1).not.toMatch(SLIP_FINGERPRINT);
+    // Falls to the honest generic nudge instead.
+    expect(rung1).toMatch(GENERIC_FINGERPRINT);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("does NOT fire on a logic family id even outside a puzzle section", () => {
+    const q = numBase({ family: "genPigeonhole" });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 19,
+      section: "Number Theory & Counting",
+    });
+    expect(ladder[0].text).not.toMatch(SLIP_FINGERPRINT);
+  });
+
+  it("STILL fires the arithmetic-slip nudge on a genuine mental-math numeric context", () => {
+    const q = numBase({ answer: 42, explanation: "It is 42." });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 41, // close numeric near-miss
+      section: "Mental Math",
+    });
+    const rung1 = ladder[0].text;
+    expect(rung1).toMatch(SLIP_FINGERPRINT);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("does NOT fire on a STATIC derivation item recognised only by its concept (the ig-max-dice screenshot)", () => {
+    // The Interview-Games "expected maximum of two dice" item is a STATIC pool
+    // item with no section/family — only `concept` marks it as a derivation
+    // problem. A close-but-wrong entry (4.5 vs 4.47) reflects a setup/formula
+    // slip, not a digit slip, so "your logic is spot on" would mislead.
+    const q: NumericQuestion = {
+      id: "ig-max-dice",
+      prompt:
+        "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two?",
+      answer: 4.47,
+      decimals: 2,
+      difficulty: "hard",
+      explanation:
+        "P(max = k) = (2k − 1)/36. E[max] = Σ k·(2k−1)/36 = 161/36 ≈ 4.47.",
+      unit: "",
+      concept: "Order statistics / expected maximum",
+      commonErrors: [],
+    };
+    const ladder = buildHintLadder({ question: q, chosenValue: 4.5 });
+    const rung1 = ladder[0].text;
+    // Sanity: 4.5 vs 4.47 is well within the arithmetic-slip band.
+    expect(rung1).not.toMatch(SLIP_FINGERPRINT);
+    expect(rung1).toMatch(GENERIC_FINGERPRINT);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  });
+});
+
+describe("rung-1 property sweep over EVERY authored quiz/numeric rationale", () => {
+  // Enumerate every playable level, materialise it across many seeds (so
+  // parametric rationale text is exercised), build the SHIPPED hint ladder for
+  // each wrong choice / common-error, and assert the invariants the truncation
+  // bug violated.
+  const SEEDS = Array.from({ length: 24 }, (_, i) => i * 29 + 1);
+
+  it("rung 1 always ends in terminal punctuation and never on a dangling conjunction; rungs 1–4 never leak the answer; rung 2 terminates cleanly", () => {
+    const seen = new Set<string>();
+    let checked = 0;
+
+    for (const track of PLAYABLE_TRACKS) {
+      for (const level of track.levels) {
+        if (isFlashcardLevel(level)) continue;
+        const section = level.section;
+
+        if (isNumericLevel(level)) {
+          for (const seed of SEEDS) {
+            for (const q of materializeNumericLevel(level, seed)) {
+              for (const ce of q.commonErrors ?? []) {
+                if (seen.has(`N::${ce.feedback}`)) continue;
+                seen.add(`N::${ce.feedback}`);
+                checked++;
+                const ladder = buildHintLadder({
+                  question: q,
+                  chosenValue: ce.value,
+                  misconceptionTag: ce.misconception,
+                  section,
+                });
+                const rung1 = ladder[0].text;
+                expect(endsTerminal(rung1)).toBe(true);
+                expect(DANGLING_CONJUNCTION.test(finalWord(rung1))).toBe(false);
+                expect(rung1.trim().length).toBeGreaterThanOrEqual(15);
+                expect(endsTerminal(ladder[1].text)).toBe(true);
+                // Rung 1 (the changed surface): STRICT — no answer at all.
+                expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+                if (!collidesWithStructuralInteger(q.answer)) {
+                  for (const rung of ladder.slice(1, 4)) {
+                    expect(containsFinalAnswer(rung.text, q.answer, 1e-9)).toBe(false);
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          for (const seed of SEEDS) {
+            for (const q of materializeLevel(level, seed)) {
+              if (!q.distractorRationale) continue;
+              for (let i = 0; i < q.distractorRationale.length; i++) {
+                if (i === q.correctIndex) continue;
+                const r = q.distractorRationale[i];
+                if (!r || seen.has(`Q::${r}`)) continue;
+                seen.add(`Q::${r}`);
+                checked++;
+                const answer = q.choices[q.correctIndex];
+                const ladder = buildHintLadder({
+                  question: q,
+                  chosenIndex: i,
+                  misconceptionTag: q.misconceptions?.[i],
+                  section,
+                });
+                const rung1 = ladder[0].text;
+                expect(endsTerminal(rung1)).toBe(true);
+                expect(DANGLING_CONJUNCTION.test(finalWord(rung1))).toBe(false);
+                expect(rung1.trim().length).toBeGreaterThanOrEqual(15);
+                expect(endsTerminal(ladder[1].text)).toBe(true);
+                expect(containsFinalAnswer(rung1, answer)).toBe(false);
+                if (!collidesWithStructuralInteger(answer)) {
+                  for (const rung of ladder.slice(1, 4)) {
+                    expect(containsFinalAnswer(rung.text, answer)).toBe(false);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Sanity: the sweep actually exercised a large, representative corpus.
+    expect(checked).toBeGreaterThan(1000);
   });
 });

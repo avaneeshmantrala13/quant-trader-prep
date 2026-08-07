@@ -14,7 +14,7 @@ import { numericErrors } from "../coreScaffold";
 /**
  * Parametric generators for the Probability & Statistics → **Order Statistics**
  * subcategory: minimums, orderings, and the median (central order statistic) of
- * continuous distributions (re-homed from the former "General" set — the uniform
+ * continuous distributions (re-homed from the former "General" set, the uniform
  * order-statistics family plus the exponential median).
  *
  * Every correct value is produced ONLY by the exact/high-precision solvers in
@@ -23,7 +23,7 @@ import { numericErrors } from "../coreScaffold";
  */
 
 /* ========================================================================== */
-/* =====================  1 — MINIMUM IN INTERVAL (numeric)  =============== */
+/* =====================  1. MINIMUM IN INTERVAL (numeric)  =============== */
 /* ========================================================================== */
 
 const SENSOR_THEME = [
@@ -61,11 +61,11 @@ export function buildMinIntervalInstance(
   );
   push(
     (hi - lo) / span,
-    `(hi−lo)/(b−a) = ${hi - lo}/${span} is the width ratio for a SINGLE uniform draw. We want the MINIMUM of ${n} draws, which shrinks toward the low end — you must raise the tail probabilities to the ${n}th power.`,
+    `(hi−lo)/(b−a) = ${hi - lo}/${span} is the width ratio for a SINGLE uniform draw. We want the MINIMUM of ${n} draws, which shrinks toward the low end, you must raise the tail probabilities to the ${n}th power.`,
   );
   push(
     1 - aboveLo,
-    `1 − ((b−lo)/(b−a))ⁿ = P(at least one draw is ≤ ${lo}) — the complement of "all exceed ${lo}", which is the wrong event entirely.`,
+    `1 − ((b−lo)/(b−a))ⁿ = P(at least one draw is ≤ ${lo}), the complement of "all exceed ${lo}", which is the wrong event entirely.`,
   );
 
   const prompt =
@@ -93,7 +93,7 @@ export function buildMinIntervalInstance(
 }
 
 /* ========================================================================== */
-/* =====================  2 — SPECIFIC ORDERING (numeric)  ================= */
+/* =====================  2. SPECIFIC ORDERING (numeric)  ================= */
 /* ========================================================================== */
 
 const ORDER_THEME = [
@@ -121,7 +121,7 @@ export function buildOrderingInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     1 / 2 ** (n - 1),
-    `1/2^(${n}−1) treats the ${n - 1} pairwise comparisons as independent ½'s. They aren't — but all ${n}! orderings are equally likely, so the answer is 1/${n}! = 1/${nFact}.`,
+    `1/2^(${n}−1) treats the ${n - 1} pairwise comparisons as independent ½'s. They aren't, but all ${n}! orderings are equally likely, so the answer is 1/${n}! = 1/${nFact}.`,
   );
   push(
     1 / n,
@@ -156,7 +156,7 @@ export function buildOrderingInstance(
 }
 
 /* ========================================================================== */
-/* =====================  3 — EXPONENTIAL MEDIAN (numeric)  ================ */
+/* =====================  3. EXPONENTIAL MEDIAN (numeric)  ================ */
 /* ========================================================================== */
 
 const EXPMED_THEME = [

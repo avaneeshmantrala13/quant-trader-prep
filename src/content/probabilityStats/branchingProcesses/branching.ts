@@ -2,7 +2,7 @@ import Fraction from "fraction.js";
 import { F } from "../coreSolvers";
 
 /**
- * Exact solvers for **branching processes** (Galton–Watson) — Bucket 2 "Extra
+ * Exact solvers for **branching processes** (Galton–Watson). Bucket 2 "Extra
  * Relevant Knowledge" (UT M362M core; academic for interviews).
  *
  * Offspring distribution is over {0,1,2} with counts (a,b,c) out of D (so

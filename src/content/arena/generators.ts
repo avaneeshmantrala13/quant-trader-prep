@@ -1,5 +1,5 @@
 /**
- * content/arena/generators.ts — seeded arithmetic item generator for the Speed
+ * content/arena/generators.ts, seeded arithmetic item generator for the Speed
  * Arena's local Custom / casual mode, extending Zetamac's integer drills with
  * fraction / decimal / percent packs (Phase 6).
  *
@@ -9,7 +9,7 @@
  *  - THIS module is the LOCAL-only, richer generator (fraction/decimal/percent)
  *    that produces free-entry `ArenaItem`s with a `decimals` grading precision.
  *
- * It reuses the Zetamac/Optiver arithmetic patterns from
+ * It reuses the timed mental-arithmetic patterns from
  * `@/content/mentalMath/generators.ts` (we import the shared `Rng`; we do NOT
  * edit that file). Every answer is computed directly, so it is correct by
  * construction, and each item is deterministic in the seeded `Rng`.
@@ -47,7 +47,7 @@ function rangeFor(preset: ArenaPreset, op: ArenaOp): [number, number] {
   return preset.ranges[op] ?? DEFAULT_RANGES[op];
 }
 
-/** Integer pack — the classic Zetamac drill (exact, no penalty by default). */
+/** Integer pack, the classic Zetamac drill (exact, no penalty by default). */
 function genInt(rng: Rng, op: ArenaOp, preset: ArenaPreset): ArenaItem {
   const [lo, hi] = rangeFor(preset, op);
   const draw = () => rng.int(lo, hi);
@@ -82,7 +82,7 @@ function genInt(rng: Rng, op: ArenaOp, preset: ArenaPreset): ArenaItem {
   };
 }
 
-/** Fraction pack — convert a proper terminating fraction to a decimal. */
+/** Fraction pack, convert a proper terminating fraction to a decimal. */
 function genFraction(rng: Rng): ArenaItem {
   const den = rng.pick(TERMINATING_DENOMS);
   const num = rng.int(1, den - 1);
@@ -97,7 +97,7 @@ function genFraction(rng: Rng): ArenaItem {
   };
 }
 
-/** Decimal pack — one-decimal-place operands, answer to 2 places. */
+/** Decimal pack, one-decimal-place operands, answer to 2 places. */
 function genDecimal(rng: Rng, op: ArenaOp, preset: ArenaPreset): ArenaItem {
   const [lo, hi] = rangeFor(preset, op);
   const a = round(rng.int(lo, hi) + rng.int(0, 9) / 10, 1);
@@ -132,7 +132,7 @@ function genDecimal(rng: Rng, op: ArenaOp, preset: ArenaPreset): ArenaItem {
   };
 }
 
-/** Percent pack — p% of a round base. */
+/** Percent pack, p% of a round base. */
 function genPercent(rng: Rng): ArenaItem {
   const p = rng.pick([5, 10, 12, 15, 20, 25, 30, 40, 50, 75]);
   const base = rng.int(2, 40) * 10;

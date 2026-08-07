@@ -75,8 +75,15 @@ describe("FloorDebrief", () => {
       ],
     };
     render(<FloorDebrief result={sparse} onRestart={vi.fn()} />);
-    // Below MIN_PAIRS the diagram refuses to show numbers and nudges for more.
-    expect(screen.getByText(/Calibration needs a bit more data/i)).toBeTruthy();
+    // Below MIN_PAIRS the diagram refuses to show numbers and nudges for more —
+    // now framed around genuinely-stated confidence and naming the ONLY two
+    // activities that produce a data point (Fermi 90% CIs + Floor quotes; FIX 2).
+    expect(
+      screen.getByText(/where you actually STATE a confidence/i),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Fermi estimation 90% intervals and your Trading-Floor price quotes/i),
+    ).toBeTruthy();
   });
 });
 

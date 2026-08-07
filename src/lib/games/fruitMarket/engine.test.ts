@@ -4,7 +4,6 @@ import {
   applesTotal,
   orangesTotal,
   computeValue,
-  roundTo10,
   correctAction,
   edge,
   dealMarket,
@@ -56,11 +55,11 @@ describe("count transforms under each event", () => {
   });
 });
 
-describe("computeValue — the spec worked example", () => {
-  it("apples 8+9=17, oranges 8+8=16 with orange-inflation → raw 544, trueValue 540", () => {
+describe("computeValue — the exact product (no rounding)", () => {
+  it("apples 8+9=17, oranges 8+8=16 with orange-inflation → 544, trueValue == rawValue", () => {
     const { rawValue, trueValue } = computeValue(bag(8, 8), bag(9, 8), "orange-inflation");
     expect(rawValue).toBe(544); // 17 × 32
-    expect(trueValue).toBe(540); // 544 rounds to nearest 10
+    expect(trueValue).toBe(544); // exact product, no rounding
   });
 
   it("no-fruit zeroing a bag drives the value to 0", () => {
@@ -71,22 +70,21 @@ describe("computeValue — the spec worked example", () => {
     expect(trueValue).toBe(0);
   });
 
-  it("no-fruit-a with orange-bearing B still multiplies remaining fruit", () => {
-    // Zero bag A → apples 5, oranges 7 → 35 → rounds to 40.
+  it("no-fruit-a with orange-bearing B multiplies remaining fruit exactly (no round)", () => {
+    // Zero bag A → apples 5, oranges 7 → 35 (exact, NOT rounded to 40).
     const { rawValue, trueValue } = computeValue(bag(3, 4), bag(5, 7), "no-fruit-a");
     expect(rawValue).toBe(35);
-    expect(trueValue).toBe(40);
+    expect(trueValue).toBe(35);
   });
-});
 
-describe("roundTo10", () => {
-  it("rounds to the nearest 10 with ties going up", () => {
-    expect(roundTo10(544)).toBe(540);
-    expect(roundTo10(545)).toBe(550);
-    expect(roundTo10(11)).toBe(10);
-    expect(roundTo10(0)).toBe(0);
-    expect(roundTo10(4)).toBe(0);
-    expect(roundTo10(5)).toBe(10);
+  it("decides trades on the EXACT product — the 2×7=14 skip case (BUG 2 regression)", () => {
+    // Bag A = 2 apples, 7 oranges; no-fruit-b zeroes bag B. Product = 2 × 7 = 14.
+    // Rounding to 10 used to make it 10 < bid 11 → falsely "SELL"; the exact 14
+    // sits inside [11, 19], so SKIP is the correct action (edge 0).
+    const { trueValue } = computeValue(bag(2, 7), bag(4, 5), "no-fruit-b");
+    expect(trueValue).toBe(14);
+    expect(correctAction(trueValue, { bid: 11, ask: 19 })).toBe("skip");
+    expect(edge(trueValue, { bid: 11, ask: 19 }, "skip")).toBe(0);
   });
 });
 
@@ -150,7 +148,7 @@ describe("dealMarket", () => {
       expect(Number.isInteger(m.quote.bid)).toBe(true);
       expect(Number.isInteger(m.quote.ask)).toBe(true);
       expect(m.quote.bid).toBeLessThan(m.quote.ask);
-      expect(m.trueValue).toBe(roundTo10(m.rawValue));
+      expect(m.trueValue).toBe(m.rawValue); // exact product, no rounding
     }
   });
 

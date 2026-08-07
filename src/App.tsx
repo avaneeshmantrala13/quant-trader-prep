@@ -108,18 +108,29 @@ const MockPage = lazy(() =>
 const ArbitragePage = lazy(() =>
   import("./pages/ArbitragePage").then((m) => ({ default: m.ArbitragePage })),
 );
-const VerifiedBankPage = lazy(() =>
-  import("./pages/VerifiedBankPage").then((m) => ({
-    default: m.VerifiedBankPage,
+const ReviewPage = lazy(() =>
+  import("./pages/ReviewPage").then((m) => ({ default: m.ReviewPage })),
+);
+const NumberLogicPage = lazy(() =>
+  import("./pages/NumberLogicPage").then((m) => ({
+    default: m.NumberLogicPage,
   })),
 );
-const CommunityPage = lazy(() =>
-  import("./pages/CommunityPage").then((m) => ({ default: m.CommunityPage })),
-);
-const LeaderboardPage = lazy(() =>
-  import("./pages/LeaderboardPage").then((m) => ({
-    default: m.LeaderboardPage,
+const BeatTheOddsPage = lazy(() =>
+  import("./pages/BeatTheOddsPage").then((m) => ({
+    default: m.BeatTheOddsPage,
   })),
+);
+const StockmasterPage = lazy(() =>
+  import("./pages/StockmasterPage").then((m) => ({
+    default: m.StockmasterPage,
+  })),
+);
+const NumberBoxPage = lazy(() =>
+  import("./pages/NumberBoxPage").then((m) => ({ default: m.NumberBoxPage })),
+);
+const ShapeShiftPage = lazy(() =>
+  import("./pages/ShapeShiftPage").then((m) => ({ default: m.ShapeShiftPage })),
 );
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
@@ -206,12 +217,12 @@ export default function App() {
                 {/* Case-A course curation page (additive; reuses lesson routes). */}
                 <Route path="/course/:courseId" element={<CourseTrackPage />} />
                 <Route path="/contents" element={<TableOfContentsPage />} />
+                {/* Spaced-repetition review surface (T14 retention). In-shell so
+                    it carries the standard nav; mode-scoped deck (Case A broad
+                    concepts / Case B fact-core). */}
+                <Route path="/review" element={<ReviewPage />} />
                 <Route path="/simulations" element={<SimulationsPage />} />
                 <Route path="/games" element={<GamesHubPage />} />
-                {/* Human-verified interview question bank (T9) — a browse surface. */}
-                <Route path="/verified-bank" element={<VerifiedBankPage />} />
-                {/* Community & social-proof layer (T13). */}
-                <Route path="/community" element={<CommunityPage />} />
                 <Route path="/themes" element={<ThemesPage />} />
               </Route>
 
@@ -336,17 +347,6 @@ export default function App() {
                 }
               />
 
-              {/* Unified competitive-games leaderboard (own full-screen layout,
-                  self-contained — see LeaderboardPage). Local-first, optional AWS. */}
-              <Route
-                path="/leaderboard"
-                element={
-                  <Guarded>
-                    <LeaderboardPage />
-                  </Guarded>
-                }
-              />
-
               {/* EV-under-time decision drill (T4, own full-screen layout). */}
               <Route
                 path="/ev-timed"
@@ -373,6 +373,50 @@ export default function App() {
                 element={
                   <Guarded>
                     <ArbitragePage />
+                  </Guarded>
+                }
+              />
+
+              {/* Optiver-style Assessment cluster (Zap-N / NumberLogic / Beat
+                  the Odds) — cognitive-aptitude drills mimicking Optiver's 2026
+                  OA sections. Each is a self-contained, full-screen game. */}
+              <Route
+                path="/numberlogic"
+                element={
+                  <Guarded>
+                    <NumberLogicPage />
+                  </Guarded>
+                }
+              />
+              <Route
+                path="/beat-the-odds"
+                element={
+                  <Guarded>
+                    <BeatTheOddsPage />
+                  </Guarded>
+                }
+              />
+              <Route
+                path="/stockmaster"
+                element={
+                  <Guarded>
+                    <StockmasterPage />
+                  </Guarded>
+                }
+              />
+              <Route
+                path="/number-box"
+                element={
+                  <Guarded>
+                    <NumberBoxPage />
+                  </Guarded>
+                }
+              />
+              <Route
+                path="/shape-shift"
+                element={
+                  <Guarded>
+                    <ShapeShiftPage />
                   </Guarded>
                 }
               />

@@ -47,7 +47,7 @@ export function ExperienceReportList({
   if (ranked.length === 0) {
     return (
       <p className="label text-muted">
-        No experience reports yet — share how your interview went.
+        No experience reports yet. Share how your interview went.
       </p>
     );
   }

@@ -3,9 +3,12 @@ import { Link } from "react-router-dom";
 import { ChevronLeftIcon } from "@/components/icons";
 import { MASTERY_BAR, P_TARGET, P_TARGET_BAND } from "@/lib/mastery/config";
 import type { MasteryState } from "@/lib/mastery/verdict";
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import type {
   DashboardMisconception,
   DashboardTopicEntry,
@@ -49,19 +52,19 @@ const VERDICT: Record<
 > = {
   STRONG: {
     label: "Made Hand",
-    note: "Strong — proven above the house line",
+    note: "Strong: proven above the house line",
     glyph: "♠",
     cls: "border-bull bg-bull/10 text-bull",
   },
   WEAK: {
     label: "Cold Deck",
-    note: "Weak — confidently below the house line",
+    note: "Weak: confidently below the house line",
     glyph: "▼",
     cls: "border-bear bg-bear/10 text-bear",
   },
   UNCERTAIN: {
     label: "Hand in Play",
-    note: "Uncertain — the hand has not been called yet",
+    note: "Uncertain: the hand has not been called yet",
     glyph: "◆",
     cls: "border-gold bg-gold/15 text-accent",
   },
@@ -223,7 +226,7 @@ function WeaknessRanking({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="text-sm text-secondary">
-        No graded evidence yet — play a few hands (or run the warm-up) to rank
+        No graded evidence yet. Play a few hands (or run the warm-up) to rank
         where the house has the edge.
       </p>
     );
@@ -277,7 +280,7 @@ function ReviewsCallList({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="text-sm text-secondary">
-        Nothing due for review — mastered hands resurface here on their SM-2
+        Nothing due for review. Mastered hands resurface here on their SM-2
         schedule.
       </p>
     );
@@ -332,12 +335,13 @@ function ReliabilityTable({ data }: { data: ReliabilityDiagramData }) {
           <Chip className="mx-auto h-9 w-9 text-accent/70" />
           <div className="label mt-2 text-accent">Building the ledger</div>
           <p className="mt-2 text-sm text-secondary">
-            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches your accuracy.
+            The ledger only logs bets where you STATE your odds — just two do
+            that: {ELICITED_ACTIVITIES_SENTENCE}. Regular lessons and quizzes
+            aren't posted here.
           </p>
           <p className="num mt-3 text-base font-semibold text-primary">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            {elicitedPairsNeeded(data.count, data.minPairs)} more of those to go.
           </p>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full border border-gold/40 bg-surface">
             <div
@@ -471,6 +475,9 @@ function ReliabilityTable({ data }: { data: ReliabilityDiagramData }) {
             <span className="text-muted">(n={data.headline.count})</span>.
           </p>
         )}
+        {data.sourceNote && (
+          <p className="text-xs text-muted">{data.sourceNote}</p>
+        )}
         {cal && (
           <p className="text-[15px] font-semibold text-primary">{cal.label}</p>
         )}
@@ -591,7 +598,6 @@ export function CasinoDashboard({
               Player Stats Sheet
             </div>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-ghost !min-h-0 shrink-0 !px-2 !py-1.5 text-xs"
@@ -620,7 +626,7 @@ export function CasinoDashboard({
                 className="mt-3 rounded-sm border border-gold/60 bg-surface-raised px-3 py-2 text-sm text-secondary"
                 style={goldRing}
               >
-                You have not run the calibration warm-up yet — it sets where your
+                You have not run the calibration warm-up yet; it sets where your
                 table starts.{" "}
                 <Link
                   to={diagnosticHref}
@@ -655,7 +661,7 @@ export function CasinoDashboard({
                   </>
                 ) : (
                   <p className="mt-1 text-sm text-secondary">
-                    No clear weak spot yet — explore a new table or deal the
+                    No clear weak spot yet. Explore a new table or deal the
                     warm-up to seed your starting point.
                   </p>
                 )}

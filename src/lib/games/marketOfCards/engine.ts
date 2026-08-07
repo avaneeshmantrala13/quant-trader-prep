@@ -264,41 +264,67 @@ export function botReactToPlayerQuote(
 }
 
 /**
- * Rate at which a bot that HAS edge against your quote actually acts. <1 so a
- * well-centred maker isn't picked off on every single edge, mirroring the mixed
- * flow of a real book.
+ * MAX probability the informed desk picks you off on a round when your market is
+ * badly OFFSIDE. The effective rate scales with how far the FAIR value (your
+ * information-correct EV) sits outside your posted market (`INFORMED_SPAN`), so
+ * a well-centred quote is essentially never adversely selected while a grossly
+ * mis-centred one is picked off almost every round. (F4.)
  */
-export const INFORMED_RATE = 0.15;
-/** Informed pick-offs are a small nibble, not a full sweep of your size. */
-const INFORMED_MAX_LOTS = 1;
+export const INFORMED_RATE_MAX = 0.9;
+/** Overhang (points the fair value sits outside your market) that reaches max pick-off rate. */
+const INFORMED_SPAN = 22;
+/** Points of overhang per lot the informed desk presses (bigger miss → more size). */
+const INFORMED_EDGE_PER_LOT = 10;
+/** Up to this many informed arrivals can hit a mis-priced quote per round. */
+const INFORMED_ARRIVALS = 2;
 /** Base rate of UNINFORMED noise flow crossing your market (scaled by tightness). */
-export const NOISE_BASE = 0.9;
+export const NOISE_BASE = 0.95;
 /** Up to this many independent uninformed orders can arrive per quote. */
-const NOISE_ARRIVALS = 2;
+const NOISE_ARRIVALS = 3;
 /** Largest lot count a single uninformed order takes (capped by the size you show). */
 const NOISE_MAX_LOTS = 3;
+/**
+ * How far your mid can drift from the fair value before UNINFORMED flow dries up.
+ * A quote that is obviously stale attracts no random/uninformed trade — only the
+ * sharp, adverse flow — so a mis-priced market can no longer "bank the spread"
+ * from matched noise to offset its pick-offs. This is what turns mis-pricing
+ * into an EV loss instead of a wash (F4).
+ */
+const NOISE_KILL = 26;
 
 /**
  * Resolve the player's posted quote against a REALISTIC mix of flow, in one
- * pass. This is the fix for the old "informed-only" model that made the maker's
- * game unwinnable (bots only ever traded when it lost the maker money):
+ * pass. Everything is keyed off `fair = playerEV(state)` — the information-
+ * correct value of the total given what the PLAYER can see — so the game
+ * rewards pricing skill and never punishes the irreducible uncertainty of the
+ * hidden cards (a quote centred on your own correct EV is "well-centred" by
+ * definition; settlement noise around it is symmetric and washes out).
  *
- *   1. INFORMED FLOW — bots with genuine edge (their private 2 cards move their
- *      EV past your quote) pick you off, but only occasionally (`INFORMED_RATE`)
- *      and only for a small nibble (`INFORMED_MAX_LOTS`). This is the adverse
- *      selection that punishes carrying one-way risk without swamping the game.
+ * Let `c = mid − fair` be your signed mis-centring and `h` your half-spread.
+ * Two flows combine so the game is both WINNABLE and FAIR:
  *
- *   2. UNINFORMED / NOISE FLOW — passing traders who just want to trade cross
- *      your market on RANDOM sides, paying you the HALF-SPREAD on average. Two-
- *      sided noise keeps a well-managed book near FLAT, and a flat book's P&L is
- *      pure spread capture (independent of the true total). This is what makes
- *      the maker's game winnable: quote a sensible market, take flow both ways,
- *      stay flat, bank the spread. Whoever lets flow push them into a big one-way
- *      position is exposed to the total's variance and can still lose — exactly
- *      the "risk-manager / trade both directions" lesson the game is built on.
+ *   1. INFORMED / ADVERSE FLOW — an informed desk (voiced by the bots) that
+ *      knows the fair value picks off the side you've left stale: it hits a bid
+ *      you've left too RICH (c > h → you buy above fair) or lifts an offer you've
+ *      left too CHEAP (c < −h → you sell below fair). Both the rate and the size
+ *      grow with the overhang `max(|c| − h, 0)`, so a well-centred quote is never
+ *      picked off, a slightly-off one only occasionally, and a grossly mis-
+ *      centred one almost every round for size-scaled losses. EV therefore falls
+ *      smoothly and monotonically as |c| grows (F4).
  *
- * The noise rate falls as you quote wider (so there's a sweet spot, not "quote
- * the max"). All randomness is drawn from the seeded `rng` for determinism.
+ *   2. UNINFORMED / NOISE FLOW — passing traders cross a SENSIBLE market on both
+ *      sides in MATCHED size, so a symmetric, well-centred book stays FLAT and
+ *      banks the full spread (pure spread capture — the winnable core). Crucially
+ *      this flow DRIES UP as your mid drifts from fair (`NOISE_KILL`): an
+ *      obviously stale quote gets no uninformed trade, so it can't bank the
+ *      spread to offset the adverse pick-offs. That's what makes a mis-priced
+ *      book bleed instead of washing out. Showing only one side (or exhausting a
+ *      side) leaves you carrying one-way inventory into the total's variance and
+ *      fully exposed to the adverse flow — an EV drag, not just a variance one
+ *      (F5).
+ *
+ * The noise rate also falls as you quote wider (so there's a sweet spot, not
+ * "quote the max"). All randomness is from the seeded `rng` for determinism.
  */
 export function resolvePlayerQuote(
   quote: Quote,
@@ -309,31 +335,58 @@ export function resolvePlayerQuote(
   let askLeft = quote.askSize;
   const fills: Fill[] = [];
   const trades: BotTrade[] = [];
+  const spread = quote.ask - quote.bid;
+  const half = spread / 2;
+  const fair = playerEV(state);
+  const mid = (quote.bid + quote.ask) / 2;
+  const c = mid - fair; // signed mis-centring vs the information-correct value
+  const overhang = Math.max(Math.abs(c) - half, 0); // how far fair sits outside your market
 
-  // 1) INFORMED flow — edge-driven, rare, and only a small nibble.
-  for (const bot of state.bots) {
+  // 1) INFORMED / ADVERSE flow — picks off the stale side, rate & size scaling
+  //    with how far off-centre you priced. This is the adverse selection that
+  //    punishes mis-pricing (F4).
+  const pInformed = INFORMED_RATE_MAX * clamp01(overhang / INFORMED_SPAN);
+  for (let k = 0; k < INFORMED_ARRIVALS && overhang > 0; k++) {
     if (bidLeft <= 0 && askLeft <= 0) break;
-    const remainingQuote: Quote = { ...quote, bidSize: bidLeft, askSize: askLeft };
-    const t = botReactToPlayerQuote(bot, remainingQuote, state);
-    if (!t) continue;
-    if (rng.next() >= INFORMED_RATE) continue; // this bot sits out this round
-    const size = Math.max(1, Math.min(t.size, INFORMED_MAX_LOTS));
-    trades.push({ ...t, size });
-    fills.push({ side: t.side, price: t.price, size, round: state.roundIdx });
-    if (t.side === "buy") bidLeft -= size; // bot sold into our bid
-    else askLeft -= size; // bot bought our ask
+    if (rng.next() >= pInformed) continue;
+    const bot = state.bots[(state.roundIdx + k) % Math.max(1, state.bots.length)];
+    const name = bot?.name ?? "An informed desk";
+    const want = Math.max(1, Math.round(overhang / INFORMED_EDGE_PER_LOT));
+    if (c > 0 && bidLeft > 0) {
+      // Mid too high → your bid is too rich → informed hits it, you BUY above fair.
+      const size = Math.min(bidLeft, want);
+      fills.push({ side: "buy", price: quote.bid, size, round: state.roundIdx });
+      trades.push({
+        side: "buy",
+        price: quote.bid,
+        size,
+        botId: bot?.id ?? -2,
+        chatter: `${name} hits your rich bid — sells ${size} @ ${quote.bid}.`,
+      });
+      bidLeft -= size;
+    } else if (c < 0 && askLeft > 0) {
+      // Mid too low → your offer is too cheap → informed lifts it, you SELL below fair.
+      const size = Math.min(askLeft, want);
+      fills.push({ side: "sell", price: quote.ask, size, round: state.roundIdx });
+      trades.push({
+        side: "sell",
+        price: quote.ask,
+        size,
+        botId: bot?.id ?? -2,
+        chatter: `${name} lifts your cheap offer — buys ${size} @ ${quote.ask}.`,
+      });
+      askLeft -= size;
+    }
   }
 
-  // 2) UNINFORMED noise flow — passing customers. Crucially this flow is roughly
-  //    TWO-SIDED: when you show BOTH a bid and an offer, customers lift and hit in
-  //    matched size, so a symmetric quote stays FLAT and banks the full spread
-  //    (pure spread capture, no exposure to the true total). If you only show one
-  //    side (or one side is exhausted), you take one-way flow and carry the risk.
-  const spread = quote.ask - quote.bid;
+  // 2) UNINFORMED noise flow — passing customers, MATCHED two-sided so a centred
+  //    book stays flat and banks the spread. Dries up as your mid drifts off fair.
   const tightness = clamp01(1 - spread / (MAX_SPREAD * 1.5));
+  const staleMult = clamp01(1 - Math.abs(c) / NOISE_KILL);
+  const noiseRate = NOISE_BASE * tightness * staleMult;
   for (let k = 0; k < NOISE_ARRIVALS; k++) {
     if (bidLeft <= 0 && askLeft <= 0) break;
-    if (rng.next() >= NOISE_BASE * tightness) continue;
+    if (rng.next() >= noiseRate) continue;
     const draw = rng.int(1, NOISE_MAX_LOTS);
     // A customer lifts your offer (you SELL).
     if (askLeft > 0) {
@@ -404,6 +457,103 @@ export function settle(state: GameState): Settlement {
     breakEven: be,
     trueTotal: state.trueTotal,
     twoSided: boughtSome && soldSome,
+  };
+}
+
+/* ========================================================================== */
+/*  Post-game coaching — the REAL "why" (pricing accuracy, then risk)          */
+/* ========================================================================== */
+
+export interface SettlementCoaching {
+  headline: string;
+  detail: string;
+  tone: "good" | "bad" | "mixed";
+  /** Fraction of traded lots that settled at a LOSS (a proxy for adverse selection). */
+  adverseFrac: number;
+  twoSided: boolean;
+}
+
+/**
+ * Grounded post-game coaching that leads with PRICING QUALITY — the skill this
+ * game actually trains — instead of the old misleading binary "two-sided ✓/✕"
+ * chip that praised a wildly mis-priced quote as a "risk-manager pass" (F4/F5).
+ *
+ * The verdict is derived from the settled fills:
+ *   • `adverseFrac` — the share of your traded lots that settled at a LOSS vs the
+ *     true total. A high share on a losing round means the informed flow kept
+ *     picking off the side you left stale, i.e. your MID was off — the pricing
+ *     lesson the old chip never surfaced.
+ *   • two-sidedness / ending inventory — the risk-manager lesson, now a SECONDARY
+ *     factor (and, per the engine fix, one-way risk is an EV drag too, not just
+ *     variance), never a headline "pass" on its own.
+ */
+export function coachSettlement(state: GameState, s: Settlement): SettlementCoaching {
+  const fills = state.fills;
+  const totalLots = fills.reduce((a, f) => a + f.size, 0);
+  let adverseLots = 0;
+  for (const f of fills) {
+    const per = f.side === "buy" ? state.trueTotal - f.price : f.price - state.trueTotal;
+    if (per < 0) adverseLots += f.size;
+  }
+  const adverseFrac = totalLots > 0 ? round2(adverseLots / totalLots) : 0;
+  const pct = Math.round(adverseFrac * 100);
+  const won = s.markPnl >= 0;
+  const evLine = `your EV (Σ your known cards + unknown × ${state.evPerCard}/card)`;
+
+  if (totalLots === 0) {
+    return {
+      headline: "You never got a fill.",
+      detail:
+        "Nothing crossed your market, so there's no pricing signal to grade. Quote a tighter, two-sided market centred on your EV so uninformed flow can pay you the spread.",
+      tone: "mixed",
+      adverseFrac,
+      twoSided: s.twoSided,
+    };
+  }
+
+  if (!won) {
+    if (adverseFrac >= 0.5) {
+      return {
+        headline: "Mis-priced — the informed flow picked you off.",
+        detail: `${pct}% of your lots settled at a loss: traders kept taking the side you left stale, so your MID was off — not just your risk. Centre on ${evLine}, and re-centre the instant a community card flips. A two-sided market that isn't centred still bleeds.`,
+        tone: "bad",
+        adverseFrac,
+        twoSided: s.twoSided,
+      };
+    }
+    return {
+      headline: "You carried the total's risk and it moved against you.",
+      detail: `You finished ${Math.abs(s.position)} lots ${s.position > 0 ? "long" : "short"} into a total that settled the other way. Your centring wasn't terrible (only ${pct}% of lots were picked off), but the open inventory is what cost you — trade the side that FLATTENS you and don't let flow build a one-way position.`,
+      tone: "bad",
+      adverseFrac,
+      twoSided: s.twoSided,
+    };
+  }
+
+  if (s.twoSided && adverseFrac < 0.4) {
+    return {
+      headline: "Well-priced and well-managed.",
+      detail: `A tight, two-sided market centred on your EV: uninformed flow paid your spread and you stayed near flat (only ${pct}% of lots were adversely selected). This is exactly the maker's edge — keep centring on ${evLine} and updating on every reveal.`,
+      tone: "good",
+      adverseFrac,
+      twoSided: s.twoSided,
+    };
+  }
+  if (!s.twoSided) {
+    return {
+      headline: "You won — but on one-way risk, not making.",
+      detail: `You only traded one side, so you were ${s.position > 0 ? "long" : "short"} into the total's variance. It paid this time, but a one-sided book is an EV drag as well as a variance one — show BOTH sides and let matched flow bank the spread.`,
+      tone: "mixed",
+      adverseFrac,
+      twoSided: s.twoSided,
+    };
+  }
+  return {
+    headline: "Profitable, but your pricing was scrappy.",
+    detail: `You finished up, but ${pct}% of your lots were adversely selected — you were getting picked off more than a clean quote should. Tighten your centring on ${evLine} so more of your flow is the spread-paying kind.`,
+    tone: "mixed",
+    adverseFrac,
+    twoSided: s.twoSided,
   };
 }
 

@@ -54,8 +54,8 @@ describe("ThemeSwitcher (pre-auth named-theme picker)", () => {
     renderSwitcher();
     const trigger = screen.getByRole("button", { name: /change theme/i });
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
-    // The active theme label (default: Broadsheet) is surfaced on the trigger.
-    expect(within(trigger).getByText("Broadsheet")).toBeTruthy();
+    // The active theme label (default: Minimalist) is surfaced on the trigger.
+    expect(within(trigger).getByText("Minimalist")).toBeTruthy();
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
@@ -69,7 +69,7 @@ describe("ThemeSwitcher (pre-auth named-theme picker)", () => {
     // The current theme is marked checked.
     const checked = options.filter((o) => o.getAttribute("aria-checked") === "true");
     expect(checked.length).toBe(1);
-    expect(within(checked[0]).getByText("Broadsheet")).toBeTruthy();
+    expect(within(checked[0]).getByText("Minimalist")).toBeTruthy();
   });
 
   it("switching theme applies it, persists to localStorage, and updates the trigger", () => {
@@ -77,16 +77,16 @@ describe("ThemeSwitcher (pre-auth named-theme picker)", () => {
     fireEvent.click(screen.getByRole("button", { name: /change theme/i }));
 
     const menu = screen.getByRole("menu");
-    fireEvent.click(within(menu).getByText("Minimalist"));
+    fireEvent.click(within(menu).getByText("Broadsheet"));
 
     // Persisted to the same device-level key the authed session reads.
-    expect(localStorage.getItem("qtp.themeId")).toBe("minimalist");
+    expect(localStorage.getItem("qtp.themeId")).toBe("broadsheet");
     // Applied to the document (ThemeProvider stamps the active theme id).
-    expect(document.documentElement.dataset.theme).toBe("minimalist");
+    expect(document.documentElement.dataset.theme).toBe("broadsheet");
     // Menu closed and the trigger now reflects the new choice.
     expect(screen.queryByRole("menu")).toBeNull();
     const trigger = screen.getByRole("button", { name: /change theme/i });
-    expect(within(trigger).getByText("Minimalist")).toBeTruthy();
+    expect(within(trigger).getByText("Broadsheet")).toBeTruthy();
   });
 
   it("closes on Escape without changing the theme", () => {
@@ -96,6 +96,6 @@ describe("ThemeSwitcher (pre-auth named-theme picker)", () => {
     expect(screen.getByRole("menu")).toBeTruthy();
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("menu")).toBeNull();
-    expect(localStorage.getItem("qtp.themeId")).toBe("broadsheet");
+    expect(localStorage.getItem("qtp.themeId")).toBe("minimalist");
   });
 });

@@ -26,7 +26,7 @@ import {
  *
  * Every ground-truth value is produced by the EXACT solver in `./solvers.ts`
  * (`lightsLineProb`, `multinomialPathsCount`, `alternatingStepPathsCount`,
- * `divisibleByModProb`) — never a hardcoded table — and every distractor
+ * `divisibleByModProb`), never a hardcoded table, and every distractor
  * (`numeric` commonErrors) is a re-derived, NAMED misconception, deduped and
  * kept ≠ the answer at the grading precision by `numericErrors`.
  *
@@ -37,7 +37,7 @@ import {
 const SOURCE = "Combinatorial Analysis · Grid & lattice counting";
 
 /* ========================================================================== */
-/* =================  1 — FULL-LINE COVERAGE ON A GRID (prob)  ============= */
+/* =================  1. FULL-LINE COVERAGE ON A GRID (prob)  ============= */
 /* ========================================================================== */
 
 const LINE_THEME = [
@@ -48,7 +48,7 @@ const LINE_THEME = [
 
 /**
  * On a 4×4 grid, `onCount` cells are lit uniformly at random. P(they include a
- * full line — some row, column, or MAIN diagonal of 4 cells) = lightsLineProb.
+ * full line, some row, column, or MAIN diagonal of 4 cells) = lightsLineProb.
  * There are 2n+2 = 10 lines; favorable = 10·C(n²−n, onCount−n). Traps: dropping
  * the two diagonals (2n lines), omitting the free-cell C(n²−n, onCount−n)
  * multiplier, and counting rows only (n lines).
@@ -86,9 +86,9 @@ export function genLightsLine(rng: Rng): NumericQuestion {
 
   const prompt =
     `A ${th.grid} is a ${n}×${n} grid of ${th.cell}s. Exactly ${onCount} of the ${cells} ${th.cell}s are ${th.lit} uniformly at random. ` +
-    `What is the probability that the ${th.lit} ${th.cell}s include a full line — a complete row, column, or main diagonal of ${n} ${th.cell}s? (Round to ${dp} decimals.)`;
+    `What is the probability that the ${th.lit} ${th.cell}s include a full line, a complete row, column, or main diagonal of ${n} ${th.cell}s? (Round to ${dp} decimals.)`;
   const explanation =
-    `There are 2n+2 = ${lines} full lines (${n} rows, ${n} columns, 2 main diagonals). For a chosen line, its ${n} ${th.cell}s must all be ${th.lit} and the other ${onCount - n} lit ${th.cell}s can sit anywhere among the remaining ${cells - n} cells — C(${cells - n}, ${onCount - n}) = ${free} ways. With ${onCount} ≤ n+2 two lines can't both be complete, so favorable = ${lines}·${free} = ${lines * Number(free)} out of C(${cells}, ${onCount}) = ${total}. ` +
+    `There are 2n+2 = ${lines} full lines (${n} rows, ${n} columns, 2 main diagonals). For a chosen line, its ${n} ${th.cell}s must all be ${th.lit} and the other ${onCount - n} lit ${th.cell}s can sit anywhere among the remaining ${cells - n} cells. C(${cells - n}, ${onCount - n}) = ${free} ways. With ${onCount} ≤ n+2 two lines can't both be complete, so favorable = ${lines}·${free} = ${lines * Number(free)} out of C(${cells}, ${onCount}) = ${total}. ` +
     `Thus P = ${fracText(value)} ≈ ${decText(value, dp)}.`;
 
   return {
@@ -106,7 +106,7 @@ export function genLightsLine(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  2 — MONOTONE 3-D LATTICE ROUTES (count)  ============= */
+/* =================  2. MONOTONE 3-D LATTICE ROUTES (count)  ============= */
 /* ========================================================================== */
 
 const PATHS3D_THEME = [
@@ -168,7 +168,7 @@ export function genMultinomialPaths(rng: Rng): NumericQuestion {
     `${th.actor} starts at the origin of a 3-D grid and must reach the point (${a}, ${b}, ${c}) using only unit ${th.steps} (never stepping backward). ` +
     `How many distinct monotone routes reach (${a}, ${b}, ${c})? (Whole number.)`;
   const explanation =
-    `A route is an arrangement of ${a} steps in x, ${b} in y, and ${c} in z — a total of ${total} steps. The number of distinct orderings of this multiset is the multinomial (${total})!/(${a}!·${b}!·${c}!) = ${count}. ` +
+    `A route is an arrangement of ${a} steps in x, ${b} in y, and ${c} in z, a total of ${total} steps. The number of distinct orderings of this multiset is the multinomial (${total})!/(${a}!·${b}!·${c}!) = ${count}. ` +
     `So there are ${answer} monotone routes to (${a}, ${b}, ${c}).`;
 
   return {
@@ -185,7 +185,7 @@ export function genMultinomialPaths(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  3 — ALTERNATING-STRIDE UP/RIGHT PATHS (count)  ======= */
+/* =================  3. ALTERNATING-STRIDE UP/RIGHT PATHS (count)  ======= */
 /* ========================================================================== */
 
 const STRIDE_THEME = [
@@ -195,7 +195,7 @@ const STRIDE_THEME = [
 ];
 
 /** Local mirror of the solver's forced-magnitude sequence (used only to derive
- * distractors — the count itself always comes from the solver). */
+ * distractors, the count itself always comes from the solver). */
 function strideSequence(
   X: number,
   Y: number,
@@ -265,7 +265,7 @@ export function genAlternatingSteps(rng: Rng): NumericQuestion {
   );
   push(
     Number(pickUpStrides),
-    `Choosing ${Y} of the ${m} strides to go "up" gives C(${m}, ${Y}) = ${pickUpStrides}, but that pretends each up-stride raises the height by 1 — the strides are ${sA} and ${sB}, so the up-strides must SUM to ${Y}.`,
+    `Choosing ${Y} of the ${m} strides to go "up" gives C(${m}, ${Y}) = ${pickUpStrides}, but that pretends each up-stride raises the height by 1, the strides are ${sA} and ${sB}, so the up-strides must SUM to ${Y}.`,
   );
   push(
     Number(freeBinary),
@@ -293,7 +293,7 @@ export function genAlternatingSteps(rng: Rng): NumericQuestion {
 }
 
 /* ========================================================================== */
-/* =================  4 — DIVISIBILITY OF A SPUN NUMBER (prob)  ============ */
+/* =================  4. DIVISIBILITY OF A SPUN NUMBER (prob)  ============ */
 /* ========================================================================== */
 
 const DIAL_THEME = [
@@ -331,7 +331,7 @@ export function genDivisibility(rng: Rng): NumericQuestion {
   const { errors, push } = numericErrors(answer, dp);
   push(
     tOverFaces,
-    `t/faces = ${t}/${faces} = ${fracText(tOverFaces)} divides the ${t} constrained digits by the ${faces} faces — that isn't a probability; divisibility by ${mod} is decided by the VALUE of the last ${t} digits.`,
+    `t/faces = ${t}/${faces} = ${fracText(tOverFaces)} divides the ${t} constrained digits by the ${faces} faces, that isn't a probability; divisibility by ${mod} is decided by the VALUE of the last ${t} digits.`,
   );
   push(
     oneFace,

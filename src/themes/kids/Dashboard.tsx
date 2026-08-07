@@ -3,9 +3,12 @@ import { Link } from "react-router-dom";
 import { MASTERY_BAR } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import type { MasteryState } from "@/lib/mastery/verdict";
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 import type { DashboardTopicEntry, DashboardViewProps } from "../types";
 import { Cheeks, Eyes, INK, KidsAnimations, Smile, Twinkle } from "./animations";
 import { KidsBackground } from "./Background";
@@ -479,7 +482,6 @@ export function KidsDashboard({
               My Progress Adventure
             </div>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="shrink-0 rounded-full border-[3px] border-border-strong bg-surface px-3 py-1.5 font-display text-xs font-black text-primary transition-transform hover:-translate-y-0.5"
@@ -869,12 +871,13 @@ function ReliabilityChart({ data }: { data: ReliabilityDiagramData }) {
         <TargetBuddy className="h-16 w-16 shrink-0" />
         <div className="min-w-0 flex-1">
           <p className="max-w-md text-sm font-semibold text-secondary">
-            Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-            confidence-rated questions and we'll show how well your confidence
-            matches how often you're right.
+            This chart only counts times you actually SAID how sure you were.
+            Just two things do that: {ELICITED_ACTIVITIES_SENTENCE}. Regular
+            lessons and quizzes don't count here.
           </p>
           <p className="mt-2 font-display text-sm font-black text-primary">
-            You're at {data.count}/{data.minPairs}.
+            You're at {data.count}/{data.minPairs} —{" "}
+            {elicitedPairsNeeded(data.count, data.minPairs)} more of those to go.
           </p>
           <div className="mt-2 h-3 w-full overflow-hidden rounded-full border-[3px] border-border-strong bg-surface">
             <div
@@ -1009,6 +1012,9 @@ function ReliabilityChart({ data }: { data: ReliabilityDiagramData }) {
             of the time!{" "}
             <span className="text-muted">({data.headline.count} answers)</span>
           </p>
+        )}
+        {data.sourceNote && (
+          <p className="text-xs font-semibold text-muted">{data.sourceNote}</p>
         )}
         <div className="flex flex-wrap gap-1.5">
           <span

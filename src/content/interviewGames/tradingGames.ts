@@ -42,7 +42,7 @@ const TICKERS = ["A", "B", "C", "D"];
 const DECIMAL_ODDS = ["1.50", "1.80", "1.90", "2.00", "2.10", "2.20", "2.50", "2.75", "3.00", "4.00"];
 
 /* ========================================================================== */
-/*  NUMERIC — scalar $ / probability answers                                   */
+/*  NUMERIC, scalar $ / probability answers                                   */
 /* ========================================================================== */
 
 /** Basket / ETF NAV: fair value = Σ qtyᵢ·priceᵢ (exact integer). */
@@ -107,7 +107,7 @@ function genNextCardFairProb(rng: Rng): NumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Sequential conditional probability (card counting)",
-    explanation: `With ${hits} red of ${hits + miss} cards left, P(next red) = ${hits}/${hits + miss} = ${P4(answer)}. As cards leave the deck the fair probability UPDATES — it is not the original ½.`,
+    explanation: `With ${hits} red of ${hits + miss} cards left, P(next red) = ${hits}/${hits + miss} = ${P4(answer)}. As cards leave the deck the fair probability UPDATES, it is not the original ½.`,
     commonErrors: errors,
     source: "Next-Card betting (GetCracked sequential probability)",
     family: "genNextCardFairProb",
@@ -169,7 +169,7 @@ function dedupeErrors(
 }
 
 /* ========================================================================== */
-/*  QUIZ — decision / arbitrage-side answers                                   */
+/*  QUIZ, decision / arbitrage-side answers                                   */
 /* ========================================================================== */
 
 /** ETF-vs-NAV arbitrage: which side to trade when price ≠ fair value. */
@@ -184,7 +184,7 @@ function genBasketArb(rng: Rng): Question {
 
   const BUY_ETF = "Buy the ETF, sell the basket of components";
   const SELL_ETF = "Sell the ETF, buy the basket of components";
-  const NONE = "No arbitrage — the ETF is fairly priced";
+  const NONE = "No arbitrage, the ETF is fairly priced";
   const BOTH = "Buy both the ETF and the basket";
   const correct = rich ? SELL_ETF : BUY_ETF;
 
@@ -197,9 +197,9 @@ function genBasketArb(rng: Rng): Question {
     difficulty: "hard",
     concept: "ETF-vs-NAV (creation/redemption) arbitrage",
     distractorRationaleByValue: {
-      [rich ? BUY_ETF : SELL_ETF]: "Traded the wrong direction — you'd be buying the expensive leg and selling the cheap one (locking in a loss).",
+      [rich ? BUY_ETF : SELL_ETF]: "Traded the wrong direction, you'd be buying the expensive leg and selling the cheap one (locking in a loss).",
       [NONE]: "Price ≠ NAV, so there IS a mispricing to capture.",
-      [BOTH]: "Buying both legs is not a hedge — it just doubles directional risk with no locked-in edge.",
+      [BOTH]: "Buying both legs is not a hedge, it just doubles directional risk with no locked-in edge.",
     },
     misconceptionByValue: {
       [rich ? BUY_ETF : SELL_ETF]: "wrong_arb_direction",
@@ -217,10 +217,10 @@ function genVigArb(rng: Rng): Question {
   const bs = booksum(odds);
   const arb = hasArbitrage(odds);
 
-  const ARB_ALL = "Arbitrage exists — back all outcomes for a guaranteed profit";
-  const NO_ARB = "No arbitrage — the overround favors the bookmaker";
-  const ARB_FAV = "Arbitrage exists — back only the favorite";
-  const FAIR = "No arbitrage — the odds are perfectly fair";
+  const ARB_ALL = "Arbitrage exists, back all outcomes for a guaranteed profit";
+  const NO_ARB = "No arbitrage, the overround favors the bookmaker";
+  const ARB_FAV = "Arbitrage exists, back only the favorite";
+  const FAIR = "No arbitrage, the odds are perfectly fair";
   const correct = arb ? ARB_ALL : NO_ARB;
 
   return assemble(rng, {
@@ -228,11 +228,11 @@ function genVigArb(rng: Rng): Question {
     prompt: `A sportsbook posts decimal odds ${odds.join(", ")} on the ${k} possible results, exactly one of which happens. Booksum Σ(1/oᵢ) = ${P4(fracToRounded(bs, 4))}. Is there an arbitrage?`,
     correct,
     distractors: [arb ? NO_ARB : ARB_ALL, ARB_FAV, FAIR],
-    explanation: `Σ(1/oᵢ) = ${P4(fracToRounded(bs, 4))}. ${arb ? "Because the booksum is BELOW 1, staking proportionally on every outcome guarantees a profit (a Dutch book)." : "Because the booksum is ABOVE 1, the overround is the bookmaker's edge — no arbitrage for the bettor."}`,
+    explanation: `Σ(1/oᵢ) = ${P4(fracToRounded(bs, 4))}. ${arb ? "Because the booksum is BELOW 1, staking proportionally on every outcome guarantees a profit (a Dutch book)." : "Because the booksum is ABOVE 1, the overround is the bookmaker's edge, no arbitrage for the bettor."}`,
     difficulty: "hard",
     concept: "Dutch-book / overround arbitrage detection",
     distractorRationaleByValue: {
-      [arb ? NO_ARB : ARB_ALL]: "Read the booksum backwards — arbitrage requires booksum < 1, a bookmaker edge means booksum > 1.",
+      [arb ? NO_ARB : ARB_ALL]: "Read the booksum backwards, arbitrage requires booksum < 1, a bookmaker edge means booksum > 1.",
       [ARB_FAV]: "Backing a single leg is a directional bet, not a locked-in arbitrage.",
       [FAIR]: "A fair book has booksum exactly 1; this one does not.",
     },
@@ -258,9 +258,9 @@ function genNextCardBet(rng: Rng): Question {
   price = Math.max(2, Math.min(98, price));
   const reallyBuy = price < fair;
 
-  const BUY = "Buy the ticket — it is cheap versus fair value";
-  const SELL = "Sell / decline — it is expensive versus fair value";
-  const INDIFF = "Indifferent — the price equals fair value";
+  const BUY = "Buy the ticket, it is cheap versus fair value";
+  const SELL = "Sell / decline, it is expensive versus fair value";
+  const INDIFF = "Indifferent, the price equals fair value";
   const OPP = "Buy the black (opposite) ticket at this price instead";
   const correct = reallyBuy ? BUY : SELL;
 
@@ -310,7 +310,7 @@ function genMakeMarketPnl(rng: Rng): Question {
       difficulty: "expert",
       concept: "Adverse-selection expected P&L",
       distractorRationaleByValue: {
-        [signedDollar(0)]: "Assumed a symmetric market breaks even — but you only get filled by the informed side.",
+        [signedDollar(0)]: "Assumed a symmetric market breaks even, but you only get filled by the informed side.",
         [signedDollar(-evNum)]: "Sign error: adverse selection is a LOSS, not a gain.",
         [signedDollar(rawSum)]: "Forgot to divide the summed P&L by the number of equally-likely values.",
         [signedDollar(oneSideEV)]: "Counted only the sell-side fills, ignoring the buy-side pick-offs.",
@@ -358,7 +358,7 @@ function genFermiMagnitude(rng: Rng): Question {
 }
 
 /* ========================================================================== */
-/*  Fermi flashcards — integrity-based reasoning (no MC)                        */
+/*  Fermi flashcards, integrity-based reasoning (no MC)                        */
 /* ========================================================================== */
 
 export const FERMI_FLASHCARDS: Flashcard[] = [
@@ -400,7 +400,7 @@ export const FERMI_FLASHCARDS: Flashcard[] = [
       "You must make a two-sided market on the weight (in kg) of a full-grown male African elephant, which you don't know exactly. How wide should your market be, and why?",
     answer: "A wide market (e.g. bid 4,000 / ask 8,000 kg) centered near ~6,000 kg.",
     explanation:
-      "Fair value ~6,000 kg (males run 5,000–7,000 kg). Because your uncertainty is large and an informed counterparty will pick you off on whichever side is wrong, your SPREAD must scale with your uncertainty — quote wide when unsure, then tighten as you learn. A tight market on a fact you don't know is how you get run over.",
+      "Fair value ~6,000 kg (males run 5,000–7,000 kg). Because your uncertainty is large and an informed counterparty will pick you off on whichever side is wrong, your SPREAD must scale with your uncertainty, quote wide when unsure, then tighten as you learn. A tight market on a fact you don't know is how you get run over.",
     difficulty: "hard",
     concept: "Spread ∝ uncertainty (Make-a-Market)",
     source: "Make-Me-a-Market (facts + guesstimates)",
@@ -414,7 +414,7 @@ export const FERMI_FLASHCARDS: Flashcard[] = [
       "Information is worth its expected value: seeing the card sharpens your fair value, letting you quote tighter and lose less to informed flow (or trade with edge). If the expected improvement in P&L from the sharper estimate exceeds the $2 cost, pay it; otherwise pass. This is the value-of-information principle behind the taker/maker card games.",
     difficulty: "hard",
     concept: "Value of information",
-    source: "Cards Market Making — value of information",
+    source: "Cards Market Making, value of information",
   },
 ];
 

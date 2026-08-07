@@ -13,7 +13,10 @@ import {
   reliabilityDiagram,
   type ReliabilityDiagramData,
 } from "@/lib/calibration/reliability";
-import { toCalibrationPairs } from "@/lib/calibration/persistedLog";
+import {
+  elicitedConfidencePairs,
+  elicitedConfidenceSourceNote,
+} from "@/lib/calibration/persistedLog";
 
 /**
  * Read-only dashboard model (PHASE_5 §6). This hook is a THIN consumer: it
@@ -144,11 +147,17 @@ export function useDashboardData(now: string): DashboardModel {
       .map((v) => byKey.get(v.topicKey))
       .filter((t): t is DashboardTopic => !!t);
 
-    // Pool from the PERSISTED cross-session calibration log (WS-CAL) so the
-    // reliability panel accrues across reloads instead of resetting each session.
-    const reliability = reliabilityDiagram(
-      toCalibrationPairs(progress.calibrationLog),
-    );
+    // Pool from the PERSISTED cross-session calibration log (WS-CAL), but ONLY
+    // the pairs where the learner genuinely stated a confidence (Fermi 90%
+    // intervals / Trading-Floor quotes). Model-predicted quiz/numeric pairs are
+    // excluded so the panel measures the learner's confidence, not the mastery
+    // model's self-estimate (FIX 2). The sufficiency gate then doubles as the
+    // "only render on real elicited data" gate. A provenance note names the
+    // drills so the panel is self-explanatory.
+    const reliability: ReliabilityDiagramData = {
+      ...reliabilityDiagram(elicitedConfidencePairs(progress.calibrationLog)),
+      sourceNote: elicitedConfidenceSourceNote(progress.calibrationLog),
+    };
 
     return {
       topics,

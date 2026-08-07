@@ -15,7 +15,7 @@ import {
 
 describe("perQuestionBudgetMs", () => {
   it("derives window/cap for a capped preset (Optiver = 6000ms)", () => {
-    // 480s window / 80 questions = 6000ms/q — the real 80-in-8 pace.
+    // 480s window / 80 questions = 6000ms/q — the real arithmetic-sprint pace.
     expect(perQuestionBudgetMs(OPTIVER_DEFAULT)).toBe(6000);
   });
 

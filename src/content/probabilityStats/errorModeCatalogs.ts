@@ -106,7 +106,7 @@ export const BAYES_POSTERIOR_ERRORS: ErrorModeCatalog<BayesParams> = [
     id: "reversed_conditional",
     misconception: MISCONCEPTION.reversedConditional,
     compute: ({ prior, sens, fpr }) => {
-      // Swapped numerator/denominator roles: P(E)·? — a common inversion.
+      // Swapped numerator/denominator roles: P(E)·?, a common inversion.
       const pe = prior * sens + (1 - prior) * fpr;
       return pe === 0 ? 0 : prior / pe;
     },

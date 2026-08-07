@@ -142,7 +142,7 @@ export function ThemesPage() {
       </section>
 
       <p className="label text-[9px]">
-        Themes change only aesthetics — never the questions, copy, or your
+        Themes change only aesthetics, never the questions, copy, or your
         progress. Your choice is saved to this browser.
       </p>
     </div>

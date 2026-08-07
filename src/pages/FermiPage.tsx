@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTheme } from "@/context/ThemeContext";
 import { useProgress } from "@/context/ProgressContext";
+import { useAuth } from "@/context/AuthContext";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 import { GameChrome } from "@/components/games/GameChrome";
 import { StampSeal } from "@/components/visuals/StampSeal";
@@ -71,13 +72,15 @@ export function FermiPage() {
   const navigate = useNavigate();
   const { themeDef } = useTheme();
   const { recordCalibrationPair } = useProgress();
+  const { username } = useAuth();
 
   const items = FERMI_ITEMS;
 
-  // Resume a persisted in-progress run (leave/reload-proof). Read once, and only
-  // trust a snapshot whose grade arrays still match the current item list.
+  // Resume the CURRENT user's persisted in-progress run (leave/reload-proof).
+  // Read once, and only trust a snapshot whose grade arrays still match the
+  // current item list. Scoping by user means account B never resumes A's run.
   const resumed = useMemo(() => {
-    const saved = loadFermiRun();
+    const saved = loadFermiRun(username);
     if (!saved) return undefined;
     if (
       saved.grades.length !== items.length ||
@@ -87,7 +90,7 @@ export function FermiPage() {
     }
     return saved;
      
-  }, [items.length]);
+  }, [items.length, username]);
 
   const [phase, setPhase] = useState<Phase>(resumed ? "drill" : "intro");
   const [mode, setMode] = useState<FermiMode>(resumed?.mode ?? "point");
@@ -106,11 +109,11 @@ export function FermiPage() {
   // clears it, so re-entering after a completed run starts fresh.
   useEffect(() => {
     if (phase === "drill") {
-      saveFermiRun({ version: 1, mode, index, grades, intervalGrades });
+      saveFermiRun({ version: 1, mode, index, grades, intervalGrades }, username);
     } else {
-      clearFermiRun();
+      clearFermiRun(username);
     }
-  }, [phase, mode, index, grades, intervalGrades]);
+  }, [phase, mode, index, grades, intervalGrades, username]);
 
   const item = items[index];
   const answered =
@@ -266,7 +269,7 @@ function ModeToggle({
         className="mt-1.5 flex gap-2"
       >
         {opt("point", "Point estimate", "One number, graded by magnitude")}
-        {opt("ci", "90% CI in 60s", "A range — calibrate your confidence")}
+        {opt("ci", "90% CI in 60s", "A range: calibrate your confidence")}
       </div>
     </div>
   );
@@ -304,7 +307,7 @@ function FermiIntro({
             <span className="float-left mr-2 font-display text-5xl font-black leading-[0.8] text-primary">
               A
             </span>
-            Fermi problem has no exact answer — you can't look up how many piano
+            Fermi problem has no exact answer: you can't look up how many piano
             tuners work in Chicago. Instead you break the unknown into a chain of
             factors you can bound, multiply through, and land near the right
             power of ten. That structured guessing is a daily trading skill:
@@ -314,7 +317,7 @@ function FermiIntro({
             You'll get {total} problems.{" "}
             {mode === "point" ? (
               <>
-                Commit a single number for each — enter it any way you like (
+                Commit a single number for each: enter it any way you like (
                 <span className="num">300000</span>,{" "}
                 <span className="num">300k</span>, or{" "}
                 <span className="num">3e5</span>). Then we reveal a defensible
@@ -326,7 +329,7 @@ function FermiIntro({
                 <span className="font-semibold text-primary">
                   90% confidence interval
                 </span>{" "}
-                — a low and a high you're 90% sure bracket the truth. We track
+                : a low and a high you're 90% sure bracket the truth. We track
                 how often the truth actually lands inside your range.
               </>
             )}
@@ -355,8 +358,8 @@ function FermiIntro({
                   <span className="text-secondary">
                     <span className="font-semibold text-primary">
                       Within ~3×
-                    </span>{" "}
-                    — full credit (spot on)
+                    </span>
+                    : full credit (spot on)
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
@@ -364,8 +367,8 @@ function FermiIntro({
                   <span className="text-secondary">
                     <span className="font-semibold text-primary">
                       Within 10×
-                    </span>{" "}
-                    — partial credit (right ballpark)
+                    </span>
+                    : partial credit (right ballpark)
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
@@ -373,8 +376,8 @@ function FermiIntro({
                   <span className="text-secondary">
                     <span className="font-semibold text-primary">
                       Beyond 10×
-                    </span>{" "}
-                    — off the mark
+                    </span>
+                    : off the mark
                   </span>
                 </li>
               </ul>
@@ -398,14 +401,14 @@ function FermiIntro({
                   <span className="inline-block h-2.5 w-2.5 shrink-0 bg-bull" />
                   <span className="text-secondary">
                     Truth <span className="font-semibold text-primary">inside</span>{" "}
-                    your range — a hit
+                    your range: a hit
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
                   <span className="inline-block h-2.5 w-2.5 shrink-0 bg-bear" />
                   <span className="text-secondary">
-                    Truth <span className="font-semibold text-primary">outside</span>{" "}
-                    — a miss (penalized by how far out)
+                    Truth <span className="font-semibold text-primary">outside</span>
+                    : a miss (penalized by how far out)
                   </span>
                 </li>
                 <li className="flex items-center gap-2">
@@ -415,7 +418,7 @@ function FermiIntro({
                     <span className="font-semibold text-primary">
                       ~90% coverage
                     </span>{" "}
-                    overall — below that you're over-confident
+                    overall: below that you're over-confident
                   </span>
                 </li>
               </ul>
@@ -551,7 +554,7 @@ function PointEntry({
     if (answered) return;
     const g = gradeFermi(reference, raw);
     if (g.parsed === null) {
-      setError("Enter a number — e.g. 300000, 300k, or 3e5.");
+      setError("Enter a number, e.g. 300000, 300k, or 3e5.");
       return;
     }
     if (g.parsed <= 0) {
@@ -667,7 +670,7 @@ function DecompositionPanel({
         {item.takeaway}
       </p>
       <p className="mt-2 text-xs italic text-muted">
-        Other decompositions are equally valid — what matters is landing near the
+        Other decompositions are equally valid; what matters is landing near the
         right magnitude with factors you can defend.
       </p>
       {item.source && (
@@ -729,7 +732,7 @@ function PointReveal({
             <span className="num font-semibold">
               {formatFermiNumber(grade.parsed ?? 0, { money })}
             </span>
-            <span className="text-secondary"> — {factorText}.</span>
+            <span className="text-secondary">, {factorText}.</span>
           </p>
           <p className="text-sm text-primary">
             <span className="label text-secondary">Reference ≈ </span>
@@ -803,7 +806,7 @@ function IntervalReveal({
           <p className="text-xs text-muted">
             {hit
               ? "The truth landed inside your interval. Sharper (narrower) honest ranges score better."
-              : "The truth fell outside your interval — a 90% range should miss only about 1 time in 10."}{" "}
+              : "The truth fell outside your interval; a 90% range should miss only about 1 time in 10."}{" "}
             <span className="num">
               (interval score {formatFermiNumber(grade.score, { money })} · lower
               is better)
@@ -1008,18 +1011,18 @@ function IntervalSummary({
         ? {
             title: "Over-confident",
             tone: "bear" as const,
-            line: `Your 90% intervals contained the truth only ${cov.hits}/${cov.n} of the time (${covPct}%). Your ranges are too tight — widen them until you're being surprised only ~1 time in 10.`,
+            line: `Your 90% intervals contained the truth only ${cov.hits}/${cov.n} of the time (${covPct}%). Your ranges are too tight; widen them until you're being surprised only ~1 time in 10.`,
           }
         : lean === "under"
           ? {
               title: "Under-confident",
               tone: "accent" as const,
-              line: `Your intervals contained the truth ${cov.hits}/${cov.n} of the time (${covPct}%) — more than the 90% target. You can afford to tighten them and still be well-calibrated.`,
+              line: `Your intervals contained the truth ${cov.hits}/${cov.n} of the time (${covPct}%), more than the 90% target. You can afford to tighten them and still be well-calibrated.`,
             }
           : {
               title: "Well-calibrated",
               tone: "bull" as const,
-              line: `Your 90% intervals contained the truth ${cov.hits}/${cov.n} of the time (${covPct}%) — right around the ${target}% target. Sharp and honest.`,
+              line: `Your 90% intervals contained the truth ${cov.hits}/${cov.n} of the time (${covPct}%), right around the ${target}% target. Sharp and honest.`,
             };
 
   return (

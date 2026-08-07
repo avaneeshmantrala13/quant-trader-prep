@@ -234,7 +234,7 @@ function GamblersRuinSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Top chart: the empirical share of games that reached the target before hitting 0 — more games ⇒ it converges to the closed-form P(reach). Bottom chart: one sample walk between the two absorbing barriers, 0 (ruin) and the target; the walk ends the instant it touches either."
+      howToRead="Top chart: the empirical share of games that reached the target before hitting 0; more games ⇒ it converges to the closed-form P(reach). Bottom chart: one sample walk between the two absorbing barriers, 0 (ruin) and the target; the walk ends the instant it touches either."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">

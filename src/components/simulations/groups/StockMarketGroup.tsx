@@ -114,7 +114,7 @@ function RandomWalkStockSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Top: one sample price path — a biased random walk that ticks up with probability p, down otherwise. The dashed line is E[price] = S0 + steps·(per-step drift). Middle: the spread of your trade's final P&L over many independent runs; its mean sits at the EV. Bottom: the running-average P&L converging to that EV as trials pile up. The max-EV action is whichever side the drift points — buy if the stock drifts up, short if it drifts down, hold when the coin is fair."
+      howToRead="Top: one sample price path, a biased random walk that ticks up with probability p, down otherwise. The dashed line is E[price] = S0 + steps·(per-step drift). Middle: the spread of your trade's final P&L over many independent runs; its mean sits at the EV. Bottom: the running-average P&L converging to that EV as trials pile up. The max-EV action is whichever side the drift points: buy if the stock drifts up, short if it drifts down, hold when the coin is fair."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -295,7 +295,7 @@ function RandomWalkStockSim(): JSX.Element {
           <p className="mt-1 text-sm text-primary">
             {isOptimal ? (
               <>
-                Your call is the max-EV action — you side with the drift, earning{" "}
+                Your call is the max-EV action: you side with the drift, earning{" "}
                 <span className="num">{fmtSigned(chosenEv)}</span> per run on
                 average.
               </>
@@ -375,7 +375,7 @@ function BullBearRegimeSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="A two-state Markov chain flips the market between a bull regime (P(up) high, upward drift) and a bear regime (P(up) low, downward drift). The stay-sliders are the diagonal of the transition matrix; the further they are from 1, the more often the regime switches. The long-run mix π is the chain's stationary distribution, and the stock's overall drift is π-weighted across the two regimes — that weighted drift is the EV the price trends along once the regimes have mixed."
+      howToRead="A two-state Markov chain flips the market between a bull regime (P(up) high, upward drift) and a bear regime (P(up) low, downward drift). The stay-sliders are the diagonal of the transition matrix; the further they are from 1, the more often the regime switches. The long-run mix π is the chain's stationary distribution, and the stock's overall drift is π-weighted across the two regimes; that weighted drift is the EV the price trends along once the regimes have mixed."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2">

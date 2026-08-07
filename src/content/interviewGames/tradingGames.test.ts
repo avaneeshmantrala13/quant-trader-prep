@@ -133,7 +133,7 @@ describe("trading quiz generators: correct choice re-derives independently", () 
       const odds = q.prompt.match(/decimal odds ([\d., ]+) on the/)![1].split(/,\s*/);
       const bs = odds.reduce((s, o) => s + 1 / Number(o), 0);
       const correct = q.choices[q.correctIndex];
-      if (bs < 1) expect(correct).toContain("Arbitrage exists — back all outcomes");
+      if (bs < 1) expect(correct).toContain("Arbitrage exists, back all outcomes");
       else expect(correct).toContain("No arbitrage");
     }
   });

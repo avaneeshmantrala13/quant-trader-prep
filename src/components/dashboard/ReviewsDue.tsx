@@ -10,7 +10,7 @@ export function ReviewsDue({ topics }: { topics: DashboardTopicEntry[] }) {
   if (topics.length === 0) {
     return (
       <p className="text-sm text-secondary">
-        Nothing due for review — mastered topics resurface here on their SM-2
+        Nothing due for review. Mastered topics resurface here on their SM-2
         schedule.
       </p>
     );

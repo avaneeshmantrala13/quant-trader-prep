@@ -37,7 +37,7 @@ export function OaReport({
           className={`chip ${expired ? "text-bear" : "text-bull"}`}
         >
           {expired
-            ? "Expired — time ran out while you were away"
+            ? "Expired: time ran out while you were away"
             : "Submitted"}
         </span>
         <div>

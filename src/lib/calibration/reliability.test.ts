@@ -3,6 +3,7 @@ import type { CalibrationPair } from "@/lib/mastery/reliability";
 import {
   brierReliabilityGap,
   brierScore,
+  CALIB_DEAD_BAND,
   reliabilityDiagram,
 } from "./reliability";
 
@@ -134,5 +135,135 @@ describe("reliabilityDiagram — WS-CAL sufficiency gate + single signed label",
       ...group(0.9, 20, 18),
     ]);
     expect(well.calibration?.lean).toBe("well");
+  });
+});
+
+describe("reliabilityDiagram — signed error is the single source of truth", () => {
+  it("over-confident: predicted > observed across bins ⇒ signed > 0, lean 'over'", () => {
+    const d = reliabilityDiagram([
+      ...group(0.7, 30, 15), // say 70 / right 50
+      ...group(0.9, 30, 18), // say 90 / right 60
+    ]);
+    expect(d.calibration!.signed).toBeGreaterThan(CALIB_DEAD_BAND);
+    expect(d.calibration!.lean).toBe("over");
+    expect(d.calibration!.label).toMatch(/over-confident/);
+  });
+
+  it("under-confident: predicted < observed across bins ⇒ signed < 0, lean 'under'", () => {
+    const d = reliabilityDiagram([
+      ...group(0.5, 30, 21), // say 50 / right 70
+      ...group(0.8, 30, 27), // say 80 / right 90
+    ]);
+    expect(d.calibration!.signed).toBeLessThan(-CALIB_DEAD_BAND);
+    expect(d.calibration!.lean).toBe("under");
+    expect(d.calibration!.label).toMatch(/under-confident/);
+  });
+
+  it("well-calibrated: predicted ≈ observed ⇒ |signed| within tolerance, lean 'well'", () => {
+    const d = reliabilityDiagram([
+      ...group(0.3, 30, 9), // say 30 / right 30
+      ...group(0.8, 30, 24), // say 80 / right 80
+    ]);
+    expect(Math.abs(d.calibration!.signed)).toBeLessThanOrEqual(CALIB_DEAD_BAND);
+    expect(d.calibration!.lean).toBe("well");
+    expect(d.calibration!.label).toMatch(/well-calibrated/);
+  });
+
+  it("the sign of the signed error matches which side of the diagonal the curve reads", () => {
+    // over ⇒ predicted above observed ⇒ every point BELOW the diagonal.
+    const over = reliabilityDiagram(group(0.9, 40, 20));
+    expect(over.calibration!.signed).toBeGreaterThan(0);
+    expect(over.bins.every((b) => b.predicted >= b.observed)).toBe(true);
+    // under ⇒ predicted below observed ⇒ every point ABOVE the diagonal.
+    const under = reliabilityDiagram(group(0.4, 40, 28));
+    expect(under.calibration!.signed).toBeLessThan(0);
+    expect(under.bins.every((b) => b.observed >= b.predicted)).toBe(true);
+  });
+});
+
+describe("reliabilityDiagram — the 80→82 screenshot regression", () => {
+  it("say ~80% / right ~82% across bins NEVER reads over-confident", () => {
+    // 28 predictions at 0.80, 23 correct ⇒ observed ≈ 0.821 (ABOVE the diagonal).
+    const d = reliabilityDiagram(group(0.8, 28, 23));
+    expect(d.sufficient).toBe(true);
+    expect(d.calibration!.signed).toBeLessThanOrEqual(0); // predicted ≤ observed
+    expect(d.calibration!.lean).not.toBe("over");
+    expect(["under", "well"]).toContain(d.calibration!.lean);
+    expect(d.calibration!.label).not.toMatch(/over-confident/);
+    // The concrete headline AGREES: right ~82% when you say ~80% (above diagonal).
+    expect(d.headline).toBeDefined();
+    expect(d.headline!.observed).toBeGreaterThan(d.headline!.predicted);
+    expect(Math.round(d.headline!.observed * 100)).toBe(82);
+  });
+
+  it("a clearly under-confident 80% band reads under-confident with the point above the diagonal", () => {
+    const d = reliabilityDiagram([
+      ...group(0.6, 30, 24), // say 60 / right 80
+      ...group(0.8, 30, 27), // say 80 / right 90
+    ]);
+    expect(d.calibration!.lean).toBe("under");
+    expect(d.headline).toBeDefined();
+    expect(d.headline!.observed).toBeGreaterThan(d.headline!.predicted);
+  });
+});
+
+describe("reliabilityDiagram — headline can never contradict the aggregate verdict", () => {
+  it("withholds the ~80% headline when it bucks an OVER-confident aggregate", () => {
+    // The exact screenshot failure: the 80% band alone is under-confident
+    // (right ~82%), but heavy over-confidence elsewhere makes the AGGREGATE
+    // over-confident. Showing "right 82% at ~80%" next to an OVER-confident
+    // verdict (curve below the diagonal) is the self-contradiction we forbid.
+    const d = reliabilityDiagram([
+      ...group(0.8, 28, 23), // 80% band: right ~82% (local under, above diagonal)
+      ...group(0.99, 120, 48), // massively over-confident elsewhere
+    ]);
+    expect(d.calibration!.lean).toBe("over");
+    expect(d.calibration!.signed).toBeGreaterThan(0);
+    expect(d.headline).toBeUndefined();
+  });
+
+  it("withholds the ~80% headline when it bucks an UNDER-confident aggregate", () => {
+    const d = reliabilityDiagram([
+      ...group(0.8, 28, 20), // 80% band: right ~71% (local over, below diagonal)
+      ...group(0.1, 120, 60), // massively under-confident elsewhere
+    ]);
+    expect(d.calibration!.lean).toBe("under");
+    expect(d.headline).toBeUndefined();
+  });
+
+  it("keeps the headline whenever its direction agrees with the verdict", () => {
+    const over = reliabilityDiagram(group(0.8, 40, 20)); // say 80 / right 50 ⇒ over
+    expect(over.calibration!.lean).toBe("over");
+    expect(over.headline).toBeDefined();
+    expect(over.headline!.observed).toBeLessThan(over.headline!.predicted);
+  });
+
+  it("a shown headline's direction never opposes the signed-error sign", () => {
+    const scenarios: CalibrationPair[][] = [
+      group(0.8, 40, 20),
+      group(0.8, 40, 34),
+      group(0.8, 40, 32),
+      group(0.8, 28, 23),
+      [...group(0.8, 28, 23), ...group(0.99, 120, 48)],
+      [...group(0.8, 28, 20), ...group(0.1, 120, 60)],
+      [...group(0.6, 30, 24), ...group(0.8, 30, 27)],
+    ];
+    for (const pairs of scenarios) {
+      const d = reliabilityDiagram(pairs);
+      if (!d.headline || !d.calibration) continue;
+      const headlineSigned = d.headline.predicted - d.headline.observed;
+      if (d.calibration.lean === "over") {
+        expect(headlineSigned).toBeGreaterThanOrEqual(0);
+      }
+      if (d.calibration.lean === "under") {
+        expect(headlineSigned).toBeLessThanOrEqual(0);
+      }
+    }
+  });
+
+  it("still gates the whole panel below MIN_PAIRS (low-sample)", () => {
+    const d = reliabilityDiagram(group(0.8, 10, 8));
+    expect(d.sufficient).toBe(false);
+    expect(d.count).toBe(10);
   });
 });

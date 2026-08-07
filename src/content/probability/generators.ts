@@ -12,7 +12,7 @@ import { MISCONCEPTION } from "@/lib/tutor/misconception";
 /**
  * Probability generators with EXACT verifiers: the true answer is computed
  * deterministically from the parameters, so every item is provably correct and
- * can be regenerated fresh. The distractors are the heart of the design — each
+ * can be regenerated fresh. The distractors are the heart of the design, each
  * wrong choice is produced by a *specific* reasoning error a real student makes
  * (e.g. for "P(A or B)": P(A)+P(B) forgets inclusion–exclusion; P(A)·P(B)
  * confuses "or" with independent "and"). Parameters are drawn from curated sets
@@ -49,7 +49,7 @@ function genUnion(rng: Rng): Question {
       concept: "Union / inclusion–exclusion",
       distractorRationaleByValue: {
         [D(pA + pB)]: "Added P(A)+P(B) but forgot to subtract the overlap P(A∩B).",
-        [D(pA * pB)]: 'Multiplied P(A)·P(B) — treating "or" as an independent "and".',
+        [D(pA * pB)]: 'Multiplied P(A)·P(B), treating "or" as an independent "and".',
         [D(pBoth)]: "Reported only the overlap P(A∩B).",
       },
       source: "Inclusion–exclusion (canonical distractor schema)",
@@ -85,7 +85,7 @@ function genIntersectionIndep(rng: Rng): Question {
     difficulty: "easy",
     concept: "Independent intersection",
     distractorRationaleByValue: {
-      [D(pA + pB)]: 'Added the probabilities — that is the (non-disjoint) "or" mistake applied to "and".',
+      [D(pA + pB)]: 'Added the probabilities, that is the (non-disjoint) "or" mistake applied to "and".',
       [D(pA + pB - pA * pB)]: "Computed P(A or B) (inclusion–exclusion) instead of P(A and B).",
       [D(Math.min(pA, pB))]: "Took the smaller probability instead of the product.",
     },
@@ -115,7 +115,7 @@ function genAtLeastOne(rng: Rng): Question {
       difficulty: "medium" as const,
       concept: "Complement / at-least-one",
       distractorRationaleByValue: {
-        [D(n * p)]: "Added the per-trial probabilities (n·p) — double counts overlapping successes.",
+        [D(n * p)]: "Added the per-trial probabilities (n·p), double counts overlapping successes.",
         [D(Math.pow(p, n))]: "Computed P(all n succeed) = pⁿ instead of P(at least one).",
         [D(1 - Math.pow(p, n))]: "Subtracted P(all) instead of P(none): 1 − pⁿ.",
       },
@@ -143,7 +143,7 @@ function genConditional(rng: Rng): Question {
     difficulty: "medium",
     concept: "Conditional probability",
     distractorRationaleByValue: {
-      [D(pBoth / pA)]: "Divided by P(A) instead of P(B) — computed P(B|A).",
+      [D(pBoth / pA)]: "Divided by P(A) instead of P(B), computed P(B|A).",
       [D(pBoth)]: "Forgot to divide by P(B); reported the joint P(A∩B).",
       [D(pB / pBoth)]: "Inverted the ratio.",
     },
@@ -157,7 +157,7 @@ function genConditional(rng: Rng): Question {
   });
 }
 
-/** Bayes' theorem — the classic disease-test inverse-probability trap. */
+/** Bayes' theorem, the classic disease-test inverse-probability trap. */
 function genBayes(rng: Rng): Question {
   return assembleDistinct(rng, (r) => {
     const [prevPct, sensPct, fprPct] = r.pick([
@@ -181,11 +181,11 @@ function genBayes(rng: Rng): Question {
       difficulty: "hard" as const,
       concept: "Bayes' theorem",
       distractorRationaleByValue: {
-        [D(sens)]: "Reported the sensitivity P(+|disease) — the inverse-probability fallacy (confusing P(D|+) with P(+|D)).",
+        [D(sens)]: "Reported the sensitivity P(+|disease), the inverse-probability fallacy (confusing P(D|+) with P(+|D)).",
         [D(sens * prior)]: "Computed only the numerator P(+|D)·P(D); forgot to normalize by total P(+).",
         [D(ignorePrior)]: "Ignored the prior/base rate entirely: P(+|D)/(P(+|D)+P(+|¬D)).",
       },
-      // Phase 4: canonical tags — likelihood-as-posterior + base-rate neglect.
+      // Phase 4: canonical tags, likelihood-as-posterior + base-rate neglect.
       misconceptionByValue: {
         [D(sens)]: MISCONCEPTION.likelihoodAsPosterior,
         [D(ignorePrior)]: MISCONCEPTION.baseRateNeglect,
@@ -223,7 +223,7 @@ function genExpectedValue(rng: Rng): Question {
       difficulty: "medium" as const,
       concept: "Expected value",
       distractorRationaleByValue: {
-        [`$${D(unweighted)}`]: "Averaged the payouts equally — forgot to weight by each color's probability.",
+        [`$${D(unweighted)}`]: "Averaged the payouts equally, forgot to weight by each color's probability.",
         [`$${D(sumPayouts)}`]: "Summed the payouts without weighting or dividing.",
         [`$${D(weightedNoDivide)}`]: "Weighted by counts but forgot to divide by the total number of chips.",
       },
@@ -250,11 +250,11 @@ function genCombinations(rng: Rng): Question {
       difficulty: "medium" as const,
       concept: "Combinations vs permutations",
       distractorRationaleByValue: {
-        [fmt(perm)]: `Used permutations P(${n},${k}) = ${n}!/(${n}−${k})! — counted order as mattering.`,
-        [fmt(withRepl)]: `Used ${n}^${k} — ordered selection WITH replacement.`,
+        [fmt(perm)]: `Used permutations P(${n},${k}) = ${n}!/(${n}−${k})!, counted order as mattering.`,
+        [fmt(withRepl)]: `Used ${n}^${k}, ordered selection WITH replacement.`,
         [fmt(naiveProduct)]: `Just multiplied n·k instead of using the combination formula.`,
       },
-      // Phase 4: canonical tag — ordered-vs-unordered (drives the edge to Counting).
+      // Phase 4: canonical tag, ordered-vs-unordered (drives the edge to Counting).
       misconceptionByValue: {
         [fmt(perm)]: MISCONCEPTION.orderedVsUnordered,
         [fmt(withRepl)]: MISCONCEPTION.orderedVsUnordered,
@@ -282,7 +282,7 @@ function genBinomial(rng: Rng): Question {
       difficulty: "hard" as const,
       concept: "Binomial distribution",
       distractorRationaleByValue: {
-        [D(oneSequence)]: "Probability of ONE specific sequence (1/2)ⁿ — forgot to multiply by the number of arrangements.",
+        [D(oneSequence)]: "Probability of ONE specific sequence (1/2)ⁿ, forgot to multiply by the number of arrangements.",
         [D(naiveRatio)]: "Used the naive ratio k/n.",
         [D(noArrangements)]: "Only accounted for the k heads (1/2)^k, ignoring the other flips and the count.",
       },
@@ -312,7 +312,7 @@ function genGeometric(rng: Rng): Question {
     concept: "Geometric expectation",
     distractorRationaleByValue: {
       [D(p)]: "Reported p itself instead of 1/p.",
-      [D(1 / (1 - p))]: "Used 1/(1−p) — the failure probability in the denominator.",
+      [D(1 / (1 - p))]: "Used 1/(1−p), the failure probability in the denominator.",
       [D(pDen / pNum - 1)]: "Counted the expected number of FAILURES before the first success (E−1).",
     },
     source: "Geometric distribution",
@@ -376,9 +376,9 @@ function numericErrors(
   return { errors, push };
 }
 
-/* ------------------------  pr-1 — Foundations  ---------------------------- */
+/* ------------------------  pr-1. Foundations  ---------------------------- */
 
-/** FREE-RESPONSE P(A∪B) — numeric conversion of `genUnion`. */
+/** FREE-RESPONSE P(A∪B), numeric conversion of `genUnion`. */
 export function buildUnionNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -404,7 +404,7 @@ export function buildUnionNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     pA + pB,
-    `Close — you added P(A)+P(B), but some integers are divisible by BOTH ${d1} and ${d2}. What must you subtract so those aren't counted twice?`,
+    `Close, you added P(A)+P(B), but some integers are divisible by BOTH ${d1} and ${d2}. What must you subtract so those aren't counted twice?`,
     MISCONCEPTION.orMeansAddNoOverlap,
   );
   push(
@@ -414,12 +414,12 @@ export function buildUnionNumericInstance(
   );
   push(
     pBoth,
-    `That's just P(A∩B), the overlap alone. The question asks for the whole union — what do you add before removing the double-count?`,
+    `That's just P(A∩B), the overlap alone. The question asks for the whole union, what do you add before removing the double-count?`,
     "reported_overlap_only",
   );
   push(
     pA,
-    `That's only P(A) — divisibility by ${d1} alone. The event is A OR B; how do you fold in B without double-counting the overlap?`,
+    `That's only P(A), divisibility by ${d1} alone. The event is A OR B; how do you fold in B without double-counting the overlap?`,
     "reported_one_event_only",
   );
 
@@ -445,7 +445,7 @@ export function buildUnionNumericInstance(
   };
 }
 
-/** FREE-RESPONSE P(A∩B), independent — numeric conversion of `genIntersectionIndep`. */
+/** FREE-RESPONSE P(A∩B), independent, numeric conversion of `genIntersectionIndep`. */
 export function buildIntersectionIndepNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -473,17 +473,17 @@ export function buildIntersectionIndepNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     pA + pB,
-    `Close — you added the two probabilities. But the wording says "A AND B" for INDEPENDENT events — what do probabilities do on AND, add or multiply?`,
+    `Close, you added the two probabilities. But the wording says "A AND B" for INDEPENDENT events, what do probabilities do on AND, add or multiply?`,
     MISCONCEPTION.andMeansAdd,
   );
   push(
     pA + pB - pA * pB,
-    `That's P(A OR B) via inclusion–exclusion. The question asks for BOTH happening — which single operation gives the joint of independent events?`,
+    `That's P(A OR B) via inclusion–exclusion. The question asks for BOTH happening, which single operation gives the joint of independent events?`,
     "computed_union_not_intersection",
   );
   push(
     Math.min(pA, pB),
-    `You reported the smaller of the two probabilities. Both events must occur together — is the joint bigger or smaller than either one, and how do you combine them?`,
+    `You reported the smaller of the two probabilities. Both events must occur together, is the joint bigger or smaller than either one, and how do you combine them?`,
     "took_min_probability",
   );
 
@@ -509,7 +509,7 @@ export function buildIntersectionIndepNumericInstance(
   };
 }
 
-/** FREE-RESPONSE C(n,k) — numeric conversion of `genCombinations` (integer count). */
+/** FREE-RESPONSE C(n,k), numeric conversion of `genCombinations` (integer count). */
 export function buildCombinationsNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -525,17 +525,17 @@ export function buildCombinationsNumericInstance(
   const { errors, push } = numericErrors(answer, 0);
   push(
     perm,
-    `Close — that's the number of ORDERED arrangements P(${n},${k}). A committee doesn't care about order, so should you keep or divide out the ${k}! orderings of each group?`,
+    `Close, that's the number of ORDERED arrangements P(${n},${k}). A committee doesn't care about order, so should you keep or divide out the ${k}! orderings of each group?`,
     MISCONCEPTION.orderedVsUnordered,
   );
   push(
     withRepl,
-    `That's ${n}^${k} — ordered selection WITH replacement (the same person picked twice). Are repeats allowed, and does order matter here?`,
+    `That's ${n}^${k}, ordered selection WITH replacement (the same person picked twice). Are repeats allowed, and does order matter here?`,
     "counted_with_replacement",
   );
   push(
     naiveProduct,
-    `You multiplied n·k. That isn't a counting formula for choosing a group — which formula counts unordered selections of ${k} from ${n}?`,
+    `You multiplied n·k. That isn't a counting formula for choosing a group, which formula counts unordered selections of ${k} from ${n}?`,
     "multiplied_n_times_k",
   );
 
@@ -560,9 +560,9 @@ export function buildCombinationsNumericInstance(
   };
 }
 
-/* ------------------  pr-2 — Conditional, Bayes, at-least-one  ------------- */
+/* ------------------  pr-2. Conditional, Bayes, at-least-one  ------------- */
 
-/** FREE-RESPONSE P(A|B) — numeric conversion of `genConditional`. */
+/** FREE-RESPONSE P(A|B), numeric conversion of `genConditional`. */
 export function buildConditionalNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -581,17 +581,17 @@ export function buildConditionalNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     pBoth / pA,
-    `Close — dividing by P(A) gives P(B|A), the REVERSED conditional. Which event were you told has already happened, and so belongs in the denominator?`,
+    `Close, dividing by P(A) gives P(B|A), the REVERSED conditional. Which event were you told has already happened, and so belongs in the denominator?`,
     MISCONCEPTION.reversedConditional,
   );
   push(
     pBoth,
-    `That's the joint P(A∩B). Conditioning restricts you to the world where B happened — what must you divide the joint by?`,
+    `That's the joint P(A∩B). Conditioning restricts you to the world where B happened, what must you divide the joint by?`,
     "reported_joint_not_conditional",
   );
   push(
     pB / pBoth,
-    `You inverted the ratio. P(A|B) puts the joint on top and P(B) on the bottom — which quantity should divide which?`,
+    `You inverted the ratio. P(A|B) puts the joint on top and P(B) on the bottom, which quantity should divide which?`,
     MISCONCEPTION.reversedConditional,
   );
 
@@ -617,7 +617,7 @@ export function buildConditionalNumericInstance(
   };
 }
 
-/** FREE-RESPONSE Bayes posterior — numeric conversion of `genBayes`. */
+/** FREE-RESPONSE Bayes posterior, numeric conversion of `genBayes`. */
 export function buildBayesNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -640,7 +640,7 @@ export function buildBayesNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     sens,
-    `Close — you reported the sensitivity P(+|disease). That's the LIKELIHOOD, not the posterior P(disease|+). With so few people actually sick, how many positives are false alarms?`,
+    `Close, you reported the sensitivity P(+|disease). That's the LIKELIHOOD, not the posterior P(disease|+). With so few people actually sick, how many positives are false alarms?`,
     MISCONCEPTION.likelihoodAsPosterior,
   );
   push(
@@ -650,7 +650,7 @@ export function buildBayesNumericInstance(
   );
   push(
     sens * prior,
-    `That's only the numerator P(+|D)·P(D) — the joint. To turn a joint into P(D|+), what total must you normalise by?`,
+    `That's only the numerator P(+|D)·P(D), the joint. To turn a joint into P(D|+), what total must you normalise by?`,
     "forgot_normalization",
   );
   push(
@@ -681,7 +681,7 @@ export function buildBayesNumericInstance(
   };
 }
 
-/** FREE-RESPONSE P(at least one) — numeric conversion of `genAtLeastOne`. */
+/** FREE-RESPONSE P(at least one), numeric conversion of `genAtLeastOne`. */
 export function buildAtLeastOneNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -702,17 +702,17 @@ export function buildAtLeastOneNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     n * p,
-    `Close — you added the per-trial probabilities (n·p). That double-counts trials where it happens more than once. What's the clean way to handle "at least one" via its opposite?`,
+    `Close, you added the per-trial probabilities (n·p). That double-counts trials where it happens more than once. What's the clean way to handle "at least one" via its opposite?`,
     MISCONCEPTION.atLeastOneNaive,
   );
   push(
     Math.pow(p, n),
-    `That's P(it happens on ALL ${n} trials) = pⁿ. "At least once" is a much bigger event — how do you get it from P(none)?`,
+    `That's P(it happens on ALL ${n} trials) = pⁿ. "At least once" is a much bigger event, how do you get it from P(none)?`,
     "computed_all_not_at_least_one",
   );
   push(
     1 - Math.pow(p, n),
-    `You subtracted P(all) from 1 instead of P(none). "At least one" is 1 − P(zero successes) — which power belongs there, pⁿ or (1−p)ⁿ?`,
+    `You subtracted P(all) from 1 instead of P(none). "At least one" is 1 − P(zero successes), which power belongs there, pⁿ or (1−p)ⁿ?`,
     "complement_of_all_not_none",
   );
 
@@ -738,9 +738,9 @@ export function buildAtLeastOneNumericInstance(
   };
 }
 
-/* ------------------  pr-3 — Expectation & distributions  ------------------ */
+/* ------------------  pr-3. Expectation & distributions  ------------------ */
 
-/** FREE-RESPONSE expected payout — numeric conversion of `genExpectedValue` ($). */
+/** FREE-RESPONSE expected payout, numeric conversion of `genExpectedValue` ($). */
 export function buildExpectedValueNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -763,12 +763,12 @@ export function buildExpectedValueNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     unweighted,
-    `Close — you averaged the three payouts equally. But the colours aren't equally likely; each payout must be weighted by its draw probability. Which chip is most common here?`,
+    `Close, you averaged the three payouts equally. But the colours aren't equally likely; each payout must be weighted by its draw probability. Which chip is most common here?`,
     MISCONCEPTION.equalWeightMixture,
   );
   push(
     sumPayouts,
-    `You summed the payouts without weighting OR dividing. Expected value is a probability-weighted average — what do you divide the weighted sum by?`,
+    `You summed the payouts without weighting OR dividing. Expected value is a probability-weighted average, what do you divide the weighted sum by?`,
     "summed_payouts_no_weight",
   );
   push(
@@ -799,7 +799,7 @@ export function buildExpectedValueNumericInstance(
   };
 }
 
-/** FREE-RESPONSE P(exactly k heads) — numeric conversion of `genBinomial`. */
+/** FREE-RESPONSE P(exactly k heads), numeric conversion of `genBinomial`. */
 export function buildBinomialNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -816,12 +816,12 @@ export function buildBinomialNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     oneSequence,
-    `Close — that's the chance of ONE specific sequence, (1/2)^${n}. There are several head/tail orders giving exactly ${k} head${k === 1 ? "" : "s"} — what counts them?`,
+    `Close, that's the chance of ONE specific sequence, (1/2)^${n}. There are several head/tail orders giving exactly ${k} head${k === 1 ? "" : "s"}, what counts them?`,
     "forgot_binomial_coefficient",
   );
   push(
     naiveRatio,
-    `You used the naive ratio ${k}/${n}. Probability isn't "successes over flips" here — which formula counts the ways to place ${k} heads among ${n} flips?`,
+    `You used the naive ratio ${k}/${n}. Probability isn't "successes over flips" here, which formula counts the ways to place ${k} heads among ${n} flips?`,
     "naive_ratio_k_over_n",
   );
   push(
@@ -831,7 +831,7 @@ export function buildBinomialNumericInstance(
   );
   push(
     choose(n, k),
-    `That's C(${n},${k}), the COUNT of arrangements — not yet a probability. Each arrangement has probability (1/2)^${n}; what do you multiply by?`,
+    `That's C(${n},${k}), the COUNT of arrangements, not yet a probability. Each arrangement has probability (1/2)^${n}; what do you multiply by?`,
     "count_not_probability",
   );
 
@@ -857,7 +857,7 @@ export function buildBinomialNumericInstance(
   };
 }
 
-/** FREE-RESPONSE E[trials to first success] — numeric conversion of `genGeometric`. */
+/** FREE-RESPONSE E[trials to first success], numeric conversion of `genGeometric`. */
 export function buildGeometricNumericInstance(
   rng: Rng,
   difficulty: Difficulty,
@@ -877,17 +877,17 @@ export function buildGeometricNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     p,
-    `Close — you reported p itself. The EXPECTED wait is the reciprocal of the per-trial chance. If success is rare, is the wait small or large?`,
+    `Close, you reported p itself. The EXPECTED wait is the reciprocal of the per-trial chance. If success is rare, is the wait small or large?`,
     "reported_p_not_reciprocal",
   );
   push(
     1 / (1 - p),
-    `You used 1/(1−p) — the failure probability in the denominator. The geometric mean uses the SUCCESS probability; which one goes on the bottom?`,
+    `You used 1/(1−p), the failure probability in the denominator. The geometric mean uses the SUCCESS probability; which one goes on the bottom?`,
     "used_failure_probability",
   );
   push(
     pDen / pNum - 1,
-    `That's the expected number of FAILURES before the first success (E − 1). The question counts the successful trial too — what do you add back?`,
+    `That's the expected number of FAILURES before the first success (E − 1). The question counts the successful trial too, what do you add back?`,
     "counted_failures_not_trials",
   );
 
@@ -943,7 +943,7 @@ export const PROB_GENERATORS = {
 };
 
 /* ========================================================================== */
-/*  Numeric (free-response) adapters — MCQ→free-response conversions.          */
+/*  Numeric (free-response) adapters. MCQ→free-response conversions.          */
 /*  These are DELIBERATELY kept OUT of `PROB_GENERATORS` (which must stay        */
 /*  quiz-only, so the shared 4-choices registry test never sees a               */
 /*  NumericQuestion). `levels.ts` references them directly through a            */
@@ -951,7 +951,7 @@ export const PROB_GENERATORS = {
 /*  family id (gen<Family>Numeric) used by the hint ladder / regeneration.       */
 /* ========================================================================== */
 
-// pr-1 — Foundations (union, independent AND, combinations)
+// pr-1. Foundations (union, independent AND, combinations)
 export const genUnionNumeric = (rng: Rng): NumericQuestion =>
   buildUnionNumericInstance(rng, "easy").numeric;
 export const genIntersectionIndepNumeric = (rng: Rng): NumericQuestion =>
@@ -959,7 +959,7 @@ export const genIntersectionIndepNumeric = (rng: Rng): NumericQuestion =>
 export const genCombinationsNumeric = (rng: Rng): NumericQuestion =>
   buildCombinationsNumericInstance(rng, "medium").numeric;
 
-// pr-2 — Conditional, Bayes, at-least-one
+// pr-2. Conditional, Bayes, at-least-one
 export const genConditionalNumeric = (rng: Rng): NumericQuestion =>
   buildConditionalNumericInstance(rng, "medium").numeric;
 export const genBayesNumeric = (rng: Rng): NumericQuestion =>
@@ -967,7 +967,7 @@ export const genBayesNumeric = (rng: Rng): NumericQuestion =>
 export const genAtLeastOneNumeric = (rng: Rng): NumericQuestion =>
   buildAtLeastOneNumericInstance(rng, "medium").numeric;
 
-// pr-3 — Expectation & distributions (EV, binomial, geometric)
+// pr-3. Expectation & distributions (EV, binomial, geometric)
 export const genExpectedValueNumeric = (rng: Rng): NumericQuestion =>
   buildExpectedValueNumericInstance(rng, "medium").numeric;
 export const genBinomialNumeric = (rng: Rng): NumericQuestion =>
@@ -991,7 +991,7 @@ export const PROB_NUMERIC_GENERATORS = {
 /**
  * Combine several question families into one generator. Delegates to the shared
  * family-tagging mixer so each produced item is stamped with the family that
- * drew it and the returned callable exposes a `.families` lookup — enabling
+ * drew it and the returned callable exposes a `.families` lookup, enabling
  * family-preserving "Generate another like this" while normal play is unchanged.
  */
 export const mix = (pool: QuestionGenerator[]): QuestionGenerator =>

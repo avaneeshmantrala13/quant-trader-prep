@@ -16,7 +16,7 @@ const BADGE: Record<
 export function MasteryBadge({ state }: { state: MasteryState }) {
   const b = BADGE[state];
   return (
-    <span className={`chip ${b.cls}`} title={`${b.label} — calibration-aware verdict`}>
+    <span className={`chip ${b.cls}`} title={`${b.label}: calibration-aware verdict`}>
       <span aria-hidden="true" className="mr-1">
         {b.glyph}
       </span>

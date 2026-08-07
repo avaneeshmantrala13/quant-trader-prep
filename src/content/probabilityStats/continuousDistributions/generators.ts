@@ -529,7 +529,7 @@ export function buildNormalSymmetricInstance(
 
   const prompt =
     `Suppose ${th.thing} is Normal with mean μ = ${mu} and standard deviation σ = ${sigma}. ` +
-    `What is P(${lo} ≤ X ≤ ${hi}) — i.e. within ${k} standard deviation${k > 1 ? "s" : ""}? (Round to ${dp} decimals.)`;
+    `What is P(${lo} ≤ X ≤ ${hi}), i.e. within ${k} standard deviation${k > 1 ? "s" : ""}? (Round to ${dp} decimals.)`;
   const explanation =
     `The interval is μ ± ${k}σ, so z runs from −${k} to ${k}: P = Φ(${k}) − Φ(−${k}) = 2Φ(${k}) − 1 = ${decText(value, dp)}.`;
 

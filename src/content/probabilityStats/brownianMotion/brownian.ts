@@ -3,11 +3,11 @@ import { normalCdf } from "../coreSolvers";
 /**
  * Solvers for the Probability & Statistics → **Brownian Motion** subcategory
  * (Bucket 1, advanced; UT M362M; interview-relevant *intuition* per the gap
- * analysis — drift + variance scaling, √t, independent increments).
+ * analysis, drift + variance scaling, √t, independent increments).
  *
  * A Brownian motion with drift μ and volatility σ started at x₀ has
  * X_t ~ N(x₀ + μt, σ²t). Everything here is that one fact: the mean grows
- * LINEARLY (x₀+μt) while the standard deviation grows like √t (σ√t) — the
+ * LINEARLY (x₀+μt) while the standard deviation grows like √t (σ√t), the
  * signature "√t scaling". Distribution probabilities reuse the shared `normalCdf`
  * (Φ) at a stated precision, matching the CLT / Normal families.
  */

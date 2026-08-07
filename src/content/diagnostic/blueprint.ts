@@ -11,7 +11,7 @@ import { topicKeyOf } from "@/lib/mastery/topicKey";
  * minimum; a balanced blueprint prevents over-sampling one skill). Each slot
  * re-uses an EXISTING quiz-mode OR numeric-mode topic generator (no new
  * question content) so the trap distractors ARE the misconception probes
- * (RESEARCH_ASSESSMENT §1.9, §3) — numeric levels are surfaced as MCQ by
+ * (RESEARCH_ASSESSMENT §1.9, §3), numeric levels are surfaced as MCQ by
  * turning their authored `commonErrors` into distractors (see `items.ts`).
  *
  * The redesign raises quality to ~8 always-on-topic × 2 items plus a GATED
@@ -21,7 +21,7 @@ import { topicKeyOf } from "@/lib/mastery/topicKey";
  */
 
 export interface DiagnosticSlot {
-  /** `topicKeyOf(trackId, section)` — the Phase-1 mastery bucket this seeds. */
+  /** `topicKeyOf(trackId, section)`, the Phase-1 mastery bucket this seeds. */
   topicKey: string;
   trackId: string;
   /** Source level whose (quiz- or numeric-mode) generator/pool we sample. */
@@ -53,15 +53,15 @@ export interface DiagnosticSlot {
  * COMPREHENSIVE MULTISTAGE BLUEPRINT (redesign, ≤ 30 items).
  *
  * Goal: probe EVERY MCQ-able topic family across the skill graph
- * (`src/lib/roadmap/skillGraph.ts`) — 15 of the 17 mastery topics; the two
+ * (`src/lib/roadmap/skillGraph.ts`), 15 of the 17 mastery topics; the two
  * Brainteasers topics are flashcard/integrity-only and cannot be surfaced as
- * MCQ — while staying strictly under 31 items. Two stages keep it efficient:
+ * MCQ, while staying strictly under 31 items. Two stages keep it efficient:
  *
  *  1. BASE breadth pass (8 always-on slots, 14 items): the Tier-0/Tier-1 core
  *     plus Expected Value and the Interview-Games decision genre. Core
  *     Probability is the ROUTER whose first items set the global starting tier.
  *  2. GATED depth pass (7 slots, 9 items): each advanced/derived topic is shown
- *     ONLY when its PREREQUISITE passed — exactly the prerequisite edges of the
+ *     ONLY when its PREREQUISITE passed, exactly the prerequisite edges of the
  *     skill graph (Geometric←CoreProb; OrderStats/Variance/Betting←EV;
  *     Markov←Conditional; GameTheory←InterviewGames; Geometry←Rates/Algebra).
  *     A failed-prereq topic is honestly left un-seeded (roadmap shows it as
@@ -69,7 +69,7 @@ export interface DiagnosticSlot {
  *
  * `run.ts` also injects an adaptive TIEBREAK 3rd item on any 2-item BASE slot
  * whose two items split. Worst case = 14 base + 9 gated-all-open + 6 tiebreaks
- * (six 2-item base slots) = 29 items — under the 31 cap. Nominal (base + all
+ * (six 2-item base slots) = 29 items, under the 31 cap. Nominal (base + all
  * gated, no tiebreaks) = 23. Fresh questions every attempt (unchanged).
  *
  * The base slots come first (indices 0–7) so `buildDiagnosticPlan` materializes
@@ -81,7 +81,7 @@ export interface DiagnosticSlot {
 export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
   /* ---------------------------- BASE (always-on) --------------------------- */
   {
-    // slot 0 — ROUTER: the first 1–2 items set the global starting tier.
+    // slot 0. ROUTER: the first 1–2 items set the global starting tier.
     topicKey: topicKeyOf("probability", "Core Probability"),
     trackId: "probability",
     levelId: "pr-1",
@@ -173,7 +173,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
   },
   /* ------------------------ GATED (prerequisite-driven) -------------------- */
   {
-    // GATED on Core Probability — continuous favourable-measure ratio.
+    // GATED on Core Probability, continuous favourable-measure ratio.
     topicKey: topicKeyOf("probability", "Geometric Probability"),
     trackId: "probability",
     levelId: "geo-1",
@@ -186,7 +186,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("probability", "Core Probability"),
   },
   {
-    // GATED on Expected Value — expected extremes / min-max of draws.
+    // GATED on Expected Value, expected extremes / min-max of draws.
     topicKey: topicKeyOf("probability", "Order Statistics"),
     trackId: "probability",
     levelId: "os-1",
@@ -199,7 +199,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
   },
   {
-    // GATED on Expected Value — second moments, covariance, CLT tails.
+    // GATED on Expected Value, second moments, covariance, CLT tails.
     topicKey: topicKeyOf("probability", "Variance, Covariance & the CLT"),
     trackId: "probability",
     levelId: "vc-1",
@@ -212,7 +212,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
   },
   {
-    // GATED on Expected Value — Kelly sizing (numeric → MCQ).
+    // GATED on Expected Value. Kelly sizing (numeric → MCQ).
     topicKey: topicKeyOf("probability", "Betting & Sizing"),
     trackId: "probability",
     levelId: "bs-1",
@@ -225,7 +225,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("probability", "Expected Value"),
   },
   {
-    // GATED on Conditional — first-step analysis rewards prior fluency.
+    // GATED on Conditional, first-step analysis rewards prior fluency.
     topicKey: topicKeyOf("probability", "Markov Chains"),
     trackId: "probability",
     levelId: "mc-1",
@@ -238,7 +238,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("probability", "Conditional Probability"),
   },
   {
-    // GATED on Interview Games — strategic reasoning on top of EV.
+    // GATED on Interview Games, strategic reasoning on top of EV.
     topicKey: topicKeyOf("probability", "Game Theory & Puzzles"),
     trackId: "probability",
     levelId: "gt-1",
@@ -251,7 +251,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     gatedOnTopicKey: topicKeyOf("interview-games"),
   },
   {
-    // GATED on Rates/Algebra — clean-number geometry (numeric → MCQ).
+    // GATED on Rates/Algebra, clean-number geometry (numeric → MCQ).
     topicKey: topicKeyOf("math-questions", "Geometry & Derivations"),
     trackId: "math-questions",
     levelId: "mq-5",
@@ -266,7 +266,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
 ];
 
 /**
- * COURSE-MODE (Case A) BLUEPRINT — assesses the UT M362K / M362M course spine
+ * COURSE-MODE (Case A) BLUEPRINT, assesses the UT M362K / M362M course spine
  * (Intro to Probability + Intro to Stochastic Processes) INSTEAD of the
  * quant-interview set, including the seven now-first-class ex-"Extra Relevant
  * Knowledge" topics (MGF / Gamma / Joint / Limit Theorems / Branching / CTMC /
@@ -287,7 +287,7 @@ export const DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
 export const COURSE_DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
   /* ---------------------------- BASE (always-on) --------------------------- */
   {
-    // slot 0 — ROUTER (must stay index 0, mirrors ROUTER_SLOT_INDEX).
+    // slot 0. ROUTER (must stay index 0, mirrors ROUTER_SLOT_INDEX).
     topicKey: topicKeyOf("probability", "Core Probability"),
     trackId: "probability",
     levelId: "pr-1",
@@ -295,7 +295,7 @@ export const COURSE_DIAGNOSTIC_BLUEPRINT: DiagnosticSlot[] = [
     startTier: "medium",
     label: "Core Probability",
     probes:
-      "Axioms, sample space, inclusion–exclusion, independence — the M362K ch. 2 foundation.",
+      "Axioms, sample space, inclusion–exclusion, independence, the M362K ch. 2 foundation.",
     misconceptionTag: "union_rule_no_overlap",
   },
   {

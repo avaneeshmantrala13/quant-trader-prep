@@ -8,7 +8,11 @@ import {
   outcomesFromAnswers,
   type PlanItem,
 } from "@/lib/diagnostic/run";
-import { diagnosticToSeeds, selfReportToSeed } from "@/lib/diagnostic/diagnosticSeed";
+import {
+  diagnosticToSeeds,
+  selfReportToSeed,
+  withPrereqUnlocks,
+} from "@/lib/diagnostic/diagnosticSeed";
 import { blueprintForMode } from "@/content/diagnostic/blueprint";
 import {
   computeDiagnosticResult,
@@ -18,7 +22,15 @@ import type { DiagnosticResult, GoalMode } from "@/types/progress";
 import { LineChart } from "@/components/simulations/charts/LineChart";
 import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { ChevronLeftIcon } from "@/components/icons";
-import { GOAL_MODES, MODE_META, resolveGoalMode } from "@/lib/mode/goalMode";
+
+/**
+ * FRONTEND GOAL MODE — course remediation is backend-only, so the diagnostic
+ * always runs the quant ("interview") assessment and skips straight into it (no
+ * "course vs interview" pre-question). The course blueprint
+ * (`blueprintForMode("course")`) and course-scoped prereq expansion stay defined
+ * for a future re-enable; the UI just never selects them.
+ */
+const FRONTEND_GOAL_MODE: GoalMode = "interview";
 
 /**
  * `/diagnostic` — the REQUIRED-once onboarding warm-up (PHASE_3 + approved
@@ -35,7 +47,7 @@ import { GOAL_MODES, MODE_META, resolveGoalMode } from "@/lib/mode/goalMode";
  * stage after the always-on base items.
  */
 
-type Phase = "mode" | "intro" | "selfreport" | "quiz" | "summary";
+type Phase = "intro" | "selfreport" | "quiz" | "summary";
 type Stage = "base" | "followup";
 type Lane = "full" | "self";
 
@@ -51,17 +63,20 @@ export function DiagnosticPage() {
     saveResume,
     getResume,
     clearResume,
-    setGoalMode,
   } = useProgress();
 
-  // PART A — the diagnostic is MODE-AWARE: Case A ("course") assesses the UT
-  // course spine, Case B ("interview") the quant-interview set. The selected
-  // blueprint drives item selection AND seeding, so results seed mastery for the
-  // correct per-mode topic set. The ≤ 30-item guarantee holds for both.
+  // The frontend is quant-only, so the diagnostic always runs the Case-B
+  // ("interview") blueprint (item selection AND seeding). The course blueprint
+  // stays defined for a future re-enable.
   const blueprint = useMemo(
-    () => blueprintForMode(resolveGoalMode(progress)),
-    [progress],
+    () => blueprintForMode(FRONTEND_GOAL_MODE),
+    [],
   );
+
+  // KST prereq low-confidence unlocks expand over the whole skill graph in the
+  // quant path (undefined scope = no restriction). The course-scoped expansion
+  // stays in `diagnosticSeed`/`courseMap` for a future re-enable.
+  const prereqScope: ((topicKey: string) => boolean) | undefined = undefined;
 
   // Restore an in-progress base run (humane "answer later" — don't restart).
   // Only trust a snapshot whose shape still matches the current blueprint.
@@ -73,10 +88,10 @@ export function DiagnosticPage() {
       ? resumed.current
       : undefined;
 
-  // The MANDATORY mode-select is the very FIRST screen (both lanes). A resumed
-  // base run already picked a mode before the quiz started, so it skips straight
-  // back to the quiz.
-  const [phase, setPhase] = useState<Phase>(() => (validResume ? "quiz" : "mode"));
+  // The intro is the FIRST screen (both lanes); a resumed base run skips straight
+  // back to the quiz. There is no mode-select pre-question — the frontend goes
+  // directly into the quant assessment.
+  const [phase, setPhase] = useState<Phase>(() => (validResume ? "quiz" : "intro"));
   const [lane, setLane] = useState<Lane>("full");
   const [stage, setStage] = useState<Stage>("base");
   const [seed, setSeed] = useState(
@@ -142,7 +157,13 @@ export function DiagnosticPage() {
     // entry so both share a single timestamp.
     const outcomes = outcomesFromAnswers(plan, answers, blueprint);
     const stamp = new Date().toISOString();
-    applyDiagnosticSeeds(diagnosticToSeeds(outcomes), stamp);
+    // Seed the assessed topics AND, for every topic the learner did WELL on, a
+    // LOW-CONFIDENCE unlock for its KST prerequisites (scoped to the path). This
+    // is the signal `locking.ts` reads to actually make those topics accessible.
+    applyDiagnosticSeeds(
+      withPrereqUnlocks(diagnosticToSeeds(outcomes), prereqScope),
+      stamp,
+    );
     // Record this attempt for the improvement graph. Only the full lane grades
     // items; skip empty attempts (e.g. "finish now" with nothing answered) so
     // the trend never shows a degenerate 0% point. The self-report lane has no
@@ -198,7 +219,7 @@ export function DiagnosticPage() {
   };
 
   const submitSelfReport = (answers: Record<string, string>) => {
-    applyDiagnosticSeeds(selfReportToSeed(answers));
+    applyDiagnosticSeeds(withPrereqUnlocks(selfReportToSeed(answers), prereqScope));
     clearResume(DIAGNOSTIC_RESUME_ID);
     setLane("self");
     setPhase("summary");
@@ -214,7 +235,7 @@ export function DiagnosticPage() {
     setFollowupAnswers([]);
     setStage("base");
     setIndex(0);
-    setPhase("mode");
+    setPhase("intro");
   };
 
   return (
@@ -253,17 +274,6 @@ export function DiagnosticPage() {
       </header>
 
       <main className="relative z-10 mx-auto max-w-3xl px-4 py-6">
-        {phase === "mode" && (
-          <ModeStep
-            current={resolveGoalMode(progress)}
-            hasChosen={progress.goalMode !== undefined}
-            onPick={(mode) => {
-              setGoalMode(mode);
-              setPhase("intro");
-            }}
-          />
-        )}
-
         {phase === "intro" && (
           <Intro
             baseTotal={baseTotal}
@@ -303,85 +313,13 @@ export function DiagnosticPage() {
         {phase === "summary" && (
           <Summary
             lane={lane}
-            mode={resolveGoalMode(progress)}
+            mode={FRONTEND_GOAL_MODE}
             history={progress.diagnosticHistory}
             onRetake={retake}
             onDone={() => navigate("/contents")}
           />
         )}
       </main>
-    </div>
-  );
-}
-
-/**
- * The MANDATORY, non-graded mode-select — the very first screen of BOTH lanes.
- * It ONLY sets `goalMode` (a pure view selector) and is therefore orthogonal to
- * the graded warm-up: it does NOT count toward the diagnostic's ≤30-item
- * guarantee, seed priors, or stamp `diagnosticDoneAt`. Advancing requires a
- * pick, so there is no default advance.
- */
-function ModeStep({
-  current,
-  hasChosen,
-  onPick,
-}: {
-  current: GoalMode;
-  hasChosen: boolean;
-  onPick: (mode: GoalMode) => void;
-}) {
-  return (
-    <div className="animate-print-in space-y-5">
-      <article className="panel-ruled p-6">
-        <span className="label text-accent">First · Pick your focus</span>
-        <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary">
-          What are you here to do?
-        </h2>
-        <p className="mt-3 text-[15px] leading-relaxed text-secondary">
-          Pick a focus — you can switch anytime from the menu or your dashboard,
-          and{" "}
-          <span className="font-semibold text-primary">
-            your progress carries over
-          </span>
-          . Either choice uses the same practice history; switching never resets
-          your progress.
-        </p>
-      </article>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        {GOAL_MODES.map((mode) => {
-          const meta = MODE_META[mode];
-          const isCurrent = hasChosen && mode === current;
-          return (
-            <button
-              key={mode}
-              onClick={() => onPick(mode)}
-              className={`flex flex-col gap-2 border p-5 text-left transition-colors min-h-[44px] ${
-                isCurrent
-                  ? "border-accent bg-success-soft"
-                  : "border-subtle bg-surface hover:bg-surface-muted"
-              }`}
-            >
-              <span className="flex items-center justify-between">
-                <span className="font-display text-lg font-semibold text-primary">
-                  {meta.blurb}
-                </span>
-                {isCurrent && (
-                  <span className="chip border-accent text-accent">Current</span>
-                )}
-              </span>
-              <span className="text-sm leading-relaxed text-secondary">
-                {meta.detail}
-              </span>
-              <span className="label mt-1 text-accent">{meta.label} ▸</span>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-center text-xs text-muted">
-        This choice only sets your focus — it is never scored and never locks or
-        unlocks anything.
-      </p>
     </div>
   );
 }
@@ -415,7 +353,7 @@ function Intro({
         </h2>
         <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-secondary">
           <p>
-            This is a quick warm-up across the core topics — probability,
+            This is a quick warm-up across the core topics: probability,
             expected value, counting, mental math and more.{" "}
             <span className="font-semibold text-primary">
               It is not scored and it never locks or unlocks anything.
@@ -428,7 +366,7 @@ function Intro({
             adaptive follow-ups). In a hurry? The{" "}
             <span className="font-semibold text-primary">20-second self-report</span>{" "}
             sets a rough starting point instead. You can{" "}
-            <span className="font-semibold text-primary">retake anytime</span> —
+            <span className="font-semibold text-primary">retake anytime</span>;
             a retake simply re-tunes your starting point.
           </p>
         </div>
@@ -450,7 +388,7 @@ function Intro({
         </button>
       </div>
       <p className="text-center text-xs text-muted">
-        Either choice gets you started — the warm-up is never scored and never
+        Either choice gets you started; the warm-up is never scored and never
         locks or unlocks anything.
       </p>
     </div>
@@ -514,7 +452,7 @@ function SelfReport({
         </h2>
         <p className="mt-2 text-sm text-secondary">
           Three quick taps set a coarse prior. It's not scored and never locks
-          or unlocks anything — you can take the full warm-up later to sharpen it.
+          or unlocks anything; you can take the full warm-up later to sharpen it.
         </p>
       </article>
 
@@ -648,7 +586,7 @@ function DiagnosticCard({
       {answered && (
         <div className="animate-print-in border border-subtle">
           <div className="flex items-center justify-between bg-surface-muted px-4 py-2">
-            <span className="label text-secondary">Noted — not scored</span>
+            <span className="label text-secondary">Noted · not scored</span>
           </div>
           <div className="space-y-2 bg-surface p-4">
             {selected !== null &&
@@ -671,7 +609,7 @@ function DiagnosticCard({
 
       <div className="border-t border-subtle pt-3">
         <button onClick={onFinishEarly} className="btn-ghost w-full text-sm">
-          Finish now — seed what I've answered (you can retake later)
+          Finish now: seed what I've answered (you can retake later)
         </button>
       </div>
     </div>
@@ -702,7 +640,7 @@ function Summary({
         </h2>
         <p className="mt-2 text-sm text-secondary">
           {lane === "self"
-            ? "Your self-report set a rough starting point. Your first practice questions in each topic will start near it and adapt as you go — take the full warm-up anytime to sharpen it. This did not affect any scores or unlocks."
+            ? "Your self-report set a rough starting point. Your first practice questions in each topic will start near it and adapt as you go. Take the full warm-up anytime to sharpen it. This did not affect any scores or unlocks."
             : "Your first practice questions in each topic will now start at the right difficulty and adapt as you go. This did not affect any scores or unlocks."}
         </p>
 
@@ -741,7 +679,7 @@ function ImprovementGraph({ history }: { history?: DiagnosticResult[] }) {
         <p className="mt-2 text-sm text-secondary">
           {trend.count === 0
             ? "Complete a warm-up to start tracking your score across retakes."
-            : "Take it again to see your trend — you've completed one warm-up so far."}
+            : "Take it again to see your trend; you've completed one warm-up so far."}
         </p>
         {trend.count === 1 && trend.latest ? (
           <p className="mt-2 text-sm text-secondary">
@@ -817,10 +755,10 @@ function ImprovementGraph({ history }: { history?: DiagnosticResult[] }) {
 
       <p className="text-xs leading-relaxed text-muted">
         {trend.improving
-          ? `You're improving — up ${deltaPts} points since your first warm-up.`
+          ? `You're improving: up ${deltaPts} points since your first warm-up.`
           : deltaPts === 0
-            ? "Holding steady — same overall score as your first warm-up."
-            : "Down from your first attempt — keep practicing and retake to climb back."}
+            ? "Holding steady: same overall score as your first warm-up."
+            : "Down from your first attempt. Keep practicing and retake to climb back."}
       </p>
     </div>
   );

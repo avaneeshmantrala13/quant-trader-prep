@@ -1,17 +1,17 @@
 /**
  * Speed Arena — presets & constants (Phase 6).
  *
- * The arena is a dedicated timed mental-math drill in the Zetamac / Optiver
- * "80-in-8" mold. Two canonical presets plus a Custom builder, all described by
- * one plain-data `ArenaPreset` so scoring / analytics / the deterministic
- * question stream stay pure and reproducible.
+ * The arena is a dedicated timed mental-math drill in the Zetamac fixed-window
+ * and timed arithmetic-sprint mold. Two canonical presets plus a Custom builder, all
+ * described by one plain-data `ArenaPreset` so scoring / analytics / the
+ * deterministic question stream stay pure and reproducible.
  *
  * Research justification (see build-specs/DESIGN_TIMING_LEADERBOARD.md §1, §4A):
- *  - Optiver's "80-in-8" test (80 questions / 8:00, +1 correct / −1 wrong, skips
- *    free) and Jane Street's ~7-minute Zetamac gate are real market-maker
- *    screens; the arena mirrors them.
+ *  - A timed arithmetic sprint (80 questions / 8:00, +1 correct / −1
+ *    wrong, skips free) and a ~7-minute fixed-window arithmetic gate are common
+ *    quant-desk screens; the arena mirrors those generic formats.
  *  - The speed-accuracy tradeoff (§4A) motivates the rushing detector and the
- *    EV coaching nudge — reasoning tabs stay UNTIMED by default (a soft
+ *    EV coaching nudge: reasoning tabs stay UNTIMED by default (a soft
  *    `TimedToggle` never blocks progression).
  *
  * NOTE: the numeric thresholds below (RUSH_FLOOR_MS, RUSH_RATIO, CARELESS_RATIO,
@@ -27,14 +27,14 @@ export type BoardKind = "zetamac" | "optiver";
 /**
  * A fully self-describing arena configuration. `ranges` is keyed by operation
  * name (`add`/`sub`/`mul`/`div`); each entry bounds the operands that op draws
- * (see `arenaQuestionStream`). `questionCap` caps total questions (Optiver = 80);
- * omit it for a pure fixed-window Zetamac run.
+ * (see `arenaQuestionStream`). `questionCap` caps total questions (the timed
+ * arithmetic sprint caps at 80); omit it for a pure fixed-window Zetamac run.
  */
 export interface ArenaPreset {
   mode: ArenaMode;
   durationSec: number;
   questionCap?: number;
-  /** true ⇒ wrong answers cost points (Optiver +1/−1); false ⇒ count-only. */
+  /** true ⇒ wrong answers cost points (a +1/−1 sprint); false ⇒ count-only. */
   penalty: boolean;
   /** true ⇒ skipping scores 0; false ⇒ skipping is penalized like a wrong. */
   skipsFree: boolean;
@@ -91,8 +91,8 @@ export const ZETAMAC_DEFAULT: ArenaPreset = {
 };
 
 /**
- * Optiver default: 80 questions / 8:00 (480s), +1 correct / −1 wrong, skips
- * free. Community pass ≈ 56; competitive ≈ 70.
+ * Timed arithmetic sprint default: 80 questions / 8:00 (480s), +1 correct / −1 wrong,
+ * skips free. Community pass ≈ 56; competitive ≈ 70.
  */
 export const OPTIVER_DEFAULT: ArenaPreset = {
   mode: "optiver",
@@ -143,15 +143,15 @@ export const RUSH_RATIO = 0.5;
 /** Aggregate nudge: rush_errors / total_errors ≥ this ⇒ careless signal. */
 export const CARELESS_RATIO = 0.4;
 
-/** Optiver score markers (see §5). */
+/** Timed arithmetic sprint score markers (see §5). */
 export const OPTIVER_PASS = 56;
 export const OPTIVER_COMPETITIVE = 70;
 
 /**
  * Default per-question budget (ms) for the interview overlay when a preset has
  * no fixed question cap (e.g. Zetamac's open count-up window). Grounded in the
- * arithmetic-sprint consensus of ~6 s/q — Optiver 80-in-8, Flow 60-in-6, and
- * Maven 50-in-5 all land at 6.0 s/q (FIRM_TIMED_ASSESSMENTS.md §1).
+ * arithmetic-sprint consensus of ~6 s/q: the 80/8, 60/6, and 50/5 sprints
+ * all land at 6.0 s/q (FIRM_TIMED_ASSESSMENTS.md §1).
  */
 export const DEFAULT_SPRINT_BUDGET_MS = 6000;
 

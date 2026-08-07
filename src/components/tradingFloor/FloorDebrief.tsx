@@ -106,7 +106,7 @@ export function FloorDebrief(props: FloorDebriefProps): JSX.Element {
 
       {/* You vs desk cumulative P&L */}
       <article className="panel-ruled p-4">
-        <div className="label text-accent">Cumulative P&amp;L — you vs the desk</div>
+        <div className="label text-accent">Cumulative P&amp;L: you vs the desk</div>
         <div className="mt-3">
           <LineChart
             series={[
@@ -138,7 +138,7 @@ export function FloorDebrief(props: FloorDebriefProps): JSX.Element {
               side of the truth, so you get picked off exactly when you're
               over-confident. That makes this a{" "}
               <strong className="text-primary">proper scoring rule</strong>:
-              minimizing your Brier score — quoting your honest probability — is
+              minimizing your Brier score (quoting your honest probability) is
               the same as maximizing your expected P&amp;L.
             </p>
           </div>
@@ -172,7 +172,7 @@ export function FloorDebrief(props: FloorDebriefProps): JSX.Element {
       {/* An unobtrusive footnote to make % capture legible even if desk flat. */}
       <p className="text-center text-[11px] text-muted">
         {binary
-          ? `Your mid averaged a ${fmtPct(0.5)} coin-flip at the open — edge comes from updating faster than the desk.`
+          ? `Your mid averaged a ${fmtPct(0.5)} coin-flip at the open; edge comes from updating faster than the desk.`
           : "Edge comes from a tighter, better-centred market than the honest desk on the same flow."}
       </p>
     </div>

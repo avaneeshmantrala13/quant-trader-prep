@@ -18,15 +18,15 @@ import { type Choice, assembleChoices, cap, numericErrors } from "../coreScaffol
  * Parametric generators for the Probability & Statistics → **Variance,
  * Covariance & the CLT** subcategory (re-homed from the former "General" set,
  * consolidating the covariance/variance-trap family with the CLT /
- * concentration-bound family — both are second-moment / limit-law reasoning).
+ * concentration-bound family, both are second-moment / limit-law reasoning).
  *
  * Every correct scalar is produced ONLY by the exact / high-precision solver in
  * `../coreSolvers`; every distractor is a re-derived, NAMED misconception,
  * guaranteed ≠ the answer and distinct at the stated grading precision.
  *
  * Modes:
- *   • quiz    — genMaxCov, genAffineCorr, genSumSD, genCltDiffZ
- *   • numeric — genVarCombo, genCltTail, genMarkovBound
+ *   • quiz   , genMaxCov, genAffineCorr, genSumSD, genCltDiffZ
+ *   • numeric, genVarCombo, genCltTail, genMarkovBound
  */
 
 /* ========================================================================== */
@@ -70,7 +70,7 @@ export function buildMaxCovInstance(
   const fmt = (v: number) => decText(v, 1);
   const correct: Choice = {
     text: fmt(value),
-    rationale: `Correct — Cauchy–Schwarz caps covariance at √(Var_A·Var_B) = √(${varA}·${varB}) = ${fmt(value)}, attained at correlation ±1.`,
+    rationale: `Correct. Cauchy–Schwarz caps covariance at √(Var_A·Var_B) = √(${varA}·${varB}) = ${fmt(value)}, attained at correlation ±1.`,
   };
   const distractors: Choice[] = [
     {
@@ -92,7 +92,7 @@ export function buildMaxCovInstance(
     `What is the LARGEST possible value of Cov(A, B)?`;
   const explanation =
     `By Cauchy–Schwarz, |Cov(A,B)| ≤ √(Var_A·Var_B) = √(${varA}·${varB}) = √${product} = ${fmt(value)}, achieved when A and B are perfectly correlated. ` +
-    `The means (${meanA}, ${meanB}) play no role — covariance is built from deviations, not levels.`;
+    `The means (${meanA}, ${meanB}) play no role, covariance is built from deviations, not levels.`;
 
   return {
     answer: fmt(value),
@@ -109,7 +109,7 @@ export function buildMaxCovInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the Cauchy–Schwarz covariance ceiling — the
+ * FREE-RESPONSE (numeric) form of the Cauchy–Schwarz covariance ceiling, the
  * PHASE_1/2 MCQ→free conversion of `buildMaxCovInstance`. Same exact solver
  * √(Var_A·Var_B); the three genuine error modes (dropping the square root, using
  * the means, and the arithmetic-vs-geometric mean) become a parametric catalog
@@ -146,12 +146,12 @@ export function buildMaxCovNumericInstance(
   );
   push(
     meanA * meanB,
-    `That multiplied the MEANS (${meanA}·${meanB}). Covariance is built from deviations about the mean — do the mean LEVELS enter the covariance at all?`,
+    `That multiplied the MEANS (${meanA}·${meanB}). Covariance is built from deviations about the mean, do the mean LEVELS enter the covariance at all?`,
     "used_means_not_deviations",
   );
   push(
     avgVar,
-    `That's the ARITHMETIC mean of the variances, (Var_A + Var_B)/2. The Cauchy–Schwarz ceiling is a different average of the two variances — which kind?`,
+    `That's the ARITHMETIC mean of the variances, (Var_A + Var_B)/2. The Cauchy–Schwarz ceiling is a different average of the two variances, which kind?`,
     "arithmetic_not_geometric_mean",
   );
 
@@ -160,7 +160,7 @@ export function buildMaxCovNumericInstance(
     `What is the LARGEST possible value of Cov(A, B)? (Enter a fraction or decimal.) Round to the nearest thousandth.`;
   const explanation =
     `By Cauchy–Schwarz, |Cov(A,B)| ≤ √(Var_A·Var_B) = √(${varA}·${varB}) = √${product} = ${decText(value, dp)}, achieved when A and B are perfectly correlated. ` +
-    `The means (${meanA}, ${meanB}) play no role — covariance is built from deviations, not levels.`;
+    `The means (${meanA}, ${meanB}) play no role, covariance is built from deviations, not levels.`;
 
   return {
     answer,
@@ -211,7 +211,7 @@ export function buildAffineCorrInstance(
 
   const correct: Choice = {
     text: decText(value, dp),
-    rationale: `Correct — ρ(U,V) = sign(b)·sign(d)·ρ = (−1)·${fracText(rho)} = ${decText(value, dp)}; the magnitudes |b|,|d| cancel, only the signs survive.`,
+    rationale: `Correct, ρ(U,V) = sign(b)·sign(d)·ρ = (−1)·${fracText(rho)} = ${decText(value, dp)}; the magnitudes |b|,|d| cancel, only the signs survive.`,
   };
   const distractors: Choice[] = [
     {
@@ -224,7 +224,7 @@ export function buildAffineCorrInstance(
     },
     {
       text: decText(rho.valueOf() * mag, dp),
-      rationale: `${decText(rho.valueOf() * mag, dp)} both scales by |b·d| = ${mag} AND ignores the sign flip — two separate errors; correlation stays in [−1, 1].`,
+      rationale: `${decText(rho.valueOf() * mag, dp)} both scales by |b·d| = ${mag} AND ignores the sign flip, two separate errors; correlation stays in [−1, 1].`,
     },
   ];
 
@@ -250,7 +250,7 @@ export function buildAffineCorrInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the affine-correlation family — the PHASE_1/2
+ * FREE-RESPONSE (numeric) form of the affine-correlation family, the PHASE_1/2
  * MCQ→free conversion of `buildAffineCorrInstance`. Same exact solver
  * sign(b)·sign(d)·ρ (one negative slope ⇒ answer −ρ); the three genuine error
  * modes (keeping ρ / ignoring the sign flip, scaling by |b·d|, and doing both)
@@ -285,17 +285,17 @@ export function buildAffineCorrNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     rho,
-    `Looks like you kept ρ = ${decText(rho, dp)}. One of the two slopes is negative — what does a negative slope do to the SIGN of a correlation?`,
+    `Looks like you kept ρ = ${decText(rho, dp)}. One of the two slopes is negative, what does a negative slope do to the SIGN of a correlation?`,
     "affine_ignored_sign",
   );
   push(
     -rho.valueOf() * mag,
-    `You scaled by |b·d| = ${mag}. But correlation is scale-free — the slope magnitudes cancel between the covariance and the two SDs. Does |b·d| survive at all?`,
+    `You scaled by |b·d| = ${mag}. But correlation is scale-free, the slope magnitudes cancel between the covariance and the two SDs. Does |b·d| survive at all?`,
     "correlation_not_scale_free",
   );
   push(
     rho.valueOf() * mag,
-    `Two errors at once: you scaled by |b·d| = ${mag} AND dropped the sign flip. A correlation must stay in [−1, 1] and only the slope SIGNS survive — so what's left of ρ?`,
+    `Two errors at once: you scaled by |b·d| = ${mag} AND dropped the sign flip. A correlation must stay in [−1, 1] and only the slope SIGNS survive, so what's left of ρ?`,
     "scaled_and_ignored_sign",
   );
 
@@ -418,12 +418,12 @@ export function buildSumSDInstance(
 
   const correct: Choice = {
     text: decText(value, dp),
-    rationale: `Correct — variances add for independent sums: Var(S) = 2·(m²−1)/12 = ${fracText(variance)}, so σ_S = √Var(S) = ${decText(value, dp)}.`,
+    rationale: `Correct, variances add for independent sums: Var(S) = 2·(m²−1)/12 = ${fracText(variance)}, so σ_S = √Var(S) = ${decText(value, dp)}.`,
   };
   const distractors: Choice[] = [
     {
       text: decText(2 * singleSd, dp),
-      rationale: `${decText(2 * singleSd, dp)} = σ_X + σ_Y ADDS standard deviations. SDs don't add — variances do: σ_S = √(σ_X²+σ_Y²), not σ_X+σ_Y.`,
+      rationale: `${decText(2 * singleSd, dp)} = σ_X + σ_Y ADDS standard deviations. SDs don't add, variances do: σ_S = √(σ_X²+σ_Y²), not σ_X+σ_Y.`,
     },
     {
       text: decText(variance, dp),
@@ -457,7 +457,7 @@ export function buildSumSDInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the independent-sum SD family — the PHASE_1/2
+ * FREE-RESPONSE (numeric) form of the independent-sum SD family, the PHASE_1/2
  * MCQ→free conversion of `buildSumSDInstance`. Same exact solver
  * √(2·(m²−1)/12); the three genuine error modes (adding SDs instead of
  * variances, reporting the variance, and reporting one draw's SD) become a
@@ -480,17 +480,17 @@ export function buildSumSDNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     2 * singleSd,
-    `Looks like you ADDED the two standard deviations (σ_X + σ_Y). SDs don't add for an independent sum — what quantity DOES add, and how do you get back to an SD?`,
+    `Looks like you ADDED the two standard deviations (σ_X + σ_Y). SDs don't add for an independent sum, what quantity DOES add, and how do you get back to an SD?`,
     "added_sds_not_variances",
   );
   push(
     variance,
-    `That's Var(S), the VARIANCE of the sum. The question asks for the standard deviation — what's the final step?`,
+    `That's Var(S), the VARIANCE of the sum. The question asks for the standard deviation, what's the final step?`,
     "reported_variance_not_sd",
   );
   push(
     singleSd,
-    `That's ONE draw's SD. Summing two independent draws changes the variance — by what factor, and what does that do to the SD?`,
+    `That's ONE draw's SD. Summing two independent draws changes the variance, by what factor, and what does that do to the SD?`,
     "single_not_sum_sd",
   );
 
@@ -644,12 +644,12 @@ export function buildCltDiffZInstance(
 
   const correct: Choice = {
     text: decText(value, dp),
-    rationale: `Correct — S − T has Var = 2nσ² = ${2 * n * variance}, sd = ${sd}, so P(S − T > ${thresh}) = Φ(−${thresh}/${sd}) = Φ(${decText(value, dp)}). Hence a = ${decText(value, dp)}.`,
+    rationale: `Correct. S − T has Var = 2nσ² = ${2 * n * variance}, sd = ${sd}, so P(S − T > ${thresh}) = Φ(−${thresh}/${sd}) = Φ(${decText(value, dp)}). Hence a = ${decText(value, dp)}.`,
   };
   const distractors: Choice[] = [
     {
       text: decText(oneSumZ, dp),
-      rationale: `The variance-DOUBLING trap: the difference has Var(S)+Var(T) = 2nσ² = ${2 * n * variance} (sd ${sd}). Using only nσ² (sd ${decText(sdOne, dp)}) gives a = ${decText(oneSumZ, dp)} — too big in magnitude because you forgot the difference doubles the variance.`,
+      rationale: `The variance-DOUBLING trap: the difference has Var(S)+Var(T) = 2nσ² = ${2 * n * variance} (sd ${sd}). Using only nσ² (sd ${decText(sdOne, dp)}) gives a = ${decText(oneSumZ, dp)}, too big in magnitude because you forgot the difference doubles the variance.`,
     },
     {
       text: decText(signFlip, dp),
@@ -684,7 +684,7 @@ export function buildCltDiffZInstance(
 }
 
 /**
- * FREE-RESPONSE (numeric) form of the CLT difference-z family — the PHASE_1/2
+ * FREE-RESPONSE (numeric) form of the CLT difference-z family, the PHASE_1/2
  * MCQ→free conversion of `buildCltDiffZInstance`. Same exact solver
  * a = −thresh/√(2nσ²); the three genuine error modes (forgetting the difference
  * DOUBLES the variance, the sign error, and forgetting the square root) become a
@@ -722,7 +722,7 @@ export function buildCltDiffZNumericInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     oneSumZ,
-    `Looks like you used only ONE sum's variance (nσ²). But S − T combines two independent totals — what happens to the variance of a DIFFERENCE, and how does that change the √(…) in the denominator?`,
+    `Looks like you used only ONE sum's variance (nσ²). But S − T combines two independent totals, what happens to the variance of a DIFFERENCE, and how does that change the √(…) in the denominator?`,
     "difference_variance_not_doubled",
   );
   push(
@@ -800,7 +800,7 @@ export function buildMarkovBoundInstance(
 
   const inverted = F(a).div(eT); // a/E[T]
   const trivial = 1;
-  const overTight = value.mul(value); // (E[T]/a)² — an over-tightening
+  const overTight = value.mul(value); // (E[T]/a)², an over-tightening
 
   const { errors, push } = numericErrors(answer, dp);
   push(
@@ -841,7 +841,7 @@ export function buildMarkovBoundInstance(
 }
 
 /* ========================================================================== */
-/*  Named generators (adapters — mode noted per line)                         */
+/*  Named generators (adapters, mode noted per line)                         */
 /* ========================================================================== */
 
 // Covariance / variance (quiz builders kept for tests; numeric = playable in vc-1)

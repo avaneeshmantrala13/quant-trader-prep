@@ -3,7 +3,7 @@ import { mixNumeric } from "../coreScaffold";
 import { genExpMedian, genMinInterval, genOrdering } from "./generators";
 
 /**
- * Probability & Statistics — **Order Statistics**: a focused topic (re-homed
+ * Probability & Statistics, **Order Statistics**: a focused topic (re-homed
  * from the former "General" grab-bag) on the distribution of the minimum, the
  * probability of a specific ordering, and the median (the central order
  * statistic) of a continuous distribution. One `numeric` Candy-Crush level.
@@ -29,15 +29,15 @@ export const orderStatisticsLevels: Level[] = [
     numericGenerator: mixNumeric([genMinInterval, genOrdering, genExpMedian]),
     lesson: {
       paragraphs: [
-        "The minimum of n iid uniforms is easy through its tail: P(min > x) = P(all > x) = ((b−x)/(b−a))ⁿ. So P(min ∈ [lo, hi]) = P(all > lo) − P(all > hi) — a difference of two nth powers. Don't confuse this with a single uniform's interval probability; the exponent n is the whole point. For strict orderings of n iid continuous variables, all n! orderings are equally likely (ties have probability 0), so any ONE specified order has probability 1/n! — not the ½-per-comparison 1/2^{n−1}.",
-        "The median is the central order statistic. For an exponential Exp(λ), the median solves 1 − e^{−λm} = ½, giving m = ln2/λ — strictly below the mean 1/λ because the exponential is right-skewed. The recurring traps are reporting the mean for the median, and forgetting the exponent n on the minimum's tail probabilities.",
+        "The minimum of n iid uniforms is easy through its tail: P(min > x) = P(all > x) = ((b−x)/(b−a))ⁿ. So P(min ∈ [lo, hi]) = P(all > lo) − P(all > hi), a difference of two nth powers. Don't confuse this with a single uniform's interval probability; the exponent n is the whole point. For strict orderings of n iid continuous variables, all n! orderings are equally likely (ties have probability 0), so any ONE specified order has probability 1/n!, not the ½-per-comparison 1/2^{n−1}.",
+        "The median is the central order statistic. For an exponential Exp(λ), the median solves 1 − e^{−λm} = ½, giving m = ln2/λ, strictly below the mean 1/λ because the exponential is right-skewed. The recurring traps are reporting the mean for the median, and forgetting the exponent n on the minimum's tail probabilities.",
       ],
       keyIdea: "P(min ∈ [lo,hi]) = ((b−lo)/(b−a))ⁿ − ((b−hi)/(b−a))ⁿ; one ordering = 1/n!; Exp median = ln2/λ.",
       whyInterviewers:
         "Order-statistic questions reward the 'all orderings equally likely' insight and the min's nth-power tail over brute-force integration.",
       deepDive: {
         whyItWorks:
-          "With independent draws, 'all draws exceed x' factorises into a product — an nth power for iid — and the minimum's tail is exactly that product. And when values are continuous (ties have probability 0), every one of the n! orderings is equally likely, and a median is simply where the CDF crosses ½.",
+          "With independent draws, 'all draws exceed x' factorises into a product, an nth power for iid, and the minimum's tail is exactly that product. And when values are continuous (ties have probability 0), every one of the n! orderings is equally likely, and a median is simply where the CDF crosses ½.",
         approach: [
           "For the minimum, work through its tail: P(min > x) = P(all draws > x) = (fraction of the range above x)ⁿ.",
           "Get an interval probability for the minimum as a difference of two such nth-power tails.",

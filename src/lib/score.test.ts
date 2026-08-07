@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { creditRoundScore, creditForRung, roundScore } from "./score";
+import {
+  creditRoundScore,
+  creditForRung,
+  meetsMasteryGate,
+  roundScore,
+} from "./score";
 
 /**
- * These lock in the CREDIT-WEIGHTED visible mastery %, which is DISTINCT from the
- * binary `roundScore` used for the advance/unlock gate. Using hints lowers the
- * displayed score (`creditRoundScore`) but never the gate (`roundScore` of items
- * ultimately correct), so hint use cannot bounce a learner below the pass bar.
+ * These lock in the CREDIT-WEIGHTED visible mastery % AND the fact that it — not
+ * the lenient binary `roundScore` — is what the mastery/unlock gate compares to
+ * the bar ({@link meetsMasteryGate}). So using hints lowers BOTH the displayed
+ * mastery and, when it drops below the bar, the mastered verdict: a hint-heavy
+ * round no longer earns a false "Mastered" stamp, while a clean few/no-hint round
+ * keeps near-full credit and still masters.
  */
 describe("creditForRung", () => {
   it("mirrors the calibrated rung schedule", () => {
@@ -54,27 +61,45 @@ describe("creditRoundScore", () => {
   });
 });
 
-describe("gate independence: hints never change advancement", () => {
-  // Mirrors ProgressContext.recordAttempt's gate decision without importing React.
-  const pass = (gate: number, threshold: number) => gate >= threshold;
+describe("meetsMasteryGate: the mastery bar reads the CREDIT-WEIGHTED score", () => {
+  const threshold = 0.8;
 
-  it("a round ultimately all-correct passes the gate while displaying < 100%", () => {
-    const threshold = 0.8;
-    // Every item was ULTIMATELY correct, but some needed hints.
-    const correctCount = 5;
+  it("SETTLEMENT BUG regression: 4/5 correct but ~22% credit reads NOT mastered", () => {
+    // The reported case: every correct answer arrived only after deep hints, so
+    // the visible mastery is ~22% even though 4 of 5 were eventually correct.
     const total = 5;
-    const gate = roundScore(correctCount, total); // binary → 1.0
-    const displayCredits = [
-      creditForRung(true, 0), // no hint
-      creditForRung(true, 2), // 2 hints
-      creditForRung(true, 1), // 1 hint
-      creditForRung(true, 0),
-      creditForRung(true, 3), // 3 hints
+    const credits = [
+      creditForRung(true, 1), // 0.65
+      creditForRung(true, 3), // 0.20
+      creditForRung(true, 3), // 0.20
+      creditForRung(true, 4), // 0.10
+      creditForRung(false, 5), // 0.00 — never got it
     ];
-    const display = creditRoundScore(displayCredits, total);
+    const binaryGate = roundScore(4, total); // 0.80 — the OLD (buggy) gate value
+    const display = creditRoundScore(credits, total); // ≈ 0.23
 
-    expect(gate).toBe(1);
-    expect(pass(gate, threshold)).toBe(true); // advancement unaffected by hints
-    expect(display).toBeLessThan(1); // visible mastery reflects hint use
+    expect(binaryGate).toBe(0.8);
+    expect(display).toBeLessThan(0.3);
+    // OLD behavior would have passed (binaryGate ≥ bar); the CORRECT gate fails.
+    expect(binaryGate >= threshold).toBe(true);
+    expect(meetsMasteryGate(display, threshold)).toBe(false);
+  });
+
+  it("a clean no-hint round still masters (few/no hints unaffected)", () => {
+    const display = creditRoundScore([1, 1, 1, 1, 1], 5); // 1.0
+    expect(meetsMasteryGate(display, threshold)).toBe(true);
+  });
+
+  it("a light-hint round that stays above the bar still masters", () => {
+    // Four first-try + one 1-hint correct = 0.93 ≥ 0.80.
+    const display = creditRoundScore([1, 1, 1, 1, creditForRung(true, 1)], 5);
+    expect(display).toBeCloseTo(0.93, 10);
+    expect(meetsMasteryGate(display, threshold)).toBe(true);
+  });
+
+  it("the gate is a pure ≥ comparison on the supplied (credit-weighted) score", () => {
+    expect(meetsMasteryGate(0.8, 0.8)).toBe(true);
+    expect(meetsMasteryGate(0.79, 0.8)).toBe(false);
+    expect(meetsMasteryGate(0.45, 0.8)).toBe(false);
   });
 });

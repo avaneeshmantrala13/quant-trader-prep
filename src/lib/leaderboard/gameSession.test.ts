@@ -107,3 +107,78 @@ describe("save / load / clear round-trip through a store", () => {
     expect(loadGameSession(memStore(), "empty")).toBeNull();
   });
 });
+
+describe("per-user scoping — no cross-account game leak", () => {
+  it("does NOT resume one user's game under a different user", () => {
+    const store = memStore();
+    saveGameSession(store, "cards-market-making", demo, 1_000, "active", "alice");
+
+    // Bob logs in on the same browser: he must NOT resume Alice's half-played
+    // game — this is the cross-account leak the scoping fixes.
+    expect(
+      loadGameSession(store, "cards-market-making", undefined, "bob"),
+    ).toBeNull();
+    expect(
+      hasActiveGameSession(store, "cards-market-making", undefined, "bob"),
+    ).toBe(false);
+    // ...and the logged-out / anonymous namespace is separate too.
+    expect(
+      loadGameSession(store, "cards-market-making", undefined, null),
+    ).toBeNull();
+
+    // Alice still resumes her OWN in-progress game on the same device.
+    expect(
+      loadGameSession<DemoSnapshot>(store, "cards-market-making", undefined, "alice")
+        ?.snapshot,
+    ).toEqual(demo);
+    expect(
+      hasActiveGameSession(store, "cards-market-making", undefined, "alice"),
+    ).toBe(true);
+  });
+
+  it("keeps each account's game independent (clear one, keep the other)", () => {
+    const store = memStore();
+    const bobSnap: DemoSnapshot = { ...demo, balance: 12345, roundIdx: 1 };
+    saveGameSession(store, "make-market", demo, 1, "active", "alice");
+    saveGameSession(store, "make-market", bobSnap, 1, "active", "bob");
+
+    // Same gameId, different users → distinct keys, distinct snapshots.
+    expect(
+      loadGameSession<DemoSnapshot>(store, "make-market", undefined, "alice")?.snapshot,
+    ).toEqual(demo);
+    expect(
+      loadGameSession<DemoSnapshot>(store, "make-market", undefined, "bob")?.snapshot,
+    ).toEqual(bobSnap);
+
+    // Clearing Bob's game leaves Alice's untouched.
+    clearGameSession(store, "make-market", "bob");
+    expect(loadGameSession(store, "make-market", undefined, "bob")).toBeNull();
+    expect(
+      loadGameSession<DemoSnapshot>(store, "make-market", undefined, "alice")?.snapshot,
+    ).toEqual(demo);
+  });
+
+  it("treats username casing as the same user (resume after reload still works)", () => {
+    const store = memStore();
+    saveGameSession(store, "dice-and-cards", demo, 1, "active", "Alice");
+    expect(
+      loadGameSession<DemoSnapshot>(store, "dice-and-cards", undefined, "alice")
+        ?.snapshot,
+    ).toEqual(demo);
+  });
+
+  it("derives the per-user key from the global base key", () => {
+    expect(sessionKey("make-market", "alice")).toBe(
+      "qtp.gamesession.make-market::alice",
+    );
+    expect(sessionKey("make-market", null)).toBe(
+      "qtp.gamesession.make-market::anon",
+    );
+    // Distinct users get distinct keys (that's what prevents the leak).
+    expect(sessionKey("make-market", "alice")).not.toBe(
+      sessionKey("make-market", "bob"),
+    );
+    // No user id falls back to the anonymous scope (matching the mock fix).
+    expect(sessionKey("make-market")).toBe(sessionKey("make-market", null));
+  });
+});

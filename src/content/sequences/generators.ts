@@ -31,8 +31,8 @@ import {
  * letters) so no option leaks the answer by shape.
  *
  * Two registries are exported:
- *   - {@link SEQUENCE_QUIZ_GENERATORS}    — MCQ "what comes next?"  (10 families)
- *   - {@link SEQUENCE_NUMERIC_GENERATORS} — free-entry "type the next number"
+ *   - {@link SEQUENCE_QUIZ_GENERATORS}   . MCQ "what comes next?"  (10 families)
+ *   - {@link SEQUENCE_NUMERIC_GENERATORS}, free-entry "type the next number"
  *
  * Each produced item carries a stable `family` id (matching its registry key)
  * so a future integrator / regenerator can re-run THAT family with a fresh seed.
@@ -172,7 +172,7 @@ function withFamily<T extends { family?: string }>(q: T, family: string): T {
 }
 
 /* ========================================================================== */
-/*  QUIZ generators — MCQ "what comes next?"                                    */
+/*  QUIZ generators. MCQ "what comes next?"                                    */
 /* ========================================================================== */
 
 const arithmeticNext: QuestionGenerator = (rng) =>
@@ -369,15 +369,25 @@ const oddOneOut: QuestionGenerator = (rng) =>
     "oddOneOut",
   );
 
-/** Analogy: a : b :: c : ? under a multiplicative rule. */
+/**
+ * Analogy: a₁ : b₁ :: a₂ : b₂ :: c : ? under a multiplicative rule.
+ *
+ * TWO example pairs (with distinct inputs a₁ ≠ a₂) pin the rule to "×ratio" as
+ * the UNIQUE affine map through both points, so the additive "copy the gap"
+ * reading is genuinely wrong rather than co-valid (audit S1). We also keep c
+ * distinct from both anchors so the additive distractor can never coincide with
+ * the ×ratio answer.
+ */
 const analogyNext: QuestionGenerator = (rng) =>
   withFamily(
     assembleDistinct(rng, (r) => {
       const ratio = r.pick([2, 3, 4] as const);
-      const a = r.int(2, 9);
-      let c = r.int(3, 9);
-      while (c === a) c = r.int(3, 9);
-      const sol = analogyMul(a, ratio, c);
+      const a1 = r.int(2, 6);
+      let a2 = r.int(2, 9);
+      while (a2 === a1) a2 = r.int(2, 9);
+      let c = r.int(2, 9);
+      while (c === a1 || c === a2) c = r.int(2, 9);
+      const sol = analogyMul(a1, a2, ratio, c);
       const rationale: Record<string, string> = {};
       const misc: Record<string, string> = {};
       const distractors: string[] = [];
@@ -387,11 +397,11 @@ const analogyNext: QuestionGenerator = (rng) =>
         misc[S(mr.value)] = mr.tag;
       }
       return {
-        id: `seq-analogy-${a}-${ratio}-${c}`,
-        prompt: `${a} is to ${sol.b} as ${c} is to ___ ?`,
+        id: `seq-analogy-${a1}-${a2}-${ratio}-${c}`,
+        prompt: `${a1} is to ${sol.b1} as ${a2} is to ${sol.b2} as ${c} is to ___ ?`,
         correct: S(sol.answer),
         distractors,
-        explanation: `The rule maps a value to ${ratio}× itself (${a}→${sol.b}). Applying it to ${c} gives ${sol.answer}.`,
+        explanation: `Both example pairs multiply by ${ratio} (${a1}→${sol.b1}, ${a2}→${sol.b2}), and that ×${ratio} rule is the only one that fits both. Applying it to ${c} gives ${sol.answer}.`,
         difficulty: "medium",
         concept: "Numeric analogy (multiplicative rule transfer)",
         distractorRationaleByValue: rationale,
@@ -403,7 +413,7 @@ const analogyNext: QuestionGenerator = (rng) =>
   );
 
 /* ========================================================================== */
-/*  NUMERIC generators — free-entry "type the next number"                      */
+/*  NUMERIC generators, free-entry "type the next number"                      */
 /* ========================================================================== */
 
 const arithmeticNumeric: NumericQuestionGenerator = (rng) => {

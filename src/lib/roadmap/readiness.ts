@@ -90,11 +90,31 @@ export interface RoadmapState {
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
+/**
+ * Interview readiness is deliberately CONSERVATIVE: merely starting or getting
+ * a low-confidence diagnostic unlock on a topic should barely move the overall
+ * number — it climbs meaningfully only as topics are actually mastered. We apply
+ * this convex discount to each skill's partial fraction when aggregating overall
+ * readiness. A confidently-mastered skill has fraction 1 (1^k = 1, full credit),
+ * so full mastery still reads 100%; a fresh post-diagnostic learner (lots of
+ * small partial signals, nothing mastered) reads only a few percent.
+ */
+const READINESS_DISCOUNT_EXP = 3.5;
+
 /** Fraction toward the mastery bar in [0,1] for one skill's evidence. */
 export function skillReadinessFraction(e: SkillEvidence): number {
   const completion = e.levelsTotal > 0 ? e.levelsMastered / e.levelsTotal : 0;
   const signal = Math.max(e.ciLow, completion);
   return clamp01(signal / MASTERY_BAR);
+}
+
+/**
+ * The conservative contribution of one skill's readiness to the OVERALL number.
+ * Full mastery (fraction 1) contributes fully; partial progress is heavily
+ * discounted so readiness stays honest until skills are truly locked in.
+ */
+export function skillReadinessContribution(e: SkillEvidence): number {
+  return Math.pow(skillReadinessFraction(e), READINESS_DISCOUNT_EXP);
 }
 
 /** True when a skill is mastered: confidently graded OR all its levels mastered. */
@@ -168,7 +188,7 @@ export function computeRoadmap(
   let accum = 0;
   for (const node of graph) {
     weightSum += node.weight;
-    accum += node.weight * skillReadinessFraction(evidence.get(node.topicKey)!);
+    accum += node.weight * skillReadinessContribution(evidence.get(node.topicKey)!);
   }
   const overallReadiness = weightSum > 0 ? Math.round(100 * (accum / weightSum)) : 0;
 

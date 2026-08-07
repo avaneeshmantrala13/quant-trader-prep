@@ -52,7 +52,7 @@ export function buildTwoStateStationaryInstance(
   const { errors, push } = numericErrors(answer, dp);
   push(
     other,
-    `${fracText(other)} is the long-run fraction of ${target === 0 ? th.s1 : th.s0} ${th.noun} — you solved for the wrong state (π for state j uses the INFLOW rate, so π_${th.s0} = b/(a+b)).`,
+    `${fracText(other)} is the long-run fraction of ${target === 0 ? th.s1 : th.s0} ${th.noun}, you solved for the wrong state (π for state j uses the INFLOW rate, so π_${th.s0} = b/(a+b)).`,
   );
   push(
     F(1, 2),

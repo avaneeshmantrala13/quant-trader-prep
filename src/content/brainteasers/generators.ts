@@ -17,7 +17,7 @@ import {
  * Parametric, EXACT-verified generators for the six ORIGINAL house brainteasers.
  * Each `(rng) => Flashcard` draws fresh parameters, computes the answer with the
  * exact solver in `./solvers.ts`, and templates the prompt + explanation (with
- * several phrasing variants) around the drawn numbers — so infinitely many fresh
+ * several phrasing variants) around the drawn numbers, so infinitely many fresh
  * instances can be produced deterministically per seed, with NO LLM / API.
  *
  * All math is rendered in PLAIN UNICODE (√, ², ·, ≥, ≤, →, …), never LaTeX, to
@@ -26,7 +26,7 @@ import {
  * verification test can independently re-derive each answer from the id alone.
  *
  * Design note (preserving each "aha"): the parameter spaces are deliberately
- * chosen to keep every puzzle's surprise intact — e.g. the Backup Dealer keeps
+ * chosen to keep every puzzle's surprise intact, e.g. the Backup Dealer keeps
  * the 50/50 fill (so the clean midpoint cancellation survives), and Walking the
  * Offer Down keeps ≥ 2 ask rounds (so "a second lower ask beats a single ask"
  * is always true). See the delivery report for the full list of judgment calls.
@@ -43,20 +43,20 @@ function usd(f: FractionType): string {
   return `$${fracText(f)}`;
 }
 
-/** Exact fraction text — for probabilities (e.g. 1/2, 2/3). */
+/** Exact fraction text, for probabilities (e.g. 1/2, 2/3). */
 function probText(f: FractionType): string {
   return fracText(f);
 }
 
 /* ========================================================================== */
-/*  FAMILY 1 — The Backup Dealer  (easy)                                        */
+/*  FAMILY 1. The Backup Dealer  (easy)                                        */
 /* ========================================================================== */
 
 const BACKUP_FRAMINGS = [
   (a: string, b: string) =>
-    `Your desk needs one share, so two rival brokers each flash a firm price at the same instant; every price is an independent draw uniform on the band ${a}–${b}. You route the order to whichever broker is cheaper, but that routing link is flaky — it works only half the time, and on the other half your order rests with the pricier broker instead. Averaged over everything, what do you end up paying for the share?`,
+    `Your desk needs one share, so two rival brokers each flash a firm price at the same instant; every price is an independent draw uniform on the band ${a}–${b}. You route the order to whichever broker is cheaper, but that routing link is flaky, it works only half the time, and on the other half your order rests with the pricier broker instead. Averaged over everything, what do you end up paying for the share?`,
   (a: string, b: string) =>
-    `Two market-makers each stream you an independent quote drawn uniformly from ${a} to ${b}. You always try to lift the lower of the two, but your line to the best price fails half the time — with probability 1/2 you get filled at the cheaper quote, and with probability 1/2 you're bumped to the dearer one. On average, what price do you pay for the one share?`,
+    `Two market-makers each stream you an independent quote drawn uniformly from ${a} to ${b}. You always try to lift the lower of the two, but your line to the best price fails half the time, with probability 1/2 you get filled at the cheaper quote, and with probability 1/2 you're bumped to the dearer one. On average, what price do you pay for the one share?`,
   (a: string, b: string) =>
     `You request a price from two independent dealers; each quote is Uniform[${a}, ${b}]. You aim for the minimum of the two, but the better dealer answers only 50% of the time (otherwise you transact at the worse quote). What is your expected fill price?`,
 ];
@@ -75,11 +75,11 @@ export function genBackupDealer(rng: Rng): Flashcard {
   const prompt = rng.pick(BACKUP_FRAMINGS)(aT, bT);
   const mid = usd(price);
   const answer =
-    `${mid} — exactly the midpoint (${aT} + ${bT})/2, the same as if you had ignored both quotes and traded with a single dealer at random.`;
+    `${mid}, exactly the midpoint (${aT} + ${bT})/2, the same as if you had ignored both quotes and traded with a single dealer at random.`;
   const explanation =
     `Call the two quotes X and Y, each Uniform[${aT}, ${bT}], so each on its own averages the midpoint ${mid}. Let m = min(X, Y) and M = max(X, Y). With probability 1/2 you pay m and with probability 1/2 you pay M, so your expected cost is ½·E[m] + ½·E[M] = ½·(E[m] + E[M]).\n\n` +
     `Key identity: for ANY two numbers, m + M = X + Y always. Taking expectations, E[m] + E[M] = E[X] + E[Y] = 2·${mid} = ${usd(F(a).add(F(b)))}. So the expected cost is ½·${usd(F(a).add(F(b)))} = ${mid}.\n\n` +
-    `The 'aha': the 50/50 backup EXACTLY cancels the advantage of shopping for the minimum — averaging the min and the max with equal weight is the same as averaging the two original quotes. (For reference, E[min] = ${usd(F(a).add(F(b).sub(F(a)).div(F(3))))} and E[max] = ${usd(F(a).add(F(b).sub(F(a)).mul(F(2)).div(F(3))))}, and indeed their average is ${mid}.) In general, if you got the cheaper quote with probability p, your expected cost would be a + (b−a)·(2 − p)/3, which only beats the midpoint when p > 1/2.`;
+    `The 'aha': the 50/50 backup EXACTLY cancels the advantage of shopping for the minimum, averaging the min and the max with equal weight is the same as averaging the two original quotes. (For reference, E[min] = ${usd(F(a).add(F(b).sub(F(a)).div(F(3))))} and E[max] = ${usd(F(a).add(F(b).sub(F(a)).mul(F(2)).div(F(3))))}, and indeed their average is ${mid}.) In general, if you got the cheaper quote with probability p, your expected cost would be a + (b−a)·(2 − p)/3, which only beats the midpoint when p > 1/2.`;
 
   return {
     id: `bt-backup-${a}-${b}`,
@@ -96,16 +96,16 @@ export function genBackupDealer(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY 2 — The Adjacent Cross  (medium)                                     */
+/*  FAMILY 2. The Adjacent Cross  (medium)                                     */
 /* ========================================================================== */
 
 const CROSS_FRAMINGS = [
   (n: number, m: number, tot: number) =>
-    `You drop ${n} buy tickets and ${m} sell tickets — ${tot} altogether — into a hopper, shuffle uniformly, and deal them out into one line. Wherever a buy ends up sitting directly ahead of a sell, mark it as a 'cross'. How many crosses should you expect the line to contain on average?`,
+    `You drop ${n} buy tickets and ${m} sell tickets, ${tot} altogether, into a hopper, shuffle uniformly, and deal them out into one line. Wherever a buy ends up sitting directly ahead of a sell, mark it as a 'cross'. How many crosses should you expect the line to contain on average?`,
   (n: number, m: number, tot: number) =>
     `${n} buy tickets and ${m} sell tickets (${tot} total) are shuffled into a uniformly random line. A 'cross' is any adjacent pair that reads buy-then-sell. What is the expected number of such crosses across the row?`,
   (n: number, m: number, tot: number) =>
-    `On the tape, ${tot} orders — ${n} buys and ${m} sells — appear in a uniformly random sequence. Count each spot where a buy is immediately followed by a sell. What is the expected count of these buy→sell adjacencies?`,
+    `On the tape, ${tot} orders, ${n} buys and ${m} sells, appear in a uniformly random sequence. Count each spot where a buy is immediately followed by a sell. What is the expected count of these buy→sell adjacencies?`,
 ];
 
 export function genAdjacentCross(rng: Rng): Flashcard {
@@ -140,14 +140,14 @@ export function genAdjacentCross(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY 3 — Walking the Offer Down  (medium)                                 */
+/*  FAMILY 3. Walking the Offer Down  (medium)                                 */
 /* ========================================================================== */
 
 const WALK_FRAMINGS = [
   (M: string, k: number) =>
-    `A lone buyer secretly values your one unit at V, an unobserved draw uniform on [0, ${M}]. You may post a descending ladder of at most ${k} firm asks — after each refusal you may drop to a strictly lower ask. The buyer is myopic and grabs the first ask that does not exceed V. Tuning the whole ${k}-ask ladder up front, (a) which prices do you post, and (b) what maximum expected revenue results — and how does that stack up against a single posted price?`,
+    `A lone buyer secretly values your one unit at V, an unobserved draw uniform on [0, ${M}]. You may post a descending ladder of at most ${k} firm asks, after each refusal you may drop to a strictly lower ask. The buyer is myopic and grabs the first ask that does not exceed V. Tuning the whole ${k}-ask ladder up front, (a) which prices do you post, and (b) what maximum expected revenue results, and how does that stack up against a single posted price?`,
   (M: string, k: number) =>
-    `A buyer's value V is Uniform[0, ${M}]. You get to "walk the offer down": quote a price, and if it's rejected you may lower it — up to ${k} asks in total, each strictly below the last. The buyer takes any ask ≤ V. Optimizing the whole schedule, what asks do you post and what expected revenue do they earn, versus the best single ask?`,
+    `A buyer's value V is Uniform[0, ${M}]. You get to "walk the offer down": quote a price, and if it's rejected you may lower it, up to ${k} asks in total, each strictly below the last. The buyer takes any ask ≤ V. Optimizing the whole schedule, what asks do you post and what expected revenue do they earn, versus the best single ask?`,
   (M: string, k: number) =>
     `Selling one unit to a myopic buyer with value V ~ Uniform[0, ${M}], you may post ${k} declining take-it-or-leave-it asks (each lower than the previous, made only after the prior is refused). What is the optimal ${k}-price schedule and its expected revenue, and how does it compare to a single posted price?`,
 ];
@@ -166,11 +166,11 @@ export function genWalkOfferDown(rng: Rng): Flashcard {
 
   const prompt = rng.pick(WALK_FRAMINGS)(MT, rounds);
   const answer =
-    `Quote ${priceList}. Maximum expected revenue = ${usd(revenue)}. A single-ask seller's best is ${usd(F(M).div(F(2)))} for expected revenue ${usd(singleAskRevenue)} — the extra asks lift revenue from ${usd(singleAskRevenue)} to ${usd(revenue)} (a ${pct.toFixed(0)}% improvement).`;
+    `Quote ${priceList}. Maximum expected revenue = ${usd(revenue)}. A single-ask seller's best is ${usd(F(M).div(F(2)))} for expected revenue ${usd(singleAskRevenue)}, the extra asks lift revenue from ${usd(singleAskRevenue)} to ${usd(revenue)} (a ${pct.toFixed(0)}% improvement).`;
   const explanation =
     `With a SINGLE ask p, the buyer accepts w.p. P(V ≥ p) = (${MT} − p)/${MT}, so expected revenue is p·(${MT} − p)/${MT}, peaking at p = ${MT}/2 = ${usd(F(M).div(F(2)))} for ${usd(singleAskRevenue)}.\n\n` +
     `With a declining schedule p₁ > p₂ > … the buyer accepts the i-th ask iff p_i ≤ V < p_{i−1} (they refused every higher earlier ask), contributing p_i·(p_{i−1} − p_i), with p₀ = ${MT}. Revenue R = Σ p_i·(p_{i−1} − p_i). The first-order conditions p_{i−1} + p_{i+1} = 2·p_i force an ARITHMETIC schedule with equal gaps of ${MT}/(${rounds}+1): the optimal asks are ${priceList}.\n\n` +
-    `Summing, R* = ${MT}·${rounds}/(2·(${rounds}+1)) = ${usd(revenue)}. The 'aha': a second, lower quote lets you price-discriminate over time — skim the high-value buyers first, then recover a sale from the medium-value buyers — which strictly beats any single price. Note the fallbacks are NOT the single-ask optimum ${MT}/2; the whole schedule shifts because each ask has already creamed off the top of the distribution.`;
+    `Summing, R* = ${MT}·${rounds}/(2·(${rounds}+1)) = ${usd(revenue)}. The 'aha': a second, lower quote lets you price-discriminate over time, skim the high-value buyers first, then recover a sale from the medium-value buyers, which strictly beats any single price. Note the fallbacks are NOT the single-ask optimum ${MT}/2; the whole schedule shifts because each ask has already creamed off the top of the distribution.`;
 
   return {
     id: `bt-walk-${M}-${rounds}`,
@@ -186,12 +186,12 @@ export function genWalkOfferDown(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY 4 — The Fading Buyer  (hard)                                         */
+/*  FAMILY 4. The Fading Buyer  (hard)                                         */
 /* ========================================================================== */
 
 const FADING_FRAMINGS = [
   (M: string, q: string) =>
-    `You must offload one block of stock. Bids land one at a time, each an independent draw uniform on [0, ${M}], and on each one you either take it on the spot or wave it off for good. The danger: after every wave-off, with probability ${q} the block is snapped up elsewhere and you walk away with 0 — otherwise a fresh bid appears. Under optimal play, (a) what acceptance rule should you use, and (b) what expected payoff does it earn?`,
+    `You must offload one block of stock. Bids land one at a time, each an independent draw uniform on [0, ${M}], and on each one you either take it on the spot or wave it off for good. The danger: after every wave-off, with probability ${q} the block is snapped up elsewhere and you walk away with 0, otherwise a fresh bid appears. Under optimal play, (a) what acceptance rule should you use, and (b) what expected payoff does it earn?`,
   (M: string, q: string) =>
     `Offers for your one block arrive sequentially, each Uniform[0, ${M}]; you accept or reject on the spot with no recall. But every rejection carries a probability ${q} that the opportunity vanishes entirely (payoff 0). What threshold should you accept above, and what is your expected sale price under optimal play?`,
   (M: string, q: string) =>
@@ -222,22 +222,22 @@ export function genFadingBuyer(rng: Rng): Flashcard {
     difficulty: "hard",
     concept: "Optimal stopping (threshold = continuation value)",
     source: "Original house brainteaser · parametric",
-    // Irrational threshold + EV and a two-part answer — not objectively gradable.
+    // Irrational threshold + EV and a two-part answer, not objectively gradable.
     gradable: false,
   };
 }
 
 /* ========================================================================== */
-/*  FAMILY 5 — The Round-Trip  (hard)                                           */
+/*  FAMILY 5. The Round-Trip  (hard)                                           */
 /* ========================================================================== */
 
 const ROUNDTRIP_FRAMINGS = [
   (M: string, d: number) =>
-    `Each of the next ${d} trading days closes at an independent price uniform on [0, ${M}], revealed only at that day's close (no re-trading past closes). You want a single round trip — one buy followed by a strictly later sell — deciding online with no lookahead. Hold past the final day and you're force-sold at that close; still flat after day ${d} and you make no trade. Under optimal play, what maximum expected profit can you lock in?`,
+    `Each of the next ${d} trading days closes at an independent price uniform on [0, ${M}], revealed only at that day's close (no re-trading past closes). You want a single round trip, one buy followed by a strictly later sell, deciding online with no lookahead. Hold past the final day and you're force-sold at that close; still flat after day ${d} and you make no trade. Under optimal play, what maximum expected profit can you lock in?`,
   (M: string, d: number) =>
     `Over ${d} days, each day's close is i.i.d. Uniform[0, ${M}]. You may buy once and sell once, buying strictly before selling, choosing online as prices reveal. If you still hold on day ${d} you sell at that close; if you're flat on day ${d} you make no trade. What is the maximum expected profit under optimal play?`,
   (M: string, d: number) =>
-    `${d} daily closes arrive one at a time, each Uniform[0, ${M}]. Do one round trip — enter on some day, exit on a strictly later day — deciding as you go, with a forced sale on the final day if you're long. What expected profit does the optimal strategy achieve?`,
+    `${d} daily closes arrive one at a time, each Uniform[0, ${M}]. Do one round trip, enter on some day, exit on a strictly later day, deciding as you go, with a forced sale on the final day if you're long. What expected profit does the optimal strategy achieve?`,
 ];
 
 export function genRoundTrip(rng: Rng): Flashcard {
@@ -258,7 +258,7 @@ export function genRoundTrip(rng: Rng): Flashcard {
     `Solve by BACKWARD INDUCTION. A fresh uniform price averages ${half}.\n\n` +
     `Selling side: define S_t = expected sale value of holding entering day t. On day ${days} you must sell: S_${days} = ${half}. Earlier, holding, you compare selling now (x) with holding for S_{t+1}: sell iff x ≥ S_{t+1}, giving S_t = E[max(x, S_{t+1})] = (${MT}² + S_{t+1}²)/(2·${MT}).\n\n` +
     `Buying side: define F_t = value of being flat entering day t. On day ${days}, F_${days} = 0 (no later day to sell). Earlier, flat, buying yields expected profit S_{t+1} − x, so buy iff x ≤ S_{t+1} − F_{t+1}, giving F_t = E[max(S_{t+1} − x, F_{t+1})].\n\n` +
-    `The answer is F_1 = ${usd(profit)}. The 'aha': this is a TWO-SIDED optimal-stopping problem — you optimize BOTH entry and exit. The thresholds sit around ${half}, yet the day-1 entry cutoff is driven by the sell-side continuation value (not by ${half} directly), because a share you buy early can still be sold on the better of the remaining days.`;
+    `The answer is F_1 = ${usd(profit)}. The 'aha': this is a TWO-SIDED optimal-stopping problem, you optimize BOTH entry and exit. The thresholds sit around ${half}, yet the day-1 entry cutoff is driven by the sell-side continuation value (not by ${half} directly), because a share you buy early can still be sold on the better of the remaining days.`;
 
   return {
     id: `bt-roundtrip-${M}-${days}`,
@@ -275,7 +275,7 @@ export function genRoundTrip(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
-/*  FAMILY 6 — The Inventory Cap  (hard)                                        */
+/*  FAMILY 6. The Inventory Cap  (hard)                                        */
 /* ========================================================================== */
 
 const INVENTORY_FRAMINGS = [
@@ -314,7 +314,7 @@ export function genInventoryCap(rng: Rng): Flashcard {
     `Model the inventory as a MARKOV CHAIN on states {−${cap}, …, +${cap}}. From an interior state the chain moves +1 w.p. ${upT} and −1 w.p. ${downT}. At the top state +${cap}, an up-move is rejected so the chain HOLDS (self-loop) with probability ${upT}; the bottom −${cap} mirrors this with the down-move.\n\n` +
     `Solve the balance equations πP = π with Σπ = 1 (an exact linear solve). The stationary distribution is ${stationaryText}.${
       isSymmetric
-        ? ` For the symmetric book all ${2 * cap + 1} states are EQUALLY likely — the reflecting cap makes the boundary states 'sticky' (a rejection leaves inventory unchanged).`
+        ? ` For the symmetric book all ${2 * cap + 1} states are EQUALLY likely, the reflecting cap makes the boundary states 'sticky' (a rejection leaves inventory unchanged).`
         : ` The ratio π(i+1)/π(i) = ${upT}/${downT} sets the geometric tilt toward the more-likely direction.`
     }\n\n` +
     `A rejection happens only at +${cap} when a customer wants to push to +${cap + 1} (prob ${upT}), or at −${cap} pushing to −${cap + 1} (prob ${downT}). So the long-run rejection rate is π(+${cap})·${upT} + π(−${cap})·${downT} = ${fracText(rejectionRate)}. The 'aha': reflecting boundaries linger, and that stickiness is exactly what produces the rejection rate.`;

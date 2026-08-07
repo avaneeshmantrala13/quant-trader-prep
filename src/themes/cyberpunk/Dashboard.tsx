@@ -6,11 +6,14 @@ import type {
   DashboardViewProps,
 } from "../types";
 import type { MasteryState } from "@/lib/mastery/verdict";
-import type { ReliabilityDiagramData } from "@/lib/calibration/reliability";
+import {
+  ELICITED_ACTIVITIES_SENTENCE,
+  elicitedPairsNeeded,
+  type ReliabilityDiagramData,
+} from "@/lib/calibration/reliability";
 import { MASTERY_BAR, P_TARGET } from "@/lib/mastery/config";
 import { ChevronLeftIcon } from "@/components/icons";
 import { CourseReadinessCards } from "@/components/dashboard/CourseReadinessCards";
-import { ModeToggle } from "@/components/mode/ModeToggle";
 import { CyberpunkAnimations, neonFilter } from "./neon";
 
 /**
@@ -477,12 +480,14 @@ function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
       >
         <div className="label text-accent">// Calibrating · Acquiring Signal</div>
         <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-secondary">
-          Calibration needs a bit more data — answer ~{data.minPairs}{" "}
-          confidence-rated questions and we'll show how well your confidence
-          matches your accuracy.
+          Signal comes only from surfaces where you STATE a confidence — just two
+          feed it: {ELICITED_ACTIVITIES_SENTENCE}. Normal lessons and quizzes
+          don't register here.
         </p>
         <p className="num mt-3 text-sm text-accent">
-          You're at {data.count}/{data.minPairs}.
+          You're at {data.count}/{data.minPairs} —{" "}
+          {elicitedPairsNeeded(data.count, data.minPairs)} more of those to
+          acquire lock.
         </p>
         <div className="mx-auto mt-2 h-2 w-full max-w-xs overflow-hidden rounded-sm border border-subtle bg-surface-muted">
           <div
@@ -612,6 +617,9 @@ function ReliabilityScope({ data }: { data: ReliabilityDiagramData }) {
             of the time <span className="text-muted">(n={data.headline.count})</span>.
           </p>
         )}
+        {data.sourceNote && (
+          <p className="text-xs leading-relaxed text-muted">{data.sourceNote}</p>
+        )}
         <div className="flex flex-wrap gap-1.5">
           <span
             className={`chip ${TONE_TEXT[leanTone]}`}
@@ -695,12 +703,11 @@ export function CyberpunkDashboard({
               Mastery Terminal
             </div>
           </div>
-          <ModeToggle size="sm" />
           <Link
             to={diagnosticHref}
             className="btn-secondary !min-h-0 shrink-0 !px-3 !py-1.5 text-[11px]"
           >
-            {diagnosticDone ? "Recalibrate ↻" : "Calibrate ▸"}
+            {diagnosticDone ? "Retake warm-up ↻" : "Run warm-up ▸"}
           </Link>
         </div>
       </header>
@@ -817,7 +824,7 @@ export function CyberpunkDashboard({
             to={diagnosticHref}
             className="label text-accent-2 underline underline-offset-4 hover:text-accent"
           >
-            {diagnosticDone ? "▸ Recalibrate the warm-up" : "▸ Run the calibration warm-up"}
+            {diagnosticDone ? "▸ Retake the warm-up" : "▸ Run the calibration warm-up"}
           </Link>
           <Link
             to={contentsHref}

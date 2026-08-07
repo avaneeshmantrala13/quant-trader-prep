@@ -48,3 +48,48 @@ export const TIER_SEED: Record<Difficulty, number> = {
  */
 export const PFAE_ENABLED = false; // asymmetric θ update (Pelánek PFAE)
 export const SPILLOVER = false; // multivariate skill spillover
+
+/**
+ * T12 ADAPTIVE ENGINE tuning (additive; PARALLEL signals that never gate content,
+ * scoring, the confident-mastery (ciLow ≥ 0.8) bar, or unlock). These govern how
+ * the recovered IRT/Glicko/Thompson engine (irt.ts / glicko.ts / thompson.ts) is
+ * folded in alongside the plain Elo+Beta path and how it informs probe-tier /
+ * next-item selection. The plain fold is unchanged when these are unused.
+ */
+
+/**
+ * Number of graded responses that must accrue in a topic's rolling IRT buffer
+ * before a 2PL MAP ability (`TopicMastery.irtAbility`) is fit. Below this the
+ * estimate is too noisy to trust, so it is left absent and selection falls back
+ * to the incremental Elo `theta`.
+ */
+export const IRT_MIN_RESPONSES = 5;
+
+/**
+ * Cap on the per-topic rolling IRT response buffer (`TopicMastery.irtResponses`).
+ * Keeps the persisted blob cheap while retaining enough recent evidence to
+ * re-fit ability; the oldest response is dropped when the cap is exceeded.
+ */
+export const IRT_BUFFER_CAP = 40;
+
+/**
+ * Max standard error at which the fitted `irtAbility` is trusted ENOUGH to inform
+ * probe-tier selection in place of the Elo `theta`. Larger SE ⇒ fall back to Elo.
+ */
+export const IRT_TRUST_SE = 0.9;
+
+/**
+ * Max Glicko rating deviation (RD) at which a per-(topic,tier) Glicko DIFFICULTY
+ * rating is trusted enough to inform probe-tier selection (converted to a logit
+ * difficulty) in place of the frozen Elo tier seed. Above this the estimate is
+ * too uncertain, so selection falls back to the Elo `TierDifficultyMap` seed.
+ */
+export const GLICKO_TRUST_RD = 150;
+
+/**
+ * Thompson-sampling pseudo-count strength for probe-tier EXPLORATION. Each
+ * candidate tier becomes a Beta arm centred on its predicted success p:
+ * Beta(1 + K·p, 1 + K·(1−p)). Larger K ⇒ tighter posteriors ⇒ less exploration
+ * (more deterministic argmin); smaller K ⇒ more exploration around the ZPD band.
+ */
+export const PROBE_EXPLORE_K = 16;

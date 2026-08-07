@@ -1,14 +1,22 @@
-import type { ItemAttempt, TopicMastery } from "@/types/mastery";
+import type { GlickoRating, ItemAttempt, TopicMastery } from "@/types/mastery";
 import {
   BETA_DECAY_RHO,
   BETA_PRIOR_ALPHA,
   BETA_PRIOR_BETA,
+  IRT_BUFFER_CAP,
+  IRT_MIN_RESPONSES,
   MASTERY_MODE,
   MISCONCEPTION_DECAY,
 } from "./config";
 import { seedTierDifficulty, updateElo } from "./elo";
 import { betaUpdate } from "./beta";
 import { bumpMisconceptions, decayMisconceptions } from "./misconceptions";
+import {
+  glickoRatingToLogit,
+  logitToGlickoRating,
+  updateItemDifficulty,
+} from "./glicko";
+import { estimateAbility2PL, type IrtResponse } from "./irt";
 
 /** Clamp a score into the valid [0,1] range (defensive against bad callers). */
 function clamp01(x: number): number {
@@ -24,13 +32,24 @@ function clamp01(x: number): number {
  *
  * `dExposures` = how many times this (topic,tier) has been seen before, supplied
  * by the caller (it lives in the TierDifficultyMap companion, see topicKey.ts).
+ *
+ * T12 ADAPTIVE ENGINE (additive, PARALLEL): when the caller passes the prior
+ * per-(topic,tier) Glicko difficulty rating (`glickoPrev`), this ALSO folds the
+ * outcome into a fresh Glicko difficulty rating (`glicko.ts`) and appends the
+ * response to the topic's rolling IRT buffer, re-fitting the 2PL MAP ability
+ * (`irt.ts`) once {@link IRT_MIN_RESPONSES} accrue. These extra signals ride
+ * alongside — they NEVER change θ/α/β, the misconception fold, the tier Elo `d`,
+ * or any gate; a caller that ignores `glicko`/`irtAbility` behaves exactly as
+ * before. The returned Glicko rating is what `recordItemAttempt` persists into
+ * `UserProgress.glickoDifficulty`.
  */
 export function applyItemAttempt(
   prev: TopicMastery | undefined,
   tierD: number | undefined,
   a: ItemAttempt,
   dExposures: number,
-): { mastery: TopicMastery; tierD: number } {
+  glickoPrev?: GlickoRating,
+): { mastery: TopicMastery; tierD: number; glicko: GlickoRating } {
   // Actual score S ∈ [0,1]. When the caller supplies fractional `credit` (the
   // free-response hint-attempt flow), use it directly; otherwise fall back to the
   // binary 0/1 outcome so every existing binary caller is unchanged (PHASE_1).
@@ -45,8 +64,11 @@ export function applyItemAttempt(
     misconceptions: {},
   };
 
-  // Tier difficulty: seed on first exposure, else use the stored value.
+  // Tier difficulty: seed on first exposure, else use the stored value. The
+  // pre-update value is the difficulty the item was actually SERVED at — the
+  // adaptive engine uses it (or the Glicko view of it) as the IRT item `b`.
   let d = tierD ?? seedTierDifficulty(a.tier);
+  const dServe = d;
   let theta = base.theta;
 
   // BACKUP mode "beta" skips the Elo block entirely (PHASE_1 §2/§5); θ and d
@@ -76,6 +98,40 @@ export function applyItemAttempt(
       ? decayMisconceptions(base.misconceptions, MISCONCEPTION_DECAY)
       : bumpMisconceptions(base.misconceptions, a.misconceptions ?? []);
 
+  // --- T12 adaptive engine (additive, parallel) ----------------------------
+  // Glicko DIFFICULTY: fold this outcome into the (topic,tier) difficulty rating,
+  // rating the item against the learner's PRIOR ability estimate (base.theta) so
+  // the just-observed outcome is not double-counted into the "opponent" strength.
+  const glicko: GlickoRating = updateItemDifficulty(glickoPrev, {
+    correct: a.correct,
+    score: a.credit,
+    learnerRating: logitToGlickoRating(base.theta),
+    at: a.at,
+  });
+
+  // IRT ability: append this response (as a 2PL item) to the rolling buffer and
+  // re-fit the MAP ability once enough evidence has accrued. The item difficulty
+  // `b` is the Glicko-derived logit difficulty when a prior Glicko rating exists
+  // (the richer view), else the Elo tier difficulty the item was served at.
+  const bServe = glickoPrev
+    ? glickoRatingToLogit(glickoPrev.rating)
+    : dServe;
+  const irtResponses = [...(base.irtResponses ?? []), { b: bServe, s }].slice(
+    -IRT_BUFFER_CAP,
+  );
+  let irtAbility = base.irtAbility;
+  let irtAbilitySe = base.irtAbilitySe;
+  if (irtResponses.length >= IRT_MIN_RESPONSES) {
+    const responses: IrtResponse[] = irtResponses.map((r) => ({
+      a: 1,
+      b: r.b,
+      score: r.s,
+    }));
+    const est = estimateAbility2PL(responses, { priorSd: 3 });
+    irtAbility = est.theta;
+    irtAbilitySe = est.se;
+  }
+
   const mastery: TopicMastery = {
     ...base,
     theta,
@@ -84,9 +140,11 @@ export function applyItemAttempt(
     beta,
     lastSeen: a.at,
     misconceptions,
+    irtResponses,
+    ...(irtAbility !== undefined ? { irtAbility, irtAbilitySe } : {}),
   };
 
-  return { mastery, tierD: d };
+  return { mastery, tierD: d, glicko };
 }
 
 /**

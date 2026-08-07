@@ -120,7 +120,7 @@ export function Leaderboard({
             ))}
             {entries !== null && entries.length === 0 && (
               <li className="text-xs text-muted">
-                No entries yet this week — be the first.
+                No entries yet this week. Be the first.
               </li>
             )}
           </ol>

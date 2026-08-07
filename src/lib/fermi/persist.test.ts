@@ -3,6 +3,7 @@ import { gradeFermi, gradeInterval } from "./grader";
 import {
   FERMI_STORAGE_KEY,
   clearFermiRun,
+  fermiRunKey,
   loadFermiRun,
   saveFermiRun,
   type FermiRunState,
@@ -35,36 +36,53 @@ describe("fermi/persist", () => {
     const store = memStore();
     const run = sampleRun();
 
-    saveFermiRun(run, store);
-    const loaded = loadFermiRun(store);
+    saveFermiRun(run, "alice", store);
+    const loaded = loadFermiRun("alice", store);
 
     expect(loaded).toEqual(run);
     // Earned verdicts survive so a resumed run shows the same reveals.
     expect(loaded?.grades[0]).toEqual(run.grades[0]);
     expect(loaded?.intervalGrades[1]).toEqual(run.intervalGrades[1]);
-    expect(store.map.has(FERMI_STORAGE_KEY)).toBe(true);
+    expect(store.map.has(fermiRunKey("alice"))).toBe(true);
   });
 
   it("returns undefined when nothing is persisted", () => {
-    expect(loadFermiRun(memStore())).toBeUndefined();
+    expect(loadFermiRun("alice", memStore())).toBeUndefined();
   });
 
   it("clear removes the persisted run so re-entry starts fresh", () => {
     const store = memStore();
-    saveFermiRun(sampleRun(), store);
-    clearFermiRun(store);
-    expect(loadFermiRun(store)).toBeUndefined();
+    saveFermiRun(sampleRun(), "alice", store);
+    clearFermiRun("alice", store);
+    expect(loadFermiRun("alice", store)).toBeUndefined();
   });
 
   it("treats a corrupt / malformed blob as no-resume", () => {
     const store = memStore();
-    store.setItem(FERMI_STORAGE_KEY, "%%%");
-    expect(loadFermiRun(store)).toBeUndefined();
+    store.setItem(fermiRunKey("alice"), "%%%");
+    expect(loadFermiRun("alice", store)).toBeUndefined();
 
     store.setItem(
-      FERMI_STORAGE_KEY,
+      fermiRunKey("alice"),
       JSON.stringify({ version: 1, mode: "bogus", index: 0 }),
     );
-    expect(loadFermiRun(store)).toBeUndefined();
+    expect(loadFermiRun("alice", store)).toBeUndefined();
+  });
+
+  it("does NOT leak a run across different users (per-user scoping)", () => {
+    const store = memStore();
+    const aliceRun = sampleRun();
+    saveFermiRun(aliceRun, "alice", store);
+
+    // A different account on the same browser starts fresh.
+    expect(loadFermiRun("bob", store)).toBeUndefined();
+    expect(loadFermiRun(null, store)).toBeUndefined();
+    // Alice still resumes her own run.
+    expect(loadFermiRun("alice", store)).toEqual(aliceRun);
+  });
+
+  it("derives per-user keys from the base key", () => {
+    expect(fermiRunKey("alice")).toBe(`${FERMI_STORAGE_KEY}::alice`);
+    expect(fermiRunKey(null)).toBe(`${FERMI_STORAGE_KEY}::anon`);
   });
 });

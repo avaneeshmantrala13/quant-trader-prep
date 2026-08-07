@@ -5,6 +5,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { celebrate } from "@/lib/celebrate";
 import { isLevelUnlockedBySection } from "@/lib/locking";
 import { topicKeyForLevel } from "@/lib/mastery/topicKey";
+import { isTopicUnlocked } from "@/lib/mastery/unlock";
 import { parseFreeResponse } from "@/lib/numeric";
 import { isFlashcardLevelComplete } from "@/lib/progressOps";
 import {
@@ -66,6 +67,7 @@ export function FlashcardLevel({ track, level }: { track: Track; level: Level })
     markUnderstood,
     completeFlashcardLevel,
     recordItemAttempt,
+    getTopicMastery,
   } = useProgress();
   const topicKey = useMemo(
     () => topicKeyForLevel(track.id, level),
@@ -87,11 +89,14 @@ export function FlashcardLevel({ track, level }: { track: Track; level: Level })
   }, [level.id]);
 
   const levelIndex = track.levels.findIndex((l) => l.id === level.id);
-  const unlocked = isLevelUnlockedBySection(
-    track.levels,
-    levelIndex,
-    (id) => !!getLevelProgress(id)?.mastered,
-  );
+  // The deep-link guard also honors a diagnostic-seeded low-confidence unlock of
+  // this level's topic (Part B) so an unlocked topic is actually playable.
+  const unlocked =
+    isLevelUnlockedBySection(
+      track.levels,
+      levelIndex,
+      (id) => !!getLevelProgress(id)?.mastered,
+    ) || isTopicUnlocked(getTopicMastery(topicKey));
 
   const [phase, setPhase] = useState<FlashPhase>("lesson");
   const [understood, setUnderstood] = useState<Set<string>>(new Set());
@@ -399,7 +404,7 @@ function FlashCard({
         </p>
         {bonus && (
           <p className="mt-2 text-xs text-secondary">
-            A brand-new, exact-verified instance of this family — not counted
+            A brand-new, exact-verified instance of this family, not counted
             toward mastery.
           </p>
         )}
@@ -414,7 +419,7 @@ function FlashCard({
         gradable ? (
           <div className="space-y-3">
             <p className="text-center text-sm text-secondary">
-              Work it out, then COMMIT your numeric answer — the reveal unlocks
+              Work it out, then COMMIT your numeric answer; the reveal unlocks
               once you do. Your commit is graded objectively.
             </p>
             <div className="panel p-5">
@@ -464,7 +469,7 @@ function FlashCard({
         ) : (
           <div className="space-y-3">
             <p className="text-center text-sm text-secondary">
-              Reason it through on your own first — then reveal and be honest
+              Reason it through on your own first, then reveal and be honest
               with yourself.
             </p>
             <button onClick={onReveal} className="btn-primary w-full">
@@ -554,7 +559,7 @@ function FlashCard({
             onClick={onUnderstandTopic}
             className="btn-ghost w-full text-sm"
           >
-            I understand this topic — advance ▸
+            I understand this topic: advance ▸
           </button>
         </div>
       )}
@@ -603,7 +608,7 @@ function FlashDone({
           {" "}
           {isNewMastery
             ? "This node is now filled and the next one is unlocked on the route."
-            : "This node was already filled — nice review."}
+            : "This node was already filled. Nice review."}
         </p>
 
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">

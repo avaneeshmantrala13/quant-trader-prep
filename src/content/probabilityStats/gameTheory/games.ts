@@ -11,7 +11,7 @@ import Fraction from "fraction.js";
  *
  * Every scalar ground-truth (mixed-strategy VALUE of a game, a Volunteer's
  * Dilemma probability, a payoff at a subgame-perfect equilibrium) is computed
- * with exact rationals via `fraction.js` — never floating point — so the
+ * with exact rationals via `fraction.js`, never floating point, so the
  * generator's answer key and the verifier agree bit-for-bit and every
  * distractor is a re-derived, named misconception rather than an arbitrary
  * offset.
@@ -206,7 +206,7 @@ export interface DominanceSolution extends MixedSolution {
   reduced: ZeroSum2x2;
   /**
    * Payoff the deleted (dominated) row would have earned against the opponent's
-   * optimal mix — strictly below the value, confirming deletion was safe.
+   * optimal mix, strictly below the value, confirming deletion was safe.
    */
   deletedRowValue: Fraction;
 }

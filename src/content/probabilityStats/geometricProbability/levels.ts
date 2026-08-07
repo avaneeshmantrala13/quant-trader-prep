@@ -8,14 +8,14 @@ import {
 } from "./generators";
 
 /**
- * Probability & Statistics — **Geometric Probability**: a focused topic
+ * Probability & Statistics, **Geometric Probability**: a focused topic
  * (re-homed from the former "General" grab-bag) on measure-ratio reasoning,
  * where a probability is the ratio of a favourable AREA or LENGTH to the total.
  * Two Candy-Crush levels ramping Easy → Hard:
  *
- *   • `quiz`    — geo-1 names the signature r-vs-r² area trap (distance is not
+ *   • `quiz`   , geo-1 names the signature r-vs-r² area trap (distance is not
  *                 uniform; probability accumulates like the area x²).
- *   • `numeric` — geo-2 sets up the favourable region explicitly (a disk fitting
+ *   • `numeric`, geo-2 sets up the favourable region explicitly (a disk fitting
  *                 in a tile, two arrival windows overlapping, a glance catching a
  *                 cyclic event).
  *
@@ -45,10 +45,10 @@ export const geometricProbabilityLevels: Level[] = [
       ],
       keyIdea: "Disk probability ∝ r² (area), never r (distance); keep numerator and denominator the same dimension.",
       whyInterviewers:
-        "This is a 'do you simplify or over-complicate' check — the tempting linear answer is exactly the wrong one.",
+        "This is a 'do you simplify or over-complicate' check, the tempting linear answer is exactly the wrong one.",
       deepDive: {
         whyItWorks:
-          "For a point spread uniformly over a region, probability is proportional to AREA, and area grows with the square of a linear dimension — so the chance of landing within radius r scales like r², not r.",
+          "For a point spread uniformly over a region, probability is proportional to AREA, and area grows with the square of a linear dimension, so the chance of landing within radius r scales like r², not r.",
         approach: [
           "Recognize the outcome space is a two-dimensional region with uniform density.",
           "Express the favourable event as a sub-region of that space.",
@@ -57,7 +57,7 @@ export const geometricProbabilityLevels: Level[] = [
         ],
         pitfalls: [
           "Treating radial distance as uniform and using a linear ratio instead of a squared one.",
-          "Answering the complement — the opposite event.",
+          "Answering the complement, the opposite event.",
           "Squaring only the numerator, leaving numerator and denominator in different dimensions.",
         ],
       },
@@ -77,15 +77,15 @@ export const geometricProbabilityLevels: Level[] = [
     numericGenerator: mixNumeric([genTileFit, genMeeting, genGlance]),
     lesson: {
       paragraphs: [
-        "Geometric probability = favourable measure ÷ total measure. A disk of radius r lands fully inside a tile iff its centre stays ≥ r from all four edges, shrinking the favourable region to a (side − 2r)² square. Two people arriving uniformly in [0,T] and each waiting w minutes MEET iff |x − y| ≤ w — a diagonal band in the T×T square whose area is T² minus two corner triangles.",
+        "Geometric probability = favourable measure ÷ total measure. A disk of radius r lands fully inside a tile iff its centre stays ≥ r from all four edges, shrinking the favourable region to a (side − 2r)² square. Two people arriving uniformly in [0,T] and each waiting w minutes MEET iff |x − y| ≤ w, a diagonal band in the T×T square whose area is T² minus two corner triangles.",
         "On a cycle, a glance of length g starting uniformly catches a change-instant iff it starts within g before it; if the pre-windows don't overlap, the favourable length is (number of changes)·g out of the period. In every case the recipe is the same: draw the sample space, shade the favourable set, take the ratio. Don't collapse a 2-D area to a 1-D length.",
       ],
-      keyIdea: "Draw the sample space, shade the favourable set, divide — areas for 2-D, lengths for 1-D.",
+      keyIdea: "Draw the sample space, shade the favourable set, divide, areas for 2-D, lengths for 1-D.",
       whyInterviewers:
         "Meeting-in-a-square and chip-on-a-tile problems test whether you can set up the right geometric region.",
       deepDive: {
         whyItWorks:
-          "When outcomes are uniform over a geometric region, probability is the favourable measure divided by the total measure — an area ratio in two dimensions, a length ratio in one.",
+          "When outcomes are uniform over a geometric region, probability is the favourable measure divided by the total measure, an area ratio in two dimensions, a length ratio in one.",
         approach: [
           "Set up the sample space as a geometric region (a square for two uniform times, an interval for one).",
           "Translate the favourable condition into an inequality and shade the corresponding sub-region.",

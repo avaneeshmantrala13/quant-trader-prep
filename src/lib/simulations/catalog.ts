@@ -65,7 +65,7 @@ export const SIM_GROUPS: SimGroupMeta[] = [
     id: "joint-distributions",
     title: "Joint Distributions",
     blurb:
-      "Two variables at once. See a joint density surface over the plane and take its double integral over a region — the volume under the surface, i.e. the probability that BOTH quantities land in that range together.",
+      "Two variables at once. See a joint density surface over the plane and take its double integral over a region: the volume under the surface, i.e. the probability that BOTH quantities land in that range together.",
   },
   {
     id: "ev-processes",
@@ -77,19 +77,19 @@ export const SIM_GROUPS: SimGroupMeta[] = [
     id: "real-world",
     title: "Real-World Scenarios",
     blurb:
-      "The same math, with money on the line. Trade a random-walk stock and read poker pot odds — see how expected value, random walks, and Markov regimes decide the right call, and watch the empirical result converge to the theory.",
+      "The same math, with money on the line. Trade a random-walk stock and read poker pot odds; see how expected value, random walks, and Markov regimes decide the right call, and watch the empirical result converge to the theory.",
   },
   {
     id: "games",
     title: "Conditional Probability, Geometry & Games",
     blurb:
-      "Where intuition breaks. Bayes, Monty Hall, geometric area demos, and strategic games — simulated until they click.",
+      "Where intuition breaks. Bayes, Monty Hall, geometric area demos, and strategic games: simulated until they click.",
   },
   {
     id: "trading-desk",
-    title: "Trading Desk — Live Markets",
+    title: "Trading Desk: Live Markets",
     blurb:
-      "Play the desk. Tune a market-making policy and stream a live, path-dependent market — quote two-sided, manage inventory and P&L, and get scored on cumulative P&L and max drawdown against a benchmark desk. The live companions to the Interview Games market-making, de-vig and ETF/NAV drills.",
+      "Play the desk. Tune a market-making policy and stream a live, path-dependent market: quote two-sided, manage inventory and P&L, and get scored on cumulative P&L and max drawdown against a benchmark desk. The live companions to the Interview Games market-making, de-vig and ETF/NAV drills.",
   },
 ];
 
@@ -129,7 +129,7 @@ export const SIMULATIONS: SimMeta[] = [
     group: "core",
     topics: ["Core Probability", "Conditional Probability"],
     whatShows:
-      "Drag P(A), P(B) and their overlap to see P(A∪B), P(A∩B), P(A|B) and complements update live — with independent vs mutually-exclusive presets.",
+      "Drag P(A), P(B) and their overlap to see P(A∪B), P(A∩B), P(A|B) and complements update live, with independent vs mutually-exclusive presets.",
   },
   {
     id: "two-independent-events",
@@ -163,7 +163,7 @@ export const SIMULATIONS: SimMeta[] = [
     group: "distributions",
     topics: ["Order Statistics"],
     whatShows:
-      "The distribution of the minimum, maximum, or median of n uniforms — see how extremes concentrate near the edges.",
+      "The distribution of the minimum, maximum, or median of n uniforms: see how extremes concentrate near the edges.",
   },
 
   /* ---- GROUP: joint-distributions --------------------------------------- */
@@ -173,7 +173,7 @@ export const SIMULATIONS: SimMeta[] = [
     group: "joint-distributions",
     topics: ["Joint Distributions"],
     whatShows:
-      "A bivariate-normal joint density of two correlated asset returns shown as a heatmap; drag a rectangular region and watch the double integral ∫∫ f dx dy — the probability/volume that BOTH returns land in the box — update live, with a Monte-Carlo scatter converging onto it.",
+      "A bivariate-normal joint density of two correlated asset returns shown as a heatmap; drag a rectangular region and watch the double integral ∫∫ f dx dy (the probability/volume that BOTH returns land in the box) update live, with a Monte-Carlo scatter converging onto it.",
   },
 
   /* ---- GROUP: ev-processes ---------------------------------------------- */
@@ -205,11 +205,11 @@ export const SIMULATIONS: SimMeta[] = [
     id: "markov-chain",
     title: "Markov Chain → Stationary Distribution",
     group: "ev-processes",
-    topics: [
-      "Markov Chains",
-      "Markov Chain Structure",
-      "Continuous-Time Markov Chains",
-    ],
+    // Illustrates a DISCRETE-time chain converging to its stationary
+    // distribution. It does NOT model continuous-time holding-times / M/M/1
+    // queues, so "Continuous-Time Markov Chains" is intentionally NOT claimed
+    // here (that would be a category error for the hint ladder's rung-4 link).
+    topics: ["Markov Chains", "Markov Chain Structure"],
     whatShows:
       "Set the transition probabilities and watch the state distribution converge to the stationary distribution.",
   },
@@ -225,7 +225,7 @@ export const SIMULATIONS: SimMeta[] = [
   /* ---- GROUP: real-world ------------------------------------------------- */
   {
     id: "stock-random-walk",
-    title: "Stock Trader — Buy, Sell, or Hold?",
+    title: "Stock Trader: Buy, Sell, or Hold?",
     group: "real-world",
     topics: ["Expected Value", "Markov Chains", "Brownian Motion"],
     whatShows:
@@ -241,7 +241,7 @@ export const SIMULATIONS: SimMeta[] = [
   },
   {
     id: "poker-pot-odds",
-    title: "Poker Pot Odds — Call or Fold?",
+    title: "Poker Pot Odds: Call or Fold?",
     group: "real-world",
     topics: ["Expected Value", "Conditional Probability"],
     whatShows:
@@ -271,7 +271,7 @@ export const SIMULATIONS: SimMeta[] = [
     group: "games",
     topics: ["Conditional Probability"],
     whatShows:
-      "A base rate plus test accuracy shown as counts out of 1000 — see why a positive test is so often a false alarm.",
+      "A base rate plus test accuracy shown as counts out of 1000: see why a positive test is so often a false alarm.",
   },
   {
     id: "geometric-dartboard",
@@ -293,7 +293,7 @@ export const SIMULATIONS: SimMeta[] = [
   /* ---- GROUP: trading-desk ---------------------------------------------- */
   {
     id: "trading-floor-live",
-    title: "The Trading Floor — Live Make-a-Market",
+    title: "The Trading Floor: Live Make-a-Market",
     group: "trading-desk",
     topics: ["Market Making", "Adverse Selection", "Calibration"],
     whatShows:
@@ -301,7 +301,7 @@ export const SIMULATIONS: SimMeta[] = [
   },
   {
     id: "basketball-book",
-    title: "Basketball — Live Book Management",
+    title: "Basketball: Live Book Management",
     group: "trading-desk",
     topics: ["Market Making", "Adverse Selection", "Inventory"],
     whatShows:
@@ -309,7 +309,7 @@ export const SIMULATIONS: SimMeta[] = [
   },
   {
     id: "marble-winner-markets",
-    title: "Marble Olympics — Winner Markets",
+    title: "Marble Olympics: Winner Markets",
     group: "trading-desk",
     topics: [
       "Market Making",
@@ -322,7 +322,7 @@ export const SIMULATIONS: SimMeta[] = [
   },
   {
     id: "etf-creation-redemption",
-    title: "ETF Challenge — Creation / Redemption",
+    title: "ETF Challenge: Creation / Redemption",
     group: "trading-desk",
     topics: ["Market Making", "ETF / NAV Arbitrage", "Latency"],
     whatShows:

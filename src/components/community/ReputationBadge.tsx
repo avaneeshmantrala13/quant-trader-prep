@@ -28,7 +28,7 @@ export function ReputationBadge({
   return (
     <span
       className={`chip ${TIER_CLS[tier.id] ?? "border-subtle text-secondary"}`}
-      title={`${tier.label} — ${karma} karma`}
+      title={`${tier.label}: ${karma} karma`}
       aria-label={`${handle ? `${handle}: ` : ""}${tier.label}, ${karma} karma`}
     >
       {showHandle && handle && <span className="normal-case">{handle}</span>}

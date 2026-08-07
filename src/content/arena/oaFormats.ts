@@ -1,5 +1,5 @@
 /**
- * content/arena/oaFormats.ts — OA-style timing/quality metadata for top-tier
+ * content/arena/oaFormats.ts. OA-style timing/quality metadata for top-tier
  * quant online assessments, plus a pure validation/audit engine that keeps our
  * timed drills FAITHFUL to how real firms pace their screens.
  *
@@ -10,8 +10,9 @@
  *  - its firm-reported shape (question count, total time, format, penalty), and
  *  - a benchmark per-question budget DERIVED from that shape (totalSec / count),
  * every number grounded in `datasets/FIRM_TIMED_ASSESSMENTS*.md` with an `asOf`
- * stamp, a `confidence` tag, and the exact source section, exactly like the
- * existing `firmFormats.ts` attribution layer.
+ * stamp, a `confidence` tag, and the exact source section. Formats are described
+ * generically by their shape and pace; the catalog does not attribute a format
+ * to any specific firm.
  *
  * The audit engine (`auditOaFormat`, `auditPresetBudget`) is the process that
  * enforces parity: it re-derives the per-question budget from count/time and
@@ -20,18 +21,18 @@
  * CI via unit tests, so a drifted budget fails the build rather than silently
  * mistraining students.
  *
- * Everything here is static, local, framework-free data + pure functions — no
+ * Everything here is static, local, framework-free data + pure functions, no
  * network, no clock, no backend.
  */
 import type { ArenaPreset } from "@/lib/arena/config";
 
 /** The three OA archetypes from FIRM_TIMED_ASSESSMENTS.md §1. */
 export type OaArchetype =
-  | "arithmetic-sprint" // Optiver/Akuna 80-in-8, Flow 60-in-6, Maven 50-in-5
-  | "short-brutal" // Five Rings 15–20/20min, DRW 6–8/45–60min, HRT 8–12/60min
-  | "mixed-battery"; // SIG, Citadel 50/12min, IMC, Belvedere
+  | "arithmetic-sprint" // e.g. 80/8, 60/6, 50/5 timed arithmetic sprints
+  | "short-brutal" // ~15–20 typed Qs / 20min, or ~6–8 Qs / 45–60min deep sets
+  | "mixed-battery"; // ~50 logic/arithmetic Qs / 12min cognitive batteries
 
-/** Answer entry style — free-response is strictly harder (no elimination). */
+/** Answer entry style, free-response is strictly harder (no elimination). */
 export type OaEntryFormat = "free-response" | "multiple-choice";
 
 /** How much we trust a community/prep-vendor-reported OA shape. */
@@ -48,8 +49,6 @@ export interface OaFormat {
   /** Human-readable, firm-neutral label. */
   label: string;
   archetype: OaArchetype;
-  /** Firms COMMUNITY-REPORTED to use a format like this. Not verified. */
-  firmsReported: string[];
   /** Reported number of questions. */
   questionCount: number;
   /** Reported total window, seconds. */
@@ -59,12 +58,12 @@ export interface OaFormat {
   entry: OaEntryFormat;
   /** Whether skipping is allowed without penalty in the reported format. */
   skipAllowed: boolean;
-  /** Whether a wrong answer is penalized (Optiver's +1/−1). */
+  /** Whether a wrong answer is penalized (e.g. a +1/−1 sprint). */
   penalty: boolean;
   /** ISO year-month this shape was last believed current. */
   asOf: string;
   confidence: OaConfidence;
-  /** Provenance — the research doc + section every number came from. */
+  /** Provenance, the research doc + section every number came from. */
   sourceDoc: string;
   /** Standing disclaimer rendered alongside any firm attribution. */
   caveat: string;
@@ -98,14 +97,13 @@ function fmt(
 export const OA_FORMATS: readonly OaFormat[] = [
   fmt({
     id: "optiver-80-8",
-    label: "80-in-8 Mental-Math Sprint",
+    label: "Rapid-Fire Arithmetic Sprint",
     archetype: "arithmetic-sprint",
-    firmsReported: ["Optiver", "Akuna"],
     questionCount: 80,
     totalSec: 480,
     entry: "free-response",
     skipAllowed: true,
-    penalty: true, // Optiver +1/−1 (§1, part1 L14)
+    penalty: true, // +1/−1 penalty (§1, part1 L14)
     asOf: "2026-07",
     confidence: "medium",
     sourceDoc: "FIRM_TIMED_ASSESSMENTS.md §1–2; part1 L14,L137",
@@ -114,7 +112,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "flow-60-6",
     label: "60-in-6 Sprint (no skip)",
     archetype: "arithmetic-sprint",
-    firmsReported: ["Flow Traders"],
     questionCount: 60,
     totalSec: 360,
     entry: "multiple-choice",
@@ -128,7 +125,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "maven-50-5",
     label: "50-in-5 Numerical Sprint",
     archetype: "arithmetic-sprint",
-    firmsReported: ["Maven"],
     questionCount: 50,
     totalSec: 300,
     entry: "free-response",
@@ -142,7 +138,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "citadel-50-12",
     label: "50-Question Cognitive Battery",
     archetype: "mixed-battery",
-    firmsReported: ["Citadel Securities"],
     questionCount: 50,
     totalSec: 720, // 12 min → ~14.4 s/q (part1 L44)
     entry: "multiple-choice",
@@ -156,7 +151,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "sig-quant-eval",
     label: "20-Minute Quant Evaluation",
     archetype: "mixed-battery",
-    firmsReported: ["SIG"],
     questionCount: 14, // ~12–16 Qs / 20 min (part1 L81) → ~15–30 s/q
     totalSec: 1200,
     entry: "multiple-choice",
@@ -170,7 +164,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "five-rings-20",
     label: "Short-&-Brutal Problem Set",
     archetype: "short-brutal",
-    firmsReported: ["Five Rings"],
     questionCount: 18, // ~15–20 typed Qs / 20 min → ~60–80 s/q (§1)
     totalSec: 1200,
     entry: "free-response",
@@ -184,7 +177,6 @@ export const OA_FORMATS: readonly OaFormat[] = [
     id: "drw-6-45",
     label: "Deep Problem Set",
     archetype: "short-brutal",
-    firmsReported: ["DRW"],
     questionCount: 7, // ~6–8 Qs / 45–60 min → ~7.5 min/q (part1 L95)
     totalSec: 3150,
     entry: "free-response",
@@ -208,7 +200,7 @@ export function benchmarkBudgetMs(id: string): number | undefined {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Validation / audit — the parity-keeping process                          */
+/*  Validation / audit, the parity-keeping process                          */
 /* -------------------------------------------------------------------------- */
 
 /** One checklist item's result. `ok:false` means the format failed the check. */
@@ -233,7 +225,7 @@ export interface OaAuditResult {
 export const BUDGET_DRIFT_TOLERANCE = 0.15;
 
 /**
- * Audit a single OA format for internal consistency — the checklist that keeps
+ * Audit a single OA format for internal consistency, the checklist that keeps
  * the metadata trustworthy:
  *  1. positive question count and window,
  *  2. `perQuestionSec` equals the derived `totalSec / count` (no hand-edited

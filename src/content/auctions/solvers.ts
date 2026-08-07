@@ -21,13 +21,13 @@ import Fraction from "fraction.js";
  *         E[V | you won] = s − E[max of n noises].
  *     The amount to SHADE your bid below your signal is exactly
  *         shade(m, n) = E[max of n noises] ≥ 0,
- *     which increases (weakly) with n — the more rivals you beat, the worse the
+ *     which increases (weakly) with n, the more rivals you beat, the worse the
  *     news, so the more you must shade.
  *
  * ACQUIRING-A-COMPANY MODEL (a second, purely-conditional family):
  *   - A firm's value V is uniform on the integers {0, 1, …, M}.
  *   - The owner sells iff V ≤ b (your bid), so you win exactly when V is low.
- *   - Conditional on winning, E[V | V ≤ b] = b/2 — half of what you offered —
+ *   - Conditional on winning, E[V | V ≤ b] = b/2, half of what you offered —
  *     which is why a synergy multiple must exceed 2× for any positive bid to be
  *     +EV.
  */
@@ -36,7 +36,7 @@ import Fraction from "fraction.js";
 export const F = (n: number | string, d?: number): Fraction =>
   d === undefined ? new Fraction(n as never) : new Fraction(n as never, d);
 
-/** Exact integer power (base, exp small here — kept exact, no float pow). */
+/** Exact integer power (base, exp small here, kept exact, no float pow). */
 function ipow(base: number, exp: number): number {
   let r = 1;
   for (let i = 0; i < exp; i++) r *= base;
@@ -125,7 +125,7 @@ export function acquireEvGivenWin(b: number): Fraction {
  * (= fNum/fDen) is applied to the value you win:
  *   P(win)·(f·E[V | win] − b) = ((b+1)/(M+1))·(f·b/2 − b).
  * Its SIGN equals the sign of (f/2 − 1), so any positive bid is +EV iff f > 2,
- * −EV iff f < 2, break-even iff f = 2 — independent of b and M.
+ * −EV iff f < 2, break-even iff f = 2, independent of b and M.
  */
 export function acquireExpectedProfit(
   M: number,

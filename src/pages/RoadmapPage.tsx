@@ -1,57 +1,28 @@
 import { Link, useNavigate } from "react-router-dom";
-import {
-  CheckIcon,
-  ChevronLeftIcon,
-  GaugeIcon,
-  LockIcon,
-} from "@/components/icons";
+import { ChevronLeftIcon, GaugeIcon } from "@/components/icons";
 import {
   useRoadmapData,
   type RoadmapCoursePath,
   type RoadmapModel,
-  type RoadmapSkillRow,
-  type RoadmapTierGroup,
 } from "@/components/roadmap/useRoadmapData";
-import type { SkillStatus } from "@/lib/roadmap/readiness";
+import { SkillGraph } from "@/components/roadmap/SkillGraph";
 
 /**
- * `/roadmap` — the Readiness Pathway. Turns the sprawling catalog into a single
- * ordered, prerequisite-respecting pathway (see `datasets/CURRICULUM_ROADMAP.md`)
- * with an overall readiness indicator, "where you are now," and how much is left
- * before the learner is ready to attempt quant OAs and interviews.
+ * `/roadmap` — the Readiness Pathway, rebuilt as a CS-style GRAPH of the
+ * Knowledge State Tree. Instead of a flat list of tiers, the prerequisite DAG
+ * (`@/lib/roadmap/skillGraph`) is drawn as a directed graph: NODES are topics,
+ * EDGES are prerequisite relationships (arrow from a prereq into what it
+ * unlocks). Nodes are coloured by mastery (mastered / in-progress / ready /
+ * locked) and the edges leading into mastered nodes light up, so the pathway
+ * visibly illuminates as the learner masters more topics. Clicking a node jumps
+ * straight to that topic's practice (the same deep-link the list used).
  *
- * A thin, token-themed CONTAINER: all logic is in the pure roadmap modules
- * (`@/lib/roadmap/*`) and the `useRoadmapData` hook. Styled purely with the
- * semantic theme tokens / component classes so it tracks every theme's colors,
- * fonts, and light/dark automatically (no per-theme override needed — see the
- * placement rationale in the task report / provenance doc).
+ * A thin, token-themed CONTAINER: all logic still lives in the pure roadmap
+ * modules (`@/lib/roadmap/*`) and the `useRoadmapData` hook; the new graph is a
+ * pure presentational component (`@/components/roadmap/SkillGraph`). Everything
+ * is styled with the semantic theme tokens so it tracks every theme's colours,
+ * fonts, and light/dark automatically.
  */
-
-const STATUS_META: Record<
-  SkillStatus,
-  { label: string; chip: string; dot: string }
-> = {
-  mastered: {
-    label: "Mastered",
-    chip: "border-bull/60 text-bull",
-    dot: "bg-bull",
-  },
-  "in-progress": {
-    label: "In progress",
-    chip: "border-accent/60 text-accent",
-    dot: "bg-accent",
-  },
-  available: {
-    label: "Ready to start",
-    chip: "border-subtle text-secondary",
-    dot: "bg-secondary",
-  },
-  locked: {
-    label: "Locked",
-    chip: "border-subtle text-muted",
-    dot: "bg-muted",
-  },
-};
 
 function ReadinessGauge({
   readiness,
@@ -98,156 +69,10 @@ function ReadinessGauge({
             · <span className="num text-primary">{remainingCount}</span> to go
           </>
         ) : (
-          <> · you're fully ready — keep it sharp</>
+          <> · you're fully ready, keep it sharp</>
         )}
       </p>
     </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="label text-muted">{label}</span>
-      <span className="num text-sm text-primary">{value}</span>
-    </div>
-  );
-}
-
-function SkillRow({
-  row,
-  isCurrent,
-}: {
-  row: RoadmapSkillRow;
-  isCurrent: boolean;
-}) {
-  const { progress: p } = row;
-  const meta = STATUS_META[p.status];
-  const locked = p.status === "locked";
-
-  return (
-    <details
-      className={`group border ${
-        isCurrent ? "border-accent" : "border-subtle"
-      } bg-surface`}
-    >
-      <summary className="flex cursor-pointer list-none items-center gap-3 p-3 marker:content-none hover:bg-surface-muted">
-        <span
-          className={`grid h-7 w-7 shrink-0 place-items-center rounded-full border ${
-            p.mastered
-              ? "border-bull text-bull"
-              : locked
-                ? "border-subtle text-muted"
-                : "border-accent text-accent"
-          }`}
-          aria-hidden="true"
-        >
-          {p.mastered ? (
-            <CheckIcon width={14} height={14} />
-          ) : locked ? (
-            <LockIcon width={13} height={13} />
-          ) : (
-            <span className="num text-xs font-semibold">{p.masteryPct}</span>
-          )}
-        </span>
-
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="truncate font-display text-sm font-semibold text-primary">
-              {row.name}
-            </span>
-            {isCurrent && (
-              <span className="chip border-accent text-accent">You are here</span>
-            )}
-          </span>
-          {/* Per-skill mastery bar. */}
-          <span className="mt-1.5 block h-1.5 w-full overflow-hidden border border-subtle bg-surface-muted">
-            <span
-              className={`block h-full ${p.mastered ? "bg-bull" : "bg-accent"}`}
-              style={{ width: `${p.masteryPct}%` }}
-            />
-          </span>
-        </span>
-
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          <span className={`chip ${meta.chip}`}>{meta.label}</span>
-          <span className="num text-xs text-secondary">{p.masteryPct}%</span>
-        </span>
-      </summary>
-
-      <div className="border-t border-subtle bg-surface p-3">
-        <p className="text-xs leading-relaxed text-muted">{row.node.source}</p>
-
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat
-            label="Mastered"
-            value={`${p.masteryPct}%`}
-          />
-          <Stat
-            label="Raw accuracy"
-            value={p.meanPct != null ? `${p.meanPct}%` : "—"}
-          />
-          <Stat label="Graded items" value={String(p.gradedCount)} />
-          <Stat
-            label="Levels"
-            value={`${p.levelsMastered}/${p.levelsTotal}`}
-          />
-        </div>
-
-        {locked && row.missingPrereqNames.length > 0 && (
-          <p className="mt-3 border border-subtle bg-surface-muted px-3 py-2 text-xs text-secondary">
-            Unlocks after mastering:{" "}
-            <span className="font-semibold text-primary">
-              {row.missingPrereqNames.join(", ")}
-            </span>
-          </p>
-        )}
-
-        <Link
-          to={row.href}
-          className={`mt-3 block w-full text-center text-sm ${
-            locked ? "btn-ghost" : "btn-primary"
-          }`}
-        >
-          {p.mastered
-            ? "Review this skill ↻"
-            : locked
-              ? "Preview this skill ▸"
-              : `Practice ${row.name} ▸`}
-        </Link>
-      </div>
-    </details>
-  );
-}
-
-function TierSection({
-  tier,
-  currentKey,
-}: {
-  tier: RoadmapTierGroup;
-  currentKey?: string;
-}) {
-  return (
-    <section className="panel p-5">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-display text-lg font-semibold text-primary">
-          {tier.label}
-        </h2>
-        <span className="num shrink-0 text-xs text-secondary">
-          {tier.masteredCount}/{tier.totalCount}
-        </span>
-      </div>
-      <p className="mt-1 text-sm text-secondary">{tier.blurb}</p>
-      <div className="mt-4 flex flex-col gap-2">
-        {tier.rows.map((row) => (
-          <SkillRow
-            key={row.node.topicKey}
-            row={row}
-            isCurrent={row.node.topicKey === currentKey}
-          />
-        ))}
-      </div>
-    </section>
   );
 }
 
@@ -256,9 +81,9 @@ function TierSection({
 /* -------------------------------------------------------------------------- */
 
 /**
- * One Case-A course path: the course's ordered topic sequence with per-topic
- * mastery / lock / complete state and an overall per-path progress bar. Reuses
- * the SAME `SkillRow` visual as the Case-B tiers — this is purely a regrouping.
+ * One Case-A course path: its per-path progress bar plus the course's topics
+ * drawn as a prerequisite graph. Reuses the SAME `SkillGraph` as the interview
+ * pathway — this is purely a regrouping of the same rows by course.
  */
 function CoursePathSection({ path }: { path: RoadmapCoursePath }) {
   return (
@@ -294,14 +119,12 @@ function CoursePathSection({ path }: { path: RoadmapCoursePath }) {
         </div>
       </div>
 
-      <div className="mt-4 flex flex-col gap-2">
-        {path.rows.map((row) => (
-          <SkillRow
-            key={row.node.topicKey}
-            row={row}
-            isCurrent={row.node.topicKey === path.currentKey}
-          />
-        ))}
+      <div className="mt-4">
+        <SkillGraph
+          rows={path.rows}
+          currentKey={path.currentKey}
+          ariaLabel={`${path.label} prerequisite graph`}
+        />
       </div>
     </section>
   );
@@ -319,7 +142,7 @@ function CourseRoadmap({
   return (
     <div className="relative min-h-[100dvh] bg-surface">
       <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5">
           <button
             onClick={onBack}
             className="btn-ghost !min-h-0 !px-2 !py-1.5"
@@ -341,22 +164,23 @@ function CourseRoadmap({
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-4xl space-y-6 px-4 py-6">
+      <main className="relative z-10 mx-auto max-w-5xl space-y-6 px-4 py-6">
         <section className="panel-ruled p-6">
           <span className="label text-accent">Your Two Course Paths</span>
           <h1 className="mt-1 font-display text-2xl font-black text-primary sm:text-3xl">
             Course Roadmap
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-secondary">
-            Two guided paths — <strong>Intro to Probability</strong> and{" "}
-            <strong>Intro to Stochastic Processes</strong> — each ordered so
-            every topic builds on the ones before it. Master each topic to work
-            through the course and complete the path.
+            Two guided paths: <strong>Intro to Probability</strong> and{" "}
+            <strong>Intro to Stochastic Processes</strong>, each ordered so
+            every topic builds on the ones before it. Each course is drawn as a
+            prerequisite graph — master a topic to light up the arrows leading
+            out of it and open what comes next.
           </p>
 
           {!diagnosticDone && (
             <p className="mt-3 border border-accent/50 bg-surface px-3 py-2 text-sm text-secondary">
-              Run the calibration warm-up first — it seeds an accurate starting
+              Run the calibration warm-up first; it seeds an accurate starting
               picture across both courses.{" "}
               <Link
                 to="/diagnostic"
@@ -382,7 +206,7 @@ export function RoadmapPage() {
   const { state, currentRow, diagnosticDone } = model;
 
   // Case A ("course"): regroup the pathway into the two UT course paths. Case B
-  // (interview / unset) renders the existing interview tiers below, unchanged.
+  // (interview / unset) renders the interview knowledge graph below.
   if (model.goalMode === "course") {
     return <CourseRoadmap model={model} onBack={() => navigate("/contents")} />;
   }
@@ -390,7 +214,7 @@ export function RoadmapPage() {
   return (
     <div className="relative min-h-[100dvh] bg-surface">
       <header className="sticky top-0 z-20 border-b-[3px] border-border-strong bg-surface">
-        <div className="mx-auto flex max-w-4xl items-center gap-3 px-4 py-2.5">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-2.5">
           <button
             onClick={() => navigate("/contents")}
             className="btn-ghost !min-h-0 !px-2 !py-1.5"
@@ -412,7 +236,7 @@ export function RoadmapPage() {
         </div>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-4xl space-y-6 px-4 py-6">
+      <main className="relative z-10 mx-auto max-w-5xl space-y-6 px-4 py-6">
         <section className="panel-ruled p-6">
           <span className="label text-accent">Your Pathway to Interview-Ready</span>
           <h1 className="mt-1 font-display text-2xl font-black text-primary sm:text-3xl">
@@ -421,14 +245,14 @@ export function RoadmapPage() {
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-secondary">
             A single prerequisite-respecting pathway across every track, ordered
             from the timed-arithmetic screen up through stochastic processes and
-            market making — grounded in UT Austin's M362K / M362M sequences and
+            market making, grounded in UT Austin's M362K / M362M sequences and
             the quant-interview canon. Master each skill to climb toward full
             readiness for quant OAs and interviews.
           </p>
 
           {!diagnosticDone && (
             <p className="mt-3 border border-accent/50 bg-surface px-3 py-2 text-sm text-secondary">
-              Run the calibration warm-up first — it seeds an accurate starting
+              Run the calibration warm-up first; it seeds an accurate starting
               picture across this whole pathway.{" "}
               <Link
                 to="/diagnostic"
@@ -466,7 +290,7 @@ export function RoadmapPage() {
                 </>
               ) : state.complete ? (
                 <p className="mt-1 text-sm text-secondary">
-                  Every skill on the pathway is mastered — you're fully ready.
+                  Every skill on the pathway is mastered: you're fully ready.
                   Keep skills sharp with spaced review from the Dashboard.
                 </p>
               ) : (
@@ -479,13 +303,30 @@ export function RoadmapPage() {
           </div>
         </section>
 
-        {model.tiers.map((tier) => (
-          <TierSection
-            key={tier.id}
-            tier={tier}
-            currentKey={state.currentSkillKey}
-          />
-        ))}
+        {/* The Knowledge State Tree, drawn as a directed prerequisite graph. */}
+        <section className="panel p-5">
+          <div className="flex items-baseline justify-between gap-2">
+            <h2 className="font-display text-lg font-semibold text-primary">
+              Knowledge State Tree
+            </h2>
+            <span className="num shrink-0 text-xs text-secondary">
+              {state.masteredCount}/{state.totalCount} mastered
+            </span>
+          </div>
+          <p className="mt-1 max-w-2xl text-sm text-secondary">
+            Every node is a skill; each arrow points from a prerequisite into the
+            topic it unlocks. Nodes light up as you master them, and the arrows
+            leading into mastered skills illuminate to show your progression.
+            Click any node to practice it.
+          </p>
+          <div className="mt-4">
+            <SkillGraph
+              rows={model.rows}
+              currentKey={state.currentSkillKey}
+              ariaLabel="Interview readiness knowledge state graph"
+            />
+          </div>
+        </section>
       </main>
     </div>
   );

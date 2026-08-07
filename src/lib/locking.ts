@@ -63,20 +63,38 @@ export function isFirstOfSection(
 }
 
 /**
+ * OPTIONAL diagnostic-seeded LOW-CONFIDENCE unlock signal (Part B). A predicate
+ * keyed on a level id that returns `true` when the level's TOPIC is currently
+ * low-confidence unlocked (a strong diagnostic result seeded its Beta prior over
+ * the unlock bar — see `@/lib/mastery/unlock`). This opens the WHOLE topic's
+ * levels ahead of section-by-section mastery, and because it reads the LIVE Beta
+ * posterior it RE-LOCKS automatically the moment a failing quiz swings the mean
+ * back under the bar. Omitting it preserves the original mastery-only gating
+ * exactly (the default is a predicate that never unlocks).
+ */
+export type SeedUnlocked = (levelId: string) => boolean;
+
+const NEVER_SEED_UNLOCKED: SeedUnlocked = () => false;
+
+/**
  * Whether the level at `index` is unlocked under the per-section rule:
  * unlocked ⇔ it is the first level of its section OR the previous level (which,
  * for a non-section-start, is guaranteed to be in the SAME section) is
- * mastered.
+ * mastered — OR the level's topic is diagnostic-seeded low-confidence unlocked
+ * (see {@link SeedUnlocked}).
  */
 export function isLevelUnlockedBySection(
   levels: readonly LockLevel[],
   index: number,
   isMastered: (levelId: string) => boolean,
+  isSeedUnlocked: SeedUnlocked = NEVER_SEED_UNLOCKED,
 ): boolean {
   if (index <= 0) return true;
   if (isFirstOfSection(levels, index)) return true;
   // Not a section start ⇒ levels[index - 1] shares this level's section.
-  return isMastered(levels[index - 1].id);
+  if (isMastered(levels[index - 1].id)) return true;
+  // Diagnostic low-confidence unlock opens the whole topic ahead of mastery.
+  return isSeedUnlocked(levels[index].id);
 }
 
 /**
@@ -87,9 +105,10 @@ export function levelLockState(
   levels: readonly LockLevel[],
   index: number,
   isMastered: (levelId: string) => boolean,
+  isSeedUnlocked: SeedUnlocked = NEVER_SEED_UNLOCKED,
 ): LockState {
   if (isMastered(levels[index].id)) return "mastered";
-  return isLevelUnlockedBySection(levels, index, isMastered)
+  return isLevelUnlockedBySection(levels, index, isMastered, isSeedUnlocked)
     ? "unlocked"
     : "locked";
 }
@@ -98,6 +117,7 @@ export function levelLockState(
 export function computeLockStates(
   levels: readonly LockLevel[],
   isMastered: (levelId: string) => boolean,
+  isSeedUnlocked: SeedUnlocked = NEVER_SEED_UNLOCKED,
 ): LockState[] {
-  return levels.map((_, i) => levelLockState(levels, i, isMastered));
+  return levels.map((_, i) => levelLockState(levels, i, isMastered, isSeedUnlocked));
 }

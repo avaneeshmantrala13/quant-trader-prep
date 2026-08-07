@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   computeRoadmap,
   isSkillMastered,
+  skillReadinessContribution,
   skillReadinessFraction,
   type SkillEvidence,
 } from "./readiness";
@@ -122,5 +123,32 @@ describe("computeRoadmap", () => {
     expect(state.overallReadiness).toBeGreaterThan(0);
     expect(state.overallReadiness).toBeLessThan(100);
     expect(state.masteredCount).toBe(2);
+  });
+
+  it("is CONSERVATIVE: post-diagnostic partial progress reads only single digits", () => {
+    // Simulate a fresh diagnostic result: every topic has some low-confidence
+    // evidence (ciLow well below the bar) but NOTHING is confidently mastered.
+    const seeded = (k: string): SkillEvidence => ({
+      ...empty(k),
+      ciLow: MASTERY_BAR * 0.5, // ~half-way to the bar on every topic
+      mean: 0.7,
+      gradedCount: 4,
+      levelsMastered: 0,
+    });
+    const state = computeRoadmap((k) => seeded(k));
+    expect(state.masteredCount).toBe(0);
+    // A linear average would read ~50%; the convex discount keeps it in single digits.
+    expect(state.overallReadiness).toBeGreaterThan(0);
+    expect(state.overallReadiness).toBeLessThanOrEqual(12);
+  });
+});
+
+describe("skillReadinessContribution", () => {
+  it("gives full credit at mastery and heavily discounts partial progress", () => {
+    expect(skillReadinessContribution(mastered("k"))).toBeCloseTo(1, 5);
+    expect(skillReadinessContribution(empty("k"))).toBe(0);
+    const half: SkillEvidence = { ...empty("k"), ciLow: MASTERY_BAR / 2, levelsTotal: 0 };
+    // fraction 0.5 -> contribution must be far below 0.5 (convex discount).
+    expect(skillReadinessContribution(half)).toBeLessThan(0.15);
   });
 });

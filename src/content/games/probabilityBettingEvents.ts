@@ -1,12 +1,12 @@
 /**
  * ============================================================================
- *  PROBABILITY BETTING — EVENT GENERATORS
+ *  PROBABILITY BETTING. EVENT GENERATORS
  * ============================================================================
  * Generates fresh betting events each round for Game 2 (`QuantGames-Mechanics.md`).
  *
  * Every event carries its EXACT true probability (computed from first
  * principles) and a HOUSE odds quote that is deliberately mispriced by a random
- * margin — sometimes generous (positive edge, you should bet), sometimes stingy
+ * margin, sometimes generous (positive edge, you should bet), sometimes stingy
  * (negative edge, you should pass). Because the events, their probabilities, and
  * the mispricing are all randomized per round, there is nothing to memorize:
  * the player must actually compute each probability and compare to the quote.
@@ -86,7 +86,7 @@ function probTwoCardsSumAtLeast(t: number, aceHigh: boolean): number {
   return hit / total;
 }
 
-/** P(the two cards are the same colour) — 2 from a fresh deck. */
+/** P(the two cards are the same colour), 2 from a fresh deck. */
 function probSameColour(): number {
   // 26 same-colour partners out of remaining 51.
   return 25 / 51;
@@ -184,7 +184,7 @@ function makeEvent(
     label,
     trueProb,
     houseOdds,
-    // Settler draws a uniform and compares to the true prob — realized
+    // Settler draws a uniform and compares to the true prob, realized
     // frequency matches trueProb exactly in expectation, independent of the
     // human-readable label.
     settle: (r: Rng) => r.next() < trueProb,
@@ -225,13 +225,13 @@ export function buildRound(
     {
       id: `insurance-${seq++}`,
       kind: "insurance",
-      label: "Insurance — pays if your other bets net a LOSS this round",
+      label: "Insurance, pays if your other bets net a LOSS this round",
       houseOdds: round2(0.8 + rng.next() * 1.4), // ~0.8–2.2 : 1
     },
     {
       id: `boost-${seq++}`,
       kind: "boost",
-      label: "Boost — pays if your other bets net a PROFIT this round",
+      label: "Boost, pays if your other bets net a PROFIT this round",
       houseOdds: round2(0.6 + rng.next() * 1.2), // ~0.6–1.8 : 1
     },
   ];

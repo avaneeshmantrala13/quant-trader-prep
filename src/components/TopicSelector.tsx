@@ -60,7 +60,7 @@ export function TopicSelector({
             Topic · Choose your path
           </label>
           <p className="mt-0.5 text-xs text-secondary">
-            Study one topic at a time — ordered easiest to hardest.
+            Study one topic at a time, ordered easiest to hardest.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export function TopicSelector({
           >
             {topics.map((t) => (
               <option key={t.slug} value={t.slug}>
-                {`Level ${t.rank} — ${t.label}`}
+                {`Level ${t.rank}: ${t.label}`}
               </option>
             ))}
           </select>

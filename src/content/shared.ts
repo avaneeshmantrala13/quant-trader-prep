@@ -4,7 +4,7 @@ import type { Difficulty, Question } from "@/types/content";
 /**
  * Build a multiple-choice question from a correct value plus a list of
  * *plausible-error* distractor values. Each distractor should correspond to a
- * specific mistake (an off-by, a wrong formula, a transposition) — never a
+ * specific mistake (an off-by, a wrong formula, a transposition), never a
  * random number. We dedupe, keep the answer and distractors the same format,
  * shuffle, and return the correctIndex.
  */
@@ -76,7 +76,7 @@ export interface QuestionParts {
   concept?: string;
   distractorRationaleByValue?: Record<string, string>;
   /**
-   * OPTIONAL, additive (Phase 4 — COORDINATION §6.2). Keyed by distractor VALUE
+   * OPTIONAL, additive (Phase 4. COORDINATION §6.2). Keyed by distractor VALUE
    * (like {@link QuestionParts.distractorRationaleByValue}): a machine-readable
    * misconception TAG for the wrong answer with that value. When any value is
    * tagged, {@link assemble} emits a parallel (shuffle-aligned)
@@ -92,7 +92,7 @@ export interface QuestionParts {
  * Assemble a Question, but re-run the builder (which re-draws parameters from
  * the RNG) until it yields at least 3 distractors that are distinct from each
  * other and from the correct answer. This guarantees no padding placeholders and
- * that every option is a genuine, meaningful choice — even when a particular
+ * that every option is a genuine, meaningful choice, even when a particular
  * parameter draw would make two error-paths coincide.
  */
 export function assembleDistinct(

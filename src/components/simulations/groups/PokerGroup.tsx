@@ -82,7 +82,7 @@ function PotOddsSim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Pot odds set a break-even equity = bet / (pot + 2·bet): the win chance at which calling is exactly EV 0. If your equity beats that line, calling is +EV; if not, fold. Top chart: the empirical win rate over many hands settling onto your true win probability w. Bottom chart: the running-average profit of always calling settling onto EV(call). The green threshold line is the pot-odds break-even — being to its right is what makes the call correct."
+      howToRead="Pot odds set a break-even equity = bet / (pot + 2·bet): the win chance at which calling is exactly EV 0. If your equity beats that line, calling is +EV; if not, fold. Top chart: the empirical win rate over many hands settling onto your true win probability w. Bottom chart: the running-average profit of always calling settling onto EV(call). The green threshold line is the pot-odds break-even: being to its right is what makes the call correct."
     >
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -281,7 +281,7 @@ function PotOddsSim(): JSX.Element {
                     (<span className="num">{fmtSigned(ev)}</span> per hand).
                   </>
                 ) : (
-                  <> — calling would be {fmtSigned(ev)}.</>
+                  <>; calling would be {fmtSigned(ev)}.</>
                 )}
               </>
             ) : (
@@ -377,7 +377,7 @@ function HandEquitySim(): JSX.Element {
       title={meta.title}
       whatShows={meta.whatShows}
       topics={meta.topics}
-      howToRead="Both hands are all-in; each deal draws five community cards at random and the best five-card hand wins (a tie counts as half). The line is Hand A's running equity (wins + ½·ties) over the deals; the dashed line is its true probability from a large reference run. More deals ⇒ the empirical equity converges to the true equity — the law of large numbers on a real poker matchup. The bars show the final win / tie / loss split."
+      howToRead="Both hands are all-in; each deal draws five community cards at random and the best five-card hand wins (a tie counts as half). The line is Hand A's running equity (wins + ½·ties) over the deals; the dashed line is its true probability from a large reference run. More deals ⇒ the empirical equity converges to the true equity: the law of large numbers on a real poker matchup. The bars show the final win / tie / loss split."
     >
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2">

@@ -169,7 +169,7 @@ export function buildMM1Instance(
   );
 
   const prompt =
-    `${cap(th.serv)} serves ${th.cust} as an M/M/1 queue: arrivals at rate λ = ${lambda}, service at rate μ = ${mu}. ` +
+    `${cap(th.serv)} serves ${th.cust} as an M/M/1 queue (one server, a single line, random Poisson arrivals and random exponential service times): arrivals at rate λ = ${lambda}, service at rate μ = ${mu}. ` +
     `What is the mean number of ${th.cust} in the system? (Round to ${dp} decimals.)`;
   const explanation =
     `For M/M/1 with ρ = λ/μ = ${fracText(mm1Utilisation(lambda, mu))}, the mean number in system is L = ρ/(1−ρ) = λ/(μ−λ) = ${lambda}/${mu - lambda} = ${fracText(value)} ≈ ${decText(value, dp)}.`;

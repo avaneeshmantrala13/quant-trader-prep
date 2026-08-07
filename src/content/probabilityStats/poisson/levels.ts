@@ -16,7 +16,7 @@ import {
 } from "./generators";
 
 /**
- * Probability & Statistics — **Poisson Distribution & Process** (Bucket 1, UT
+ * Probability & Statistics, **Poisson Distribution & Process** (Bucket 1, UT
  * M362K ch. 4.7 + M362M Poisson-process core; interview-relevant per
  * FIRM_TIMED_ASSESSMENTS). Two `numeric` Candy-Crush levels ramping medium →
  * hard, placed right after Expected Value (they use E[X] = λ). Exact/precise
@@ -43,7 +43,7 @@ export const poissonLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "The Poisson distribution models counts of rare, independent events with a known average λ. Its pmf is P(X=k) = e^{−λ}·λ^k/k!. The e^{−λ} factor is the normaliser that makes the probabilities sum to 1 — dropping it (reporting just λ^k/k!) is the #1 mistake. For 'at least one', complement the single easy term: P(X≥1) = 1 − P(X=0) = 1 − e^{−λ}.",
+        "The Poisson distribution models counts of rare, independent events with a known average λ. Its pmf is P(X=k) = e^{−λ}·λ^k/k!. The e^{−λ} factor is the normaliser that makes the probabilities sum to 1, dropping it (reporting just λ^k/k!) is the #1 mistake. For 'at least one', complement the single easy term: P(X≥1) = 1 − P(X=0) = 1 − e^{−λ}.",
         "A Poisson has the unusual property that its mean AND variance both equal λ, so its standard deviation is √λ. Don't reach for λ² (that would be mean-squared) or confuse the SD √λ with the variance. This mean=variance identity is a fast interview tell that a count is Poisson.",
       ],
       keyIdea: "P(X=k)=e^{−λ}λ^k/k!; P(X≥1)=1−e^{−λ}; mean = variance = λ.",
@@ -85,7 +85,7 @@ export const poissonLevels: Level[] = [
     ]),
     lesson: {
       paragraphs: [
-        "A Poisson process with rate λ produces, over a window of length t, a Poisson count with mean λt — the window length scales the mean, so always use λt (not λ). Two structural facts do most of the interview work. SPLITTING/THINNING: if each event is independently 'type A' with probability p, the type-A events form a Poisson process of rate λp, so their expected count over t is λpt. SUPERPOSITION: independent streams with rates λ₁, λ₂ merge into one Poisson process of rate λ₁+λ₂ (add the rates — never multiply or average).",
+        "A Poisson process with rate λ produces, over a window of length t, a Poisson count with mean λt, the window length scales the mean, so always use λt (not λ). Two structural facts do most of the interview work. SPLITTING/THINNING: if each event is independently 'type A' with probability p, the type-A events form a Poisson process of rate λp, so their expected count over t is λpt. SUPERPOSITION: independent streams with rates λ₁, λ₂ merge into one Poisson process of rate λ₁+λ₂ (add the rates, never multiply or average).",
         "Because the streams are memoryless, the competition 'which stream fires next?' is settled purely by the rates: the next event is from stream 1 with probability λ₁/(λ₁+λ₂). This is the same min-of-exponentials split used in market-microstructure arrival models.",
       ],
       keyIdea: "Count over t ~ Poisson(λt); thin → λp; superpose → λ₁+λ₂; next-event split λ₁/(λ₁+λ₂).",
@@ -101,7 +101,7 @@ export const poissonLevels: Level[] = [
           "For 'which stream fires next', split the merged rate: stream 1 wins with probability λ₁/(λ₁+λ₂).",
         ],
         pitfalls: [
-          "Using λ instead of λt — forgetting the window length scales the mean.",
+          "Using λ instead of λt, forgetting the window length scales the mean.",
           "Multiplying or averaging rates when superposing, instead of adding them.",
           "Reporting the odds λ₁/λ₂ instead of the probability λ₁/(λ₁+λ₂) for which stream is first.",
         ],
@@ -129,7 +129,7 @@ export const poissonLevels: Level[] = [
     lesson: {
       paragraphs: [
         "The times BETWEEN Poisson events are independent Exponential(λ) gaps, so the mean interarrival is 1/λ and the chance of NO event before time t is P(T>t) = e^{−λt} (the first arrival lands after t). The waiting time to the k-th arrival stacks k of those gaps into an Erlang(k, λ), with mean k/λ. Watch the reciprocal: λ is events-per-time, 1/λ is time-per-event.",
-        "Two deeper facts finish the process toolkit. CONDITIONAL UNIFORMITY: given exactly n events in [0, T], the arrival times look like the order statistics of n Uniform(0, T) points, so they split the window into n+1 equal expected gaps and the j-th arrival has expected time j·T/(n+1). COMPOUND POISSON: if each of the λt expected events carries an independent mark of mean μ, the expected total is λ·t·μ (Wald over a Poisson count) — miss any of the three factors and the total is wrong.",
+        "Two deeper facts finish the process toolkit. CONDITIONAL UNIFORMITY: given exactly n events in [0, T], the arrival times look like the order statistics of n Uniform(0, T) points, so they split the window into n+1 equal expected gaps and the j-th arrival has expected time j·T/(n+1). COMPOUND POISSON: if each of the λt expected events carries an independent mark of mean μ, the expected total is λ·t·μ (Wald over a Poisson count), miss any of the three factors and the total is wrong.",
       ],
       keyIdea:
         "Interarrival mean 1/λ, P(T>t)=e^{−λt}; k-th arrival mean k/λ; E[S₍ⱼ₎|N=n]=jT/(n+1); compound mean λtμ.",

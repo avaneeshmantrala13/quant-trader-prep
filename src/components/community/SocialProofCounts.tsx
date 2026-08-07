@@ -24,7 +24,7 @@ export function SocialProofCounts({ agg }: { agg: ItemAggregate }) {
   if (empty) {
     return (
       <p className="label text-muted" aria-live="polite">
-        No community activity yet — be the first to share.
+        No community activity yet. Be the first to share.
       </p>
     );
   }
