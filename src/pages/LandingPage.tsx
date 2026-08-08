@@ -183,9 +183,6 @@ function Hero() {
                   I have an account
                 </Link>
               </div>
-              <p className="label mt-4 text-[9px]">
-                Local-first. No email or API keys required.
-              </p>
             </>
           )}
         </div>
