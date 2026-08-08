@@ -8,8 +8,13 @@ import {
   type MaterializedNumericItem,
 } from "@/lib/diagnostic/untimedRun";
 import { formatNumericAnswer } from "@/lib/numeric";
+import { topicKeyOf } from "@/lib/mastery/topicKey";
+import { drawContentDrill } from "@/lib/pipeline/drilling";
 import { drillWorkedSiblingLevel } from "./drillSibling";
 import { buildWorkedSibling } from "./workedSibling";
+
+const RATES = topicKeyOf("math-questions", "Rates, Algebra & Word Problems");
+const GEOMETRY = topicKeyOf("math-questions", "Geometry & Derivations");
 
 /**
  * The DRILLING loop (Stage 6) serves items from the untimed blueprint, not from
@@ -88,11 +93,63 @@ describe("drillWorkedSiblingLevel — every hard-OA adapter family (drilling loo
 describe("drillWorkedSiblingLevel — authored singletons cannot regenerate", () => {
   it("returns null for an authored (non-adapter) drill item ⇒ ladder drops the rung", () => {
     const authored = untimedContentItems().find(
-      (it) => it.kind === "numeric-authored",
+      (it) => it.kind === "numeric-authored" && !it.generator,
     )!;
     const m = materializeUntimedItem(authored, 1, 0);
     expect(m.kind).toBe("numeric");
     if (m.kind !== "numeric") return;
     expect(drillWorkedSiblingLevel(m)).toBeNull();
+  });
+});
+
+/**
+ * Bug 2 — a GENERATOR-BACKED authored family (the reported "two pipes fill a
+ * tank" combined-rates floor) must NOT drop the worked-sibling rung: it can
+ * obviously produce a same-kind, different-numbers sibling, so the rung must
+ * render a real worked example. Only truly-unique authored singletons (no
+ * generator) may omit it.
+ */
+describe("drillWorkedSiblingLevel — generator-backed authored family (rates/work)", () => {
+  it("the rates floor renders a NON-EMPTY worked sibling for every parametric draw", () => {
+    let checked = 0;
+    for (let seed = 1; seed <= 24; seed++) {
+      for (const item of drawContentDrill(RATES, seed, 5)) {
+        if (item.item.kind !== "numeric-authored" || !item.item.generator) continue;
+        checked++;
+
+        const level = drillWorkedSiblingLevel(item);
+        expect(level, `level for ${item.question.id}`).not.toBeNull();
+
+        const sib = buildWorkedSibling({
+          level: level!,
+          question: item.question,
+          seed: seed * 31 + 5,
+        });
+        expect(sib, `sibling for ${item.question.id}`).not.toBeNull();
+        if (!sib) continue;
+
+        expect(sib.prompt.trim().length).toBeGreaterThan(0);
+        expect(sib.steps.length).toBeGreaterThan(0);
+        expect(sib.steps.some((s) => /\d/.test(s))).toBe(true);
+        expect(/\d/.test(sib.answer)).toBe(true);
+        // Different numbers ⇒ a different statement (never re-shows the current one).
+        expect(sib.prompt).not.toBe(item.question.prompt);
+      }
+    }
+    // Not vacuous: parametric rates items were actually exercised.
+    expect(checked).toBeGreaterThan(10);
+  });
+
+  it("a static authored floor in another topic still drops the rung (null)", () => {
+    let checkedStatic = 0;
+    for (let seed = 1; seed <= 10; seed++) {
+      for (const item of drawContentDrill(GEOMETRY, seed, 5)) {
+        if (item.item.kind === "numeric-authored" && !item.item.generator) {
+          expect(drillWorkedSiblingLevel(item)).toBeNull();
+          checkedStatic++;
+        }
+      }
+    }
+    expect(checkedStatic).toBeGreaterThan(0);
   });
 });

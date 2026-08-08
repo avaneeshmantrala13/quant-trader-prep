@@ -15,6 +15,7 @@ import {
   type MaterializedBrainteaserItem,
   type MaterializedNumericItem,
 } from "@/lib/diagnostic/untimedRun";
+import { flashcardSignature, numericSignature } from "@/lib/regenerate";
 import {
   UNTIMED_BLUEPRINT,
   type UntimedItem,
@@ -142,6 +143,24 @@ function drawSeed(seed: number, i: number): number {
   return (seed + i * 6151 + 17) >>> 0;
 }
 
+/**
+ * The STABLE content signature of a drawn content item (normalized prompt +
+ * exact answer). Two draws collide IFF the learner would perceive the SAME
+ * rendered question. This is the dedup key that guarantees no exact-duplicate
+ * question within a drill session.
+ */
+export function contentSignature(item: MaterializedNumericItem): string {
+  return numericSignature(item.question);
+}
+
+/** The stable content signature of a drawn brainteaser (prompt + answer). */
+export function brainteaserSignature(item: MaterializedBrainteaserItem): string {
+  return flashcardSignature(item.flashcard);
+}
+
+/** Reseed attempts before accepting that a family can't produce a novel draw. */
+const DRAW_RESEED_CAP = 8;
+
 /** All non-brainteaser blueprint items authored/adapted for a given topic. */
 export function contentItemsForTopic(topicKey: string): UntimedItem[] {
   return UNTIMED_BLUEPRINT.filter(
@@ -150,24 +169,52 @@ export function contentItemsForTopic(topicKey: string): UntimedItem[] {
 }
 
 /**
- * Draw one weakest-first CONTENT drill round for `topicKey`: cycle that topic's
- * blueprint items (floor / ceiling / hard-adapter), materialized to fresh
- * free-response instances via the SAME `materializeUntimedItem` the untimed
- * diagnostic uses. Empty ⇒ no items (a topic with no bank entry is skipped by
- * the caller). Deterministic given `seed`.
+ * Draw one weakest-first CONTENT drill round for `topicKey`, GUARANTEEING every
+ * served item is novel: no two items in the returned round share a content
+ * signature, and none collides with `avoid` (the session-wide set of signatures
+ * already served this drill session). Cycles the topic's blueprint items
+ * (floor / ceiling / hard-adapter), materialized via the SAME
+ * `materializeUntimedItem` the untimed diagnostic uses; on a collision it
+ * RESEEDS the same family (parametric families draw genuinely different numbers)
+ * and, if that family is a static singleton that cannot vary, rotates to the
+ * next distinct blueprint item — so distinct instances are cycled before any
+ * repeat rather than sampling with replacement.
+ *
+ * Empty ⇒ no items (a topic with no bank entry is skipped by the caller).
+ * Deterministic given `seed`. Returns up to `count` items (fewer only if the
+ * topic genuinely cannot produce that many distinct instances — never a repeat).
  */
 export function drawContentDrill(
   topicKey: string,
   seed: number,
   count: number = DRILL_ROUND_SIZE,
+  avoid?: ReadonlySet<string>,
 ): MaterializedNumericItem[] {
   const pool = contentItemsForTopic(topicKey);
   if (pool.length === 0) return [];
+  const seen = new Set<string>(avoid);
   const out: MaterializedNumericItem[] = [];
   for (let i = 0; i < count; i++) {
-    const item = pool[i % pool.length];
-    const m = materializeUntimedItem(item, drawSeed(seed, i), i);
-    if (m.kind === "numeric") out.push(m);
+    let chosen: MaterializedNumericItem | null = null;
+    // Rotate the pool starting at position i so each slot prefers a different
+    // family; fall through to later families when the preferred one is exhausted.
+    for (let p = 0; p < pool.length && !chosen; p++) {
+      const item = pool[(i + p) % pool.length];
+      const isStatic = item.kind === "numeric-authored" && !item.generator;
+      for (let r = 0; r < DRAW_RESEED_CAP; r++) {
+        const m = materializeUntimedItem(item, drawSeed(seed, i * 131 + p * 17 + r), i);
+        if (m.kind !== "numeric") break;
+        const sig = contentSignature(m);
+        if (!seen.has(sig)) {
+          seen.add(sig);
+          chosen = m;
+          break;
+        }
+        // A static singleton can't vary on reseed — stop and try another family.
+        if (isStatic) break;
+      }
+    }
+    if (chosen) out.push(chosen);
   }
   return out;
 }
@@ -178,21 +225,37 @@ export function brainteaserBlueprintItems(): UntimedItem[] {
 }
 
 /**
- * Draw one BRAINTEASER drill round (competency::brainteaser-reasoning): cycle
- * the brainteaser families, materialized to fresh flashcards. Deterministic
- * given `seed`.
+ * Draw one BRAINTEASER drill round (competency::brainteaser-reasoning),
+ * GUARANTEEING every served card is novel: no two cards share a content
+ * signature and none collides with `avoid` (the session-wide set). Cycles the
+ * brainteaser families (all parametric), reseeding on a collision so each draw
+ * is a genuinely different instance. Deterministic given `seed`.
  */
 export function drawBrainteaserDrill(
   seed: number,
   count: number = DRILL_ROUND_SIZE,
+  avoid?: ReadonlySet<string>,
 ): MaterializedBrainteaserItem[] {
   const pool = brainteaserBlueprintItems();
   if (pool.length === 0) return [];
+  const seen = new Set<string>(avoid);
   const out: MaterializedBrainteaserItem[] = [];
   for (let i = 0; i < count; i++) {
-    const item = pool[i % pool.length];
-    const m = materializeUntimedItem(item, drawSeed(seed, i), i);
-    if (m.kind === "brainteaser") out.push(m);
+    let chosen: MaterializedBrainteaserItem | null = null;
+    for (let p = 0; p < pool.length && !chosen; p++) {
+      const item = pool[(i + p) % pool.length];
+      for (let r = 0; r < DRAW_RESEED_CAP; r++) {
+        const m = materializeUntimedItem(item, drawSeed(seed, i * 131 + p * 17 + r), i);
+        if (m.kind !== "brainteaser") break;
+        const sig = brainteaserSignature(m);
+        if (!seen.has(sig)) {
+          seen.add(sig);
+          chosen = m;
+          break;
+        }
+      }
+    }
+    if (chosen) out.push(chosen);
   }
   return out;
 }

@@ -77,13 +77,16 @@ export function materializeUntimedItem(
 ): MaterializedUntimedItem {
   const rng = new Rng(itemSeed(seed, index));
   if (item.kind === "numeric-authored") {
+    // A parametric family varies its numbers per seed (infinite bank); a plain
+    // authored singleton re-serves its static question verbatim.
+    const question = item.generator ? item.generator(rng) : item.question;
     return {
       kind: "numeric",
       item,
       topicKey: item.topicKey,
       subtopic: item.subtopic,
-      question: item.question,
-      tier: item.question.difficulty,
+      question,
+      tier: question.difficulty,
     };
   }
   if (item.kind === "numeric-adapter") {

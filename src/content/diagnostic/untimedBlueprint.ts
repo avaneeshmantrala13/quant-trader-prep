@@ -1,9 +1,15 @@
-import type { Difficulty, FlashcardGenerator, NumericQuestion } from "@/types/content";
+import type {
+  Difficulty,
+  FlashcardGenerator,
+  NumericQuestion,
+  NumericQuestionGenerator,
+} from "@/types/content";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 import { COMPETENCY_BRAINTEASER } from "@/lib/roadmap/skillGraph";
 import type { MentalMathSubtopic } from "@/content/mentalMath/subtopics";
 import { ALL_BRAINTEASER_FAMILIES } from "@/content/brainteasers/generators";
 import { ALL_TECHNIQUE_FAMILIES } from "@/content/brainteasers/techniqueGenerators";
+import { combinedRatesFloorGenerator } from "./floorGenerators";
 
 /**
  * THE ~100-ITEM UNTIMED FREE-RESPONSE DIAGNOSTIC BLUEPRINT (Stage 2, spec §2 /
@@ -86,6 +92,16 @@ interface BaseUntimedItem {
 export interface UntimedNumericItem extends BaseUntimedItem {
   kind: "numeric-authored";
   question: NumericQuestion;
+  /**
+   * OPTIONAL exact-verified parametric generator for this item's family. When
+   * present, materialization draws a FRESH same-family instance (varied numbers)
+   * from the seed instead of re-serving the static `question`, so the drilling
+   * bank feels infinite and a rung-3 worked SIBLING can be produced (a static
+   * `question` alone cannot vary and drops the sibling rung). The static
+   * `question` remains the canonical/floor exemplar and the difficulty-floor
+   * allowlist keys off it. Absent ⇒ a genuinely-unique authored singleton.
+   */
+  generator?: NumericQuestionGenerator;
 }
 
 /** A hard-ceiling item projected from a hard OA archetype via `frAdapters`. */
@@ -119,6 +135,21 @@ function num(
   subtopic: string = topicKey,
 ): UntimedNumericItem {
   return { kind: "numeric-authored", topicKey, subtopic, tier, question };
+}
+
+/**
+ * Build an authored numeric item that ALSO carries an exact-verified parametric
+ * `generator` for its family (see {@link UntimedNumericItem.generator}). The
+ * static `question` stays the canonical exemplar; every draw varies its numbers.
+ */
+function numGen(
+  topicKey: string,
+  tier: UntimedTier,
+  question: NumericQuestion,
+  generator: NumericQuestionGenerator,
+  subtopic: string = topicKey,
+): UntimedNumericItem {
+  return { kind: "numeric-authored", topicKey, subtopic, tier, question, generator };
 }
 
 /** Build a hard-ceiling adapter item (defaults to `ceiling`). */
@@ -258,7 +289,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
     ),
     digitCounting,
   ),
-  num(
+  numGen(
     RATES,
     "floor",
     q(
@@ -276,6 +307,10 @@ const CONTENT_ITEMS: UntimedItem[] = [
         ],
       },
     ),
+    // Parametric combined-rates family: every draw varies the solo times, so the
+    // "two pipes fill a tank" floor never re-emits the same rendered problem and
+    // its rung-3 worked sibling can be produced from the SAME family.
+    combinedRatesFloorGenerator,
   ),
   num(
     RATES,

@@ -25,6 +25,8 @@ import { HintLadder } from "@/components/tutor/HintLadder";
 import {
   buildContentDrillAttempt,
   buildBrainteaserDrillAttempt,
+  brainteaserSignature,
+  contentSignature,
   drawBrainteaserDrill,
   drawContentDrill,
   drillingProgress,
@@ -77,6 +79,10 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
   const rngRef = useRef<Rng>(new Rng(Math.floor(Math.random() * 1e9)));
   const [round, setRound] = useState<ActiveRound | null>(null);
   const doneRef = useRef(false);
+  // Every content signature served THIS drill session. Passed to each draw so no
+  // exact-duplicate question is ever re-served across rounds (bug: the same
+  // rendered problem repeating within a session).
+  const seenSigRef = useRef<Set<string>>(new Set());
 
   const prog = useMemo(() => drillingProgress(progress), [progress]);
 
@@ -94,20 +100,24 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
     }
     const seed = rngRef.current.int(0, 2_000_000_000);
     if (target.serve === "numeric" && target.topicKey) {
-      const items = drawContentDrill(target.topicKey, seed, DRILL_ROUND_SIZE);
+      const items = drawContentDrill(
+        target.topicKey,
+        seed,
+        DRILL_ROUND_SIZE,
+        seenSigRef.current,
+      );
       // A topic with no bank entry would loop forever — fall back to a timed
       // info panel (never happens for scored nodes, which all carry items).
       if (items.length === 0) {
         setRound({ serve: "timed-info", target });
         return;
       }
+      for (const it of items) seenSigRef.current.add(contentSignature(it));
       setRound({ serve: "numeric", target, items });
     } else if (target.serve === "brainteaser") {
-      setRound({
-        serve: "brainteaser",
-        target,
-        items: drawBrainteaserDrill(seed, DRILL_ROUND_SIZE),
-      });
+      const items = drawBrainteaserDrill(seed, DRILL_ROUND_SIZE, seenSigRef.current);
+      for (const it of items) seenSigRef.current.add(brainteaserSignature(it));
+      setRound({ serve: "brainteaser", target, items });
     } else if (target.serve === "trading") {
       setRound({ serve: "trading", target });
     } else {
