@@ -12,6 +12,8 @@ import type { ItemAttempt } from "@/types/mastery";
 import { Rng } from "@/lib/rng";
 import { gradeFreeResponse, parseFreeResponse, formatNumericAnswer } from "@/lib/numeric";
 import { buildHintLadder } from "@/lib/tutor/hintLadder";
+import { buildWorkedSibling } from "@/lib/tutor/workedSibling";
+import { drillWorkedSiblingLevel } from "@/lib/tutor/drillSibling";
 import { resolveNumericTag } from "@/lib/tutor/misconception";
 import {
   startEpisode,
@@ -317,6 +319,16 @@ function NumericDrillItem({
     [question, lastWrong],
   );
 
+  // Rung-3 worked sibling for the drill item. Adapter (hard-ceiling) items can
+  // regenerate a genuine same-family instance with different numbers; authored
+  // singletons cannot, so this is null and the ladder drops the worked-sibling
+  // rung (header ⇔ steps invariant — no orphan header).
+  const sibling = useMemo(() => {
+    if (!ladder) return null;
+    const level = drillWorkedSiblingLevel(item);
+    return level ? buildWorkedSibling({ level, question }) : null;
+  }, [ladder, item, question]);
+
   const submit = () => {
     if (resolved) return;
     const g = gradeFreeResponse(question, raw);
@@ -384,7 +396,11 @@ function NumericDrillItem({
       )}
 
       {ladder && episode.revealed > 0 && (
-        <HintLadder rungs={ladder} controlledRevealed={episode.revealed} />
+        <HintLadder
+          rungs={ladder}
+          siblingWorked={sibling}
+          controlledRevealed={episode.revealed}
+        />
       )}
 
       {resolved && (

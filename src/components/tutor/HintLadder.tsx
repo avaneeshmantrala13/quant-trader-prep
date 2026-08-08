@@ -21,6 +21,26 @@ function isMcSpec(p: HintRung["payload"]): p is MonteCarloSpec {
   return !!p && "kind" in p && "trials" in p;
 }
 
+/**
+ * INVARIANT GUARD (header ⇔ steps). The worked-sibling rung's header ("the SAME
+ * kind of problem with different numbers, worked one step at a time") is ONLY
+ * meaningful when a genuine sibling with at least one non-empty worked step is
+ * supplied. This predicate is the single source of truth the view uses to decide
+ * whether that rung may render at all — so its header is never shown as an empty,
+ * useless hint.
+ */
+function hasWorkedSteps(
+  sw: SiblingWorked | null | undefined,
+): sw is SiblingWorked {
+  return (
+    !!sw &&
+    typeof sw.prompt === "string" &&
+    sw.prompt.trim().length > 0 &&
+    Array.isArray(sw.steps) &&
+    sw.steps.some((s) => typeof s === "string" && s.trim().length > 0)
+  );
+}
+
 const RUNG_LABEL: Record<HintRung["kind"], string> = {
   "name-trap": "Name the trap",
   representation: "Make a plan of attack",
@@ -69,12 +89,24 @@ export function HintLadder({
 }) {
   const controlled = controlledRevealed != null;
   const [selfRevealed, setSelfRevealed] = useState(1);
+
+  // Enforce the header ⇔ steps invariant BEFORE any disclosure maths: if no
+  // genuine worked sibling was produced (fixed-answer / unique-concept item, or
+  // a caller that supplies none), DROP the worked-sibling rung entirely so its
+  // header is never rendered without a calculation beneath it. The ladder then
+  // discloses the NEXT meaningful rung in its place — no orphan header, no gap.
+  const workedOk = hasWorkedSteps(siblingWorked);
+  const renderRungs = workedOk
+    ? rungs
+    : rungs.filter((r) => r.kind !== "worked-sibling");
+
+  const total = renderRungs.length;
   const revealed = controlled
-    ? Math.max(0, Math.min(controlledRevealed, rungs.length))
-    : selfRevealed;
-  const shown = rungs.slice(0, revealed);
-  const hasMore = !controlled && revealed < rungs.length;
-  const nextRung = rungs[revealed];
+    ? Math.max(0, Math.min(controlledRevealed, total))
+    : Math.min(selfRevealed, total);
+  const shown = renderRungs.slice(0, revealed);
+  const hasMore = !controlled && revealed < total;
+  const nextRung = renderRungs[revealed];
 
   /** The wording to display for a rung: LLM phrasing (non-reveal) else original. */
   const displayText = (rung: HintRung): { text: string; aiAssisted: boolean } => {
@@ -91,18 +123,18 @@ export function HintLadder({
       <div className="flex items-center justify-between">
         <span className="label text-accent">Coaching · not the answer yet</span>
         <span className="num text-[10px] uppercase tracking-label text-muted">
-          Hint {Math.min(revealed, rungs.length)} / {rungs.length}
+          Hint {Math.min(revealed, total)} / {total}
         </span>
       </div>
 
       <ol className="space-y-3">
-        {shown.map((rung) => {
+        {shown.map((rung, i) => {
           const disp = displayText(rung);
           return (
           <li key={rung.rung} className="border-l-2 border-accent pl-3">
             <div className="flex items-center justify-between gap-2">
               <div className="label text-[10px] text-secondary">
-                Rung {rung.rung} · {RUNG_LABEL[rung.kind]}
+                Rung {i + 1} · {RUNG_LABEL[rung.kind]}
               </div>
               {disp.aiAssisted && (
                 <span className="chip text-[10px] text-accent">✨ AI-assisted</span>
