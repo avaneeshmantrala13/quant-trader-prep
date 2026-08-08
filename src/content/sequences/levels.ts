@@ -70,6 +70,7 @@ export const sequenceLevels: Level[] = [
     generator: mixSequenceQuiz([
       Q.polynomialNext,
       Q.interleavedNext,
+      Q.tribonacciNext,
       Q.alternatingOpNext,
     ]),
     lesson: {
@@ -129,6 +130,8 @@ export const sequenceLevels: Level[] = [
       N.polynomialNumeric,
       N.interleavedNumeric,
       N.fibonacciNumeric,
+      N.tribonacciNumeric,
+      N.lookAndSayNumeric,
       N.alternatingOpNumeric,
     ]),
     lesson: {

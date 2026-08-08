@@ -87,7 +87,7 @@ export function HintLadder({
   };
 
   return (
-    <div className="animate-print-in space-y-3 border border-subtle bg-surface p-4">
+    <div className="animate-print-in space-y-3 rounded border border-subtle bg-surface p-4">
       <div className="flex items-center justify-between">
         <span className="label text-accent">Coaching · not the answer yet</span>
         <span className="num text-[10px] uppercase tracking-label text-muted">

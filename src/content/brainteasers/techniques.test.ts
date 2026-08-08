@@ -15,6 +15,8 @@ import {
   minDropsTwoBalls,
   minPerBoxThreshold,
   modularHats,
+  openLockersAfterToggles,
+  openLockersBruteForce,
   smallestDigitProductBruteForce,
   smallestNumberWithDigitProduct,
   trailingZerosBruteForce,
@@ -25,6 +27,7 @@ import {
   genBinaryWeights,
   genDigitProduct,
   genHouseOfCards,
+  genLockerToggle,
   genModularHats,
   genPigeonhole,
   genSubtractionGame,
@@ -211,6 +214,28 @@ describe("Modular-checksum hats solver", () => {
 });
 
 /* ========================================================================== */
+/*  4b. Divisor-parity toggling lockers (dataset 3) — ⌊√N⌋ vs simulation.       */
+/* ========================================================================== */
+
+describe("Toggling-lockers divisor-parity solver", () => {
+  it("reproduces the classic 100-locker answer", () => {
+    expect(openLockersAfterToggles(100)).toBe(10); // perfect squares 1..100
+  });
+
+  it("closed form ⌊√N⌋ matches a full toggle simulation for all N", () => {
+    for (let N = 1; N <= 400; N++) {
+      expect(openLockersAfterToggles(N)).toBe(openLockersBruteForce(N));
+    }
+  });
+
+  it("open lockers are exactly the perfect squares (count = ⌊√N⌋)", () => {
+    for (const N of [1, 2, 3, 15, 16, 30, 99, 100, 256, 300, 1000]) {
+      expect(openLockersAfterToggles(N)).toBe(Math.floor(Math.sqrt(N)));
+    }
+  });
+});
+
+/* ========================================================================== */
 /*  5. Subtraction game (dataset 7, LG17) — closed form vs exhaustive.          */
 /* ========================================================================== */
 
@@ -352,6 +377,21 @@ describe("technique generators are self-consistent across many seeds", () => {
     }
   });
 
+  it("genLockerToggle — open count re-derives; prompt shows N; card grades", () => {
+    for (const seed of SEEDS) {
+      const c = genLockerToggle(new Rng(seed));
+      const N = Number(idParts(c.id)[3]); // bt lockers toggle <N>
+      const open = openLockersAfterToggles(N);
+      expect(c.answer).toContain(String(open));
+      expect(c.prompt).toContain(String(N));
+      expect(c.difficulty).toBe("hard");
+      // Objectively gradable: the open-locker count is a single integer.
+      expect(c.gradable).toBe(true);
+      expect(c.numericAnswer).toBe(open);
+      expect(c.explanation.length).toBeGreaterThan(80);
+    }
+  });
+
   it("each generator is deterministic per seed and varied across seeds", () => {
     const gens = [
       genPigeonhole,
@@ -362,6 +402,7 @@ describe("technique generators are self-consistent across many seeds", () => {
       genBinaryWeights,
       genModularHats,
       genSubtractionGame,
+      genLockerToggle,
     ];
     for (const gen of gens) {
       const a = gen(new Rng(24680));
@@ -412,9 +453,9 @@ describe("new Techniques Toolkit levels are wired for infinite generation", () =
     }
   });
 
-  it("family counts match the plan (6 counting, 1 invariant, 1 game)", () => {
+  it("family counts match the plan (6 counting, 2 invariant, 1 game)", () => {
     expect(byId("bt-4").flashcardGenerators?.length).toBe(6);
-    expect(byId("bt-5").flashcardGenerators?.length).toBe(1);
+    expect(byId("bt-5").flashcardGenerators?.length).toBe(2);
     expect(byId("bt-6").flashcardGenerators?.length).toBe(1);
   });
 

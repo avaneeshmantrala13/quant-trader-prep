@@ -27,13 +27,17 @@ import type { Question, QuestionGenerator } from "@/types/content";
 import { Rng } from "@/lib/rng";
 import {
   F,
+  basketArbProfit,
+  basketNav,
   binom,
+  bookOverround,
   coinBiasPosterior,
   completeGraph,
   couponCollectorEV,
   cubeGraph,
   cycleGraph,
   cycleMeetingTime,
+  deVigFairProb,
   expectedHittingTime,
   expectedWaitForPattern,
   fracExact,
@@ -41,10 +45,13 @@ import {
   informedLiftPosteriorMean,
   keepHigherOfTwoEV,
   kellyFraction,
+  makeMarketPickoffLoss,
   maxOfDiceEV,
   minOfDiceEV,
+  nextCardRedProb,
   oneRerollEV,
   pathIntersectProb,
+  pickoffTradeCount,
   resetCollectorEV,
   ruinExpectedDuration,
   sameTimeMeetProb,
@@ -861,6 +868,276 @@ export function buildCycleMeeting(rng: Rng): Built {
 }
 
 /* ========================================================================== */
+/*  Net-new — Next-card conditional fair value (info in the order)             */
+/* ========================================================================== */
+
+/** Curated (red, black, revealed, revealed-red) decks with clean, distinct math. */
+const NEXT_CARD: { r: number; b: number; k: number; j: number }[] = [
+  { r: 5, b: 5, k: 4, j: 3 },
+  { r: 6, b: 4, k: 3, j: 1 },
+  { r: 8, b: 4, k: 5, j: 3 },
+  { r: 7, b: 5, k: 4, j: 2 },
+  { r: 5, b: 7, k: 5, j: 1 },
+  { r: 4, b: 6, k: 3, j: 2 },
+];
+
+/**
+ * Next-card conditional fair value: a deck of r red + b black; k cards have been
+ * revealed, j of them red. Fair P(next card is red) = (r−j)/((r+b)−k) =
+ * `nextCardRedProb`. Distractors: the UNCONDITIONAL r/(r+b) (ignoring the reveal),
+ * the empirical j/k (only the seen frequency), and (r−j)/(r+b) (updated the reds
+ * but forgot to shrink the deck).
+ */
+export function buildNextCard(rng: Rng): Built {
+  const { r, b, k, j } = rng.pick(NEXT_CARD);
+  const answer = nextCardRedProb(r, b, j, k);
+  const uncond = F(r, r + b);
+  const empirical = F(j, k);
+  const forgotDenom = F(r - j, r + b);
+
+  const distractors: Choice[] = [
+    {
+      text: fmt(uncond),
+      rationale: `${fmt(uncond)} = r/(r+b) is the fair value for a FRESH deck. It ignores that ${k} cards (including ${j} red) are already gone, which shifts the odds.`,
+    },
+    {
+      text: fmt(empirical),
+      rationale: `${fmt(empirical)} = ${j}/${k} is just the observed red frequency among the revealed cards, not the composition of what REMAINS in the deck.`,
+    },
+    {
+      text: fmt(forgotDenom),
+      rationale: `${fmt(forgotDenom)} = (r−j)/(r+b) correctly removes the ${j} seen reds from the numerator but forgets to shrink the denominator to the ${r + b - k} cards left.`,
+    },
+  ];
+
+  const question: Question = {
+    id: `hard-nextCard-${r}-${b}-${k}-${j}`,
+    prompt:
+      `A shuffled deck has ${r} red and ${b} black cards. ${k} cards have been turned over one by one, and ${j} of them were red. ` +
+      `A fair price is quoted on whether the NEXT card is red. What is the probability that the next card is red?`,
+    explanation:
+      `Only the cards still in the deck matter: ${r - j} red remain out of ${r + b - k} total, so P(next red) = (r−j)/((r+b)−k) = ${r - j}/${r + b - k} = ${fmt(answer)}. ` +
+      `The unconditional r/(r+b) = ${fmt(uncond)} ignores the reveal; the empirical ${j}/${k} confuses "what was seen" with "what is left".`,
+    difficulty: "hard",
+    concept: "Next-card conditional fair value (sampling without replacement)",
+    source: "Hard OA · Next-card pricing",
+    family: "hardNextCard",
+    ...assembleFour(
+      rng,
+      answer,
+      `Red remaining over cards remaining: (r−j)/((r+b)−k) = ${fmt(answer)}.`,
+      distractors,
+    ),
+  };
+  return { answer, question };
+}
+
+/* ========================================================================== */
+/*  Net-new — De-vig (remove the overround to a fair leg probability)          */
+/* ========================================================================== */
+
+/** Curated two-leg books (decimal odds n/d each) with a positive overround. */
+const DEVIG_BOOKS: { n0: number; d0: number; n1: number; d1: number }[] = [
+  { n0: 3, d0: 2, n1: 5, d1: 2 }, // 1.5 & 2.5 ⇒ fair0 5/8
+  { n0: 5, d0: 2, n1: 3, d1: 2 }, // 2.5 & 1.5 ⇒ fair0 3/8
+  { n0: 3, d0: 2, n1: 2, d1: 1 }, // 1.5 & 2.0 ⇒ fair0 4/7
+  { n0: 2, d0: 1, n1: 3, d1: 2 }, // 2.0 & 1.5 ⇒ fair0 3/7
+];
+
+/** Render decimal odds n/d as a short number string (all curated books terminate). */
+function oddsStr(n: number, d: number): string {
+  return String(n / d);
+}
+
+/**
+ * De-vig: a two-outcome book quotes decimal odds o0, o1 whose implied
+ * probabilities sum to more than 1 (the overround). The fair probability of
+ * outcome A, after removing the vig, is (1/o0)/(1/o0 + 1/o1) = `deVigFairProb`.
+ * Distractors: the RAW implied 1/o0 (keeps the vig), the OTHER leg's fair prob
+ * (1 − answer), and 1 − (1/o1) (complement of B's raw implied, un-normalized).
+ */
+export function buildDeVig(rng: Rng): Built {
+  const { n0, d0, n1, d1 } = rng.pick(DEVIG_BOOKS);
+  const answer = deVigFairProb([n0, n1], [d0, d1]);
+  const rawImplied0 = F(d0, n0); // 1/o0, includes the vig
+  const otherFair = F(1).sub(answer); // fair prob of the OTHER leg
+  const complementRawB = F(1).sub(F(d1, n1)); // 1 − raw implied of B
+  const overround = bookOverround([n0, n1], [d0, d1]);
+
+  const distractors: Choice[] = [
+    {
+      text: fmt(rawImplied0),
+      rationale: `${fmt(rawImplied0)} = 1/${oddsStr(n0, d0)} is the RAW implied probability, which still contains the bookmaker's margin (overround ${fmt(overround)}). You must divide by the booksum to remove it.`,
+    },
+    {
+      text: fmt(otherFair),
+      rationale: `${fmt(otherFair)} is the fair probability of the OTHER outcome (1 − the answer). Read the wrong leg.`,
+    },
+    {
+      text: fmt(complementRawB),
+      rationale: `${fmt(complementRawB)} = 1 − 1/${oddsStr(n1, d1)} takes one minus B's raw implied probability, which is not the same as normalizing away the vig.`,
+    },
+  ];
+
+  const question: Question = {
+    id: `hard-deVig-${n0}-${d0}-${n1}-${d1}`,
+    prompt:
+      `A bookmaker offers a two-outcome market at decimal odds ${oddsStr(n0, d0)} on outcome A and ${oddsStr(n1, d1)} on outcome B. ` +
+      `The implied probabilities sum to more than 1 (the overround). After removing the vig, what is the fair probability of outcome A?`,
+    explanation:
+      `Raw implied probs are 1/${oddsStr(n0, d0)} and 1/${oddsStr(n1, d1)}, summing to 1 + ${fmt(overround)}. Renormalize: fair P(A) = (1/o_A)/(1/o_A + 1/o_B) = ${fmt(answer)}.`,
+    difficulty: "hard",
+    concept: "De-vig / overround removal (fair leg probability)",
+    source: "Hard OA · Vig removal",
+    family: "hardDeVig",
+    ...assembleFour(
+      rng,
+      answer,
+      `Normalizing the implied probs removes the vig: fair P(A) = ${fmt(answer)}.`,
+      distractors,
+    ),
+  };
+  return { answer, question };
+}
+
+/* ========================================================================== */
+/*  Net-new — Basket / NAV (ETF) creation-redemption arbitrage                 */
+/* ========================================================================== */
+
+/** Curated baskets: integer share counts + prices, plus a quoted ETF price. */
+const BASKETS: { shares: number[]; prices: number[]; etf: number; names: string[] }[] = [
+  { shares: [2, 3], prices: [30, 20], etf: 125, names: ["X", "Y"] },
+  { shares: [1, 4], prices: [50, 10], etf: 84, names: ["X", "Y"] },
+  { shares: [3, 2], prices: [15, 25], etf: 100, names: ["X", "Y"] },
+  { shares: [1, 2, 1], prices: [20, 10, 30], etf: 76, names: ["X", "Y", "Z"] },
+];
+
+/**
+ * Basket / NAV creation-redemption arbitrage: an ETF unit holds the given shares
+ * of each underlying at the given prices, while the ETF itself trades at `etf`.
+ * The risk-free profit per unit is |NAV − price| = `basketArbProfit`. Distractors:
+ * the NAV itself (the fair value, not the edge), the quoted ETF price, and the
+ * UNWEIGHTED price sum vs the quote (forgot the share counts).
+ */
+export function buildBasketNav(rng: Rng): Built {
+  const { shares, prices, etf, names } = rng.pick(BASKETS);
+  const nav = basketNav(shares, prices);
+  const answer = basketArbProfit(shares, prices, etf);
+  const unweighted = prices.reduce((s, p) => s + p, 0);
+  const unweightedArb = Math.abs(unweighted - etf);
+
+  const holdings = shares
+    .map((s, i) => `${s} share(s) of ${names[i]} at $${prices[i]}`)
+    .join(", ");
+
+  const distractors: Choice[] = [
+    {
+      text: fmt(nav),
+      rationale: `$${nav} is the basket's NAV (fair value), not the ARBITRAGE profit. The edge is the gap between NAV and the quoted price.`,
+    },
+    {
+      text: fmt(etf),
+      rationale: `$${etf} is just the quoted ETF price. The profit is how far it sits from the $${nav} NAV.`,
+    },
+    {
+      text: fmt(unweightedArb),
+      rationale: `$${unweightedArb} = |(Σ prices) − price| adds the share prices WITHOUT their unit counts, so it misprices the basket.`,
+    },
+  ];
+
+  const question: Question = {
+    id: `hard-basketNav-${shares.join("_")}-${prices.join("_")}-${etf}`,
+    prompt:
+      `An ETF creation unit holds ${holdings}. The ETF trades at $${etf} per unit. ` +
+      `What is the risk-free arbitrage profit per unit from creating or redeeming against the underlying?`,
+    explanation:
+      `NAV = Σ shares·price = ${shares.map((s, i) => `${s}·${prices[i]}`).join(" + ")} = $${nav}. The ETF quote is $${etf}, so the create/redeem edge is |NAV − price| = $${fmt(answer)}.`,
+    difficulty: "hard",
+    concept: "Basket/NAV creation-redemption arbitrage (ETF pricing)",
+    source: "Hard OA · Basket/NAV pricing",
+    family: "hardBasketNav",
+    ...assembleFour(
+      rng,
+      answer,
+      `The arbitrage edge is |NAV − price| = |${nav} − ${etf}| = ${fmt(answer)}.`,
+      distractors,
+    ),
+  };
+  return { answer, question };
+}
+
+/* ========================================================================== */
+/*  Net-new — Make-a-market expected pick-off loss (informed flow)             */
+/* ========================================================================== */
+
+/** Curated (die faces n, bid, ask) with a two-sided pick-off and clean loss. */
+const MAKE_MARKET: { n: number; bid: number; ask: number }[] = [
+  { n: 6, bid: 2, ask: 4 },
+  { n: 8, bid: 3, ask: 6 },
+  { n: 10, bid: 4, ask: 8 },
+  { n: 8, bid: 4, ask: 5 },
+  { n: 6, bid: 2, ask: 5 },
+];
+
+/**
+ * Make-a-market pick-off P&L: the true value is uniform on {1..n}; you post a
+ * two-sided market (bid, ask), and a fully informed counterparty lifts your ask
+ * when V > ask (you lose V − ask) and hits your bid when V < bid (you lose
+ * bid − V). Expected loss per quote = `makeMarketPickoffLoss`. Distractors: only
+ * the upside pick-off (forgot the bid side), the trade FREQUENCY (counts trades
+ * but ignores magnitude), and half the loss (a scaling slip).
+ */
+export function buildMakeMarket(rng: Rng): Built {
+  const { n, bid, ask } = rng.pick(MAKE_MARKET);
+  const values = Array.from({ length: n }, (_, i) => i + 1);
+  const answer = makeMarketPickoffLoss(values, bid, ask);
+  let upside = F(0);
+  for (const v of values) if (v > ask) upside = upside.add(F(v - ask, 1));
+  const oneSide = upside.div(n);
+  const tradeFreq = F(pickoffTradeCount(values, bid, ask), n);
+  const half = answer.div(2);
+
+  const distractors: Choice[] = [
+    {
+      text: fmt(oneSide),
+      rationale: `${fmt(oneSide)} counts only the ask-side pick-offs (V > ${ask}). The informed trader ALSO hits your bid when V < ${bid}, and that loss must be added.`,
+    },
+    {
+      text: fmt(tradeFreq),
+      rationale: `${fmt(tradeFreq)} is the probability a trade happens at all, ignoring HOW FAR in-the-money it is. A pick-off 3 away hurts more than one 1 away.`,
+    },
+    {
+      text: fmt(half),
+      rationale: `${fmt(half)} halves the true expected loss — a scaling slip (e.g. averaging the two sides instead of summing them).`,
+    },
+    {
+      text: fmt(F(0)),
+      rationale: `0 assumes a symmetric quote is safe. Against a FULLY informed counterparty every quote is adversely selected, so the expected loss is strictly positive.`,
+    },
+  ];
+
+  const question: Question = {
+    id: `hard-makeMarket-${n}-${bid}-${ask}`,
+    prompt:
+      `A security's true value is equally likely to be any integer from 1 to ${n}. You must quote a two-sided market: bid ${bid}, ask ${ask}. ` +
+      `A fully informed counterparty buys at your ask whenever the value exceeds ${ask} and sells at your bid whenever it is below ${bid}. What is your expected pick-off loss per quote?`,
+    explanation:
+      `Sum the adverse trades: E[loss] = (1/${n})·[Σ_{V>${ask}}(V−${ask}) + Σ_{V<${bid}}(${bid}−V)] = ${fmt(answer)}. Only the magnitude of each in-the-money pick-off counts, not merely how often a trade occurs.`,
+    difficulty: "hard",
+    concept: "Make-a-market pick-off loss vs informed flow",
+    source: "Hard OA · Make-a-market",
+    family: "hardMakeMarket",
+    ...assembleFour(
+      rng,
+      answer,
+      `Summing both sides' magnitude-weighted pick-offs gives ${fmt(answer)}.`,
+      distractors,
+    ),
+  };
+  return { answer, question };
+}
+
+/* ========================================================================== */
 /*  Registry — the exported seedable generators                               */
 /* ========================================================================== */
 
@@ -880,6 +1157,10 @@ export const HARD_OA_BUILDERS: Record<string, (rng: Rng) => Built> = {
   hardStepLanding: buildStepLanding,
   hardKelly: buildKelly,
   hardCycleMeeting: buildCycleMeeting,
+  hardNextCard: buildNextCard,
+  hardDeVig: buildDeVig,
+  hardBasketNav: buildBasketNav,
+  hardMakeMarket: buildMakeMarket,
 };
 
 /** The exported OA `QuestionGenerator`s (thin `(rng) => Question` adapters). */

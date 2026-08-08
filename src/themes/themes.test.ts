@@ -1,16 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { THEMES, getTheme } from "./index";
+import { DEFAULT_THEME_ID, THEMES, getTheme } from "./index";
 import { themeToCss, type ThemeColorTokens } from "./types";
 import { BASE_LIGHT } from "./base";
 
-const REQUIRED_IDS = [
-  "broadsheet",
-  "minimalist",
-  "kids",
-  "cyberpunk",
-  "chalkboard",
-  "casino",
-];
+// The registry is hard-locked to the single minimalist theme (spec §7.2).
+const REQUIRED_IDS = ["minimalist"];
 
 const COLOR_KEYS = Object.keys(BASE_LIGHT) as (keyof ThemeColorTokens)[];
 
@@ -35,15 +29,20 @@ function contrastRatio(fg: string, bg: string): number {
 const AA = 4.5; // WCAG-AA for normal body text
 
 describe("theme registry contract", () => {
-  it("registers all required themes with unique ids", () => {
+  it("registers only the locked minimalist theme, with a unique id", () => {
     const ids = THEMES.map((t) => t.id);
     for (const id of REQUIRED_IDS) expect(ids).toContain(id);
     expect(new Set(ids).size).toBe(ids.length);
+    // No alternate themes remain — the registry is minimalist-only.
+    expect(ids).toEqual(["minimalist"]);
+    expect(DEFAULT_THEME_ID).toBe("minimalist");
   });
 
-  it("getTheme falls back to broadsheet for unknown ids", () => {
-    expect(getTheme("does-not-exist").id).toBe("broadsheet");
-    expect(getTheme(null).id).toBe("broadsheet");
+  it("getTheme always resolves to the locked minimalist theme", () => {
+    expect(getTheme("does-not-exist").id).toBe("minimalist");
+    expect(getTheme(null).id).toBe("minimalist");
+    expect(getTheme("minimalist").id).toBe("minimalist");
+    expect(getTheme().id).toBe("minimalist");
   });
 
   for (const t of THEMES) {
@@ -66,8 +65,8 @@ describe("theme registry contract", () => {
     });
   }
 
-  // Every theme's text tokens must clear WCAG-AA against the surfaces they sit
-  // on, in BOTH light and dark, so text never becomes illegible or invisible.
+  // The (single) theme's text tokens must clear WCAG-AA against the surfaces
+  // they sit on, in BOTH light and dark, so text never becomes illegible.
   const SURFACES = [
     "bg",
     "surface",
@@ -97,32 +96,8 @@ describe("theme registry contract", () => {
     }
   }
 
-  // The cyberpunk theme leans on NEON tokens as text/rules; verify the extra
-  // neon-as-foreground pairs it relies on stay WCAG-AA in BOTH modes so no neon
-  // label, chip, or mastered-node text drops below legibility.
-  it("cyberpunk: neon accent/bull/bear tokens stay AA as text", () => {
-    const cyber = getTheme("cyberpunk");
-    for (const mode of ["light", "dark"] as const) {
-      const c = cyber.colors[mode];
-      for (const bg of ["bg", "surface", "surfaceMuted"] as const) {
-        for (const fg of ["accent", "accent2", "bull", "bear"] as const) {
-          const r = contrastRatio(c[fg], c[bg]);
-          expect(
-            r,
-            `cyberpunk.${mode}: ${fg} on ${bg} = ${r.toFixed(2)}`,
-          ).toBeGreaterThanOrEqual(AA);
-        }
-      }
-      // mastered map node renders the bg token as text ON the bull fill.
-      expect(
-        contrastRatio(c.bg, c.bull),
-        `cyberpunk.${mode}: bg on bull`,
-      ).toBeGreaterThanOrEqual(AA);
-    }
-  });
-
   it("themeToCss emits :root + .dark blocks with the core tokens", () => {
-    const css = themeToCss(getTheme("broadsheet"));
+    const css = themeToCss(getTheme("minimalist"));
     expect(css).toContain(":root{");
     expect(css).toContain(".dark{");
     expect(css).toContain("--color-bg:");

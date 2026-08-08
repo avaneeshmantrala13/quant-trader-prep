@@ -57,11 +57,11 @@ export const MODE_META: Record<GoalMode, GoalModeMeta> = {
 /**
  * The product/brand name shown in the app for a given mode. Course mode
  * rebrands to "Course Remediator" so a learner focused on their probability
- * courses isn't confronted with "Quant Trader Prep" everywhere; interview mode
- * keeps the original name.
+ * courses isn't confronted with the trading wordmark everywhere; the quant
+ * interview product is branded "The Quant Factory".
  */
 export function appTitleFor(mode: GoalMode): string {
-  return mode === "course" ? "Course Remediator" : "Quant Trader Prep";
+  return mode === "course" ? "Course Remediator" : "The Quant Factory";
 }
 
 /** The two modes in display order (Course first, Interview second). */

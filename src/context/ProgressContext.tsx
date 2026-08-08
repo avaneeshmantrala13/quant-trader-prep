@@ -22,9 +22,14 @@ import {
   type DiagnosticResult,
   type GoalMode,
   type LevelProgress,
+  type PipelineMockResult,
+  type PipelineStage,
+  type PipelineState,
   type ResumeState,
   type UserProgress,
 } from "@/types/progress";
+import { FIRST_STAGE, resolveStage } from "@/lib/pipeline/stateMachine";
+import { passesDrillingGate, passesMockGate } from "@/lib/pipeline/gates";
 import {
   appendOaResult,
   clearActiveSession,
@@ -213,6 +218,29 @@ interface ProgressContextValue {
    * v-migration. See the review page for the rationale.
    */
   gradeSrsCard: (cardId: string, grade: SrsGrade, nowMs?: number) => void;
+  // ---- Guided pipeline (P8 cutover) — the stage-advance persistence seam ----
+  /**
+   * THE guided-pipeline advance writer (spec §3.4 / RESOLVED DECISION §10.5).
+   * Called by the guided shell when the CURRENT stage reports completion: it
+   * writes that stage's `PipelineState` field(s) + completion stamp, then
+   * RE-DERIVES `pipeline.stage` from the live stamps + gates via
+   * {@link resolveStage}. Per finishing stage:
+   *   • `diagnostic-untimed` → `pipeline.untimed = result` + `untimedDoneAt`
+   *   • `diagnostic-timed`   → `pipeline.timed = result` + `timedDoneAt`
+   *   • `game-oa`            → `pipeline.gameOa = result` + `gameOaDoneAt`
+   *   • `diagnosis`          → `diagnosisComputedAt`
+   *   • `drilling`           → `drillingClearedAt` (only when `passesDrillingGate`)
+   *   • `mock`               → APPEND `result` to `pipeline.mocks` (+ `mockClearedAt`
+   *                            when `passesMockGate`)
+   *   • `greenlight`         → `greenlitAt` (terminal)
+   *
+   * CRITICAL (§10.5): the `*ClearedAt` / `greenlitAt` stamps are audit-only. The
+   * gates RE-EVALUATE from LIVE mastery/results on every resolve, so `resolveStage`
+   * stays authoritative — a relocked node or a broken mock streak re-derives an
+   * EARLIER stage even with a later stamp present. `result` is the stage's
+   * optional payload (its shape is stage-specific; see the stage components).
+   */
+  completePipelineStage: (stage: PipelineStage, result?: unknown) => void;
 }
 
 /**
@@ -647,6 +675,72 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const completePipelineStage = useCallback(
+    (stage: PipelineStage, result?: unknown) => {
+      update((p) => {
+        const now = new Date().toISOString();
+        // Start from the live pipeline state (or a fresh one defaulting to the
+        // first stage) and stamp/write ONLY this finishing stage's fields.
+        const pipeline: PipelineState = { ...(p.pipeline ?? { stage: FIRST_STAGE }) };
+        switch (stage) {
+          case "diagnostic-untimed":
+            if (result) pipeline.untimed = result as DiagnosticResult;
+            pipeline.untimedDoneAt = now;
+            break;
+          case "diagnostic-timed":
+            if (result) pipeline.timed = result as PipelineState["timed"];
+            pipeline.timedDoneAt = now;
+            break;
+          case "game-oa":
+            if (result) pipeline.gameOa = result as PipelineState["gameOa"];
+            pipeline.gameOaDoneAt = now;
+            break;
+          case "diagnosis":
+            pipeline.diagnosisComputedAt = now;
+            break;
+          case "drilling":
+            // Audit stamp only — written below once the LIVE gate confirms it.
+            break;
+          case "mock":
+            if (result) {
+              pipeline.mocks = [
+                ...(pipeline.mocks ?? []),
+                result as PipelineMockResult,
+              ];
+            }
+            break;
+          case "greenlight":
+            // Terminal — the greenlit stamp is written below after re-derivation.
+            break;
+        }
+        p.pipeline = pipeline;
+
+        // Audit-only "first cleared at" stamps: written ONLY when the LIVE gate
+        // actually holds (§10.5). They never gate anything — `resolveStage` does.
+        if (
+          stage === "drilling" &&
+          !pipeline.drillingClearedAt &&
+          passesDrillingGate(p)
+        ) {
+          pipeline.drillingClearedAt = now;
+        }
+        if (stage === "mock" && !pipeline.mockClearedAt && passesMockGate(p)) {
+          pipeline.mockClearedAt = now;
+        }
+
+        // RE-DERIVE the authoritative stage from stamps + LIVE gates. This is
+        // what lets a relocked node / broken streak pull the user back even with
+        // downstream stamps present — the stamps are NOT the source of truth.
+        pipeline.stage = resolveStage(p);
+        if (pipeline.stage === "greenlight" && !pipeline.greenlitAt) {
+          pipeline.greenlitAt = now;
+        }
+        return p;
+      });
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -672,6 +766,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       recordOaResult,
       ensureSrsCardsSeeded,
       gradeSrsCard,
+      completePipelineStage,
     }),
     [
       progress,
@@ -697,6 +792,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       recordOaResult,
       ensureSrsCardsSeeded,
       gradeSrsCard,
+      completePipelineStage,
     ],
   );
 

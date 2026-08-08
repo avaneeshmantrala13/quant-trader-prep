@@ -522,6 +522,73 @@ export function conditionalTwoDiceMeanAbove(threshold: number): number {
   return num / den;
 }
 
+/* -------------------------------------------------------------------------- */
+/* 10) COUPON COLLECTOR / BIRTHDAY / DERANGEMENT (Cluster-A hard prob/EV)       */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Expected number of rolls of a fair `k`-sided die to see ALL `k` distinct
+ * faces (the coupon-collector time) = k·H_k, H_k = Σ_{i=1}^{k} 1/i. Exact for
+ * the interview-scale k. d6 → 14.7 ; d4 → 25/3 ≈ 8.3333.
+ */
+export function couponCollectorExpected(k: number): number {
+  let h = 0;
+  for (let i = 1; i <= k; i++) h += 1 / i;
+  return k * h;
+}
+
+/**
+ * Expected rolls to collect the LAST (k-th) still-missing face once `k−1` are
+ * already held: a geometric wait with success 1/k, so mean k. (The single
+ * largest term of the coupon-collector sum — the finish line dominates.)
+ */
+export function couponCollectorLastFaceExpected(k: number): number {
+  return k;
+}
+
+/**
+ * P(at least two of `n` people share a birthday) when each of the `n` birthdays
+ * is uniform over `d` equally-likely days, independently. Exact:
+ * 1 − Π_{i=0}^{n−1} (d−i)/d. Once n > d it is exactly 1 (pigeonhole).
+ * n=4,d=10 → 0.496 ; n=5,d=12 → 0.6181.
+ */
+export function birthdayCollisionProb(n: number, d: number): number {
+  if (n > d) return 1;
+  let noColl = 1;
+  for (let i = 0; i < n; i++) noColl *= (d - i) / d;
+  return 1 - noColl;
+}
+
+/** P(NO collision among `n` people over `d` days) — the complement. */
+export function birthdayNoCollisionProb(n: number, d: number): number {
+  return 1 - birthdayCollisionProb(n, d);
+}
+
+/** Exact factorial n! (n small — interview scale). */
+function factorialExact(n: number): number {
+  let r = 1;
+  for (let i = 2; i <= n; i++) r *= i;
+  return r;
+}
+
+/**
+ * P(a uniformly-random permutation of `n` items is a DERANGEMENT — no item in
+ * its own place) = !n/n! = Σ_{k=0}^{n} (−1)^k/k!. Exact; converges to 1/e.
+ * n=4 → 3/8 = 0.375 ; n=5 → 11/30 ≈ 0.3667.
+ */
+export function derangementProb(n: number): number {
+  let s = 0;
+  for (let k = 0; k <= n; k++) {
+    s += (k % 2 === 0 ? 1 : -1) / factorialExact(k);
+  }
+  return s;
+}
+
+/** The number of derangements !n = n!·Σ_{k=0}^{n}(−1)^k/k! (exact integer). */
+export function derangementCount(n: number): number {
+  return Math.round(derangementProb(n) * factorialExact(n));
+}
+
 /**
  * IMC urn: N balls, unknown #red R uniform on {0..N}. You sample `d` without
  * replacement and see `r` red. Posterior mean of R under the hypergeometric

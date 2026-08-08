@@ -2,20 +2,10 @@ import { useState, type FormEvent } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import type { AuthResult } from "@/lib/storage";
-import { isAwsBackend, type EnvLike } from "@/lib/awsConfig";
 import { useTheme } from "@/context/ThemeContext";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
-import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
+import { CardShuffleIntro } from "@/components/visuals/CardShuffle";
 import { MoonIcon, SunIcon } from "@/components/icons";
-
-/**
- * True when the app is running against the AWS backend (accounts in Cognito,
- * progress synced to DynamoDB) rather than the local-first default. Read once
- * at module load from the same `VITE_STORAGE_BACKEND` signal `storage.ts` uses,
- * so the access-panel copy (status pill + blurb) is always accurate for the
- * active deployment.
- */
-const AWS_BACKEND = isAwsBackend(import.meta.env as unknown as EnvLike);
 
 function today(): string {
   return new Date()
@@ -28,39 +18,13 @@ function today(): string {
     .toUpperCase();
 }
 
-function LeadFigure() {
-  // A small editorial "figure" — an engraved candlestick chart with a caption.
-  const bars = [
-    [30, 12, true],
-    [24, 16, false],
-    [26, 20, true],
-    [18, 14, true],
-    [22, 10, false],
-    [12, 16, true],
-    [16, 8, false],
-    [8, 12, true],
-  ] as const;
-  return (
-    <figure className="border border-border-strong bg-surface p-3">
-      <svg viewBox="0 0 200 90" className="h-28 w-full" aria-hidden="true">
-        <line x1="0" y1="70" x2="200" y2="70" stroke="rgb(var(--color-border))" />
-        {bars.map(([y, h, bull], i) => {
-          const x = 14 + i * 24;
-          const color = bull ? "rgb(var(--color-bull))" : "rgb(var(--color-bear))";
-          return (
-            <g key={i} stroke={color} fill={color}>
-              <line x1={x} x2={x} y1={y - 8} y2={y + h + 8} strokeWidth={1.5} />
-              <rect x={x - 6} y={y} width={12} height={h} fillOpacity={bull ? 0.9 : 0.5} />
-            </g>
-          );
-        })}
-      </svg>
-      <figcaption className="label mt-2 text-[9px]">
-        Fig. 1. The whole funnel is one skill: pricing uncertainty.
-      </figcaption>
-    </figure>
-  );
-}
+/** The four practice areas, set as a mono ledger index. */
+const PRACTICE_INDEX = [
+  ["01", "Probability & EV"],
+  ["02", "Mental math"],
+  ["03", "Brainteasers"],
+  ["04", "Market making"],
+] as const;
 
 export function LoginPage() {
   const { isAuthed, signUp, logIn, signInWithGoogle } = useAuth();
@@ -136,9 +100,9 @@ export function LoginPage() {
   return (
     <div className="relative min-h-[100dvh]">
       <ThemeBackground />
+      <CardShuffleIntro />
 
       <div className="absolute right-3 top-3 z-20 flex items-center gap-1.5">
-        <ThemeSwitcher />
         <button
           onClick={toggleTheme}
           className="btn-ghost !min-h-0 !px-2 !py-1.5"
@@ -152,70 +116,44 @@ export function LoginPage() {
         </button>
       </div>
 
-      <div className="relative z-10 mx-auto max-w-5xl px-4 py-8">
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-screen-2xl flex-col justify-center px-6 py-8 sm:px-10 lg:px-14">
         {/* Nameplate */}
-        <div className="text-center">
-          <div className="label flex items-center justify-center gap-3 text-[9px]">
-            <span className="hidden sm:inline">Vol. MMXXVI · No. 1</span>
-            <span className="hidden h-3 w-px bg-subtle sm:block" />
-            <span>{today()}</span>
-            <span className="hidden h-3 w-px bg-subtle sm:block" />
-            <span className="hidden sm:inline">Price: Free</span>
-          </div>
-          <div className="mt-2 border-y-[3px] border-border-strong py-3">
-            <Link to="/" aria-label="Back to front page">
-              <h1 className="font-display text-4xl font-black leading-none tracking-tight text-primary transition-colors hover:text-accent sm:text-6xl">
-                Quant Trader Prep
-              </h1>
-            </Link>
-            <p className="label mt-2 text-[10px]">
-              The Interview Desk · Probability · Mental Math · Brainteasers ·
-              Market Making
-            </p>
-          </div>
+        <div className="flex items-baseline justify-between gap-4 border-b-[3px] border-border-strong pb-4">
+          <Link to="/" aria-label="Back to front page" className="min-w-0">
+            <h1 className="font-display text-3xl font-black leading-none tracking-tight text-primary transition-colors hover:text-accent sm:text-5xl">
+              The Quant Factory
+            </h1>
+          </Link>
+          <span className="label hidden shrink-0 text-[9px] text-muted sm:block">
+            {today()}
+          </span>
         </div>
 
         {/* Body: lead editorial + access panel */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.4fr_1fr]">
+        <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[1.35fr_1fr] lg:gap-12">
           {/* Lead article */}
-          <article className="border-r-0 lg:border-r lg:border-subtle lg:pr-6">
-            <span className="label text-accent">Lead · The One Roadmap</span>
-            <h2 className="mt-2 font-display text-2xl font-semibold leading-tight text-primary sm:text-3xl">
+          <article className="lg:border-r lg:border-subtle lg:pr-10">
+            <span className="label text-accent">The one roadmap</span>
+            <h2 className="mt-3 font-display text-3xl font-semibold leading-[1.1] text-primary sm:text-[2.6rem]">
               From “I know some algebra” to a two-sided market under a timer.
             </h2>
-            <div className="mt-4 gap-5 text-[15px] leading-relaxed text-secondary sm:columns-2">
-              <p className="mb-3">
-                <span className="float-left mr-2 font-display text-5xl font-black leading-[0.8] text-primary">
-                  Q
-                </span>
-                uant interviews reward one durable skill: pricing uncertainty
-                honestly. This desk teaches it as a single ordered path:
-                probability from the ground up, speed arithmetic, the classic
-                brainteasers, and the expected-value games traders actually play.
-              </p>
-              <p className="mb-3">
-                Every question is exact and every wrong answer is a real mistake,
-                not a giveaway. Levels unlock only when you earn mastery, drawn
-                as a charted route across the map: a beautifully typeset
-                broadsheet for a trader’s desk.
-              </p>
-            </div>
-            <div className="mt-4">
-              <LeadFigure />
-            </div>
+
+            <ul className="mt-8 grid grid-cols-2 gap-x-8 gap-y-6 border-t border-subtle pt-7 sm:max-w-lg">
+              {PRACTICE_INDEX.map(([n, label]) => (
+                <li key={n} className="flex items-baseline gap-3.5">
+                  <span className="num text-4xl font-semibold leading-none text-accent sm:text-5xl">
+                    {n}
+                  </span>
+                  <span className="text-[15px] font-medium text-primary">{label}</span>
+                </li>
+              ))}
+            </ul>
           </article>
 
           {/* Access panel */}
           <aside>
             <div className="panel-ruled p-5">
-              <div className="flex items-center justify-between">
-                <span className="label">Desk Access</span>
-                <span className="label text-bull">
-                  ● Secure · {AWS_BACKEND ? "Cloud" : "Local"}
-                </span>
-              </div>
-
-              <div className="mt-4 grid grid-cols-2 border border-subtle">
+              <div className="grid grid-cols-2 overflow-hidden rounded border border-subtle">
                 {(["signup", "login"] as const).map((m) => (
                   <button
                     key={m}
@@ -226,7 +164,7 @@ export function LoginPage() {
                     className={`py-2.5 font-mono text-[11px] font-semibold uppercase tracking-label transition-colors ${
                       mode === m
                         ? "bg-primary text-bg"
-                        : "bg-surface text-secondary hover:text-primary"
+                        : "bg-surface text-secondary hover:bg-surface-muted hover:text-primary"
                     }`}
                   >
                     {m === "signup" ? "Open Account" : "Log In"}
@@ -303,12 +241,6 @@ export function LoginPage() {
                   </button>
                 </>
               )}
-
-              <p className="label mt-4 text-[9px] leading-relaxed">
-                {AWS_BACKEND
-                  ? "Cloud edition: your account is secured by Amazon Cognito and your progress syncs privately to the cloud, so it follows you across devices."
-                  : "Local-first edition: your account and progress are stored privately in this browser. No email, no API keys."}
-              </p>
             </div>
           </aside>
         </div>

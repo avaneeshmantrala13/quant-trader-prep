@@ -1,4 +1,5 @@
 import { topicKeyOf } from "@/lib/mastery/topicKey";
+import { TRADING_SUBTOPICS } from "@/lib/mastery/tradingSubtopics";
 
 /**
  * THE SKILL GRAPH — the ordered, prerequisite-respecting pathway that turns the
@@ -91,6 +92,19 @@ export interface SkillNode {
   /** Short academic/canon justification for placement. */
   source: string;
   /**
+   * COURSE-COMPLETENESS ONLY (default: scored). When explicitly `false`, this
+   * node is present in the graph/roadmap (and the Case-A course-mode diagnostic)
+   * for M362K/M362M completeness, but is EXCLUDED from the quant-interview SCORED
+   * set (`scoredContentTopicKeys`) — so it does NOT gate greenlight, is NOT probed
+   * by the untimed interview diagnostic, and is NOT drilled by the pipeline. Set
+   * on the purely-academic distribution/process-theory topics with no attested
+   * OA/interview footprint (MGF, Gamma, Joint Distributions, Limit Theorems, CTMC
+   * — see `datasets/UT_COURSE_GAP_ANALYSIS.md` §4 "largely academic"). Genuinely
+   * interview-relevant advanced topics (Markov Chains, Markov Chain Structure /
+   * stationary distributions, Branching, Brownian) stay scored.
+   */
+  scored?: boolean;
+  /**
    * EXTERNAL timed-drill / game topic (Speed Arena, Sequences, No-Arbitrage,
    * Fermi, EV-under-time, Auctions) whose `Level`s are authored but NOT yet
    * registered into a playable track. Mirrored here so the remediation prereq
@@ -145,6 +159,25 @@ const FERMI = topicKeyOf("fermi");
 const EV_TIMED = topicKeyOf("ev-timed");
 const ARENA = topicKeyOf("arena");
 const AUCTIONS = topicKeyOf("auctions");
+/**
+ * The two NEW first-class COMPETENCY nodes (spec §3.2 / RESOLVED DECISIONS §10.2,
+ * §10.8). They are gated to pass Stage 6 but have NO in-place probe ladder of
+ * their own: brainteaser-reasoning is fed by self-eval / objectively-graded
+ * flashcards, and trading-intuition by the market-making game verdict — both via
+ * the competency scorer (`src/lib/mastery/competency.ts`), which folds a computed
+ * `credit ∈ [0,1]` through the SAME `applyItemAttempt`/Beta path every other node
+ * uses. Because they carry no resolvable content level, they are marked
+ * `external: true` so the "references a REAL first level" invariant SKIPS them
+ * (exactly like the timed-drill / game stubs above). Their literal topicKeys
+ * MUST equal `COMPETENCY_BRAINTEASER` / `COMPETENCY_TRADING` in
+ * `src/lib/pipeline/gates.ts` (asserted in `skillGraph.test.ts`) so the P0 gate
+ * stubs read the very buckets the scorer feeds.
+ */
+export const COMPETENCY_BRAINTEASER = topicKeyOf(
+  "competency",
+  "brainteaser-reasoning",
+);
+export const COMPETENCY_TRADING = topicKeyOf("competency", "trading-intuition");
 
 /**
  * The pathway, in curriculum order. Order within a tier is easiest→hardest and
@@ -394,8 +427,15 @@ export const SKILL_GRAPH: SkillNode[] = [
   },
   // --- Course-completeness topics (formerly the single "Extra Relevant
   // Knowledge" super-node; now seven first-class topics, each with its own
-  // prerequisites). Untested at surveyed firms; included for M362K/M362M
-  // completeness. Placed last so they never clutter the interview spine. ---
+  // prerequisites). Included for M362K/M362M completeness and the Case-A
+  // course-mode diagnostic. Placed last so they never clutter the interview
+  // spine. FIVE of them (MGF, Gamma, Joint Distributions, Limit Theorems, CTMC)
+  // are `scored: false` — purely academic distribution/process-theory with no
+  // attested quant OA/interview footprint (UT_COURSE_GAP_ANALYSIS.md §4), so
+  // they stay learnable but are EXCLUDED from the interview scored gate and the
+  // untimed diagnostic. Branching and Markov Chain Structure remain scored
+  // (branching/PGF puzzles + stationary-distribution / Chapman–Kolmogorov
+  // reasoning genuinely appear at top firms). ---
   {
     topicKey: MGF,
     label: "Moment Generating Functions",
@@ -404,6 +444,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     tier: "expectation",
     prereqs: [EXPECTED_VALUE, VARIANCE_CLT],
     weight: 1,
+    scored: false,
     source:
       "M362K: moments from M'(0)/M''(0), the uniqueness theorem, and the MGF method for independent sums. Builds on expectation and second moments (variance).",
   },
@@ -415,6 +456,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     tier: "expectation",
     prereqs: [CONTINUOUS],
     weight: 1,
+    scored: false,
     source:
       "M362K: Gamma(k,λ) as the sum of k iid Exp(λ) — a continuous density (mean k/λ, variance k/λ²) built directly on Continuous Distributions.",
   },
@@ -428,6 +470,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     // the discrete pmf conditionals/independence draw on conditioning.
     prereqs: [CONTINUOUS, CONDITIONAL],
     weight: 1,
+    scored: false,
     source:
       "M362K chs. 6–7: joint densities/pmfs, marginals, conditionals, independence, covariance, and CDF-method transforms. Rests on continuous integration + conditioning.",
   },
@@ -439,6 +482,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     tier: "expectation",
     prereqs: [VARIANCE_CLT],
     weight: 1,
+    scored: false,
     source:
       "M362K ch. 8: Chebyshev's inequality, the (weak) Law of Large Numbers, and the formal Central Limit Theorem — a precise treatment on top of variance/covariance & the CLT.",
   },
@@ -465,6 +509,7 @@ export const SKILL_GRAPH: SkillNode[] = [
     // the jump chain + balance equations extend discrete Markov chains.
     prereqs: [MARKOV, POISSON],
     weight: 1,
+    scored: false,
     source:
       "M362M / Ross IPM: exponential holding times, flow balance, and the M/M/1 queue — continuous-time extension of Markov chains built on the Poisson process.",
   },
@@ -556,6 +601,68 @@ export const SKILL_GRAPH: SkillNode[] = [
     source:
       "‘Winning is bad news’: E[V|win] conditioning, the exact shade E[max of n signals] (order statistics), and the +EV/−EV bid decision.",
   },
+  // --- Competency nodes (spec §3.2). First-class KST nodes that MUST be mastered
+  // to clear Stage 6, but with NO probe ladder of their own — fed by the
+  // competency scorer (self-eval flashcards / market-making verdict), so they are
+  // `external` (the "resolves to a real first level" invariant skips them). Their
+  // prereqs are all REAL, earlier scored nodes, so the DAG-order invariant holds.
+  // Placed LAST so they never clutter the interview spine. ---
+  {
+    topicKey: COMPETENCY_BRAINTEASER,
+    label: "Brainteaser Reasoning (competency)",
+    trackId: "competency",
+    // No resolvable content level of its own; drilling routes to brainteaser
+    // flashcard sets (self-eval / objectively-graded). Placeholder id for the
+    // future integrator — never resolved because the node is `external`.
+    firstLevelId: "competency-brainteaser-reasoning",
+    tier: "synthesis",
+    // §3.2: Combinatorial Analysis, Conditional Probability, Expected Value
+    // (advisory) — the probability the hard brainteasers actually lean on.
+    prereqs: [COMBINATORICS, CONDITIONAL, EXPECTED_VALUE],
+    weight: 3,
+    external: true,
+    source:
+      "Competency node (spec §3.2): folds Stage-2 brainteaser flashcard self-eval + mock brainteaser steps into a Beta on self-assessed 'got'; mastered ⇔ CI_low ≥ 0.80.",
+  },
+  {
+    topicKey: COMPETENCY_TRADING,
+    label: "Trading Intuition (competency)",
+    trackId: "competency",
+    // No resolvable content level of its own; drilling routes to make-a-market
+    // game rounds. Placeholder id — never resolved (the node is `external`).
+    firstLevelId: "competency-trading-intuition",
+    tier: "processes",
+    // §3.2: Expected Value + the EV-decision / market-making genre.
+    prereqs: [EXPECTED_VALUE, INTERVIEW_GAMES],
+    weight: 3,
+    external: true,
+    source:
+      "Competency node (spec §3.2 / §10.8): folds Stage-4 game-OA + drilling MM rounds + mock MM into a Beta on the edge-capturing verdict; mastered ⇔ CI_low ≥ 0.80.",
+  },
+  // --- Trading-intuition SUBTOPICS (Game-OA battery decomposition). One
+  // first-class competency node per market game in the battery, each fed by its
+  // own game and folded into its own Beta (mastered ⇔ CI_low ≥ 0.80). The
+  // aggregate `competency::trading-intuition` gate ROLLS UP these subtopics (all
+  // must clear their bar), so a weak SPECIFIC subtopic re-opens Stage-6 drilling
+  // and routes back to that exact game. Like the other competency nodes they are
+  // `external` (no probe ladder of their own — drilling routes to the game), and
+  // every prereq is a REAL earlier scored node so the DAG-order + external-node
+  // invariants hold. Placed LAST so they never clutter the interview spine. The
+  // single source of truth for the decomposition is
+  // `@/lib/mastery/tradingSubtopics`. ---
+  ...TRADING_SUBTOPICS.map(
+    (s): SkillNode => ({
+      topicKey: s.key,
+      label: s.label,
+      trackId: "competency",
+      firstLevelId: s.key.replace("::", "-"),
+      tier: s.tier,
+      prereqs: s.prereqs,
+      weight: s.weight,
+      external: true,
+      source: `Trading-intuition subtopic (Game-OA battery): folds the ${s.gameId} game's per-round verdict into a Beta; the aggregate trading-intuition gate rolls it up.`,
+    }),
+  ),
 ];
 
 /** Curriculum-ordered pathway (the canonical export order). */

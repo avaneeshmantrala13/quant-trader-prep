@@ -1,5 +1,15 @@
 # Theme System — author guide & contract
 
+> **STRIP-DOWN NOTICE (guided-pipeline P1, spec §7.2).** The app is now
+> hard-locked to the single **minimalist** theme. The five alternate themes
+> (broadsheet / casino / chalkboard / cyberpunk / kids), the `/themes` gallery
+> page, and the named-theme switcher have been REMOVED. A working **light/dark
+> toggle is kept** (RESOLVED DECISION §10.7) — that is a color-MODE switch inside
+> the locked minimalist theme, not a theme swap. The multi-theme contract below
+> is retained for reference (and in case themes are ever re-enabled), but
+> `THEMES` in `src/themes/index.ts` now contains only `minimalist` and
+> `getTheme()` always resolves to it.
+
 Quant Trader Prep supports **N named visual themes**. A theme changes **only aesthetics** — never content, copy, layout structure, or which questions/levels exist. Everything themeable flows through semantic CSS-variable tokens, so a new theme supplies token values (+ optional assets) and never rewrites components.
 
 At runtime the active theme injects a `<style id="qtp-theme">` block that sets the token variables for `:root` (light) and `.dark` (dark). The existing light/dark toggle still works **within** any theme.

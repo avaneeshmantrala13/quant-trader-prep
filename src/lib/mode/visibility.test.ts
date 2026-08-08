@@ -6,6 +6,9 @@ import {
   EXTRA_RELEVANT_KNOWLEDGE_TOPIC_KEYS,
   featureEmphasis,
   gatingPriority,
+  GUIDED_HIDDEN_ROUTES,
+  GUIDED_KEPT_ROUTES,
+  guidedNavFor,
   isExtraRelevantKnowledge,
   isFeatureVisible,
   navFor,
@@ -85,7 +88,6 @@ describe("navFor", () => {
       "Practice",
       "Games",
       "Interview Prep",
-      "Settings",
     ]);
     // Overview leads with Home.
     expect(groups[0].items[0].label).toBe("Home");
@@ -107,7 +109,6 @@ describe("navFor", () => {
       "Overview",
       "Courses",
       "Foundations",
-      "Settings",
     ]);
     for (const dropped of [
       "extra-topics",
@@ -197,7 +198,6 @@ describe("navFor — mode scoping invariants", () => {
       "/roadmap",
       "/contents",
       "/simulations",
-      "/themes",
       "/track/mental-math",
       "/track/math-questions",
     ];
@@ -225,7 +225,6 @@ describe("navFor — grouped structure is well-formed", () => {
       "games",
       "trading-floor",
       "mock",
-      "themes",
     ],
     // Course mode is lean: only the course-relevant anchors survive (the
     // Intro-to-Probability card carries the `probability` anchor).
@@ -234,7 +233,6 @@ describe("navFor — grouped structure is well-formed", () => {
       "contents",
       "probability",
       "simulations",
-      "themes",
     ],
   };
 
@@ -259,7 +257,6 @@ describe("navFor — grouped structure is well-formed", () => {
       "/games",
       "/trading-floor",
       "/mock",
-      "/themes",
     ],
     // Course mode surfaces ONLY the course-relevant routes.
     course: [
@@ -272,7 +269,6 @@ describe("navFor — grouped structure is well-formed", () => {
       "/simulations",
       "/track/mental-math",
       "/track/math-questions",
-      "/themes",
     ],
   };
 
@@ -332,6 +328,51 @@ describe("navFor — grouped structure is well-formed", () => {
       it("has at least one open-by-default group so the menu isn't fully collapsed", () => {
         expect(groups.some((g) => g.defaultOpen)).toBe(true);
       });
+
+      it("no longer advertises the removed /themes gallery (theme hard-locked to minimalist)", () => {
+        const routes = groups.flatMap((g) => g.items.map((i) => i.to));
+        const labels = groups.flatMap((g) => g.items.map((i) => i.label));
+        const anchors = groups.flatMap((g) => g.items.map((i) => i.tour));
+        expect(routes).not.toContain("/themes");
+        expect(labels).not.toContain("Themes");
+        expect(anchors).not.toContain("themes");
+      });
     });
   }
+});
+
+describe("guided pipeline strip-down config (prepared, dormant in P1)", () => {
+  it("guidedNavFor exposes NO free-roam menu (the stepper + Progress panel replace it)", () => {
+    expect(guidedNavFor("interview")).toEqual([]);
+    expect(guidedNavFor("course")).toEqual([]);
+  });
+
+  it("keeps the auth + pipeline entry points and hides every free-roam surface", () => {
+    expect(GUIDED_KEPT_ROUTES).toContain("/");
+    expect(GUIDED_KEPT_ROUTES).toContain("/login");
+    expect(GUIDED_KEPT_ROUTES).toContain("/pipeline");
+    // The core free-roam hubs are all slated to be hidden at cutover.
+    for (const hidden of [
+      "/dashboard",
+      "/roadmap",
+      "/contents",
+      "/games",
+      "/mock",
+      "/oa",
+      "/track",
+    ]) {
+      expect(GUIDED_HIDDEN_ROUTES).toContain(hidden);
+    }
+  });
+
+  it("the kept + hidden sets are disjoint (no route is both kept and hidden)", () => {
+    const kept = new Set(GUIDED_KEPT_ROUTES);
+    for (const r of GUIDED_HIDDEN_ROUTES) expect(kept.has(r)).toBe(false);
+  });
+
+  it("never hides the pipeline stage routes (RequirePipelineStage owns them)", () => {
+    expect(GUIDED_HIDDEN_ROUTES.some((r) => r.startsWith("/pipeline"))).toBe(
+      false,
+    );
+  });
 });

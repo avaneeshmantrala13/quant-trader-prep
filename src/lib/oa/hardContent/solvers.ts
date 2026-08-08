@@ -553,6 +553,105 @@ export function deVigFairProb(oddsNum: number[], oddsDen: number[]): Fraction {
   return implied[0].div(booksum);
 }
 
+/**
+ * Overround (book margin) of a two-or-more-leg book: Σ(1/oᵢ) − 1, where each leg
+ * i has decimal odds `oddsNum[i]/oddsDen[i]`. Positive ⇒ the book is stacked in
+ * the layer's favour (a vig); negative ⇒ an arbitrage. Exact.
+ */
+export function bookOverround(oddsNum: number[], oddsDen: number[]): Fraction {
+  const booksum = oddsNum
+    .map((_, i) => F(oddsDen[i], oddsNum[i]))
+    .reduce((s, x) => s.add(x), F(0));
+  return booksum.sub(1);
+}
+
+/* ========================================================================== */
+/*  Next-card conditional fair value (card-counting / info-in-the-order)       */
+/* ========================================================================== */
+
+/**
+ * Fair value (probability the next card is RED) after some cards have been
+ * revealed from a deck of `r` red + `b` black. Given `seenRed` reds among
+ * `seenTotal` revealed cards, the conditional probability the next draw is red is
+ * `(r − seenRed) / ((r + b) − seenTotal)` — the exact ratio of red remaining to
+ * cards remaining. Exact. Verified `r=b=5, seen 3/4 → 1/3`; `r=6,b=4, seen 1/3 →
+ * 5/7`.
+ */
+export function nextCardRedProb(
+  r: number,
+  b: number,
+  seenRed: number,
+  seenTotal: number,
+): Fraction {
+  const redLeft = r - seenRed;
+  const cardsLeft = r + b - seenTotal;
+  return F(redLeft, cardsLeft);
+}
+
+/* ========================================================================== */
+/*  Basket / NAV (ETF-vs-underlying) fair value + creation-redemption arb       */
+/* ========================================================================== */
+
+/**
+ * Net asset value of one basket unit holding `shares[i]` of asset i at price
+ * `prices[i]`: `Σ shares[i]·prices[i]`. Exact integer for integer inputs.
+ * Verified `[2,3]·[30,20] = 120`; `[1,1,1]·[10,20,30] = 60`.
+ */
+export function basketNav(shares: number[], prices: number[]): number {
+  let nav = 0;
+  for (let i = 0; i < shares.length; i++) nav += shares[i] * prices[i];
+  return nav;
+}
+
+/**
+ * The risk-free create/redeem arbitrage profit per unit when the basket trades at
+ * market price `etfPrice` while its underlying NAV is `basketNav(shares,prices)`:
+ * `|NAV − price|` (buy the cheaper side, sell the richer, convert). Exact integer.
+ */
+export function basketArbProfit(
+  shares: number[],
+  prices: number[],
+  etfPrice: number,
+): number {
+  return Math.abs(basketNav(shares, prices) - etfPrice);
+}
+
+/* ========================================================================== */
+/*  Make-a-market — expected pick-off loss to a fully-informed counterparty     */
+/* ========================================================================== */
+
+/**
+ * Expected pick-off loss per quote when you post a two-sided market (`bid`,`ask`)
+ * on a security whose true value is uniform over the integer list `values`, and a
+ * FULLY INFORMED counterparty trades against you only when it is profitable for
+ * them: they LIFT your ask (you go short at `ask`, lose `V − ask`) whenever
+ * `V > ask`, and HIT your bid (you go long at `bid`, lose `bid − V`) whenever
+ * `V < bid`; no trade when `bid ≤ V ≤ ask`. So the expected loss is
+ * `(1/n)·[Σ_{V>ask}(V − ask) + Σ_{V<bid}(bid − V)]`. Exact.
+ * Verified `V∈{1..6}, (bid,ask)=(2,4) → 2/3`; `{1..8},(3,6) → 3/4`.
+ */
+export function makeMarketPickoffLoss(
+  values: number[],
+  bid: number,
+  ask: number,
+): Fraction {
+  let loss = F(0);
+  for (const v of values) {
+    if (v > ask) loss = loss.add(F(v - ask, 1));
+    else if (v < bid) loss = loss.add(F(bid - v, 1));
+  }
+  return loss.div(values.length);
+}
+
+/** How many of `values` would trade against a two-sided (`bid`,`ask`) quote. */
+export function pickoffTradeCount(
+  values: number[],
+  bid: number,
+  ask: number,
+): number {
+  return values.filter((v) => v > ask || v < bid).length;
+}
+
 /* ========================================================================== */
 /*  Archetype B2 — constrained lattice-path COUNTING (avoid a point)           */
 /* ========================================================================== */

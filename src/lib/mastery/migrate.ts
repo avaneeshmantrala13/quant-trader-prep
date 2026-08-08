@@ -1,12 +1,13 @@
 import { emptyProgress, type UserProgress } from "@/types/progress";
 
 /**
- * Non-destructive v1 → v2 → v3 → v4 → v5 progress migration (COORDINATION §2.2 /
- * §3.3; T12 adaptive engine; T14 retention/SRS; ZPD repeated-mistake tally).
+ * Non-destructive v1 → v2 → v3 → v4 → v5 → v6 progress migration (COORDINATION
+ * §2.2 / §3.3; T12 adaptive engine; T14 retention/SRS; ZPD repeated-mistake
+ * tally; guided-pipeline stage state).
  *
  * Any older (or partial) saved blob is upgraded to the CURRENT schema version
- * (now 5): missing mastery fields are filled with empty maps and `version` is
- * set to 5, while EVERY existing field is preserved untouched — `levelProgress`
+ * (now 6): missing mastery fields are filled with empty maps and `version` is
+ * set to 6, while EVERY existing field is preserved untouched — `levelProgress`
  * / `resume` / `xp` / `streak` / `createdAt`, the Phase-1 mastery state (θ/α/β
  * via `topicMastery`, `tierDifficulty`), the diagnostic/goal/calibration/OA
  * add-ons, etc. Existing level mastery — the unlock gate — is NEVER lost, and
@@ -29,6 +30,14 @@ import { emptyProgress, type UserProgress } from "@/types/progress";
  * ABSENT unless the saved blob already carried it. It never re-derives it from
  * the mastery misconception flags (those are decayed, mastery-facing); the tally
  * simply starts accumulating from the next graded item.
+ *
+ * The v5 → v6 step is likewise purely ADDITIVE (guided pipeline — P0): it
+ * introduces the optional stage-unlock state (`pipeline`, spec §3.4) and leaves
+ * it ABSENT unless the saved blob already carried it. A returning user therefore
+ * loads with `pipeline === undefined`, which the pure stage router
+ * (`resolveStage`) defaults to the first stage. It never re-derives stage state
+ * from `diagnosticDoneAt` or mastery, and it never gates content / affects
+ * scoring / mastery / unlock. The pipeline stays dormant until Phase P1 wires it.
  */
 export function migrateProgress(raw: unknown): UserProgress {
   const fallback = emptyProgress();
@@ -36,7 +45,7 @@ export function migrateProgress(raw: unknown): UserProgress {
 
   const r = raw as Partial<UserProgress>;
   return {
-    version: 5,
+    version: 6,
     levelProgress: r.levelProgress ?? {},
     resume: r.resume ?? {},
     xp: typeof r.xp === "number" ? r.xp : 0,
@@ -76,5 +85,10 @@ export function migrateProgress(raw: unknown): UserProgress {
     // repeated-mistake feedback + targeted (unscored) re-prep; never gates
     // content or affects scoring / mastery / unlock / relock / the fold.
     misconceptionsByTopic: r.misconceptionsByTopic,
+    // Guided pipeline (v5 → v6): preserve the optional stage-unlock state if
+    // present, else leave it ABSENT so `resolveStage` defaults to the first
+    // stage. Purely additive — never gates content or affects scoring / mastery
+    // / unlock / relock / the fold. Dormant until Phase P1.
+    pipeline: r.pipeline,
   };
 }

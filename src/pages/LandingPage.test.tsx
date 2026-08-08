@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { AuthProvider } from "@/context/AuthContext";
@@ -57,15 +57,17 @@ function renderLanding() {
   );
 }
 
-describe("LandingPage — pre-auth theme switching", () => {
-  it("exposes a usable theme switcher before login and persists the choice", () => {
+describe("LandingPage — pre-auth light/dark toggle (theme hard-locked to minimalist)", () => {
+  it("exposes a working light/dark toggle and locks the visual theme to minimalist", () => {
     renderLanding();
-    const trigger = screen.getByRole("button", { name: /change theme/i });
-    fireEvent.click(trigger);
-    const menu = screen.getByRole("menu", { name: /choose a theme/i });
-    fireEvent.click(within(menu).getByText("Cyberpunk"));
-    expect(localStorage.getItem("qtp.themeId")).toBe("cyberpunk");
-    expect(document.documentElement.dataset.theme).toBe("cyberpunk");
+    // The named-theme switcher is gone (spec §7.2) — no "change theme" control.
+    expect(screen.queryByRole("button", { name: /change theme/i })).toBeNull();
+    // The light/dark MODE toggle stays (RESOLVED DECISION §10.7).
+    expect(
+      screen.getByRole("button", { name: /toggle light or dark mode/i }),
+    ).toBeTruthy();
+    // The locked minimalist theme is applied to the document.
+    expect(document.documentElement.dataset.theme).toBe("minimalist");
   });
 });
 

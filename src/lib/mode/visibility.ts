@@ -297,14 +297,6 @@ function interviewNav(): NavGroup[] {
         { to: "/mock", label: "Mock Interview", end: false, tour: "mock" },
       ],
     },
-    {
-      id: "settings",
-      heading: "Settings",
-      defaultOpen: false,
-      items: [
-        { to: "/themes", label: "Themes", end: false, tour: "themes" },
-      ],
-    },
   ];
 }
 
@@ -375,14 +367,6 @@ function courseNav(): NavGroup[] {
         trackItem("math-questions"),
       ],
     },
-    {
-      id: "settings",
-      heading: "Settings",
-      defaultOpen: false,
-      items: [
-        { to: "/themes", label: "Themes", end: false, tour: "themes" },
-      ],
-    },
   ];
 }
 
@@ -431,3 +415,84 @@ export function navRouteBases(mode: GoalMode): string[] {
 export function navFor(mode: GoalMode): NavGroup[] {
   return mode === "course" ? courseNav() : interviewNav();
 }
+
+/* -------------------------------------------------------------------------- */
+/*  GUIDED PIPELINE strip-down config (Phase P1 — PREPARED, NOT YET ACTIVE)    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The guided pipeline (spec §2 / §7) collapses the whole free-roam shell to a
+ * single persistent layout: one "Your Next Task" area, a read-only Progress /
+ * Roadmap panel, a compact 8-step stepper, and Sign out + a light/dark toggle.
+ * There is NO free navigation — the stage router (`RequirePipelineStage`) is the
+ * sole navigation authority — so the guided shell exposes NO `NavGroup` menu.
+ *
+ * IMPORTANT (sequencing): this config is ADDITIVE and DORMANT. `navFor()` above
+ * is still the live nav in P1 (the free-roam pages still exist and are the sole
+ * runtime authority until the integration phase flips `PIPELINE_ENABLED`). The
+ * exports below merely DOCUMENT the exact cutover so a later phase can hide the
+ * free-roam routes without re-deriving the list. See `datasets/PIPELINE_CUTOVER.md`.
+ */
+
+/**
+ * The guided shell has no traditional side-nav. Returns an EMPTY nav so a caller
+ * that (in the cutover) swaps `navFor` for `guidedNavFor` renders no free-roam
+ * menu — the stepper + Progress panel replace it entirely (spec §2).
+ */
+export function guidedNavFor(_mode: GoalMode): NavGroup[] {
+  return [];
+}
+
+/**
+ * The exact free-roam route BASES the integration phase will HIDE from the shell
+ * when it flips `PIPELINE_ENABLED` on (spec §7.1). The underlying route/page/
+ * engine files are NEVER deleted — several are reused INTERNALLY by stage
+ * screens (e.g. the lesson player by the drilling loop, the mock runner by the
+ * mock stage) — they are simply not user-navigable once the guided flow owns
+ * navigation. This is the single source of truth for that hide-set so the
+ * cutover (and its tests) never drift from the plan.
+ */
+export const GUIDED_HIDDEN_ROUTES: string[] = [
+  // Overview / hubs (replaced by the in-loop Progress panel + stepper)
+  "/dashboard",
+  "/roadmap",
+  "/contents",
+  "/simulations",
+  // Games hub + individual game pages + trading floor (Stage 4 reuses engines)
+  "/games",
+  "/make-market",
+  "/probability-betting",
+  "/cards-market-making",
+  "/market-of-cards",
+  "/fruit-market",
+  "/dice-and-cards",
+  "/next-card-betting",
+  "/trading-floor",
+  // Tracks / courses / lessons player (drilling loop reuses the lesson player)
+  "/track",
+  "/course",
+  "/review",
+  // Standalone drills (engines reused by the diagnosis / drilling stages)
+  "/arena",
+  "/oa",
+  "/arbitrage",
+  "/ev-timed",
+  "/fermi",
+  "/drill",
+  // Optiver assessment cluster
+  "/numberlogic",
+  "/beat-the-odds",
+  "/stockmaster",
+  "/number-box",
+  "/shape-shift",
+  // Mock hub (Stage 7 reuses the mock runner internally)
+  "/mock",
+];
+
+/**
+ * The routes the guided shell KEEPS reachable at cutover: auth + the pipeline
+ * stage routes (`/pipeline/*`, owned by `RequirePipelineStage`) + the landing /
+ * login entry points. Everything else in {@link GUIDED_HIDDEN_ROUTES} is hidden
+ * from navigation (but importable for internal reuse).
+ */
+export const GUIDED_KEPT_ROUTES: string[] = ["/", "/login", "/pipeline"];

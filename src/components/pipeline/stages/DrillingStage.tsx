@@ -1,0 +1,650 @@
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useProgress } from "@/context/ProgressContext";
+import type { StageComponentProps } from "../stageRegistry";
+import type { ItemAttempt } from "@/types/mastery";
+import { Rng } from "@/lib/rng";
+import { gradeFreeResponse, parseFreeResponse, formatNumericAnswer } from "@/lib/numeric";
+import { buildHintLadder } from "@/lib/tutor/hintLadder";
+import { resolveNumericTag } from "@/lib/tutor/misconception";
+import {
+  startEpisode,
+  submitAttempt,
+  isResolved,
+  type HintEpisode,
+} from "@/lib/tutor/hintEpisode";
+import { HintLadder } from "@/components/tutor/HintLadder";
+import {
+  buildContentDrillAttempt,
+  buildBrainteaserDrillAttempt,
+  drawBrainteaserDrill,
+  drawContentDrill,
+  drillingProgress,
+  pickNextDrillTarget,
+  DRILL_ROUND_SIZE,
+  type ContentDrillResult,
+  type DrillTarget,
+} from "@/lib/pipeline/drilling";
+import {
+  gradeBrainteaserNumeric,
+  type MaterializedBrainteaserItem,
+  type MaterializedNumericItem,
+} from "@/lib/diagnostic/untimedRun";
+import { stationForSubtopic } from "./gameOa/battery";
+
+/**
+ * ============================================================================
+ *  STAGE 6 — DRILLING LOOP screen  (guided pipeline, Phase P6)
+ * ============================================================================
+ * Serves drills WEAKEST-FIRST (spec §2 Stage 6) driven entirely by the pure
+ * orchestrator (`@/lib/pipeline/drilling`): {@link pickNextDrillTarget} chooses
+ * the next node from live mastery, and each round REUSES an existing engine —
+ *
+ *   • content nodes  → the untimed-diagnostic free-response items + the
+ *     answer-withholding HINT LADDER; a correct answer's credit DECAYS with the
+ *     highest rung used (`buildContentDrillAttempt`), so mastery is earned with
+ *     progressively less help.
+ *   • brainteaser competency → the brainteaser flashcards (hybrid grading).
+ *   • trading SUBTOPIC        → re-mounts that subtopic's Game-OA battery
+ *     station (the exact game), which folds into the subtopic's Beta itself.
+ *
+ * EVERY resolved item is persisted through `useProgress().recordItemAttempt`
+ * (the single mastery entry point), so the Beta posteriors move and the live
+ * gate re-derives. The loop is DONE exactly when `passesDrillingGate` holds —
+ * `onComplete()` fires once, then, and only then (relock can revoke it).
+ *
+ * CONTRACT: a {@link StageComponent} taking only `onComplete`. DEFAULT export.
+ */
+
+/** The active drill round the stage is serving (frozen at round start). */
+type ActiveRound =
+  | { serve: "numeric"; target: DrillTarget; items: MaterializedNumericItem[] }
+  | { serve: "brainteaser"; target: DrillTarget; items: MaterializedBrainteaserItem[] }
+  | { serve: "trading"; target: DrillTarget }
+  | { serve: "timed-info"; target: DrillTarget };
+
+export default function DrillingStage({ onComplete }: StageComponentProps) {
+  const { progress, recordItemAttempt } = useProgress();
+
+  const rngRef = useRef<Rng>(new Rng(Math.floor(Math.random() * 1e9)));
+  const [round, setRound] = useState<ActiveRound | null>(null);
+  const doneRef = useRef(false);
+
+  const prog = useMemo(() => drillingProgress(progress), [progress]);
+
+  const record = useCallback(
+    (attempt: ItemAttempt) => recordItemAttempt(attempt),
+    [recordItemAttempt],
+  );
+
+  // Freeze the next round from LIVE progress (target + materialized items).
+  const startNextRound = useCallback(() => {
+    const target = pickNextDrillTarget(progress);
+    if (!target) {
+      setRound(null);
+      return;
+    }
+    const seed = rngRef.current.int(0, 2_000_000_000);
+    if (target.serve === "numeric" && target.topicKey) {
+      const items = drawContentDrill(target.topicKey, seed, DRILL_ROUND_SIZE);
+      // A topic with no bank entry would loop forever — fall back to a timed
+      // info panel (never happens for scored nodes, which all carry items).
+      if (items.length === 0) {
+        setRound({ serve: "timed-info", target });
+        return;
+      }
+      setRound({ serve: "numeric", target, items });
+    } else if (target.serve === "brainteaser") {
+      setRound({
+        serve: "brainteaser",
+        target,
+        items: drawBrainteaserDrill(seed, DRILL_ROUND_SIZE),
+      });
+    } else if (target.serve === "trading") {
+      setRound({ serve: "trading", target });
+    } else {
+      setRound({ serve: "timed-info", target });
+    }
+  }, [progress]);
+
+  // Drive the loop: finish once the gate holds, else keep a round in flight.
+  useEffect(() => {
+    if (prog.done) {
+      if (!doneRef.current) {
+        doneRef.current = true;
+        onComplete();
+      }
+      return;
+    }
+    if (round === null) startNextRound();
+  }, [prog.done, round, startNextRound, onComplete]);
+
+  const onRoundDone = () => setRound(null);
+
+  return (
+    <section className="panel space-y-5 p-6" data-testid="drilling-stage">
+      <header className="space-y-1">
+        <span className="label text-accent">Stage 6 · Drilling loop</span>
+        <h2 className="font-display text-2xl font-bold text-primary">
+          {prog.done ? "All gates cleared" : "Drill your weakest topic"}
+        </h2>
+        <p className="text-sm text-secondary">
+          Work weakest-first with the hint ladder. Fewer hints ⇒ more mastery
+          credit. Every topic must clear its bar before you advance.
+        </p>
+      </header>
+
+      <GatePanel prog={prog} target={round?.target ?? null} />
+
+      {prog.done ? (
+        <div className="panel-ruled p-6 text-center" data-testid="drilling-cleared">
+          <span className="label text-accent">Stage 6 gate</span>
+          <div className="mt-2 font-display text-3xl font-black leading-tight text-bull">
+            Cleared
+          </div>
+          <p className="mt-2 text-sm leading-relaxed text-secondary">
+            Content, timed, and both competencies all clear their bars. Advancing
+            to the mock stage.
+          </p>
+        </div>
+      ) : round === null ? (
+        <div className="panel flex items-center gap-2.5 p-6 font-mono text-sm text-muted">
+          <span className="cursor" aria-hidden />
+          Preparing your next drill…
+        </div>
+      ) : round.serve === "numeric" ? (
+        <NumericDrillRound
+          key={`${round.target.topicKey}-${round.items[0]?.question.id}`}
+          target={round.target}
+          items={round.items}
+          record={record}
+          onDone={onRoundDone}
+        />
+      ) : round.serve === "brainteaser" ? (
+        <BrainteaserDrillRound
+          key={`bt-${round.items[0]?.flashcard.id ?? "x"}`}
+          items={round.items}
+          record={record}
+          onDone={onRoundDone}
+        />
+      ) : round.serve === "trading" ? (
+        <TradingStationRound
+          key={round.target.topicKey ?? "trading"}
+          target={round.target}
+          onDone={onRoundDone}
+        />
+      ) : (
+        <TimedInfoPanel target={round.target} />
+      )}
+    </section>
+  );
+}
+
+/* ========================================================================== */
+/*  Live gate panel                                                            */
+/* ========================================================================== */
+
+function GatePanel({
+  prog,
+  target,
+}: {
+  prog: ReturnType<typeof drillingProgress>;
+  target: DrillTarget | null;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4" data-testid="drilling-gates">
+        <GateStat
+          label="Content"
+          value={`${prog.contentMastered}/${prog.contentTotal}`}
+          ok={prog.contentMastered === prog.contentTotal}
+        />
+        <GateStat label="Timed" value={prog.timedClear ? "Clear" : "Open"} ok={prog.timedClear} />
+        <GateStat
+          label="Brainteaser"
+          value={prog.brainteaserMastered ? "Clear" : "Open"}
+          ok={prog.brainteaserMastered}
+        />
+        <GateStat
+          label="Trading"
+          value={`${prog.tradingSubtopicsMastered}/${prog.tradingSubtopicTotal}`}
+          ok={prog.tradingMastered}
+        />
+      </div>
+      {target && !prog.done && (
+        <div className="rule-row">
+          <span className="label text-muted">Now drilling</span>
+          <span className="text-sm font-semibold text-primary" data-testid="drilling-target">
+            {target.label}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GateStat({ label, value, ok }: { label: string; value: string; ok: boolean }) {
+  return (
+    <div className="stat">
+      <div className="label text-muted">{label}</div>
+      <div className={`num text-lg font-semibold ${ok ? "text-bull" : "text-primary"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/*  Content drill (free-response + answer-withholding hint ladder)            */
+/* ========================================================================== */
+
+function NumericDrillRound({
+  target,
+  items,
+  record,
+  onDone,
+}: {
+  target: DrillTarget;
+  items: MaterializedNumericItem[];
+  record: (a: ItemAttempt) => void;
+  onDone: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const item = items[index];
+  const isLast = index >= items.length - 1;
+
+  const next = () => {
+    if (isLast) onDone();
+    else setIndex((i) => i + 1);
+  };
+
+  return (
+    <div className="space-y-3" data-testid="drilling-numeric">
+      <div className="rule-row">
+        <span className="label text-muted">
+          {target.label} · item <span className="num text-primary">{index + 1}</span> /{" "}
+          <span className="num">{items.length}</span>
+        </span>
+      </div>
+      <NumericDrillItem
+        key={item.question.id + index}
+        item={item}
+        isLast={isLast}
+        onResolve={(r) => record(buildContentDrillAttempt(item, r))}
+        onNext={next}
+      />
+    </div>
+  );
+}
+
+function NumericDrillItem({
+  item,
+  isLast,
+  onResolve,
+  onNext,
+}: {
+  item: MaterializedNumericItem;
+  isLast: boolean;
+  onResolve: (r: ContentDrillResult) => void;
+  onNext: () => void;
+}) {
+  const { question } = item;
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [episode, setEpisode] = useState<HintEpisode>(() => startEpisode());
+  const [lastWrong, setLastWrong] = useState<number | null>(null);
+  const firstWrongRef = useRef<number | undefined>(undefined);
+  const resolvedRef = useRef(false);
+
+  const resolved = isResolved(episode);
+  const isCorrect = episode.status === "correct";
+
+  const ladder = useMemo(
+    () =>
+      lastWrong !== null
+        ? buildHintLadder({
+            question,
+            chosenValue: lastWrong,
+            misconceptionTag: resolveNumericTag(question, lastWrong),
+          })
+        : null,
+    [question, lastWrong],
+  );
+
+  const submit = () => {
+    if (resolved) return;
+    const g = gradeFreeResponse(question, raw);
+    if (g.parsed === null) {
+      setError("Enter a number, fraction, or expression (e.g. 2.8 or 1/3).");
+      return;
+    }
+    setError(null);
+    const nextEp = submitAttempt(episode, g.correct);
+    setEpisode(nextEp);
+    if (!g.correct) {
+      if (firstWrongRef.current === undefined) firstWrongRef.current = g.parsed;
+      setLastWrong(g.parsed);
+      setRaw("");
+    }
+    if (isResolved(nextEp) && !resolvedRef.current) {
+      resolvedRef.current = true;
+      onResolve({
+        correct: nextEp.status === "correct",
+        highestRung: nextEp.highestRung,
+        finalValue: g.parsed,
+        firstWrongValue: firstWrongRef.current,
+      });
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="space-y-2">
+        {question.concept && (
+          <span className="chip border-subtle text-secondary">{question.concept}</span>
+        )}
+        <p className="font-display text-lg font-semibold leading-relaxed text-primary">
+          {question.prompt}
+        </p>
+      </div>
+
+      {!resolved && (
+        <div className="space-y-3">
+          <input
+            autoFocus
+            inputMode={question.decimals != null ? "decimal" : "numeric"}
+            value={raw}
+            onChange={(e) => {
+              setRaw(e.target.value);
+              if (error) setError(null);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") submit();
+            }}
+            placeholder="Type a number — e.g. 0.25, 3/8, 5%"
+            aria-label="Your answer"
+            className="input"
+          />
+          {error && <p className="text-sm text-bear">{error}</p>}
+          <button type="button" className="btn-primary w-full" onClick={submit} disabled={raw.trim() === ""}>
+            {episode.revealed > 0 ? "Re-attempt ▸" : "Submit ▸"}
+          </button>
+          {episode.revealed > 0 && (
+            <p className="text-xs text-muted">
+              Not quite. Read the coaching below, then re-enter your answer.
+            </p>
+          )}
+        </div>
+      )}
+
+      {ladder && episode.revealed > 0 && (
+        <HintLadder rungs={ladder} controlledRevealed={episode.revealed} />
+      )}
+
+      {resolved && (
+        <div className="space-y-3">
+          <div
+            className={`verdict ${isCorrect ? "bg-bull text-bg" : "bg-bear text-bg"}`}
+            data-testid="drilling-item-result"
+          >
+            {isCorrect
+              ? episode.highestRung === 0
+                ? "● Correct"
+                : `● Correct after ${episode.highestRung} hint${episode.highestRung > 1 ? "s" : ""}`
+              : "● Not quite"}
+          </div>
+          <div className="reveal">
+            {!isCorrect && (
+              <p>
+                <span className="label text-secondary">Answer · </span>
+                <span className="num font-semibold">{formatNumericAnswer(question)}</span>
+                {question.unit ? ` ${question.unit}` : ""}
+              </p>
+            )}
+            <p className="text-secondary">{question.explanation}</p>
+          </div>
+          <button type="button" className="btn-primary w-full" onClick={onNext}>
+            {isLast ? "Finish round ▸" : "Next ▸"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/*  Brainteaser competency drill (hybrid grading)                             */
+/* ========================================================================== */
+
+function BrainteaserDrillRound({
+  items,
+  record,
+  onDone,
+}: {
+  items: MaterializedBrainteaserItem[];
+  record: (a: ItemAttempt) => void;
+  onDone: () => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const item = items[index];
+  const isLast = index >= items.length - 1;
+  const next = () => {
+    if (isLast) onDone();
+    else setIndex((i) => i + 1);
+  };
+
+  if (!item) return <div className="panel p-6 text-sm text-muted">No brainteasers available.</div>;
+
+  return (
+    <div className="space-y-3" data-testid="drilling-brainteaser">
+      <div className="rule-row">
+        <span className="label text-muted">
+          Brainteaser reasoning · item{" "}
+          <span className="num text-primary">{index + 1}</span> /{" "}
+          <span className="num">{items.length}</span>
+        </span>
+      </div>
+      <BrainteaserDrillItem
+        key={item.flashcard.id + index}
+        item={item}
+        isLast={isLast}
+        onResolve={(got) => record(buildBrainteaserDrillAttempt(got))}
+        onNext={next}
+      />
+    </div>
+  );
+}
+
+function BrainteaserDrillItem({
+  item,
+  isLast,
+  onResolve,
+  onNext,
+}: {
+  item: MaterializedBrainteaserItem;
+  isLast: boolean;
+  onResolve: (got: boolean) => void;
+  onNext: () => void;
+}) {
+  const { flashcard, numericGradable } = item;
+  const [entry, setEntry] = useState("");
+  const [revealed, setRevealed] = useState(false);
+  const [graded, setGraded] = useState<boolean | null>(null);
+
+  const commitNumeric = () => {
+    if (graded !== null || entry.trim() === "") return;
+    const value = parseFreeResponse(entry);
+    const got = value !== null && gradeBrainteaserNumeric(flashcard, value);
+    setGraded(got);
+    setRevealed(true);
+    onResolve(got);
+  };
+  const selfEval = (got: boolean) => {
+    if (graded !== null) return;
+    setGraded(got);
+    onResolve(got);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="space-y-2">
+        <span className="chip border-accent text-accent">Brainteaser</span>
+        <p className="font-display text-lg font-semibold leading-relaxed text-primary">
+          {flashcard.prompt}
+        </p>
+      </div>
+
+      {numericGradable ? (
+        graded === null ? (
+          <div className="space-y-3">
+            <input
+              autoFocus
+              inputMode="decimal"
+              value={entry}
+              onChange={(e) => setEntry(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitNumeric();
+              }}
+              placeholder="Enter your numeric answer"
+              aria-label="Your brainteaser answer"
+              className="input"
+            />
+            <button type="button" className="btn-primary w-full" onClick={commitNumeric} disabled={entry.trim() === ""}>
+              Commit &amp; reveal
+            </button>
+          </div>
+        ) : (
+          <RevealBlock flashcard={flashcard} good={graded} onNext={onNext} isLast={isLast} />
+        )
+      ) : !revealed ? (
+        <button type="button" className="btn-secondary w-full" onClick={() => setRevealed(true)}>
+          Show answer
+        </button>
+      ) : graded === null ? (
+        <div className="space-y-3">
+          <RevealBody flashcard={flashcard} />
+          <div className="flex gap-3">
+            <button type="button" className="btn-primary flex-1" onClick={() => selfEval(true)}>
+              I got it
+            </button>
+            <button type="button" className="btn-secondary flex-1" onClick={() => selfEval(false)}>
+              I missed it
+            </button>
+          </div>
+        </div>
+      ) : (
+        <RevealBlock flashcard={flashcard} good={graded} onNext={onNext} isLast={isLast} />
+      )}
+    </div>
+  );
+}
+
+function RevealBody({ flashcard }: { flashcard: MaterializedBrainteaserItem["flashcard"] }) {
+  return (
+    <div className="reveal">
+      <p>
+        <span className="label text-secondary">Answer · </span>
+        <span className="text-primary">{flashcard.answer}</span>
+      </p>
+      <p className="text-secondary">{flashcard.explanation}</p>
+    </div>
+  );
+}
+
+function RevealBlock({
+  flashcard,
+  good,
+  onNext,
+  isLast,
+}: {
+  flashcard: MaterializedBrainteaserItem["flashcard"];
+  good: boolean;
+  onNext: () => void;
+  isLast: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className={`verdict ${good ? "bg-bull text-bg" : "bg-bear text-bg"}`}>
+        {good ? "● Got it" : "● Missed"}
+      </div>
+      <RevealBody flashcard={flashcard} />
+      <button type="button" className="btn-primary w-full" onClick={onNext}>
+        {isLast ? "Finish round ▸" : "Next ▸"}
+      </button>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/*  Trading SUBTOPIC drill — re-mount the weak subtopic's Game-OA station       */
+/* ========================================================================== */
+
+/**
+ * Re-drill a weak trading subtopic by mounting its EXACT Game-OA battery station
+ * (the same game that seeded it). The station folds its rounds into the subtopic
+ * Beta itself (via `useStationFold`), so this wrapper only needs to look the
+ * station up by the target's subtopic key and advance the loop when it finishes.
+ */
+function TradingStationRound({
+  target,
+  onDone,
+}: {
+  target: DrillTarget;
+  onDone: () => void;
+}) {
+  const station = target.topicKey
+    ? stationForSubtopic(target.topicKey)
+    : undefined;
+
+  if (!station) {
+    // No station for this key (should never happen for a trading target) —
+    // don't stall the loop.
+    return (
+      <div className="note" data-testid="drilling-trading">
+        <p className="font-semibold text-primary">{target.label}</p>
+        <p className="mt-1 leading-relaxed">{target.reason}</p>
+        <button type="button" className="btn-primary mt-3 w-full" onClick={onDone}>
+          Continue ▸
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3" data-testid="drilling-trading">
+      <div className="rule-row">
+        <span className="label text-muted">
+          {station.title} · <span className="text-secondary">{station.skillLabel}</span>
+        </span>
+      </div>
+      <Suspense
+        fallback={
+          <div className="panel-ruled p-8 text-center text-sm text-muted">
+            Loading game…
+          </div>
+        }
+      >
+        <station.Component onComplete={onDone} />
+      </Suspense>
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/*  Timed-overlay residual info                                                */
+/* ========================================================================== */
+
+function TimedInfoPanel({ target }: { target: DrillTarget }) {
+  return (
+    <div className="note" data-testid="drilling-timed-info">
+      <p className="font-semibold text-primary">{target.label}</p>
+      <p className="mt-1 leading-relaxed">{target.reason}</p>
+    </div>
+  );
+}

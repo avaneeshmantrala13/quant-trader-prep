@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, cleanup, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
-import { createElement } from "react";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { createElement, Suspense } from "react";
 import { emptyProgress, type UserProgress } from "@/types/progress";
 import { probabilityTrack } from "@/content/probability/levels";
 import { groupLevelsIntoTopics } from "@/lib/topics";
@@ -40,8 +40,18 @@ vi.mock("@/lib/storage", () => ({
   },
 }));
 
+// The guided-pipeline cutover (PIPELINE_ENABLED) unmounts the free-roam lesson
+// route from `App`, so we mount the REAL LessonPage directly on its route path
+// (wrapped in the same providers) — this still exercises the actual lesson-intro
+// render path this regression guards.
 // eslint-disable-next-line import/first
-import App from "@/App";
+import { ThemeProvider } from "@/context/ThemeContext";
+// eslint-disable-next-line import/first
+import { AuthProvider } from "@/context/AuthContext";
+// eslint-disable-next-line import/first
+import { ProgressProvider } from "@/context/ProgressContext";
+// eslint-disable-next-line import/first
+import { LessonPage } from "@/pages/LessonPage";
 
 const track = probabilityTrack;
 
@@ -69,9 +79,32 @@ async function renderLessonIntro(levelId: string): Promise<string> {
   CURRENT = unlockThrough(levelId);
   const { container } = render(
     createElement(
-      MemoryRouter,
-      { initialEntries: [`/track/${track.id}/level/${levelId}`] },
-      createElement(App),
+      ThemeProvider,
+      null,
+      createElement(
+        AuthProvider,
+        null,
+        createElement(
+          ProgressProvider,
+          null,
+          createElement(
+            Suspense,
+            { fallback: null },
+            createElement(
+              MemoryRouter,
+              { initialEntries: [`/track/${track.id}/level/${levelId}`] },
+              createElement(
+                Routes,
+                null,
+                createElement(Route, {
+                  path: "/track/:trackId/level/:levelId",
+                  element: createElement(LessonPage),
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
   // 5s timeout: under full-suite parallelism the first dynamic import() has to

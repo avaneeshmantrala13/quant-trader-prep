@@ -32,12 +32,20 @@ export function OaRunner({
   session,
   onChange,
   onFinish,
+  hideTopic = false,
 }: {
   session: OaSessionState;
   /** Persist + update page state with a new (still-running) session. */
   onChange: (next: OaSessionState) => void;
   /** Called ONCE when the session becomes terminal (page shows the report). */
   onFinish: (finished: OaSessionState) => void;
+  /**
+   * Suppress the per-question concept/topic reveal. Passed by the guided TIMED
+   * DIAGNOSTIC (a real quant test never shows the trick); free-roam / drilling
+   * usages leave it false so they keep showing the concept as before. The
+   * question's topic tags still flow through scoring — this hides display only.
+   */
+  hideTopic?: boolean;
 }) {
   const nowTs = useWallClock(true);
 
@@ -172,16 +180,12 @@ export function OaRunner({
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       {/* ---- header: clock / stopwatch + progress ---- */}
-      <div className="flex items-end justify-between">
-        <div>
+      <div className="flex items-end justify-between gap-4 border-b border-subtle pb-4">
+        <div className="space-y-1">
           {session.kind === "sprint" && questionMs != null && (
             <>
               <span className="label">This question</span>
-              <div
-                className={`num text-4xl font-black ${
-                  questionMs <= 10_000 ? "text-bear" : "text-primary"
-                }`}
-              >
+              <div className={`clock ${questionMs <= 10_000 ? "text-bear" : "text-primary"}`}>
                 {clock(questionMs)}
               </div>
             </>
@@ -189,11 +193,7 @@ export function OaRunner({
           {session.kind === "section" && sectionMs != null && (
             <>
               <span className="label">Section time</span>
-              <div
-                className={`num text-4xl font-black ${
-                  sectionMs < 60_000 ? "text-bear" : "text-primary"
-                }`}
-              >
+              <div className={`clock ${sectionMs < 60_000 ? "text-bear" : "text-primary"}`}>
                 {clock(sectionMs)}
               </div>
             </>
@@ -201,13 +201,13 @@ export function OaRunner({
           {session.kind === "measured" && (
             <>
               <span className="label">This question</span>
-              <div className="num text-4xl font-black text-primary">
+              <div className="clock text-primary">
                 {(measuredElapsedMs / 1000).toFixed(1)}s
               </div>
             </>
           )}
         </div>
-        <div className="text-right">
+        <div className="space-y-1 text-right">
           <span className="label">Question</span>
           <div className="num text-2xl font-bold text-accent">
             {session.index + 1} / {total}
@@ -221,38 +221,41 @@ export function OaRunner({
       </div>
 
       {/* ---- prompt ---- */}
-      <div className="panel p-6">
-        {question.concept && (
+      <div className="panel-ruled p-6">
+        {!hideTopic && question.concept && (
           <div className="label mb-2 text-accent">{question.concept}</div>
         )}
-        <p className="whitespace-pre-line text-lg font-semibold text-primary">
+        <p className="whitespace-pre-line font-display text-xl font-semibold leading-relaxed text-primary">
           {question.prompt}
         </p>
       </div>
 
       {/* ---- choices ---- */}
-      <div className="grid gap-3">
+      <div className="grid gap-2.5">
         {question.choices.map((choice, i) => {
           const isChosen = chosen === i;
           return (
             <button
               key={i}
               onClick={() => select(i)}
-              className={`flex items-start gap-3 border px-4 py-3 text-left transition-colors ${
+              className={`group flex items-center gap-3 rounded border px-3 py-3 text-left transition-colors ${
                 isChosen
-                  ? "border-strong bg-surface-muted text-primary"
-                  : "border-subtle bg-surface text-secondary hover:border-strong hover:text-primary"
+                  ? "border-border-strong bg-surface-muted text-primary"
+                  : "border-subtle bg-surface text-secondary hover:border-border-strong hover:text-primary"
               }`}
               aria-pressed={isChosen}
             >
               <span
-                className={`num font-bold ${
-                  isChosen ? "text-accent" : "text-muted"
+                className={`num grid h-7 w-7 shrink-0 place-items-center rounded-sm border text-xs font-bold transition-colors ${
+                  isChosen
+                    ? "border-accent bg-accent text-accent-contrast"
+                    : "border-subtle text-muted group-hover:border-border-strong group-hover:text-primary"
                 }`}
+                aria-hidden
               >
                 {String.fromCharCode(65 + i)}
               </span>
-              <span className="num">{choice}</span>
+              <span className="num text-[15px]">{choice}</span>
             </button>
           );
         })}
@@ -300,12 +303,12 @@ export function OaRunner({
                 <button
                   key={q.id}
                   onClick={() => goTo(i)}
-                  className={`num h-8 w-8 border text-xs font-bold ${
+                  className={`num h-8 w-8 rounded-sm border text-xs font-bold transition-colors ${
                     isCurrent
-                      ? "border-strong bg-accent text-bg"
+                      ? "border-accent bg-accent text-accent-contrast"
                       : done
-                        ? "border-subtle bg-surface-muted text-primary"
-                        : "border-subtle bg-surface text-muted hover:text-primary"
+                        ? "border-border-strong bg-surface-muted text-primary"
+                        : "border-subtle bg-surface text-muted hover:border-border-strong hover:text-primary"
                   }`}
                   aria-current={isCurrent}
                 >

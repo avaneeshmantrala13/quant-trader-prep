@@ -237,6 +237,99 @@ export function fibonacciLike(s0: number, s1: number, n: number): SeqSolution {
 }
 
 /* -------------------------------------------------------------------------- */
+/*  5b. Tribonacci-like, each term = sum of the previous THREE (general seeds)  */
+/* -------------------------------------------------------------------------- */
+
+export function tribonacciLike(
+  s0: number,
+  s1: number,
+  s2: number,
+  n: number,
+): SeqSolution {
+  const seq: number[] = [s0, s1, s2];
+  for (let i = 3; i < n; i++) seq.push(seq[i - 1] + seq[i - 2] + seq[i - 3]);
+  const last = seq[n - 1];
+  const prev = seq[n - 2];
+  const prev2 = seq[n - 3];
+  const answer = last + prev + prev2;
+  const misreads: Misread[] = [
+    {
+      value: last + prev,
+      tag: "skipped_a_term",
+      why: "Summed only the two most recent terms; a tribonacci adds the previous THREE.",
+    },
+    {
+      value: 2 * last,
+      tag: "doubled_last",
+      why: "Doubled the last term instead of adding the three preceding terms.",
+    },
+    {
+      value: last,
+      tag: "used_previous_term",
+      why: "Returned the last term shown without adding the three before it.",
+    },
+  ];
+  return { seq, answer, misreads };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  5c. Look-and-say, each term "reads out" the run-length encoding of the last */
+/* -------------------------------------------------------------------------- */
+
+/** Run-length "read": "1112" → "3112" (three 1s, one 2), the look-and-say step. */
+export function sayOnce(digits: string): string {
+  let out = "";
+  let i = 0;
+  while (i < digits.length) {
+    let j = i;
+    while (j < digits.length && digits[j] === digits[i]) j++;
+    out += String(j - i) + digits[i];
+    i = j;
+  }
+  return out;
+}
+
+/** The same read-out but emitting digit-then-count (the classic reversed slip). */
+function sayReversed(digits: string): string {
+  let out = "";
+  let i = 0;
+  while (i < digits.length) {
+    let j = i;
+    while (j < digits.length && digits[j] === digits[i]) j++;
+    out += digits[i] + String(j - i);
+    i = j;
+  }
+  return out;
+}
+
+/**
+ * Look-and-say sequence from a seed digit-string (avoid the "22" fixed point).
+ * Every term is the run-length "read" of the one before it. The misreads encode
+ * the two dominant slips: repeating the last term (describing nothing) and
+ * reading each run as digit-then-count instead of count-then-digit.
+ */
+export function lookAndSay(seed: string, n: number): SeqSolution {
+  const terms: string[] = [seed];
+  for (let i = 1; i < n; i++) terms.push(sayOnce(terms[i - 1]));
+  const last = terms[n - 1];
+  const answer = Number(sayOnce(last));
+  const seq = terms.map(Number);
+  const misreads: Misread[] = [
+    {
+      value: Number(last),
+      tag: "used_previous_term",
+      why: "Repeated the last term instead of DESCRIBING it (say what you see).",
+    },
+    {
+      value: Number(sayReversed(last)),
+      tag: "reversed_description",
+      why: "Wrote each run as digit-then-count; look-and-say is count-then-digit.",
+    },
+  ];
+  return { seq, answer, misreads };
+}
+
+/* -------------------------------------------------------------------------- */
 /*  6. Alternating-operation, cycle "+a" then "×b"                             */
 /* -------------------------------------------------------------------------- */
 

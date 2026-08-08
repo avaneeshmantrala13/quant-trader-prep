@@ -20,7 +20,6 @@ import {
 } from "@/lib/diagnostic/history";
 import type { DiagnosticResult, GoalMode } from "@/types/progress";
 import { LineChart } from "@/components/simulations/charts/LineChart";
-import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
 import { ChevronLeftIcon } from "@/components/icons";
 
 /**
@@ -269,7 +268,6 @@ export function DiagnosticPage() {
               {displayNumber} of {total}
             </span>
           )}
-          <ThemeSwitcher />
         </div>
       </header>
 

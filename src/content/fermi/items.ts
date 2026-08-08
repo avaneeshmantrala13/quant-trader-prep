@@ -945,6 +945,81 @@ export const FERMI_ITEMS: FermiItem[] = [
       "A daily rate × days × years. Anchoring the daily-steps factor (well under the mythical 10,000) is the whole ballgame.",
     source: "Unit-chaining estimation (human scale)",
   },
+
+  /* ---------------------------------------------------------------------- */
+  /*  Net-new markets/microstructure decompositions (Cluster D)             */
+  /* ---------------------------------------------------------------------- */
+  {
+    id: "fermi-megacap-daily-notional",
+    prompt:
+      "What is the daily dollar notional traded in a single mega-cap tech stock on a typical day? Estimate the dollars per day.",
+    quantity: "daily notional of one mega-cap stock",
+    unit: "$ traded per day",
+    money: true,
+    category: "Markets & Trading",
+    difficulty: "medium",
+    factors: [
+      { label: "Shares of the mega-cap traded per day", value: 40_000_000, unit: "shares/day" },
+      { label: "Average share price", value: 180, unit: "$/share" },
+    ],
+    reference: 7_200_000_000,
+    takeaway:
+      "Notional = share volume × price, applied to one name. Anchoring both factors (tens of millions of shares, ~$180) lands the ~$7B/day a single mega-cap turns over.",
+    source: "Markets sizing (single-name notional)",
+  },
+  {
+    id: "fermi-hft-messages-per-firm-day",
+    prompt:
+      "How many order messages does a large high-frequency market maker send across US equities in a single day? Estimate the count.",
+    quantity: "order messages/day for one HFT",
+    unit: "messages",
+    category: "Market Microstructure",
+    difficulty: "hard",
+    factors: [
+      { label: "Symbols actively quoted by the firm", value: 3_000, unit: "symbols" },
+      { label: "Order messages per symbol per day (quote + cancel churn)", value: 200_000, unit: "messages/symbol/day" },
+    ],
+    reference: 600_000_000,
+    takeaway:
+      "Breadth × per-symbol churn. A market maker re-quotes thousands of names hundreds of thousands of times each, so one firm alone sends hundreds of millions of messages a day.",
+    source: "Microstructure (per-firm message load)",
+  },
+  {
+    id: "fermi-spx-options-oi-notional",
+    prompt:
+      "What is the total dollar notional controlled by all open SPX index-option contracts? Estimate the dollars.",
+    quantity: "SPX option open-interest notional",
+    unit: "$ notional",
+    money: true,
+    category: "Derivatives & Risk",
+    difficulty: "hard",
+    factors: [
+      { label: "SPX option contracts of open interest", value: 20_000_000, unit: "contracts" },
+      { label: "Notional per ATM SPX contract (5,000 × $100)", value: 500_000, unit: "$/contract" },
+    ],
+    reference: 10_000_000_000_000,
+    takeaway:
+      "Open interest × per-contract notional. Each SPX contract controls ~$500k, so tens of millions of open contracts stack to a ~$10T notional footprint.",
+    source: "Derivatives sizing (open-interest notional)",
+  },
+  {
+    id: "fermi-exchange-annual-notional",
+    prompt:
+      "What is the total dollar value matched by a major US stock exchange over a full year? Estimate the dollars per year.",
+    quantity: "annual $ matched (one exchange)",
+    unit: "$ per year",
+    money: true,
+    category: "Exchange & Liquidity",
+    difficulty: "hard",
+    factors: [
+      { label: "Dollar value matched per day by the exchange", value: 80_000_000_000, unit: "$/day" },
+      { label: "Trading days per year", value: 252, unit: "days/yr" },
+    ],
+    reference: 20_160_000_000_000,
+    takeaway:
+      "Daily matched notional × ~252 trading days annualizes venue throughput. Using 252 (not 365) for market-closed weekends/holidays is the honest bookkeeping move.",
+    source: "Liquidity sizing (annualized notional)",
+  },
 ];
 
 /** Categories present in `FERMI_ITEMS`, in a stable curated display order. */

@@ -176,6 +176,42 @@ export const MEASURED_FORMAT: OaFormatConfig = {
 };
 
 /**
+ * TIMED DIAGNOSTIC — guided-pipeline Stage 3 (GUIDED_PIPELINE_PLAN.md §2, §3.3
+ * metric (b), §3.6 0.90 gate). 30 hard, MULTI-topic questions on ONE strict
+ * 45-minute wall-clock section timer, measuring the SPEED of correct thinking.
+ *
+ * It is a `section` kind, so it reuses the EXACT reload-proof engine every other
+ * section format uses (`timedSession.ts`: an absolute `deadlineTs` seeded at
+ * creation and recomputed as `deadline − now`, persisted via `progress.oaTimed`),
+ * so a reload never resets the clock and `resumeOaSession` auto-submits at 0:00.
+ *
+ * DELIBERATELY NOT in {@link OA_FORMATS}: it is not a user-pickable `/oa` preset.
+ * The pipeline's `TimedDiagnosticStage` references this preset directly and draws
+ * its own hard, topic-TAGGED items from the hard generators/verifiers via
+ * `lib/oa/timedDiagnostic.ts` (so `contentPool` is intentionally omitted — the
+ * default mixed pool is never used for it). Scoring records a per-topic timed
+ * tally (metric b) and gates each section with `meetsMasteryGate(score, 0.90)`
+ * where 0.90 is passed as a PARAMETER — it never touches the 0.80 content bar.
+ */
+export const TIMED_DIAGNOSTIC_FORMAT: OaFormatConfig = {
+  id: "timed-diagnostic",
+  kind: "section",
+  label: "Timed diagnostic",
+  blurb:
+    "30 hard, multi-topic questions on one 45-minute wall clock. It keeps running if you leave and auto-submits at 0:00 — this measures the speed of your correct thinking. +1 correct / 0 otherwise.",
+  questionCount: 30,
+  sectionSec: 45 * 60,
+  // Free navigation within the one running section clock (revisit/flag freely).
+  freeNavigation: true,
+  autoAdvance: false,
+  scoring: COUNT_STYLE,
+  // Per-question fair share = 2700s / 30 = 90s → ms.
+  budgetMs: Math.round(((45 * 60) / 30) * 1000),
+  sourceNote:
+    "GUIDED_PIPELINE_PLAN.md §2 (Stage 3 UX) / §3.3 metric (b) timed performance / §3.6 (0.90 timed gate): 30 Q / 45 min strict wall-clock, hard multi-topic, speed of correct thinking. Section pass gated at ≥0.90 via meetsMasteryGate (threshold param); the 0.80 content-mastery bar is left untouched.",
+};
+
+/**
  * All timed formats, ordered fastest-pace → slowest (the UI difficulty
  * gradient), with the untimed Measured mode last. Per-question pace (sec/q):
  * Rapid 15 · Blitz 48 · Sprint 90 · Section ~106 · Derivation 180 · Deep 360.

@@ -11,6 +11,7 @@ import {
   binaryWeightsFamily,
   digitProductFamily,
   houseOfCardsFamily,
+  lockerToggleFamily,
   modularHatsFamily,
   pigeonholeFamily,
   subtractionGameFamily,
@@ -741,9 +742,10 @@ const levels: Level[] = [
     mode: "flashcard",
     masteryThreshold: 0.7,
     flashcards: invariantsParity,
-    // The prisoners'-hats modular-checksum family generates infinitely (n, k);
-    // the invariant/parity/mirror one-offs above are the fixed mastery deck.
-    flashcardGenerators: [modularHatsFamily],
+    // The prisoners'-hats modular-checksum family and the toggling-lockers
+    // divisor-parity family both generate infinitely; the invariant/parity/mirror
+    // one-offs above are the fixed mastery deck.
+    flashcardGenerators: [modularHatsFamily, lockerToggleFamily],
     lesson: {
       paragraphs: [
         "The most powerful single trick in puzzle-solving: find an INVARIANT, a quantity that every allowed move leaves unchanged (or a parity that never flips). If the goal state would violate the invariant, it's impossible; if the invariant pins down the end state, you get the answer for free.",

@@ -174,7 +174,7 @@ function QuoteInput({
         autoComplete="off"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="num mt-1 min-h-[44px] w-full border-2 border-border-strong bg-surface px-3 py-2 text-lg font-semibold text-primary outline-none focus:border-accent"
+        className="num mt-1 min-h-[44px] w-full rounded border-2 border-border-strong bg-surface px-3 py-2 text-lg font-semibold text-primary outline-none transition-colors focus:border-accent"
       />
     </label>
   );

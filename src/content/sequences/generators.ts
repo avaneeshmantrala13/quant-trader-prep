@@ -16,7 +16,9 @@ import {
   findOddByDivisor,
   geometric,
   interleaved,
+  lookAndSay,
   quadratic,
+  tribonacciLike,
   type LetterSolution,
   type SeqSolution,
 } from "./solvers";
@@ -263,6 +265,24 @@ const fibonacciNext: QuestionGenerator = (rng) =>
     "fibonacciNext",
   );
 
+const tribonacciNext: QuestionGenerator = (rng) =>
+  withFamily(
+    assembleDistinct(rng, (r) => {
+      const s0 = r.int(1, 3);
+      const s1 = r.int(1, 4);
+      const s2 = r.int(2, 5);
+      const n = r.int(5, 6);
+      const sol = tribonacciLike(s0, s1, s2, n);
+      return numericSeqParts(sol, {
+        idBase: "seq-trib",
+        concept: "Tribonacci-like sequence (sum of the previous three)",
+        difficulty: "medium",
+        rule: "Each term is the sum of the three preceding terms.",
+      });
+    }),
+    "tribonacciNext",
+  );
+
 const alternatingOpNext: QuestionGenerator = (rng) =>
   withFamily(
     assembleDistinct(rng, (r) => {
@@ -484,6 +504,32 @@ const fibonacciNumeric: NumericQuestionGenerator = (rng) => {
   });
 };
 
+const tribonacciNumeric: NumericQuestionGenerator = (rng) => {
+  const s0 = rng.int(1, 3);
+  const s1 = rng.int(1, 4);
+  const s2 = rng.int(2, 5);
+  const n = rng.int(5, 6);
+  return numericSeqQuestion(tribonacciLike(s0, s1, s2, n), {
+    idBase: "seqn-trib",
+    family: "tribonacciNumeric",
+    concept: "Tribonacci-like sequence (sum of the previous three)",
+    difficulty: "medium",
+    rule: "Each term is the sum of the three preceding terms.",
+  });
+};
+
+const lookAndSayNumeric: NumericQuestionGenerator = (rng) => {
+  const seed = rng.pick(["1", "2", "3"] as const);
+  const n = rng.int(4, 5);
+  return numericSeqQuestion(lookAndSay(seed, n), {
+    idBase: "seqn-lns",
+    family: "lookAndSayNumeric",
+    concept: "Look-and-say sequence (run-length read-out)",
+    difficulty: "hard",
+    rule: 'Each term "reads" the previous one aloud: count each run of equal digits, writing count-then-digit (e.g. "1112" → "3112").',
+  });
+};
+
 const alternatingOpNumeric: NumericQuestionGenerator = (rng) => {
   const s = rng.int(1, 6);
   const a = rng.int(2, 7);
@@ -508,6 +554,7 @@ export const SEQUENCE_QUIZ_GENERATORS: Record<string, QuestionGenerator> = {
   polynomialNext,
   interleavedNext,
   fibonacciNext,
+  tribonacciNext,
   alternatingOpNext,
   caesarNext,
   alternatingShiftNext,
@@ -524,6 +571,8 @@ export const SEQUENCE_NUMERIC_GENERATORS: Record<
   polynomialNumeric,
   interleavedNumeric,
   fibonacciNumeric,
+  tribonacciNumeric,
+  lookAndSayNumeric,
   alternatingOpNumeric,
 };
 

@@ -7,22 +7,36 @@ import {
   type ReactNode,
 } from "react";
 import { storage, type ThemeChoice } from "@/lib/storage";
-import { DEFAULT_THEME_ID, THEMES, applyTheme, getTheme } from "@/themes";
+import { DEFAULT_THEME_ID, applyTheme, getTheme } from "@/themes";
 import type { Theme } from "@/themes/types";
 
+/**
+ * THEME CONTEXT — hard-locked to the single `minimalist` theme (guided-pipeline
+ * strip-down, spec §7.2). There is no longer a named-theme switcher or `/themes`
+ * gallery, so the context no longer exposes `themeId` / `setThemeId` / `themes`.
+ *
+ * A working LIGHT/DARK toggle is intentionally KEPT (RESOLVED DECISION §10.7):
+ * `theme` / `toggleTheme` / `setTheme` switch the color MODE (which flips the
+ * `.dark` class + persists the choice) WITHIN the locked minimalist theme.
+ * `themeDef` is always the minimalist theme, so every consumer that reads a
+ * theme's optional hooks (Background, Dashboard, TableOfContents, map stations)
+ * keeps working unchanged.
+ */
 interface ThemeContextValue {
-  /** Light/dark MODE (kept as `theme`/`toggleTheme` for backward-compat). */
+  /** Light/dark color MODE. */
   theme: ThemeChoice;
+  /** Flip between light and dark. */
   toggleTheme: () => void;
+  /** Set the light/dark color mode explicitly. */
   setTheme: (t: ThemeChoice) => void;
-  /** Named visual theme. */
-  themeId: string;
-  setThemeId: (id: string) => void;
+  /** The active (locked) named theme — always `minimalist`. */
   themeDef: Theme;
-  themes: Theme[];
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+/** The single locked theme. Resolved once — `getTheme` always returns it. */
+const LOCKED_THEME: Theme = getTheme(DEFAULT_THEME_ID);
 
 function resolveInitialMode(): ThemeChoice {
   const saved = storage.getTheme();
@@ -36,22 +50,17 @@ function resolveInitialMode(): ThemeChoice {
   return "light";
 }
 
-function resolveInitialThemeId(): string {
-  const saved = storage.getThemeId();
-  return saved && THEMES.some((t) => t.id === saved) ? saved : DEFAULT_THEME_ID;
-}
-
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemeChoice>(resolveInitialMode);
-  const [themeId, setThemeIdState] = useState<string>(resolveInitialThemeId);
 
-  // Apply the named theme's tokens (before paint to minimize any flash).
+  // Apply the locked theme's tokens once (before paint to minimize any flash).
+  // Persist the id too so a returning session keeps reading "minimalist".
   useLayoutEffect(() => {
-    applyTheme(getTheme(themeId));
-    storage.setThemeId(themeId);
-  }, [themeId]);
+    applyTheme(LOCKED_THEME);
+    storage.setThemeId(LOCKED_THEME.id);
+  }, []);
 
-  // Light/dark mode toggling (works within any theme).
+  // Light/dark mode toggling (works within the locked minimalist theme).
   useEffect(() => {
     const root = document.documentElement;
     root.classList.toggle("dark", theme === "dark");
@@ -64,10 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     toggleTheme: () =>
       setThemeState((t) => (t === "dark" ? "light" : "dark")),
     setTheme: (t) => setThemeState(t),
-    themeId,
-    setThemeId: (id) => setThemeIdState(id),
-    themeDef: getTheme(themeId),
-    themes: THEMES,
+    themeDef: LOCKED_THEME,
   };
 
   return (

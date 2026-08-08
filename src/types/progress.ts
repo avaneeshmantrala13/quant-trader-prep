@@ -66,6 +66,99 @@ export interface DiagnosticResult {
 export type GoalMode = "course" | "interview";
 
 /**
+ * The eight-stage guided pipeline (login → greenlight). Login is stage 1 in the
+ * UX but is NOT modeled here — it is handled by `ProtectedRoute`/auth — so this
+ * enum starts at the first in-app stage (the untimed diagnostic) and ends at the
+ * terminal `greenlight`. The ORDER of this union is authoritative for stage
+ * progression (see `src/lib/pipeline/stateMachine.ts`, `stageOrder`). Spec §3.4.
+ */
+export type PipelineStage =
+  | "diagnostic-untimed"
+  | "diagnostic-timed"
+  | "game-oa"
+  | "diagnosis"
+  | "drilling"
+  | "mock"
+  | "greenlight";
+
+/**
+ * One completed strict-timed multi-topic section (the timed diagnostic or an
+ * in-loop timed section). Held in `PipelineState.timed.sections` for the
+ * progress view / audit and the metric-(b) timed tally. Accuracy is
+ * `correct / total`, gated at ≥ 0.90 (spec §3.6) via `meetsMasteryGate`.
+ */
+export interface TimedSectionResult {
+  /** Section label / id (e.g. "timed-diagnostic" or a topic-composition tag). */
+  label: string;
+  /** Items answered correctly in this section. */
+  correct: number;
+  /** Total graded items in this section. */
+  total: number;
+  /** Topic keys the section drew from (feeds the per-topic timed tally, metric b). */
+  topicKeys?: string[];
+  /** ISO timestamp the section was completed. */
+  at?: string;
+}
+
+/**
+ * One completed mock-interview attempt, recorded for the Stage-7 "≥90% on 3
+ * consecutive mocks" gate (RESOLVED DECISION §10.4) and the progress view.
+ * `scorePct` is a percentage in [0,100]; `wouldPass` mirrors the mock
+ * diagnosis verdict string ("yes" | "borderline" | "no").
+ */
+export interface PipelineMockResult {
+  /** ISO timestamp of the mock. */
+  at: string;
+  /** Score as a PERCENT in [0,100] (compared against a 90 bar). */
+  scorePct: number;
+  /** Mock-diagnosis pass verdict ("yes" | "borderline" | "no"). */
+  wouldPass: string;
+}
+
+/**
+ * Stage-unlock state for the guided pipeline (spec §3.4). ADDITIVE & OPTIONAL on
+ * `UserProgress` (mirrors the `diagnosticDoneAt` pattern): older saves without it
+ * load unchanged and `migrateProgress` leaves it absent, so a pure stage router
+ * (`resolveStage`) can default an undefined `pipeline` to the first stage. The
+ * `*At` stamps are write-once completion markers a pure guard reads; the per-run
+ * result holders are for the progress view / audit only.
+ *
+ * IMPORTANT (relock semantics, RESOLVED DECISION §10.5): the `drillingClearedAt`
+ * / `mockClearedAt` / `greenlitAt` stamps are NOT the source of truth for
+ * whether a user is still cleared — a decayed/relocked node must be able to
+ * un-greenlight a user. Gates therefore RE-EVALUATE from live mastery/results
+ * (see `src/lib/pipeline/gates.ts`); the stamps only record WHEN a gate first
+ * passed, for the audit trail.
+ */
+export interface PipelineState {
+  /** The current (last-resolved) pipeline stage. */
+  stage: PipelineStage;
+  /** Set when the untimed diagnostic (stage 2) is completed. */
+  untimedDoneAt?: string;
+  /** Set when the timed diagnostic (stage 3) is completed. */
+  timedDoneAt?: string;
+  /** Set when the game-OA / trading-intuition stage (stage 4) is completed. */
+  gameOaDoneAt?: string;
+  /** Set when the backend diagnosis (stage 5) has been computed. */
+  diagnosisComputedAt?: string;
+  /** Set when ALL §6 drilling gates pass (content 0.80 + timed 0.90 + competencies). */
+  drillingClearedAt?: string;
+  /** Set when the mock stage (≥90% on 3 consecutive mocks) clears. */
+  mockClearedAt?: string;
+  /** Set when the user reaches the terminal greenlight stage. */
+  greenlitAt?: string;
+  // ---- per-run results for the progress view / audit (reuse existing types) ----
+  /** Untimed-diagnostic result (reuses the existing `DiagnosticResult`). */
+  untimed?: DiagnosticResult;
+  /** Timed-diagnostic result: overall tally + the per-section breakdown. */
+  timed?: { correct: number; total: number; sections: TimedSectionResult[] };
+  /** Game-OA result: rounds played, running P&L, and the MM verdict string. */
+  gameOa?: { rounds: number; pnl: number; verdict: string };
+  /** Append-only log of mock attempts (newest last), for the 3-consecutive gate. */
+  mocks?: PipelineMockResult[];
+}
+
+/**
  * One persisted (predicted, outcome) calibration pair, keyed by topic. Additive
  * & optional (mirrors `diagnosticHistory`): older saves without it load
  * unchanged, and it NEVER gates content or affects scoring / mastery / the
@@ -83,7 +176,7 @@ export interface PersistedCalibrationPair {
 }
 
 export interface UserProgress {
-  version: number; // was 1; Phase 1 wrote 2; T12 adaptive engine wrote 3; T14 SRS wrote 4; ZPD repeated-mistake tally writes 5 (see src/lib/mastery/migrate.ts)
+  version: number; // was 1; Phase 1 wrote 2; T12 adaptive engine wrote 3; T14 SRS wrote 4; ZPD repeated-mistake tally wrote 5; guided-pipeline (P0) writes 6 (see src/lib/mastery/migrate.ts)
   levelProgress: Record<string, LevelProgress>;
   resume: Record<string, ResumeState>;
   xp: number;
@@ -176,12 +269,24 @@ export interface UserProgress {
    * the saved blob already carried it.
    */
   misconceptionsByTopic?: Record<string, Record<string, number>>;
+  /**
+   * OPTIONAL, additive (guided pipeline — v5→v6). The stage-unlock state for the
+   * linear login→greenlight pipeline (spec §3.4). Mirrors the `diagnosticDoneAt`
+   * pattern: a pure stage router (`src/lib/pipeline/stateMachine.ts`) derives the
+   * current stage from these stamps + live gate results. Older saves without it
+   * load unchanged; the v5→v6 migration leaves it ABSENT unless the saved blob
+   * already carried it, and `resolveStage` defaults an undefined `pipeline` to
+   * the first stage (untimed diagnostic). Its own additive field — it does not
+   * touch the existing mastery/unlock/scoring lanes or the v1→v2 migration. The
+   * pipeline itself is dormant at runtime until Phase P1 flips `PIPELINE_ENABLED`.
+   */
+  pipeline?: PipelineState;
 }
 
 export function emptyProgress(): UserProgress {
   const today = new Date().toISOString().slice(0, 10);
   return {
-    version: 5,
+    version: 6,
     levelProgress: {},
     resume: {},
     xp: 0,

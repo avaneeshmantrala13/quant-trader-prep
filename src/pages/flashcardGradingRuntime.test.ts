@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, cleanup, fireEvent, screen } from "@testing-library/react";
-import { createElement } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { createElement, Suspense } from "react";
+import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { emptyProgress, type UserProgress } from "@/types/progress";
 import type { ItemAttempt } from "@/types/mastery";
 import { topicKeyForLevel } from "@/lib/mastery/topicKey";
@@ -48,8 +48,17 @@ vi.mock("@/lib/mastery/mastery", async (importOriginal) => {
 
 // eslint-disable-next-line import/first
 import { applyItemAttempt } from "@/lib/mastery/mastery";
+// The guided-pipeline cutover (PIPELINE_ENABLED) unmounts the free-roam lesson
+// route from `App`, so we mount the REAL LessonPage directly on its route path
+// (wrapped in the same providers) to exercise the runtime under test.
 // eslint-disable-next-line import/first
-import App from "@/App";
+import { ThemeProvider } from "@/context/ThemeContext";
+// eslint-disable-next-line import/first
+import { AuthProvider } from "@/context/AuthContext";
+// eslint-disable-next-line import/first
+import { ProgressProvider } from "@/context/ProgressContext";
+// eslint-disable-next-line import/first
+import { LessonPage } from "@/pages/LessonPage";
 
 const applySpy = applyItemAttempt as unknown as ReturnType<typeof vi.fn>;
 
@@ -71,9 +80,32 @@ function baseProgress(): UserProgress {
 function mount() {
   return render(
     createElement(
-      MemoryRouter,
-      { initialEntries: [`/track/${btTrack.id}/level/${bt1.id}`] },
-      createElement(App),
+      ThemeProvider,
+      null,
+      createElement(
+        AuthProvider,
+        null,
+        createElement(
+          ProgressProvider,
+          null,
+          createElement(
+            Suspense,
+            { fallback: null },
+            createElement(
+              MemoryRouter,
+              { initialEntries: [`/track/${btTrack.id}/level/${bt1.id}`] },
+              createElement(
+                Routes,
+                null,
+                createElement(Route, {
+                  path: "/track/:trackId/level/:levelId",
+                  element: createElement(LessonPage),
+                }),
+              ),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

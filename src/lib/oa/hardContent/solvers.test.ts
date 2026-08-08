@@ -3,7 +3,10 @@ import { Rng } from "@/lib/rng";
 import {
   F,
   asymmetricBetEV,
+  basketArbProfit,
+  basketNav,
   binom,
+  bookOverround,
   breakEvenProb,
   catalan,
   coinBiasPosterior,
@@ -21,11 +24,14 @@ import {
   informedLiftPosteriorMean,
   keepHigherOfTwoEV,
   kellyFraction,
+  makeMarketPickoffLoss,
   maxOfDiceEV,
   minOfDiceEV,
+  nextCardRedProb,
   oneRerollEV,
   pathIntersectProb,
   pathsAvoidingPoint,
+  pickoffTradeCount,
   probStrictlyGreater,
   resetCollectorEV,
   ruinExpectedDuration,
@@ -286,5 +292,45 @@ describe("de-vig + constrained path counting + cycle meeting", () => {
     expectFrac(cycleMeetingTime(12, 6)!, 18, 1);
     expectFrac(cycleMeetingTime(4, 2)!, 2, 1);
     expect(cycleMeetingTime(6, 3)).toBeNull(); // odd gap ⇒ never meet
+  });
+});
+
+describe("net-new game-OA families (Cluster B)", () => {
+  it("next-card conditional fair value (red remaining / cards remaining)", () => {
+    expectFrac(nextCardRedProb(5, 5, 3, 4), 1, 3);
+    expectFrac(nextCardRedProb(6, 4, 1, 3), 5, 7);
+    expectFrac(nextCardRedProb(26, 26, 0, 0), 1, 2); // fresh deck ⇒ 1/2
+    expectFrac(nextCardRedProb(4, 6, 4, 5), 0, 1); // all reds gone ⇒ 0
+  });
+
+  it("basket / NAV fair value + creation-redemption arbitrage", () => {
+    expect(basketNav([2, 3], [30, 20])).toBe(120);
+    expect(basketNav([1, 1, 1], [10, 20, 30])).toBe(60);
+    // ETF quoted at 125 vs NAV 120 ⇒ 5 of risk-free edge per unit.
+    expect(basketArbProfit([2, 3], [30, 20], 125)).toBe(5);
+    expect(basketArbProfit([2, 3], [30, 20], 118)).toBe(2);
+    expect(basketArbProfit([2, 3], [30, 20], 120)).toBe(0); // fairly priced
+  });
+
+  it("de-vig overround detection (book margin = Σ implied − 1)", () => {
+    // Odds 1.5 & 2.5 ⇒ implied 2/3 + 2/5 = 16/15 ⇒ overround 1/15.
+    expectFrac(bookOverround([3, 5], [2, 2]), 1, 15);
+    expectFrac(deVigFairProb([3, 5], [2, 2]), 5, 8); // fair P(leg0)
+    // A fair (no-vig) book has zero overround.
+    expectFrac(bookOverround([2, 2], [1, 1]), 0, 1);
+  });
+
+  it("make-a-market expected pick-off loss (informed counterparty)", () => {
+    const d6 = [1, 2, 3, 4, 5, 6];
+    const d8 = [1, 2, 3, 4, 5, 6, 7, 8];
+    const d10 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    expectFrac(makeMarketPickoffLoss(d6, 2, 4), 2, 3);
+    expectFrac(makeMarketPickoffLoss(d8, 3, 6), 3, 4);
+    expectFrac(makeMarketPickoffLoss(d10, 4, 8), 9, 10);
+    // Quoting the whole range (bid≤min, ask≥max) ⇒ never picked off.
+    expectFrac(makeMarketPickoffLoss(d6, 1, 6), 0, 1);
+    // V=1 hits the bid; V∈{5,6} lift the ask ⇒ 3 of 6 values trade.
+    expect(pickoffTradeCount(d6, 2, 4)).toBe(3);
+    expect(pickoffTradeCount(d8, 3, 6)).toBe(4);
   });
 });

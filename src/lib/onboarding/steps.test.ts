@@ -25,7 +25,6 @@ const KNOWN_TARGETS: TourTarget[] = [
   "arena",
   "timed-oa",
   "mock",
-  "themes",
 ];
 
 describe("ONBOARDING_TOUR_STEPS", () => {
@@ -102,7 +101,7 @@ describe("ONBOARDING_TOUR_STEPS", () => {
     expect(byId.arena).toBe("arena");
     expect(byId.timed).toBe("timed-oa");
     expect(byId.mock).toBe("mock");
-    expect(byId.themes).toBe("themes");
+    expect(byId.themes).toBeUndefined();
     expect(byId.done).toBeUndefined();
   });
 

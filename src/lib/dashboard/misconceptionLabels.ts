@@ -253,6 +253,36 @@ export const MISCONCEPTION_LABELS: Record<string, string> = {
   near_peak_not_mode: "Picking a near-peak total instead of the mode",
   min_not_mode: "Picking the least likely value instead of the mode",
   guessed_midpoint: "Guessing a round midpoint instead of computing E[X]",
+
+  // ── Attribution-accuracy backfill (P2 §10.10 audit) ──
+  // Authored tags on diagnostic+drilling-reachable items (Geometric Probability
+  // and the Interview-Games EV / market-making / de-vig generators) that lacked a
+  // learner-facing description, so the weakness report couldn't name the true
+  // cause. Added here so every served misconception resolves.
+  // Geometric Probability
+  linear_not_area: "Using a distance ratio where an area ratio is needed",
+  dimensional_mismatch: "Mixing a squared numerator with a linear denominator",
+  // Interview Games — order statistics / dice-sum mode
+  min_not_max: "Reporting the expected minimum instead of the maximum",
+  near_peak_below: "Picking a total just below the peak, not the mode",
+  near_peak_above: "Picking a total just above the peak, not the mode",
+  // Interview Games — card conditioning
+  color_inversion: "Counting the unfavorable cards (color inverted)",
+  miscount_remaining: "Off by one on the remaining cards in the denominator",
+  // Interview Games — market making / adverse selection
+  ignore_adverse_selection: "Ignoring adverse selection on the pick-off side",
+  wrong_ticket: "Trading the wrong side (buy/sell inverted)",
+  no_edge_when_mispriced: "Passing on a mispriced quote that has real edge",
+  // Interview Games — no-arbitrage / de-vig
+  single_leg_not_arb: "Treating a single leg as an arbitrage",
+  assume_fair_book: "Assuming the book is fair (booksum = 1)",
+  booksum_backwards: "Reading the book-sum arbitrage direction backwards",
+  added_not_multiplied: "Adding the factors instead of multiplying them",
+  off_by_order_high: "Off by a factor of ten (too high)",
+  off_by_order_low: "Off by a factor of ten (too low)",
+  buy_both_no_hedge: "Buying both legs — doubling risk, not hedging",
+  wrong_arb_direction: "Arbitraging in the wrong direction",
+  no_arb_when_mispriced: "Passing on a genuine mispricing arbitrage",
 };
 
 /**

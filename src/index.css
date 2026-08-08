@@ -5,82 +5,85 @@
 
 @layer base {
   :root {
-    /* ============ LIGHT — "Newsprint / FT broadsheet" ============ */
-    --color-bg: 249 237 224; /* warm salmon-cream paper */
-    --color-surface: 253 247 238;
-    --color-surface-raised: 255 251 245;
-    --color-surface-muted: 240 229 213;
-    --color-border: 210 193 170; /* warm hairline */
-    --color-border-strong: 38 30 20; /* ink rule (editorial double-rules) */
+    /* ============ LIGHT — "The Daybook" (warm parchment + ink) ============
+       These are the flash-safe defaults; the active minimalist theme injects the
+       identical values at runtime via <style id="qtp-theme">. Keep them in sync
+       with src/themes/minimalist/index.ts. See datasets/UI_DESIGN_DIRECTION.md. */
+    --color-bg: 243 240 232; /* warm oat parchment */
+    --color-surface: 251 249 243; /* warm paper panels */
+    --color-surface-raised: 255 255 255;
+    --color-surface-muted: 232 227 214; /* tonal fills / tracks */
+    --color-border: 216 209 192; /* warm hairline */
+    --color-border-strong: 35 31 24; /* ink rule */
 
-    --color-text-primary: 26 20 12; /* near-black ink */
-    --color-text-secondary: 74 63 48;
-    --color-text-muted: 101 88 70;
+    --color-text-primary: 33 30 23; /* warm near-black ink */
+    --color-text-secondary: 87 79 63;
+    --color-text-muted: 107 99 83;
 
-    --color-accent: 138 76 10; /* deep ochre */
-    --color-accent-hover: 112 61 6;
-    --color-accent-contrast: 255 250 243;
+    --color-accent: 29 78 107; /* the one accent — deep ink blue */
+    --color-accent-hover: 22 60 83;
+    --color-accent-contrast: 251 249 243;
 
-    --color-accent-2: 33 74 92; /* ledger teal-ink (sparingly) */
-    --color-accent-2-hover: 24 58 73;
+    --color-accent-2: 42 36 25; /* secondary kept as ink (monochrome) */
+    --color-accent-2-hover: 35 31 24;
 
-    --color-gold: 168 114 16;
+    --color-gold: 154 107 30;
 
-    --color-success: 26 116 66; /* bull */
-    --color-success-soft: 220 235 223;
-    --color-danger: 173 38 27; /* bear */
-    --color-danger-soft: 244 222 214;
-    --color-warning: 150 88 8;
+    --color-success: 46 125 87; /* bull */
+    --color-success-soft: 225 234 224;
+    --color-danger: 180 71 47; /* bear (warm brick) */
+    --color-danger-soft: 240 226 216;
+    --color-warning: 176 125 40;
 
-    --color-bull: 26 116 66;
-    --color-bear: 173 38 27;
+    --color-bull: 46 125 87;
+    --color-bear: 180 71 47;
 
-    --tex-grid: 210 193 170;
-    --grain-opacity: 0.05;
+    --tex-grid: 223 216 200;
+    --grain-opacity: 0.04;
 
     /* Theme-driven fonts & radii (overridden at runtime by the active theme;
-       these defaults are the broadsheet look so text is never fontless). */
-    --font-display: "Fraunces", Georgia, Cambria, serif;
-    --font-body: "Archivo", system-ui, -apple-system, sans-serif;
+       these defaults match the Daybook look so text is never fontless). */
+    --font-display: "Fraunces", Georgia, Cambria, "Times New Roman", serif;
+    --font-body: "Archivo", system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
     --radius-sm: 2px;
-    --radius: 3px;
-    --radius-md: 4px;
+    --radius: 4px;
+    --radius-md: 6px;
   }
 
   .dark {
-    /* ============ DARK — "Bloomberg terminal / phosphor" ============ */
-    --color-bg: 12 11 8; /* warm near-black */
-    --color-surface: 22 19 14;
-    --color-surface-raised: 29 25 18;
-    --color-surface-muted: 33 28 21;
-    --color-border: 56 48 36; /* warm hairline */
-    --color-border-strong: 122 106 80;
+    /* ============ DARK — "Nocturne" (warm ink ledger, not pure black) ======= */
+    --color-bg: 23 21 15; /* warm ink-brown near-black */
+    --color-surface: 32 29 21;
+    --color-surface-raised: 40 36 26;
+    --color-surface-muted: 47 42 31;
+    --color-border: 58 52 40; /* warm hairline */
+    --color-border-strong: 216 207 188;
 
-    --color-text-primary: 237 228 211; /* warm off-white */
-    --color-text-secondary: 180 168 145;
-    --color-text-muted: 142 130 108;
+    --color-text-primary: 236 230 216; /* paper-white ink */
+    --color-text-secondary: 189 179 156;
+    --color-text-muted: 158 149 129;
 
-    --color-accent: 240 169 43; /* phosphor amber */
-    --color-accent-hover: 246 189 88;
-    --color-accent-contrast: 20 16 8;
+    --color-accent: 131 169 199; /* soft chalk-blue (not neon) */
+    --color-accent-hover: 157 191 216;
+    --color-accent-contrast: 23 21 15;
 
-    --color-accent-2: 92 180 212; /* terminal cyan (sparingly) */
-    --color-accent-2-hover: 122 198 226;
+    --color-accent-2: 207 199 180; /* secondary as light ink (monochrome) */
+    --color-accent-2-hover: 236 230 216;
 
-    --color-gold: 240 191 74;
+    --color-gold: 201 162 74;
 
-    --color-success: 74 194 110; /* bull */
-    --color-success-soft: 18 41 27;
-    --color-danger: 240 92 62; /* bear */
-    --color-danger-soft: 46 22 16;
-    --color-warning: 240 169 43;
+    --color-success: 95 181 136; /* bull */
+    --color-success-soft: 24 42 32;
+    --color-danger: 217 113 79; /* bear (warm brick) */
+    --color-danger-soft: 46 28 20;
+    --color-warning: 208 162 74;
 
-    --color-bull: 74 194 110;
-    --color-bear: 240 92 62;
+    --color-bull: 95 181 136;
+    --color-bear: 217 113 79;
 
-    --tex-grid: 70 60 44;
-    --grain-opacity: 0.06;
+    --tex-grid: 43 38 25;
+    --grain-opacity: 0.05;
   }
 
   html {
@@ -116,6 +119,7 @@
   .display {
     @apply font-display;
     font-optical-sizing: auto;
+    letter-spacing: -0.011em; /* Fraunces reads best a touch tight at display sizes */
   }
 
   :focus-visible {
@@ -129,23 +133,26 @@
 }
 
 @layer components {
-  /* ---- Panels: hairline-bordered, sharp-cornered, no drop shadows ---- */
+  /* ---- Panels: hairline-bordered, flat, no drop shadows (depth = borders +
+         tonal surface shifts + warm color temperature, never shadow soup) ---- */
   .panel {
-    @apply relative border border-subtle bg-surface rounded-sm;
+    @apply relative border border-subtle bg-surface rounded-md;
   }
   .card {
     @apply panel;
   }
-  /* Editorial top rule accent for a panel. */
+  /* Editorial top rule accent for a panel (the "ledger card" signature). */
   .panel-ruled {
     @apply panel;
     border-top: 3px solid rgb(var(--color-border-strong));
   }
 
-  /* ---- Buttons: small-caps mono, thin ink border, square-ish ---- */
+  /* ---- Buttons: small-caps mono on a square-ish body — a considered ledger
+         control, never a friendly SaaS pill. Hierarchy: filled ink-blue primary,
+         ink-outlined secondary, quiet ghost. ---- */
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-sm px-4 py-3 font-mono text-xs font-semibold
-           uppercase tracking-label transition-colors disabled:opacity-50 disabled:cursor-not-allowed select-none;
+    @apply inline-flex items-center justify-center gap-2 rounded px-4 py-3 font-mono text-[11px] font-semibold
+           uppercase tracking-label transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed select-none;
     min-height: 44px;
   }
   .btn-primary {
@@ -160,14 +167,20 @@
   }
 
   .input {
-    @apply w-full rounded-sm border border-subtle bg-surface px-3.5 py-3 font-mono text-primary
-           placeholder:text-muted focus:border-accent focus:outline-none;
+    @apply w-full rounded border border-subtle bg-surface px-3.5 py-3 font-mono text-primary
+           placeholder:text-muted transition-colors focus:border-accent focus:outline-none;
     min-height: 44px;
   }
 
-  /* ---- Small-caps mono annotation label (the editorial/terminal signature) ---- */
+  /* ---- Small-caps mono annotation label (the editorial/ledger signature) ---- */
   .label {
     @apply font-mono text-[11px] font-semibold uppercase tracking-label text-muted;
+  }
+
+  /* Editorial in-text link: ink-blue with a subtle underline that thickens on hover. */
+  .link {
+    @apply text-accent underline decoration-from-font underline-offset-2 transition-colors hover:text-accent-hover;
+    text-decoration-thickness: 1px;
   }
 
   .chip {
@@ -178,6 +191,123 @@
   .num {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  /* ---- Stage-screen building blocks — the shared vocabulary every guided
+         pipeline screen inherits so the whole in-app run reads as ONE ledger.
+         Containers only; children keep using .label / .num / .chip. ---- */
+
+  /* A ledger stat cell: a hairline box for a small-caps label over a tabular
+     figure. The pipeline's unit of measure (gate tiles, score readouts). */
+  .stat {
+    @apply border border-subtle bg-surface-muted px-3 py-2.5;
+  }
+
+  /* The graded-result strip. Functional bull/bear (or accent) fills are set by
+     the caller — a signal, never decoration. Small-caps mono, like a stamp. */
+  .verdict {
+    @apply flex items-center justify-between gap-3 px-4 py-2.5 font-mono text-[11px]
+           font-semibold uppercase tracking-label;
+  }
+
+  /* "Turn the card over": the model answer + explanation on a tonal fill, set
+     off by a hairline like a note pasted into the daybook. */
+  .reveal {
+    @apply space-y-1 border border-subtle bg-surface-muted p-4 text-sm text-primary;
+  }
+
+  /* A quiet margin note / callout (how-it-works, empty + unscored states): a
+     single ink rule down the left instead of an AI-ish dashed box. */
+  .note {
+    @apply border-l-2 border-border-strong bg-surface-muted px-4 py-3 text-sm text-secondary;
+  }
+
+  /* An accent-ruled aside — coaching, reasoning checks, interviewer voice. The
+     ink-blue rule marks "the system is talking to you." */
+  .aside {
+    @apply border-l-2 border-accent bg-surface-muted px-4 py-3;
+  }
+
+  /* A hairline-ruled meta strip (round / item counters, running P&L, streak). */
+  .rule-row {
+    @apply flex items-center justify-between gap-3 border-y border-subtle py-2;
+  }
+
+  /* The ledger clock: a big tabular countdown/stopwatch. The low-time state
+     recolours to the bear signal via a caller-set text color. */
+  .clock {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    @apply text-4xl font-black leading-none;
+  }
+
+  /* ---- Card-shuffle INTRO (entry screens). A fixed, viewport-centered one-shot
+         overlay: paper cards, ink-blue pips. Pure-transform keyframes, cheap and
+         jank-free; it clears itself away and unmounts. See CardShuffle.tsx. ---- */
+  .qf-intro {
+    perspective: 1600px;
+  }
+  /* The whole deck lifts + dissolves once the fan has settled, then unmounts. */
+  .qf-intro-deck {
+    animation: qf-intro-clear 0.55s cubic-bezier(0.4, 0, 1, 1) 1.7s both;
+    will-change: transform, opacity;
+  }
+  .qf-intro-backdrop {
+    animation: qf-intro-backdrop 2.4s ease-in-out both;
+    will-change: opacity;
+  }
+  .qf-shuffle-card {
+    grid-area: 1 / 1; /* stack every card on the same cell, transforms fan them */
+    /* Resting state = the fan position, so a settled deck (and the reduced-motion
+       contract) sits as a static, dignified hand with no empty space. */
+    transform: translate3d(var(--fan-x), var(--fan-y), 0) rotate(var(--fan-r));
+    animation: qf-card-shuffle 1.25s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+    animation-delay: var(--delay, 0ms);
+    will-change: transform, opacity;
+  }
+  .qf-card {
+    position: relative;
+    display: grid;
+    place-items: center;
+    height: 210px;
+    width: 150px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgb(var(--color-border-strong));
+    background: rgb(var(--color-surface));
+    color: rgb(var(--color-accent));
+    overflow: hidden;
+  }
+  .qf-card-center {
+    height: 68px;
+    width: 68px;
+    opacity: 0.9;
+  }
+  .qf-card-corner {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+  }
+  .qf-card-corner-tl {
+    top: 12px;
+    left: 12px;
+  }
+  .qf-card-corner-br {
+    bottom: 12px;
+    right: 12px;
+    transform: rotate(180deg);
+  }
+  .qf-card-rank {
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: 26px;
+    letter-spacing: -0.02em;
+  }
+  .qf-card-mini {
+    height: 18px;
+    width: 18px;
+    margin-top: 3px;
   }
 
   /* Blinking terminal cursor. */
@@ -222,6 +352,63 @@
       transparent 1px,
       transparent 5px
     );
+  }
+}
+
+/* Card-shuffle keyframe: riffle in from a deck half → gather into a neat stack
+   → spread WIDE with a slight overshoot → settle into the held fan. Per-card
+   offsets come from CSS vars set inline. */
+@keyframes qf-card-shuffle {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--from-x), var(--from-y), 0) rotate(var(--from-r))
+      scale(0.9);
+  }
+  22% {
+    opacity: 1;
+  }
+  48% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1.03);
+  }
+  60% {
+    transform: translate3d(0, 0, 0) rotate(0deg) scale(1);
+  }
+  82% {
+    transform: translate3d(calc(var(--fan-x) * 1.12), calc(var(--fan-y) * 1.12), 0)
+      rotate(calc(var(--fan-r) * 1.12)) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(var(--fan-x), var(--fan-y), 0) rotate(var(--fan-r))
+      scale(1);
+  }
+}
+
+/* Clear-away: once the fan has settled, the whole deck lifts + dissolves. */
+@keyframes qf-intro-clear {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-24px) scale(1.08);
+  }
+}
+
+/* The focusing paper wash fades in, holds, then fades out with the deck. */
+@keyframes qf-intro-backdrop {
+  0% {
+    opacity: 0;
+  }
+  14% {
+    opacity: 1;
+  }
+  68% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 

@@ -231,6 +231,33 @@ export function lastCogDirection(n: number): "clockwise" | "counterclockwise" {
 }
 
 /* ========================================================================== */
+/*  Divisor-parity invariant, the "toggling lockers" family (dataset 3)       */
+/* ========================================================================== */
+
+/**
+ * Number of lockers left OPEN after the classic toggle process on N lockers:
+ * person k toggles every k-th locker, so locker n is toggled once per divisor of
+ * n and ends OPEN iff n has an ODD number of divisors, which happens iff n is a
+ * perfect square. Hence the count of open lockers is ⌊√N⌋. (N = 100 → 10.)
+ * Exact integer.
+ */
+export function openLockersAfterToggles(N: number): number {
+  if (N < 1 || !Number.isInteger(N)) throw new Error("need N ≥ 1 integer");
+  return Math.floor(Math.sqrt(N));
+}
+
+/** Brute-force the open-locker count by simulating every toggle (test truth). */
+export function openLockersBruteForce(N: number): number {
+  const open = new Array<boolean>(N + 1).fill(false);
+  for (let k = 1; k <= N; k++) {
+    for (let n = k; n <= N; n += k) open[n] = !open[n];
+  }
+  let count = 0;
+  for (let n = 1; n <= N; n++) if (open[n]) count++;
+  return count;
+}
+
+/* ========================================================================== */
 /*  Modular checksum, prisoners' hats (dataset 3)                             */
 /* ========================================================================== */
 

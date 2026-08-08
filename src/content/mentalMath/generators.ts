@@ -7,6 +7,14 @@ import type {
 } from "@/types/content";
 import { assemble, assembleDistinct, fmt, fracStr, pct, round } from "../shared";
 import { mixQuestionGenerators } from "../mixFamilies";
+import {
+  diffOfSquaresProduct,
+  rangeSum,
+  sumOfFirstEvens,
+  sumOfFirstOdds,
+  totalDigitsToNumber,
+  triangular,
+} from "./advancedSolvers";
 
 /**
  * Mental-math generators in the timed, exact-arithmetic mold many quant firms
@@ -706,6 +714,213 @@ export function buildOddsToProbNumericInstance(
   };
 }
 
+/* ----------------  Squares & near-square products (a²−k²)  --------------- */
+
+export function buildSquareProductNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const center = rng.pick([
+    20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 105,
+    110,
+  ]);
+  const k = rng.int(2, 7);
+  const a = center - k;
+  const b = center + k;
+  const answer = diffOfSquaresProduct(center, k); // = a·b = center² − k²
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    center * center,
+    `You squared the center ${center} (= ${fmt(center * center)}) but forgot to subtract the offset²: (${center} − ${k})(${center} + ${k}) = ${center}² − ${k}² = ${fmt(answer)}.`,
+    "operation_confused",
+  );
+  push(
+    a * a,
+    `That is ${a} squared. The two factors are ${a} and ${b} — multiply ${a} × ${b}, don't square one of them.`,
+    "operation_confused",
+  );
+  push(
+    answer + 100,
+    `That's 100 too big — a partial product landed one place-value column too high.`,
+    "place_value_slip",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-sqprod-${a}-${b}`,
+      prompt: `${a} × ${b} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Squares & products",
+      explanation: `${a} × ${b} sits symmetrically around ${center}, so use difference-of-squares: (${center} − ${k})(${center} + ${k}) = ${center}² − ${k}² = ${fmt(center * center)} − ${fmt(k * k)} = ${fmt(answer)}.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Difference-of-squares mental-math shortcut",
+    },
+  };
+}
+
+/* ----------------------  Series sums (closed forms)  --------------------- */
+
+export function buildSeriesSumNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const mode = rng.pick(["triangular", "odds", "range"] as const);
+
+  if (mode === "triangular") {
+    const n = rng.int(10, 60);
+    const answer = triangular(n);
+    const { errors, push } = numericErrors(answer, 0);
+    push(
+      triangular(n - 1),
+      `That drops the last term. 1 + 2 + … + ${n} keeps the ${n}; you summed only through ${n - 1}.`,
+      "dropped_last_term",
+    );
+    push(
+      n * n,
+      `That's ${n}², which sums the first ${n} ODD numbers — not 1 + 2 + … + ${n}. Use n(n+1)/2.`,
+      "n_squared_misapplied",
+    );
+    push(
+      n * (n + 1),
+      `You used n(n+1) but forgot to divide by 2: 1 + 2 + … + ${n} = ${n}·${n + 1}/2 = ${fmt(answer)}.`,
+      "operation_confused",
+    );
+    return {
+      answer,
+      numeric: {
+        id: `mm-seriestri-${n}`,
+        prompt: `1 + 2 + 3 + … + ${n} = ? (Enter the number.)`,
+        answer,
+        difficulty,
+        concept: "Series sums",
+        explanation: `Σ from 1 to ${n} = ${n}(${n}+1)/2 = ${fmt(answer)} (the ${n}-th triangular number).`,
+        unit: "",
+        commonErrors: errors,
+        source: "Triangular-number series sum",
+      },
+    };
+  }
+
+  if (mode === "odds") {
+    const n = rng.int(6, 40);
+    const answer = sumOfFirstOdds(n); // n²
+    const last = 2 * n - 1;
+    const { errors, push } = numericErrors(answer, 0);
+    push(
+      triangular(n),
+      `That's 1 + 2 + … + ${n}. Here every term is ODD (1, 3, 5, …); the first ${n} odds sum to ${n}² = ${fmt(answer)}.`,
+      "operation_confused",
+    );
+    push(
+      sumOfFirstEvens(n),
+      `You summed the first ${n} EVEN numbers (2 + 4 + …). The first ${n} ODD numbers sum to ${n}² = ${fmt(answer)}.`,
+      "summed_evens_instead",
+    );
+    push(
+      answer - last,
+      `That drops the last term ${last}. Include it — the first ${n} odds sum to ${n}² = ${fmt(answer)}.`,
+      "dropped_last_term",
+    );
+    return {
+      answer,
+      numeric: {
+        id: `mm-seriesodd-${n}`,
+        prompt: `1 + 3 + 5 + … + ${last} = ? (Enter the number.)`,
+        answer,
+        difficulty,
+        concept: "Series sums",
+        explanation: `The sum of the first ${n} odd numbers is ${n}² = ${fmt(answer)} — the odds 1, 3, …, ${last} telescope to a perfect square.`,
+        unit: "",
+        commonErrors: errors,
+        source: "Sum-of-odds series shortcut",
+      },
+    };
+  }
+
+  // mode === "range"
+  const lo = rng.int(11, 40);
+  const hi = lo + rng.int(10, 40);
+  const answer = rangeSum(lo, hi);
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    triangular(hi),
+    `That sums 1 … ${hi}. You only need ${lo} … ${hi}; subtract the 1 … ${lo - 1} head first.`,
+    "forgot_lower_bound",
+  );
+  push(
+    lo * hi,
+    `You multiplied the endpoints. A range sum is (count)·(first + last)/2, not first × last.`,
+    "multiplied_endpoints",
+  );
+  push(
+    rangeSum(lo, hi - 1),
+    `That drops the last term ${hi}. Include it: ${lo} + … + ${hi} = ${fmt(answer)}.`,
+    "dropped_last_term",
+  );
+  return {
+    answer,
+    numeric: {
+      id: `mm-seriesrange-${lo}-${hi}`,
+      prompt: `${lo} + ${lo + 1} + … + ${hi} = ? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Series sums",
+      explanation: `Σ from ${lo} to ${hi} = (${hi} − ${lo} + 1)·(${lo} + ${hi})/2 = ${fmt(answer)}.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Consecutive-integer range sum",
+    },
+  };
+}
+
+/* ---------------------------  Digit counting  ---------------------------- */
+
+export function buildDigitCountNumericInstance(
+  rng: Rng,
+  difficulty: Difficulty,
+): { answer: number; numeric: NumericQuestion } {
+  const N = rng.pick([
+    60, 75, 90, 120, 150, 175, 200, 250, 300, 365, 500, 750, 999, 1000, 1200,
+  ]);
+  const answer = totalDigitsToNumber(N);
+
+  const { errors, push } = numericErrors(answer, 0);
+  push(
+    N,
+    `That counts one digit per number, but every number from 10 up uses two or more digits — add the extra digits.`,
+    "operation_confused",
+  );
+  push(
+    answer - 1,
+    `Off by one — recount the boundary where the digit length jumps (…, 99 → 100 adds a digit).`,
+    "off_by_one",
+  );
+  push(
+    2 * N,
+    `That assumes every number has two digits, but 1–9 have one and 100+ have three.`,
+    "operation_confused",
+  );
+
+  return {
+    answer,
+    numeric: {
+      id: `mm-digits-${N}`,
+      prompt: `How many digits are used in total to write every whole number from 1 to ${N}? (Enter the number.)`,
+      answer,
+      difficulty,
+      concept: "Digit counting",
+      explanation: `1–9 contribute 1 digit each, 10–99 two each, 100–999 three each, and so on; summing the digit-length bands up to ${N} gives ${fmt(answer)}.`,
+      unit: "",
+      commonErrors: errors,
+      source: "Digit-counting (page-numbering) drill",
+    },
+  };
+}
+
 /* --------------------  Named numeric generators (adapters)  -------------- */
 
 export const genAdditionNumeric = (rng: Rng): NumericQuestion =>
@@ -724,6 +939,12 @@ export const genFractionToDecimalNumeric = (rng: Rng): NumericQuestion =>
   buildFractionToDecimalNumericInstance(rng, "medium").numeric;
 export const genOddsToProbNumeric = (rng: Rng): NumericQuestion =>
   buildOddsToProbNumericInstance(rng, "hard").numeric;
+export const genSquareProductNumeric = (rng: Rng): NumericQuestion =>
+  buildSquareProductNumericInstance(rng, "hard").numeric;
+export const genSeriesSumNumeric = (rng: Rng): NumericQuestion =>
+  buildSeriesSumNumericInstance(rng, "hard").numeric;
+export const genDigitCountNumeric = (rng: Rng): NumericQuestion =>
+  buildDigitCountNumericInstance(rng, "medium").numeric;
 
 type NumericQuestionAdapter = (rng: Rng) => NumericQuestion;
 
@@ -741,6 +962,7 @@ export const MM_MEDIUM_NUMERIC: NumericQuestionAdapter[] = [
   genDivisionNumeric,
   genPercentNumeric,
   genFractionToDecimalNumeric,
+  genDigitCountNumeric,
 ];
 
 export const MM_HARD_NUMERIC: NumericQuestionAdapter[] = [
@@ -748,6 +970,8 @@ export const MM_HARD_NUMERIC: NumericQuestionAdapter[] = [
   genDivisionNumeric,
   genFractionToDecimalNumeric,
   genOddsToProbNumeric,
+  genSquareProductNumeric,
+  genSeriesSumNumeric,
 ];
 
 export const MM_CONVERSIONS_NUMERIC: NumericQuestionAdapter[] = [
@@ -766,4 +990,7 @@ export const ALL_MM_NUMERIC_GENERATORS = {
   genPercentNumeric,
   genFractionToDecimalNumeric,
   genOddsToProbNumeric,
+  genSquareProductNumeric,
+  genSeriesSumNumeric,
+  genDigitCountNumeric,
 };

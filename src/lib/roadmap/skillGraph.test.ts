@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  COMPETENCY_BRAINTEASER,
+  COMPETENCY_TRADING,
   SKILL_GRAPH,
   SKILL_TIERS,
   skillByKey,
@@ -11,6 +13,10 @@ import { getLevel, PLAYABLE_TRACKS } from "@/content";
 import { groupLevelsIntoTopics } from "@/lib/topics";
 import { topicKeyOf } from "@/lib/mastery/topicKey";
 import { PREREQ_DAG } from "@/content/remediation/prereqDAG";
+import {
+  COMPETENCY_BRAINTEASER as GATE_COMPETENCY_BRAINTEASER,
+  COMPETENCY_TRADING as GATE_COMPETENCY_TRADING,
+} from "@/lib/pipeline/gates";
 
 describe("SKILL_GRAPH structure", () => {
   it("has a node per major topic with unique topicKeys", () => {
@@ -87,6 +93,53 @@ describe("SKILL_GRAPH structure", () => {
     for (const key of contentTopics) {
       expect(skillByKey(key), `graph is missing ${key}`).toBeDefined();
     }
+  });
+});
+
+describe("competency nodes (spec §3.2)", () => {
+  const bt = skillByKey(COMPETENCY_BRAINTEASER);
+  const trading = skillByKey(COMPETENCY_TRADING);
+
+  it("adds both first-class competency nodes to the graph", () => {
+    expect(bt, "brainteaser-reasoning node").toBeDefined();
+    expect(trading, "trading-intuition node").toBeDefined();
+  });
+
+  it("keys match the (un-editable) P0 gate stubs exactly", () => {
+    expect(COMPETENCY_BRAINTEASER).toBe(GATE_COMPETENCY_BRAINTEASER);
+    expect(COMPETENCY_TRADING).toBe(GATE_COMPETENCY_TRADING);
+    expect(COMPETENCY_BRAINTEASER).toBe("competency::brainteaser-reasoning");
+    expect(COMPETENCY_TRADING).toBe("competency::trading-intuition");
+  });
+
+  it("are marked external (no probe ladder ⇒ the real-first-level invariant skips them)", () => {
+    expect(bt!.external).toBe(true);
+    expect(trading!.external).toBe(true);
+  });
+
+  it("carry the §3.2 prerequisites", () => {
+    expect(new Set(bt!.prereqs)).toEqual(
+      new Set([
+        topicKeyOf("probability", "Combinatorial Analysis"),
+        topicKeyOf("probability", "Conditional Probability"),
+        topicKeyOf("probability", "Expected Value"),
+      ]),
+    );
+    expect(new Set(trading!.prereqs)).toEqual(
+      new Set([
+        topicKeyOf("probability", "Expected Value"),
+        topicKeyOf("interview-games"),
+      ]),
+    );
+  });
+
+  it("are EXCLUDED from the scored content topics (gated separately by their Beta)", () => {
+    // Mirrors gates.scoredContentTopicKeys(): external ⇒ not a scored-content node.
+    const scored = SKILL_GRAPH.filter(
+      (n) => !n.external && n.trackId !== "brainteasers",
+    ).map((n) => n.topicKey);
+    expect(scored).not.toContain(COMPETENCY_BRAINTEASER);
+    expect(scored).not.toContain(COMPETENCY_TRADING);
   });
 });
 

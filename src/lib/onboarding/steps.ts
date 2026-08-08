@@ -33,8 +33,7 @@ export type TourTarget =
   | "trading-floor"
   | "arena"
   | "timed-oa"
-  | "mock"
-  | "themes";
+  | "mock";
 
 export interface OnboardingStep {
   /** Stable id (React key + test anchor). */
@@ -131,13 +130,6 @@ export const ONBOARDING_TOUR_STEPS: OnboardingStep[] = [
     target: "mock",
   },
   {
-    id: "themes",
-    title: "11 · Make it yours in Themes",
-    body:
-      "Switch the whole look anytime in Themes: six styles, each with light and dark mode. Pick whatever keeps you coming back to practice.",
-    target: "themes",
-  },
-  {
     id: "done",
     title: "That's the tour: go get an edge",
     body:
@@ -205,13 +197,6 @@ export const COURSE_ONBOARDING_TOUR_STEPS: OnboardingStep[] = [
     title: "6 · Optional: going beyond the course",
     body:
       "That's everything Course mastery needs — the menu stays focused on your two courses and their Foundations, so nothing here is required for Intro to Probability or Intro to Stochastic Processes. If you ever want to stretch past the syllabus or start prepping for trading interviews, flip the header toggle to Interview prep and a whole extra menu opens up: the Games hub, the Trading Floor, the Speed Arena (with weak-spot drills that target whatever your Course Readiness flags), Timed Sections fed by Arbitrage & De-vig and EV Under Time, the AI Mock Interview, and the Verified Bank. It's all optional and your courses never depend on it, so switch over only if and when you want more.",
-  },
-  {
-    id: "themes",
-    title: "7 · Make it yours in Themes",
-    body:
-      "Switch the whole look anytime in Themes: six styles, each with light and dark mode. Pick whatever keeps you coming back to practice.",
-    target: "themes",
   },
   {
     id: "done",

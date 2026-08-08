@@ -12,6 +12,7 @@ import {
   minDropsTwoBalls,
   minPerBoxThreshold,
   modularHats,
+  openLockersAfterToggles,
   smallestNumberWithDigitProduct,
   trailingZerosFactorial,
   triangular,
@@ -302,6 +303,41 @@ export function genBinaryWeights(rng: Rng): Flashcard {
 }
 
 /* ========================================================================== */
+/*  FAMILY. Divisor-parity toggling lockers (invariant, dataset 3)            */
+/* ========================================================================== */
+
+export function genLockerToggle(rng: Rng): Flashcard {
+  const N = rng.pick([
+    30, 50, 64, 80, 100, 120, 144, 150, 200, 225, 256, 300, 400, 500, 625, 750,
+    1000,
+  ]);
+  const open = openLockersAfterToggles(N); // ⌊√N⌋
+  const largestSquareRoot = open;
+  const largestSquare = largestSquareRoot * largestSquareRoot;
+  const prompt =
+    `A hallway has ${N} lockers, all starting CLOSED. Person k (for k = 1..${N}) walks by and TOGGLES every k-th locker ` +
+    `(person 1 flips all of them, person 2 flips lockers 2, 4, 6, …, and so on through person ${N}). ` +
+    `After all ${N} people have passed, how many lockers are left OPEN?`;
+  const answer =
+    `${open} lockers, exactly the perfect squares 1², 2², …, ${largestSquareRoot}² (up to ${largestSquare} ≤ ${N}). ` +
+    `In general the count of open lockers among N is ⌊√N⌋ = ${open}.`;
+  const explanation =
+    `Locker n is toggled once by each person whose number DIVIDES n, so its final state depends on the PARITY of n's divisor count: it ends OPEN iff n has an ODD number of divisors. Divisors normally pair up as (d, n/d), giving an EVEN count, and that pairing only fails to double-count when d = n/d, i.e. when n is a PERFECT SQUARE. So exactly the perfect squares 1, 4, 9, …, ${largestSquare} stay open. The number of perfect squares in 1..${N} is ⌊√${N}⌋ = ${open}. The whole problem collapses to a divisor-parity invariant, no simulation needed.`;
+  return {
+    id: `bt-lockers-toggle-${N}`,
+    prompt,
+    answer,
+    explanation,
+    difficulty: "hard",
+    concept: "Divisor-parity invariant (open lockers = ⌊√N⌋)",
+    source: "Brainteasers · Invariants · parametric",
+    gradable: true,
+    numericAnswer: open,
+    tolerance: 0,
+  };
+}
+
+/* ========================================================================== */
 /*  FAMILY. Modular checksum prisoners' hats (dataset 3)                       */
 /* ========================================================================== */
 
@@ -405,6 +441,7 @@ export const digitProductFamily: FlashcardGenerator = genDigitProduct;
 export const binaryWeightsFamily: FlashcardGenerator = genBinaryWeights;
 export const modularHatsFamily: FlashcardGenerator = genModularHats;
 export const subtractionGameFamily: FlashcardGenerator = genSubtractionGame;
+export const lockerToggleFamily: FlashcardGenerator = genLockerToggle;
 
 /** All technique families, for tests and any "mixed" wiring. */
 export const ALL_TECHNIQUE_FAMILIES: [string, FlashcardGenerator][] = [
@@ -416,4 +453,5 @@ export const ALL_TECHNIQUE_FAMILIES: [string, FlashcardGenerator][] = [
   ["genBinaryWeights", genBinaryWeights],
   ["genModularHats", genModularHats],
   ["genSubtractionGame", genSubtractionGame],
+  ["genLockerToggle", genLockerToggle],
 ];

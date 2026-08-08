@@ -3,10 +3,27 @@ import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ProgressProvider, useProgress } from "./context/ProgressContext";
+import { DevPipelineProvider, useDevPipeline } from "./context/DevPipelineContext";
+import { devEffectiveStage } from "./lib/dev/devStage";
 import { shouldRedirectToDiagnostic } from "./lib/diagnostic/gate";
+import {
+  PIPELINE_ENABLED,
+  RequirePipelineStage,
+  STAGE_PATH,
+} from "./components/pipeline/RequirePipelineStage";
+import { resolveStage, stageOrder } from "./lib/pipeline/stateMachine";
 import { AppShell } from "./components/layout/AppShell";
 import { LandingPage } from "./pages/LandingPage";
 import { LoginPage } from "./pages/LoginPage";
+
+// The guided shell is THE authenticated experience once `PIPELINE_ENABLED` is
+// on. Kept lazy so the free-roam initial chunk is unchanged while the flag is
+// off (the shell pulls the roadmap projection + every stage screen).
+const GuidedShell = lazy(() =>
+  import("./components/pipeline/GuidedShell").then((m) => ({
+    default: m.GuidedShell,
+  })),
+);
 
 // Landing / Login / AppShell stay eager: they are on the first-paint path (the
 // unauthenticated home + auth screen, and the authenticated layout shell). Every
@@ -20,9 +37,6 @@ const CourseTrackPage = lazy(() =>
   import("./pages/CourseTrackPage").then((m) => ({
     default: m.CourseTrackPage,
   })),
-);
-const ThemesPage = lazy(() =>
-  import("./pages/ThemesPage").then((m) => ({ default: m.ThemesPage })),
 );
 const LessonPage = lazy(() =>
   import("./pages/LessonPage").then((m) => ({ default: m.LessonPage })),
@@ -169,21 +183,79 @@ function Guarded({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The `/` entry point. Unauthenticated (or with the pipeline OFF) it is the
+ * public marketing landing exactly as before. Once `PIPELINE_ENABLED` is on, a
+ * signed-in, past-login user is routed straight into the guided flow at their
+ * live resolved stage ({@link resolveStage}) — the guided shell, not the
+ * free-roam Home, is their app (cutover runbook §2). Reversible: with the flag
+ * off this is a pure pass-through to {@link LandingPage}.
+ */
+function HomeRoute() {
+  const { isAuthed, isDeveloper } = useAuth();
+  const { progress } = useProgress();
+  const { forcedStage } = useDevPipeline();
+  if (PIPELINE_ENABLED && isAuthed) {
+    // Honor a developer's forced-stage override so a demo deep-links to the
+    // stage it jumped to; real users go to the live gate-derived stage.
+    const stage = devEffectiveStage(resolveStage(progress), {
+      isDeveloper,
+      forcedStage,
+    });
+    return <Navigate to={STAGE_PATH[stage]} replace />;
+  }
+  return <LandingPage />;
+}
+
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <ProgressProvider>
+          {/* Dev-only pipeline override (demo escape hatch). Inert for real
+              users — it exposes a forced stage ONLY for a developer session. */}
+          <DevPipelineProvider>
           {/* A single Suspense boundary covers every lazy route. The fallback is
               intentionally minimal — route modules are small and load fast on a
               warm cache; a heavier skeleton would flash more than it helps. */}
           <Suspense fallback={null}>
             <Routes>
-              {/* The landing page is the home for EVERYONE — it renders
-                  auth-aware header/CTAs (see LandingPage). No separate dashboard. */}
-              <Route path="/" element={<LandingPage />} />
+              {/* Home: the public marketing landing when signed-out / flag-off;
+                  once the guided pipeline is live it redirects a signed-in user
+                  to their resolved stage (see HomeRoute). */}
+              <Route path="/" element={<HomeRoute />} />
               <Route path="/login" element={<LoginPage />} />
 
+              {/* GUIDED PIPELINE (cutover LIVE). One route per stage, each guarded
+                  by auth + the stage router (which redirects a mismatched stage to
+                  the resolved one) and rendering the single GuidedShell. This is
+                  the sole navigation authority while PIPELINE_ENABLED is true. */}
+              {PIPELINE_ENABLED &&
+                stageOrder.map((stage) => (
+                  <Route
+                    key={stage}
+                    path={STAGE_PATH[stage]}
+                    element={
+                      <ProtectedRoute>
+                        <RequirePipelineStage stage={stage}>
+                          <GuidedShell />
+                        </RequirePipelineStage>
+                      </ProtectedRoute>
+                    }
+                  />
+                ))}
+
+              {/* ────────────────────────────────────────────────────────────
+                  FREE-ROAM ROUTES (spec §7.1 hide-set). Mounted ONLY while the
+                  guided pipeline is OFF. The page/engine modules are NEVER
+                  deleted — they stay lazy-importable so stage screens reuse them
+                  internally (lesson player, mock runner, MM engine, timed-OA
+                  engine, …); the cutover merely stops advertising/mounting them
+                  as user navigation. Flipping PIPELINE_ENABLED back to false
+                  restores this shell verbatim.
+                  ──────────────────────────────────────────────────────────── */}
+              {!PIPELINE_ENABLED && (
+                <>
               {/* Phase-5 mastery + calibration dashboard (own full-screen layout). */}
               <Route
                 path="/dashboard"
@@ -223,7 +295,6 @@ export default function App() {
                 <Route path="/review" element={<ReviewPage />} />
                 <Route path="/simulations" element={<SimulationsPage />} />
                 <Route path="/games" element={<GamesHubPage />} />
-                <Route path="/themes" element={<ThemesPage />} />
               </Route>
 
               {/* Immersive lesson player (its own full-screen layout) */}
@@ -451,10 +522,16 @@ export default function App() {
                   </Guarded>
                 }
               />
+                </>
+              )}
 
+              {/* Catch-all: unknown URLs go to `/`. With the pipeline live and a
+                  user signed in, HomeRoute then forwards them to their resolved
+                  stage — so no free-roam URL is reachable by hand. */}
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
+          </DevPipelineProvider>
         </ProgressProvider>
       </AuthProvider>
     </ThemeProvider>

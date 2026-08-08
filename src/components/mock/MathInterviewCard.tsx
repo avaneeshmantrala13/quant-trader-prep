@@ -504,7 +504,7 @@ function FollowupBlock({
 }) {
   if (!followup) {
     return (
-      <div className="border-l-2 border-accent bg-surface-muted px-4 py-3">
+      <div className="aside">
         <div className="label text-accent">Follow-up</div>
         <p className="mt-1 flex items-center gap-2 text-sm text-secondary" role="status">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />

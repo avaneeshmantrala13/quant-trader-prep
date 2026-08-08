@@ -57,7 +57,7 @@ export function ReasoningPanel({
 }) {
   if (loading && !grade) {
     return (
-      <div className="border-l-2 border-accent bg-surface-muted px-4 py-3">
+      <div className="aside">
         <div className="label text-accent">Reasoning check</div>
         <p className="mt-1 flex items-center gap-2 text-sm text-secondary" role="status">
           <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent" />
@@ -70,7 +70,7 @@ export function ReasoningPanel({
   const meta = QUALITY_META[grade.quality];
 
   return (
-    <div className="border-l-2 border-accent bg-surface-muted px-4 py-3">
+    <div className="aside">
       <div className="flex items-center justify-between">
         <div className="label text-accent">Reasoning quality</div>
         <span className={`chip ${meta.tone}`}>{meta.label}</span>

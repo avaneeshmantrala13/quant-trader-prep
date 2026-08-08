@@ -9,12 +9,11 @@ import { NavMenu } from "@/components/layout/NavMenu";
 import { PLAYABLE_TRACKS } from "@/content";
 import type { Track } from "@/types/content";
 import { ThemeBackground } from "@/components/visuals/ThemeBackground";
-import { ThemeSwitcher } from "@/components/theme/ThemeSwitcher";
+import { CardShuffleIntro } from "@/components/visuals/CardShuffle";
 import { CandlestickIcon, LogoutIcon, MoonIcon, SunIcon } from "@/components/icons";
 import {
   CurriculumVisual,
   FreshVisual,
-  FunnelVisual,
   HintLadderVisual,
   RoadmapVisual,
 } from "@/components/marketing/visuals";
@@ -72,12 +71,12 @@ function LandingHeader() {
   const showNavMenu = diagnosticDone;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-subtle bg-surface/95 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-        <div className="flex items-center gap-2">
+    <header className="sticky top-0 z-30 border-b border-border-strong bg-surface/95 backdrop-blur">
+      <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3 px-6 py-3 sm:px-10 lg:px-14">
+        <div className="flex items-center gap-2.5">
           {showNavMenu && <NavMenu mode={FRONTEND_GOAL_MODE} />}
           <Link to="/" className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center border border-border-strong text-primary">
+            <span className="grid h-8 w-8 place-items-center border border-border-strong bg-surface-muted text-accent">
               <CandlestickIcon width={18} height={18} />
             </span>
             <span className="font-display text-lg font-bold tracking-tight text-primary">
@@ -87,7 +86,6 @@ function LandingHeader() {
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
-          <ThemeSwitcher />
           <button
             onClick={toggleTheme}
             className="btn-ghost !min-h-0 !px-2 !py-2"
@@ -139,18 +137,16 @@ function Hero() {
   const diagnosticDone = !!progress.diagnosticDoneAt;
 
   return (
-    <section className="mx-auto max-w-5xl px-4 pb-14 pt-14 sm:pt-20">
-      <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-16">
+    <section className="mx-auto flex min-h-[calc(100dvh-3.5rem)] w-full max-w-screen-2xl items-center px-6 pb-14 pt-10 sm:px-10 lg:px-14">
+      <div className="w-full max-w-3xl">
         <div>
           <span className="label text-accent">Quant trader OA &amp; interview prep</span>
-          <h1 className="mt-3 font-display text-4xl font-bold leading-[1.08] tracking-tight text-primary sm:text-5xl">
+          <h1 className="mt-3 font-display text-[2.75rem] font-black leading-[1.03] tracking-tight text-primary sm:text-6xl">
             Get quant-trader interview ready.
           </h1>
-          <p className="mt-5 max-w-xl text-lg leading-relaxed text-secondary">
-            Adaptive practice built around the real hiring funnel. A short
-            diagnostic places you, focused reps cover the exact skills firms
-            test, and timed OA sections and mock interviews rehearse the format
-            before it counts. One clear path, not a pile of tabs.
+          <p className="mt-6 max-w-xl text-lg leading-relaxed text-secondary">
+            One ordered path from first principles to a two-sided market under a
+            timer.
           </p>
 
           {isAuthed ? (
@@ -193,10 +189,6 @@ function Hero() {
             </>
           )}
         </div>
-
-        <div className="lg:pl-4">
-          <FunnelVisual />
-        </div>
       </div>
     </section>
   );
@@ -227,7 +219,7 @@ function HowItWorks() {
     ],
   ];
   return (
-    <section className="mx-auto max-w-5xl border-t border-subtle px-4 py-14 sm:py-16">
+    <section className="mx-auto w-full max-w-screen-2xl border-t border-subtle px-6 py-14 sm:px-10 sm:py-16 lg:px-14">
       <div className="max-w-2xl">
         <span className="label text-accent">How it works</span>
         <h2 className="mt-2 font-display text-3xl font-bold tracking-tight text-primary">
@@ -253,7 +245,7 @@ function HowItWorks() {
 function WhatYouPractice() {
   const { isAuthed } = useAuth();
   return (
-    <section className="mx-auto max-w-5xl border-t border-subtle px-4 py-14 sm:py-16">
+    <section className="mx-auto w-full max-w-screen-2xl border-t border-subtle px-6 py-14 sm:px-10 sm:py-16 lg:px-14">
       <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <div>
           <span className="label text-accent">What you'll practice</span>
@@ -302,7 +294,7 @@ function Feature({
   return (
     <section
       id={id}
-      className="mx-auto max-w-5xl scroll-mt-24 border-t border-subtle px-4 py-14 sm:py-16"
+      className="mx-auto w-full max-w-screen-2xl scroll-mt-24 border-t border-subtle px-6 py-14 sm:px-10 sm:py-16 lg:px-14"
     >
       <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
         <div className={reverse ? "lg:order-2" : ""}>
@@ -337,7 +329,7 @@ function ClosingCTA() {
   const diagnosticDone = !!progress.diagnosticDoneAt;
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-16">
+    <section className="mx-auto w-full max-w-screen-2xl px-6 py-16 sm:px-10 lg:px-14">
       <div className="border-t border-subtle pt-12 text-center">
         <h2 className="mx-auto max-w-2xl font-display text-3xl font-bold leading-tight tracking-tight text-primary sm:text-4xl">
           Start where you stand. Build toward the offer.
@@ -383,7 +375,7 @@ function Footer() {
     ["Track", ["Readiness roadmap", "Mastery dashboard", "Guided hint ladder"]],
   ] as const;
   return (
-    <footer className="mx-auto max-w-5xl border-t border-subtle px-4 py-10">
+    <footer className="mx-auto w-full max-w-screen-2xl border-t border-subtle px-6 py-10 sm:px-10 lg:px-14">
       <div className="grid grid-cols-2 gap-8 sm:grid-cols-4">
         <div className="col-span-2 sm:col-span-1">
           <div className="flex items-center gap-2.5">
@@ -426,6 +418,7 @@ export function LandingPage() {
   return (
     <div className="relative min-h-[100dvh]">
       <ThemeBackground />
+      <CardShuffleIntro />
       <div className="relative z-10">
         <LandingHeader />
 

@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { migrateProgress } from "./migrate";
 import { emptyProgress } from "@/types/progress";
 
-describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
-  it("upgrades a v1 blob (no mastery fields) non-destructively to v5", () => {
+describe("migrateProgress (v1 → v2 → v3 → v4 → v5 → v6)", () => {
+  it("upgrades a v1 blob (no mastery fields) non-destructively to v6", () => {
     const v1 = {
       version: 1,
       levelProgress: {
@@ -16,7 +16,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       createdAt: "2025-01-01T00:00:00.000Z",
     };
     const v3 = migrateProgress(v1);
-    expect(v3.version).toBe(5);
+    expect(v3.version).toBe(6);
     // preserved
     expect(v3.levelProgress["p-1"].mastered).toBe(true);
     expect(v3.xp).toBe(420);
@@ -54,7 +54,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       diagnosticDoneAt: "2026-01-01T00:00:00.000Z",
     };
     const out = migrateProgress(v2in);
-    expect(out.version).toBe(5);
+    expect(out.version).toBe(6);
     // θ/α/β preserved VALID and UNCHANGED.
     expect(out.topicMastery?.["t::_core"].theta).toBe(0.5);
     expect(out.topicMastery?.["t::_core"].alpha).toBe(3);
@@ -86,7 +86,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       },
     };
     const out = migrateProgress(withT12);
-    expect(out.version).toBe(5);
+    expect(out.version).toBe(6);
     // The new estimator signals ride along, preserved-if-present.
     expect(out.topicMastery?.["t::_core"].irtAbility).toBe(0.73);
     expect(out.topicMastery?.["t::_core"].irtAbilitySe).toBe(0.4);
@@ -101,7 +101,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       oaTimed: { active: undefined, results: [{ id: "oa-x" }] },
     } as unknown;
     const out = migrateProgress(withOa);
-    expect(out.version).toBe(5);
+    expect(out.version).toBe(6);
     expect(out.oaTimed).toEqual({ active: undefined, results: [{ id: "oa-x" }] });
   });
 
@@ -130,7 +130,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       createdAt: "2025-01-01T00:00:00.000Z",
     };
     const out = migrateProgress(legacy);
-    expect(out.version).toBe(5);
+    expect(out.version).toBe(6);
     expect(out.levelProgress.x.mastered).toBe(true);
     expect(out.topicMastery).toEqual({});
   });
@@ -153,7 +153,7 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
   });
 
   it("returns a fresh empty (v5) progress for garbage input", () => {
-    expect(migrateProgress(null).version).toBe(5);
+    expect(migrateProgress(null).version).toBe(6);
     expect(migrateProgress(undefined).topicMastery).toEqual({});
     expect(migrateProgress("nope").tierDifficulty).toEqual({});
   });
@@ -170,9 +170,54 @@ describe("migrateProgress (v1 → v2 → v3 → v4 → v5)", () => {
       },
     };
     const out = migrateProgress(saved);
-    expect(out.version).toBe(5);
+    expect(out.version).toBe(6);
     expect(out.misconceptionsByTopic).toEqual({
       "probability::Core Probability": { or_means_add_no_overlap: 4, and_means_add: 1 },
     });
+  });
+
+  it("leaves `pipeline` absent for a pre-v6 (pre-pipeline) save, and preserves it when present", () => {
+    // A pre-pipeline blob (a returning user) never carried `pipeline` ⇒ it stays
+    // absent so the pure stage router can default it to the first stage.
+    const prePipeline = {
+      version: 5,
+      levelProgress: { "p-1": { bestScore: 0.9, mastered: true, attempts: 3 } },
+      resume: {},
+      xp: 12,
+      streak: 2,
+      lastActiveDate: "2026-02-01",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      diagnosticDoneAt: "2026-01-15T00:00:00.000Z",
+    };
+    const out = migrateProgress(prePipeline);
+    expect(out.version).toBe(6);
+    expect(out.pipeline).toBeUndefined();
+    // The v5→v6 step never re-derives stage state from `diagnosticDoneAt`.
+    expect(out.diagnosticDoneAt).toBe("2026-01-15T00:00:00.000Z");
+    // Every prior field survives the no-op step untouched.
+    expect(out.levelProgress["p-1"].mastered).toBe(true);
+    expect(out.xp).toBe(12);
+
+    // An explicit pipeline state is preserved EXACTLY across the migration.
+    const withPipeline = {
+      ...emptyProgress(),
+      version: 5,
+      pipeline: {
+        stage: "drilling" as const,
+        untimedDoneAt: "2026-03-01T00:00:00.000Z",
+        timedDoneAt: "2026-03-02T00:00:00.000Z",
+        gameOaDoneAt: "2026-03-03T00:00:00.000Z",
+        diagnosisComputedAt: "2026-03-04T00:00:00.000Z",
+        untimed: { at: "2026-03-01T00:00:00.000Z", overallScore: 0.7, itemsAnswered: 100 },
+        mocks: [{ at: "2026-03-05T00:00:00.000Z", scorePct: 88, wouldPass: "borderline" }],
+      },
+    };
+    const out2 = migrateProgress(withPipeline);
+    expect(out2.version).toBe(6);
+    expect(out2.pipeline?.stage).toBe("drilling");
+    expect(out2.pipeline?.untimedDoneAt).toBe("2026-03-01T00:00:00.000Z");
+    expect(out2.pipeline?.untimed?.overallScore).toBe(0.7);
+    expect(out2.pipeline?.mocks).toHaveLength(1);
+    expect(out2.pipeline?.mocks?.[0].scorePct).toBe(88);
   });
 });

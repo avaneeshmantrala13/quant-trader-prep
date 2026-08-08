@@ -174,6 +174,7 @@ export const OA_CONTENT_POOLS: Record<string, QuestionGenerator[]> = {
     SEQUENCE_QUIZ_GENERATORS.polynomialNext,
     SEQUENCE_QUIZ_GENERATORS.interleavedNext,
     SEQUENCE_QUIZ_GENERATORS.fibonacciNext,
+    SEQUENCE_QUIZ_GENERATORS.tribonacciNext,
     SEQUENCE_QUIZ_GENERATORS.alternatingOpNext,
     SEQUENCE_QUIZ_GENERATORS.oddOneOut,
     // Hard, exact-verified probability + combinatorics anchors (the flagship

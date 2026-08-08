@@ -333,6 +333,47 @@ const ADV: Record<string, AdvBuilder> = {
       `Bet it all, $100.`,
     ],
   },
+  // Coupon collector: total grows FASTER than the number of faces (~k·ln k),
+  // and the value for the other die (mode "any" ⇒ keyword OR value passes).
+  "pev-coupon": {
+    correct: (_q, a) => [
+      `It grows faster than the face count — a harmonic k·H_k.`,
+      `${t0(a)} rolls, and it climbs faster than the number of faces.`,
+      `Grows faster; the total scales like k times ln k.`,
+      `${t0(a)} — the harmonic sum grows faster than the die size.`,
+    ],
+    flawed: () => [
+      `It's linear — doubling the faces doubles the rolls.`,
+      `Proportional to the number of faces.`,
+      `Just k, in proportion to the faces.`,
+    ],
+  },
+  // Birthday paradox: more people than days ⇒ a shared day is CERTAIN (pigeonhole).
+  "pev-birthday": {
+    correct: () => [
+      `Exactly 1 — by the pigeonhole principle, more people than days forces a shared day.`,
+      `Certain, so it's 1; you can't seat everyone on distinct days.`,
+      `The probability is 1 — pigeonhole guarantees a collision.`,
+    ],
+    flawed: () => [
+      `It's still less than 1, not guaranteed.`,
+      `About 0.5, roughly even.`,
+      `It stays the same as before.`,
+    ],
+  },
+  // Derangements: as n → ∞ the probability tends to 1/e ≈ 0.3679.
+  "pev-derange": {
+    correct: () => [
+      `It tends to 1/e ≈ 0.3679 — the alternating series is the expansion of e inverse.`,
+      `The reciprocal of e, about 0.37.`,
+      `It settles at 1/e, one over e.`,
+    ],
+    flawed: () => [
+      `It approaches 0 as n grows.`,
+      `It goes to 1 — everything gets deranged.`,
+      `About 1/2.`,
+    ],
+  },
   // HARD market-making-anchor Fermi (the retained estimation generator).
   // Adversarial: total is LINEAR in the refresh rate ⇒ 2× rate = 2× messages.
   "est-mmquotes": {

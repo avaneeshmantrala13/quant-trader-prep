@@ -32,6 +32,12 @@ import {
   bluffCatchFrequencies,
   conditionalTwoDiceMeanAbove,
   urnPosteriorMeanRed,
+  couponCollectorExpected,
+  couponCollectorLastFaceExpected,
+  birthdayCollisionProb,
+  birthdayNoCollisionProb,
+  derangementProb,
+  derangementCount,
 } from "./verifiers";
 
 /* -------------------------------------------------------------------------- */
@@ -297,5 +303,73 @@ describe("secretary / poker / IMC inference", () => {
     expect(conditionalTwoDiceMeanAbove(8)).toBeCloseTo(10, 12);
     expect(urnPosteriorMeanRed(100, 10, 3)).toBeCloseTo(33, 6);
     expect(urnPosteriorMeanRed(100, 10, 8)).toBeCloseTo(75.5, 6);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  10) COUPON COLLECTOR / BIRTHDAY / DERANGEMENT                              */
+/* -------------------------------------------------------------------------- */
+
+describe("coupon collector / birthday / derangement (Cluster-A hard prob/EV)", () => {
+  it("coupon-collector expectation k·H_k is exact (d6 → 14.7, d4 → 25/3)", () => {
+    expect(couponCollectorExpected(6)).toBeCloseTo(14.7, 9);
+    expect(couponCollectorExpected(4)).toBeCloseTo(25 / 3, 9);
+    expect(couponCollectorExpected(2)).toBeCloseTo(3, 9); // 2·(1+1/2)
+    // The last (k-th) face takes a mean of k rolls (the dominant term).
+    expect(couponCollectorLastFaceExpected(6)).toBe(6);
+  });
+
+  it("MONTE-CARLO confirms the d6 coupon-collector mean ≈ 14.7", () => {
+    const rng = new Rng(4242);
+    const trials = 200000;
+    let total = 0;
+    for (let t = 0; t < trials; t++) {
+      const seen = new Set<number>();
+      let rolls = 0;
+      while (seen.size < 6) {
+        seen.add(1 + Math.floor(rng.next() * 6));
+        rolls++;
+      }
+      total += rolls;
+    }
+    expect(total / trials).toBeCloseTo(14.7, 0);
+  });
+
+  it("birthday collision probability is exact and complement-consistent", () => {
+    expect(birthdayCollisionProb(4, 10)).toBeCloseTo(0.496, 9); // 1 − .9·.8·.7
+    expect(birthdayCollisionProb(5, 12)).toBeCloseTo(0.618055555, 6);
+    expect(birthdayCollisionProb(2, 365)).toBeCloseTo(1 / 365, 9);
+    // Pigeonhole: more people than days ⇒ a shared day is certain.
+    expect(birthdayCollisionProb(13, 12)).toBe(1);
+    // Complement consistency.
+    expect(
+      birthdayCollisionProb(4, 10) + birthdayNoCollisionProb(4, 10),
+    ).toBeCloseTo(1, 12);
+  });
+
+  it("MONTE-CARLO confirms birthday collision for n=5, d=12 ≈ 0.618", () => {
+    const rng = new Rng(555);
+    const trials = 300000;
+    let hit = 0;
+    for (let t = 0; t < trials; t++) {
+      const days = new Set<number>();
+      let coll = false;
+      for (let i = 0; i < 5; i++) {
+        const day = Math.floor(rng.next() * 12);
+        if (days.has(day)) coll = true;
+        days.add(day);
+      }
+      if (coll) hit++;
+    }
+    expect(hit / trials).toBeCloseTo(0.6181, 1);
+  });
+
+  it("derangement probability is exact and tends to 1/e", () => {
+    expect(derangementProb(4)).toBeCloseTo(3 / 8, 12); // !4/4! = 9/24
+    expect(derangementProb(5)).toBeCloseTo(11 / 30, 12);
+    expect(derangementProb(3)).toBeCloseTo(1 / 3, 12); // !3/3! = 2/6
+    expect(derangementCount(4)).toBe(9);
+    expect(derangementCount(5)).toBe(44);
+    expect(derangementProb(8)).toBeCloseTo(Math.exp(-1), 3); // → 1/e
   });
 });

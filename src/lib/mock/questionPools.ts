@@ -32,6 +32,12 @@ import {
   expectedMinDice,
   expectedFlipsForPattern,
   gamblersRuinReachTop,
+  couponCollectorExpected,
+  couponCollectorLastFaceExpected,
+  birthdayCollisionProb,
+  birthdayNoCollisionProb,
+  derangementProb,
+  derangementCount,
 } from "./archetypes/verifiers";
 
 /** A scored numeric question with its two concept-specific follow-ups. */
@@ -919,6 +925,164 @@ function genSigConfidenceBet(): MockNumericQuestion {
   };
 }
 
+/**
+ * COUPON COLLECTOR — expected rolls of a fair k-die to see EVERY face (k·H_k).
+ * The MAIN is not a memorized 1/p: it needs summing the per-new-face geometric
+ * waits k/k + k/(k−1) + ⋯ + k/1. The PROBE isolates the finish-line wait for the
+ * single LAST missing face (mean k), and the ADVERSARIAL asks how the total
+ * scales with k (super-linear, ~k ln k). Values pinned by `verifiers.ts`.
+ */
+function genCouponCollector(rng: Rng): MockNumericQuestion {
+  const k = rng.pick([5, 6, 8]);
+  const ev = round(couponCollectorExpected(k), 4);
+  const last = couponCollectorLastFaceExpected(k); // k
+  const nextK = rng.pick([8, 10, 12].filter((x) => x !== k));
+  const evNext = round(couponCollectorExpected(nextK), 4);
+  return {
+    id: `pev-coupon-${k}`,
+    prompt: `You roll a fair ${k}-sided die repeatedly. What is the expected number of rolls until you have seen ALL ${k} distinct faces at least once?`,
+    answer: ev,
+    decimals: 4,
+    difficulty: "hard",
+    concept: "Coupon collector (expected cover time)",
+    explanation: `Collecting the i-th new face is a geometric wait with success probability (${k}−(i−1))/${k}, so its mean is ${k}/(${k}−i+1). Summing over all faces: E = ${k}·(1 + 1/2 + ⋯ + 1/${k}) = ${k}·H_${k} = ${ev}.`,
+    unit: "",
+    commonErrors: [
+      { value: k, feedback: `${k} is the expected wait for just the FINAL missing face; the earlier faces also take time — sum all ${k} geometric waits.`, misconception: "used_last_face_only" },
+      { value: round(couponCollectorExpected(k) - k, 4), feedback: `You dropped the last (hardest) term k/1 = ${k}; include the wait for the final face.`, misconception: "dropped_last_term" },
+    ],
+    source: "mock probability/EV",
+    followups: {
+      probe: {
+        prompt: `In that same process, once you already hold ${k - 1} of the ${k} faces, what is the expected number of ADDITIONAL rolls to finally get the one missing face?`,
+        answerKind: "numeric",
+        answer: last,
+        decimals: 0,
+        modelReasoning: `Each roll shows the missing face with probability 1/${k}, a geometric wait with mean ${k}. This single term is the largest in the coupon-collector sum.`,
+        commonErrors: [
+          { value: 1, feedback: `It isn't one roll on average — the missing face appears with probability 1/${k}, so you wait ${k} rolls on average.`, misconception: "ignored_geometric_wait" },
+        ],
+      },
+      adversarial: {
+        prompt: `A fair ${nextK}-sided die instead of a ${k}-sided one: does the expected number of rolls to collect all faces grow in PROPORTION to the number of faces, or FASTER than proportionally? Commit to a side and explain, and state the value for the ${nextK}-sided die.`,
+        answerKind: "reasoning",
+        modelAnswer: `Faster than proportionally (≈ k·ln k), and for ${nextK} faces it is ${evNext}.`,
+        modelReasoning: `E = k·H_k and H_k ≈ ln k + γ grows without bound, so the total grows like k·ln k — FASTER than linearly in k. For ${nextK} faces the expected rolls are ${nextK}·H_${nextK} = ${evNext}.`,
+        conclusionTargets: [evNext],
+        conclusionKeywords: [["faster", "grows faster", "harmonic", "k ln k", "k log k", "ln k", "log k"]],
+        conclusionMode: "any",
+        wrongKeywords: [["proportional", "linear", "linearly", "in proportion", "same rate", "doubles exactly", "just k"]],
+      },
+    },
+  };
+}
+
+/**
+ * BIRTHDAY PARADOX — collision probability among n people over d equally-likely
+ * days. The MAIN uses the complement 1 − Π(d−i)/d (people underestimate it). The
+ * PROBE isolates the no-collision product; the ADVERSARIAL springs the
+ * pigeonhole limit (n > d ⇒ certainty). Values pinned by `verifiers.ts`.
+ */
+function genBirthdayCollision(rng: Rng): MockNumericQuestion {
+  const { n, d } = rng.pick([
+    { n: 4, d: 10 },
+    { n: 5, d: 12 },
+    { n: 4, d: 8 },
+    { n: 5, d: 20 },
+  ]);
+  const ans = round(birthdayCollisionProb(n, d), 4);
+  const noColl = round(birthdayNoCollisionProb(n, d), 4);
+  const linear = round((n * (n - 1)) / (2 * d), 4); // pair-count approximation
+  return {
+    id: `pev-birthday-${n}-${d}`,
+    prompt: `A room has ${n} people, each equally likely to have been born on any of ${d} days (independently). What is the probability that AT LEAST TWO of them share a birthday (the same day)?`,
+    answer: ans,
+    decimals: 4,
+    difficulty: "hard",
+    concept: "Birthday paradox (collision probability)",
+    explanation: `Use the complement. P(all distinct) = (${d}/${d})·(${d - 1}/${d})·⋯·(${d - n + 1}/${d}) = ${noColl}, so P(some shared) = 1 − ${noColl} = ${ans}.`,
+    unit: "",
+    commonErrors: [
+      { value: noColl, feedback: "That's the probability all birthdays are DISTINCT — the question asks for at least one shared, its complement.", misconception: "answered_complement" },
+      { value: linear, feedback: `${linear} counts the ${n}·(${n}−1)/2 pairs each colliding with probability 1/${d} — a first-order approximation that ignores overlap. Use 1 − Π(d−i)/d.`, misconception: "used_pair_approximation" },
+    ],
+    source: "mock probability/EV",
+    followups: {
+      probe: {
+        prompt: `First nail the piece that drives it: with those same ${n} people and ${d} days, what is the probability that ALL ${n} birthdays are DISTINCT (no two shared)?`,
+        answerKind: "numeric",
+        answer: noColl,
+        decimals: 4,
+        modelReasoning: `Place people one at a time; each must avoid the days already used: (${d}/${d})·(${d - 1}/${d})·⋯·(${d - n + 1}/${d}) = ${noColl}.`,
+        commonErrors: [
+          { value: ans, feedback: "That's P(some shared); the all-distinct probability is its complement.", misconception: "swapped_complement" },
+        ],
+      },
+      adversarial: {
+        prompt: `Now suppose the room holds MORE than ${d} people (more people than possible days). What is the probability that at least two share a day, and what principle forces it? Commit to a value and name the principle.`,
+        answerKind: "reasoning",
+        modelAnswer: `Exactly 1 (certain), by the pigeonhole principle.`,
+        modelReasoning: `With more people than distinct days, at least two must land on the same day — the pigeonhole principle forces a collision, so the probability is exactly 1.`,
+        conclusionTargets: [1],
+        conclusionKeywords: [["pigeonhole", "more people than days", "must share", "guaranteed", "certain", "forced", "cannot all be distinct", "can't all be distinct"]],
+        conclusionMode: "any",
+        wrongKeywords: [["less than 1", "still less than one", "not certain", "not guaranteed", "0.5", "impossible", "stays the same"]],
+      },
+    },
+  };
+}
+
+/**
+ * DERANGEMENTS — P(a random permutation fixes NO element) = !n/n! → 1/e. The
+ * MAIN needs inclusion–exclusion (Σ(−1)^k/k!), not a naive 1/n. The PROBE asks
+ * the exact derangement COUNT !n; the ADVERSARIAL asks the large-n limit (1/e).
+ * Values pinned by `verifiers.ts`.
+ */
+function genDerangement(rng: Rng): MockNumericQuestion {
+  const n = rng.pick([4, 5, 6]);
+  const ans = round(derangementProb(n), 4);
+  const count = derangementCount(n);
+  const naive = round(1 / n, 4); // "1/n" reflex
+  const oneMinus = round(1 - 1 / n, 4); // "1 − 1/n" reflex
+  return {
+    id: `pev-derange-${n}`,
+    prompt: `${n} distinct letters are placed at random into ${n} addressed envelopes (one per envelope, a uniformly random matching). What is the probability that NO letter ends up in its own correct envelope?`,
+    answer: ans,
+    decimals: 4,
+    difficulty: "expert",
+    concept: "Derangements (inclusion–exclusion)",
+    explanation: `By inclusion–exclusion, P(no fixed point) = Σ_{k=0}^{${n}} (−1)^k/k! = 1 − 1 + 1/2! − ⋯ = !${n}/${n}! = ${count}/${factorial(n)} = ${ans}. This sits close to 1/e ≈ 0.3679.`,
+    unit: "",
+    commonErrors: [
+      { value: naive, feedback: `${naive} = 1/${n} assumes only one letter matters; you must exclude EVERY letter landing home, which is inclusion–exclusion.`, misconception: "used_single_letter" },
+      { value: oneMinus, feedback: `${oneMinus} = 1 − 1/${n} only removes the first letter being correct; the other correct-placements must be inclusion–excluded too.`, misconception: "removed_one_only" },
+    ],
+    source: "mock probability/EV",
+    followups: {
+      probe: {
+        prompt: `For those same ${n} letters, how many of the ${n}! arrangements are derangements (COUNT the arrangements with no letter in its own envelope)?`,
+        answerKind: "numeric",
+        answer: count,
+        decimals: 0,
+        modelReasoning: `!${n} = ${n}!·Σ_{k=0}^{${n}}(−1)^k/k! = ${count}. (Check: ${count}/${factorial(n)} = ${ans} matches the probability.)`,
+        commonErrors: [
+          { value: factorial(n), feedback: `${factorial(n)} = ${n}! counts ALL arrangements; only the derangements have no fixed point.`, misconception: "counted_all_permutations" },
+        ],
+      },
+      adversarial: {
+        prompt: `As the number of letters grows very large, what value does the probability of a complete derangement approach, and why does it NOT go to 0 or 1? Commit to the limit.`,
+        answerKind: "reasoning",
+        modelAnswer: `It approaches 1/e ≈ 0.3679.`,
+        modelReasoning: `The series Σ(−1)^k/k! is exactly the Taylor expansion of e^{−1}, so P(derangement) → 1/e ≈ 0.3679 as n → ∞ — it stabilizes, neither vanishing nor going to 1.`,
+        conclusionTargets: [round(Math.exp(-1), 4)],
+        conclusionKeywords: [["1/e", "1 / e", "e^-1", "e^(-1)", "0.3679", "0.37", "reciprocal of e", "one over e"]],
+        conclusionMode: "any",
+        wrongKeywords: [["approaches 0", "goes to 0", "approaches 1", "goes to 1", "toward zero", "toward one", "1/2", "0.5"]],
+      },
+    },
+  };
+}
+
 /* -------------------------------------------------------------------------- */
 /*  SEQUENCES (self-contained so each carries concept-tied follow-ups)         */
 /* -------------------------------------------------------------------------- */
@@ -1383,6 +1547,8 @@ const PROB_EV_HARD: Gen[] = [
   genGamblersRuin,
   () => genBankOrRoll(),
   () => genMontyHall(),
+  genCouponCollector,
+  genBirthdayCollision,
 ];
 
 const PROB_EV_STRETCH: Gen[] = [
@@ -1392,6 +1558,9 @@ const PROB_EV_STRETCH: Gen[] = [
   genPatternFlips,
   genGamblersRuin,
   () => genCitadelStones(),
+  genCouponCollector,
+  genBirthdayCollision,
+  genDerangement,
 ];
 
 /**
@@ -1506,6 +1675,21 @@ const MAIN_MECHANISM_BY_ID: Record<string, string[]> = {
     "choose", "3 ways", "three ways", "c(3,2)", "×3", "*3", "3 *", "p^2",
     "p²", "(1-p)", "(1 - p)", "exactly two", "one fails", "third",
     "combination", "binomial",
+  ],
+  "pev-coupon": [
+    "coupon", "geometric", "harmonic", "h_", "1 + 1/2", "sum of", "each new",
+    "new face", "k/(", "k/k", "missing face", "1/p", "k ln k", "k log k",
+    "add the waits", "cover time",
+  ],
+  "pev-birthday": [
+    "complement", "1 -", "1 −", "all distinct", "no two", "product", "d-1",
+    "d - 1", "(d-i)", "pigeonhole", "birthday", "collision", "shared",
+    "π(", "distinct days",
+  ],
+  "pev-derange": [
+    "derangement", "inclusion", "exclusion", "inclusion-exclusion",
+    "inclusion–exclusion", "(-1)^k", "alternating", "1/e", "!n", "n!",
+    "no fixed point", "fixed point", "subfactorial", "e^-1",
   ],
   // --- estimation --------------------------------------------------------
   "est-mmquotes": [

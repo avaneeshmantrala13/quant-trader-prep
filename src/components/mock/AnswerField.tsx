@@ -74,7 +74,7 @@ export function AnswerField({
   return (
     <div>
       <div className="flex items-stretch gap-2">
-        <div className="flex flex-1 items-center border-2 border-border-strong bg-surface focus-within:border-accent">
+        <div className="flex flex-1 items-center overflow-hidden rounded border-2 border-border-strong bg-surface transition-colors focus-within:border-accent">
           {multiline ? (
             <textarea
               value={shown}

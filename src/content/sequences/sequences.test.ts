@@ -10,8 +10,11 @@ import {
   geometric,
   interleaved,
   letterToPos,
+  lookAndSay,
   posToLetter,
   quadratic,
+  sayOnce,
+  tribonacciLike,
 } from "./solvers";
 import {
   SEQUENCE_NUMERIC_GENERATORS,
@@ -128,6 +131,24 @@ describe("sequence solvers — exact fixtures", () => {
     const sol = alternatingOp(3, 4, 2, 5); // 3,+4→7,×2→14,+4→18,×2→36 ; next +4 → 40
     expect(sol.seq).toEqual([3, 7, 14, 18, 36]);
     expect(sol.answer).toBe(40);
+  });
+
+  it("tribonacci-like sums the previous three from general seeds", () => {
+    const sol = tribonacciLike(1, 1, 2, 6); // 1,1,2,4,7,13 → next 4+7+13 = 24
+    expect(sol.seq).toEqual([1, 1, 2, 4, 7, 13]);
+    expect(sol.answer).toBe(24);
+    // The three misreads are distinct integers, none equal to the answer.
+    const vals = sol.misreads.map((m) => m.value);
+    expect(new Set([...vals, sol.answer]).size).toBe(4);
+  });
+
+  it("look-and-say reads the run-length encoding of the previous term", () => {
+    expect(sayOnce("1")).toBe("11");
+    expect(sayOnce("1112")).toBe("3112");
+    expect(sayOnce("111221")).toBe("312211");
+    const sol = lookAndSay("1", 5); // 1,11,21,1211,111221 → next 312211
+    expect(sol.seq).toEqual([1, 11, 21, 1211, 111221]);
+    expect(sol.answer).toBe(312211);
   });
 
   it("interleaved continues the correct strand", () => {
