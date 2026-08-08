@@ -18,6 +18,11 @@ import { useEffect, useMemo, useState, type CSSProperties } from "react";
  *   and it fully UNMOUNTS when finished (a JS timer removes it from the tree).
  * - `prefers-reduced-motion`: we skip the whole thing and render NOTHING, so a
  *   reduced-motion user lands directly on the clean, plain entry screen.
+ * - PLAY-ONCE-PER-LOAD: a module-level (in-memory) flag records that the intro
+ *   has played, so it fires on the FIRST mount after a full page load and does
+ *   NOT replay on client-side route changes (e.g. Landing → Log in). It is
+ *   deliberately NOT persisted (no localStorage/sessionStorage) — a full browser
+ *   reload re-evaluates the module and plays it exactly once again.
  */
 
 type Suit = "spade" | "diamond";
@@ -79,12 +84,25 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
+/**
+ * Module-level (in-memory) "already played" flag. Lives for the lifetime of the
+ * loaded module — i.e. one full page load — so the intro plays on the first
+ * mount and is suppressed on every subsequent client-side navigation. A hard
+ * reload re-imports the module, resetting this to `false` (play once again).
+ */
+let introHasPlayed = false;
+
 export function CardShuffleIntro() {
-  // Skip entirely under reduced motion — land straight on the plain screen.
-  const [visible, setVisible] = useState(() => !prefersReducedMotion());
+  // Play only on the FIRST mount per page load, and never under reduced motion.
+  const [visible, setVisible] = useState(
+    () => !introHasPlayed && !prefersReducedMotion(),
+  );
 
   useEffect(() => {
     if (!visible) return;
+    // Latch the flag as soon as it actually plays, so any later mount this page
+    // load (a route change) skips the animation entirely.
+    introHasPlayed = true;
     const t = window.setTimeout(() => setVisible(false), INTRO_LIFETIME_MS);
     return () => window.clearTimeout(t);
   }, [visible]);
@@ -119,6 +137,7 @@ export function CardShuffleIntro() {
 
   return (
     <div
+      data-testid="card-shuffle-intro"
       className="qf-intro pointer-events-none fixed inset-0 z-[70] grid place-items-center overflow-hidden"
       aria-hidden="true"
     >

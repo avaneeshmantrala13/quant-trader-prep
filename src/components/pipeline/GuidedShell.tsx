@@ -17,6 +17,7 @@ import { ProgressPanel } from "./ProgressPanel";
 import { StageStepper } from "./StageStepper";
 import { DevStageControl } from "./DevStageControl";
 import { DevKstView } from "./DevKstView";
+import { DevResetControl } from "./DevResetControl";
 import { stageMetaFor, type StageResult } from "./stageRegistry";
 
 /**
@@ -119,14 +120,15 @@ export function GuidedShell({
           </div>
         </div>
 
-        {/* Developer-only controls (demo escape hatch): stage skip-gating +
-            the on-demand Knowledge State Tree viewer. Renders nothing for real
-            users — each self-gates on useIsDeveloper. */}
+        {/* Developer-only controls (demo escape hatch): stage skip-gating, the
+            on-demand Knowledge State Tree viewer, and a full demo-progress reset.
+            Renders nothing for real users — each self-gates on useIsDeveloper. */}
         {isDeveloper && (
           <div className="border-t border-subtle">
             <div className="mx-auto w-full max-w-7xl space-y-px px-2 lg:px-4">
               <DevStageControl current={stage} />
               <DevKstView />
+              <DevResetControl />
             </div>
           </div>
         )}

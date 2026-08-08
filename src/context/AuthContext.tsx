@@ -15,6 +15,7 @@ import {
   isDeveloperCredentials,
   startDevSession,
 } from "@/lib/dev/devAccount";
+import { maybeRunOneTimeDevReset } from "@/lib/dev/devReset";
 
 interface AuthContextValue {
   username: string | null;
@@ -45,10 +46,15 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   // A persisted developer session takes precedence over any backend session so
-  // it survives reloads and works identically on every StorageProvider.
-  const [isDeveloper, setIsDeveloper] = useState<boolean>(() =>
-    isDevSessionActive(),
-  );
+  // it survives reloads and works identically on every StorageProvider. When a
+  // dev session is restored on a reload, run the deploy-scoped one-time reset
+  // BEFORE ProgressProvider (a child) hydrates, so a new build's demo starts
+  // clean without a per-login wipe (see maybeRunOneTimeDevReset).
+  const [isDeveloper, setIsDeveloper] = useState<boolean>(() => {
+    const active = isDevSessionActive();
+    if (active) maybeRunOneTimeDevReset();
+    return active;
+  });
   const [username, setUsername] = useState<string | null>(() =>
     isDevSessionActive() ? DEV_USER_ID : storage.getSession(),
   );
@@ -71,6 +77,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // backend entirely. Intercepted from BOTH signUp and logIn so the credentials
   // work regardless of which tab the login screen is on.
   const enterDeveloperMode = useCallback((): AuthResult => {
+    // Deploy-scoped one-time reset BEFORE adopting the dev namespace, so the
+    // first dev login on a new build sees a clean demo (and later logins do
+    // not — the token guards against a persistence-breaking per-login wipe).
+    maybeRunOneTimeDevReset();
     startDevSession();
     setIsDeveloper(true);
     setUsername(DEV_USER_ID);
