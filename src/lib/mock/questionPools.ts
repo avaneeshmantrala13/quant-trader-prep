@@ -156,7 +156,7 @@ function genExactlyTwoOfThree(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "medium",
     concept: "Independent events",
-    explanation: `Choose which 2 of 3 occur (3 ways): 3 · p² · (1−p) = 3 · ${round(p * p, 4)} · ${round(1 - p, 2)} = ${ans}.`,
+    explanation: `Build it from the mechanism: "exactly two occur" means two specific events fire (probability p·p by independence) while the third does NOT (probability 1−p), and there are 3 different ways to choose WHICH event is the one that fails. Those 3 cases are mutually exclusive, so they add. Hence 3 · p² · (1−p) = 3 · ${round(p * p, 4)} · ${round(1 - p, 2)} = ${ans}.`,
     unit: "",
     commonErrors: [
       { value: round(p * p, 4), feedback: "You computed p² for one specific pair but forgot (1−p) for the third event and the ×3 choices.", misconception: "forgot_complement_and_count" },
@@ -175,7 +175,7 @@ function genExactlyTwoOfThree(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: atLeastTwo,
         decimals: 4,
-        modelReasoning: `Add the two disjoint cases: P(exactly two) + P(all three) = 3·p²·(1−p) + p³ = ${ans} + ${exactlyThree} = ${atLeastTwo}.`,
+        modelReasoning: `"At least two" is just "exactly two" OR "all three", and those two outcomes can't happen at once, so you add them with no double-counting: P = 3·p²·(1−p) + p³ = ${ans} + ${exactlyThree} = ${atLeastTwo}.`,
         commonErrors: [
           { value: ans, feedback: "That's only EXACTLY two — you must also add the all-three case p³.", misconception: "forgot_all_three_leg" },
           { value: exactlyThree, feedback: "That's only all three (p³); add the exactly-two term 3·p²·(1−p) as well.", misconception: "only_all_three" },
@@ -240,7 +240,7 @@ function genConditionalUrn(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Conditional probability",
-    explanation: `P(both red | ≥1 red) = P(both red) / P(≥1 red). With C(·,2) counts: P(both red) = ${red}·${red - 1} / (${T}·${T - 1}); P(≥1 red) = 1 − ${blue}·${blue - 1}/(${T}·${T - 1}). The ${T}·${T - 1} cancels, giving ${red}·${red - 1} / (${T}·${T - 1} − ${blue}·${blue - 1}) = ${ans}.`,
+    explanation: `Conditioning on "at least one red" throws away every both-blue draw, so the real question is: among the pairs that contain some red, what fraction are fully red? Count equally-likely ordered pairs — both-red accounts for ${red}·${red - 1}, and the ONLY pairs we discard are the both-blue ones (${blue}·${blue - 1} of the ${T}·${T - 1} total). Removing losing outcomes can only push the fraction up, so the answer sits a bit above the plain P(both red). Formally P(both red | ≥1 red) = P(both red)/P(≥1 red) = ${red}·${red - 1} / (${T}·${T - 1} − ${blue}·${blue - 1}) = ${ans}.`,
     unit: "",
     commonErrors: [
       { value: bothRedUncond, feedback: "That's the UNCONDITIONAL P(both red). You must divide by P(at least one red) (< 1), so the conditional is larger.", misconception: "forgot_to_condition" },
@@ -259,7 +259,7 @@ function genConditionalUrn(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: allThreeGivenTwo,
         decimals: 4,
-        modelReasoning: `Condition on "≥2 red among 3": P(all 3 red | ≥2 red) = C(${red},3) / [C(${red},3) + C(${red},2)·C(${blue},1)] = ${red3} / (${red3} + ${exactlyTwoRed3}) = ${allThreeGivenTwo}.`,
+        modelReasoning: `Same idea, one draw deeper: restrict to triples with at least two red, then ask what share are all-red. The "≥2 red" world splits cleanly into two disjoint pieces — all-three-red (C(${red},3)) plus exactly-two-red (C(${red},2)·C(${blue},1)) — so P(all 3 red | ≥2 red) = ${red3} / (${red3} + ${exactlyTwoRed3}) = ${allThreeGivenTwo}.`,
         commonErrors: [
           { value: round(red3 / choose(T, 3), 4), feedback: "That's the UNCONDITIONAL P(all three red); you must divide by P(at least two red), not by all triples.", misconception: "forgot_to_condition_three" },
           { value: ans, feedback: "That's the two-draw answer; the three-draw conditioning event and count are different.", misconception: "reused_two_draw" },
@@ -303,7 +303,7 @@ function genGeometricFlips(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Geometric distribution",
-    explanation: `The first mover wins on attempt 1, 3, 5, …: P = p + (1−p)²p + (1−p)⁴p + ⋯ = p / (1 − (1−p)²) = 1/(2 − p). With p = 1/${k}, that is ${k}/(2·${k} − 1) = ${first}.`,
+    explanation: `Intuition first: moving first is a genuine edge — every round you get the earlier shot — so the answer must sit a bit ABOVE 1/2, never below. To pin it exactly, note the first mover can only win on the ODD attempts 1, 3, 5, …, and each needs every prior attempt to have missed: P = p + (1−p)²p + (1−p)⁴p + ⋯. That geometric series collapses to p / (1 − (1−p)²) = 1/(2 − p). With p = 1/${k}, that is ${k}/(2·${k} − 1) = ${first}.`,
     unit: "",
     commonErrors: [
       { value: 0.5, feedback: "It isn't 50/50 — moving first is a real edge because you get the first attempt every round.", misconception: "assumed_symmetric" },
@@ -321,7 +321,7 @@ function genGeometricFlips(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: firstOfThree,
         decimals: 4,
-        modelReasoning: `The first of three wins on attempts 1, 4, 7, …: P = p·Σ(1−p)^{3j} = p/(1−(1−p)³). With p = 1/${k} that is ${firstOfThree}.`,
+        modelReasoning: `The first mover still leads each cycle, so they beat a symmetric 1/3 — but by less than in the two-player game, since now two rivals shoot before their next turn. They win only on attempts 1, 4, 7, …: P = p·Σ(1−p)^{3j} = p/(1−(1−p)³). With p = 1/${k} that is ${firstOfThree}.`,
         commonErrors: [
           { value: first, feedback: "That's the TWO-player first-mover probability; with three players the geometric sum runs over every THIRD attempt.", misconception: "reused_two_player" },
           { value: round(1 / 3, 4), feedback: "It isn't a symmetric 1/3 — moving first is an edge because you get the first attempt each cycle.", misconception: "assumed_symmetric_three" },
@@ -365,7 +365,7 @@ function genConditionalGeometric(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Conditional probability (memorylessness)",
-    explanation: `P(N=${m}) = (2/3)^${m - 1}·(1/3) and P(N>1) = 2/3, so P(N=${m} | N>1) = (2/3)^${m - 1}·(1/3) / (2/3) = (2/3)^${m - 2}·(1/3) = ${ans}.`,
+    explanation: `Key intuition: the coin is MEMORYLESS — once you're told the first flip was a tail, the wait effectively restarts, so needing exactly ${m} flips in total is the same as needing exactly ${m - 1} flips from scratch (that's ${m - 2} more tails, then a head): (2/3)^${m - 2}·(1/3). Mechanically this is P(N=${m})/P(N>1) = (2/3)^${m - 1}·(1/3) / (2/3) = (2/3)^${m - 2}·(1/3) = ${ans}.`,
     unit: "",
     commonErrors: [
       { value: uncond, feedback: `That's the UNCONDITIONAL P(exactly ${m} flips); you must divide by P(>1 flip) = 2/3.`, misconception: "forgot_conditioning" },
@@ -383,7 +383,7 @@ function genConditionalGeometric(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: tailGivenGt1,
         decimals: 4,
-        modelReasoning: `The tail is P(N>${m}) = (2/3)^${m}, and conditioning on N>1 divides by P(N>1) = 2/3: P(N>${m} | N>1) = (2/3)^${m}/(2/3) = (2/3)^${m - 1} = ${tailGivenGt1}.`,
+        modelReasoning: `"More than ${m} flips" just means the first ${m} flips are all tails — but you already know the first one was a tail, so only ${m - 1} of those tails are new information. By memorylessness the conditional tail is (2/3)^${m - 1} = ${tailGivenGt1}. (Mechanically, P(N>${m})/P(N>1) = (2/3)^${m}/(2/3).)`,
         commonErrors: [
           { value: tailUncond, feedback: `That's the UNCONDITIONAL tail P(N>${m}) = (2/3)^${m}; you must still divide by P(N>1) = 2/3.`, misconception: "forgot_conditioning_tail" },
           { value: ans, feedback: `That's P(N=${m} | N>1), a single point mass — the question asks for the whole tail beyond ${m}.`, misconception: "point_not_tail" },
@@ -425,7 +425,7 @@ function genCombosConstraint(rng: Rng): MockNumericQuestion {
     answer: ans,
     difficulty: "hard",
     concept: "Combinatorics",
-    explanation: `Take all C(${n},${k}) = ${total} committees, then subtract those containing BOTH A and B (fix their 2 seats, choose the rest): C(${n - 2},${k - 2}) = ${bothTogether}. Valid = ${total} − ${bothTogether} = ${ans}.`,
+    explanation: `Counting valid committees head-on means juggling three cases (A but not B, B but not A, neither) — it's far cleaner to count ALL committees and subtract only the forbidden ones. The forbidden committees are exactly those seating BOTH A and B: fix their two seats and fill the remaining ${k - 2} from the other ${n - 2} people, C(${n - 2},${k - 2}) = ${bothTogether}. So valid = C(${n},${k}) − C(${n - 2},${k - 2}) = ${total} − ${bothTogether} = ${ans}.`,
     unit: "",
     commonErrors: [
       { value: total, feedback: "That's ALL committees; you still have to remove the ones with A and B together.", misconception: "ignored_constraint" },
@@ -444,7 +444,7 @@ function genCombosConstraint(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: ansTrio,
         decimals: 0,
-        modelReasoning: `Take all C(${n},${k}) = ${total}, then subtract committees containing ALL of A, B, C (fix their 3 seats, choose the rest): C(${n - 3},${k - 3}) = ${trioTogether}. Valid = ${total} − ${trioTogether} = ${ansTrio}.`,
+        modelReasoning: `Same complementary trick: the only newly-forbidden committees are those seating ALL of A, B, C, so fix their three seats and fill the remaining ${k - 3} from the other ${n - 3} people, C(${n - 3},${k - 3}) = ${trioTogether}. Valid = C(${n},${k}) − C(${n - 3},${k - 3}) = ${total} − ${trioTogether} = ${ansTrio}.`,
         commonErrors: [
           { value: total, feedback: "That's ALL committees; still subtract the ones that seat all three of A, B, C.", misconception: "ignored_trio_constraint" },
           { value: bothTogether, feedback: "That's the two-person forbidden count from the base; the new rule forbids only the full TRIO — subtract C(n−3,k−3).", misconception: "reused_pair_count" },
@@ -478,7 +478,7 @@ function genDieReroll(): MockNumericQuestion {
     decimals: 2,
     difficulty: "hard",
     concept: "Optimal stopping / multi-stage EV",
-    explanation: `Reroll only when the first roll is below the reroll value 3.5 (so keep 4,5,6). EV = ½·(4+5+6)/3 + ½·3.5 = ½·5 + ½·3.5 = 4.25.`,
+    explanation: `Compare each first roll against the value of rerolling — which is just a fresh die's mean, 3.5. Keep anything that beats 3.5 (so 4, 5, 6) and reroll the rest; since the option can only help, the answer must land ABOVE 3.5. Half the time you keep a high roll (average (4+5+6)/3 = 5), half the time you take the 3.5 continuation: EV = ½·5 + ½·3.5 = 4.25.`,
     unit: "",
     commonErrors: [
       { value: 3.5, feedback: "3.5 is the EV with NO option to reroll — the reroll strictly improves it.", misconception: "ignored_option" },
@@ -528,7 +528,7 @@ function genExpectedMaxTwoDice(): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Order statistics",
-    explanation: `P(max = m) = (2m−1)/36, so E[max] = Σ m·(2m−1)/36 = 161/36 ≈ ${eMax}.`,
+    explanation: `First the intuition. Of the 36 equally likely ordered rolls, "max = m" means both dice land ≤ m but they're NOT both ≤ m−1 — that's m² − (m−1)² = 2m−1 outcomes, so P(max = m) = (2m−1)/36 (bigger m ⇒ more ways). And because you keep the LARGER of two draws, the max skews high: it should sit noticeably above a single die's mean of 3.5 (it comes out ≈ 4.47, not 3.5). Putting it together, E[max] = Σ m·(2m−1)/36 = 161/36 ≈ ${eMax}.`,
     unit: "",
     commonErrors: [
       { value: 3.5, feedback: "3.5 is the EV of one die; the max of two is pulled higher.", misconception: "used_single_die" },
@@ -584,7 +584,7 @@ function genBayesDisease(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "expert",
     concept: "Bayes' theorem (base rates)",
-    explanation: `P(disease|+) = P·1 / (P·1 + (1−P)·FPR) = ${p} / (${p} + ${round((1 - p) * fpr, 4)}) = ${post}.`,
+    explanation: `Think in natural frequencies. Among 10,000 people only ${prevPct}% — about ${prevPct * 100} — truly have it, and all of them test positive. But ${fprPct}% of the ${10000 - prevPct * 100} healthy people ALSO test positive, roughly ${Math.round((1 - p) * fpr * 10000)} false alarms. Those false positives from the huge healthy majority swamp the ${prevPct * 100} real cases, so a positive is probably a false alarm — the answer is small despite the "positive". Formally P(disease|+) = P / (P + (1−P)·FPR) = ${p} / (${p} + ${round((1 - p) * fpr, 4)}) = ${post}.`,
     unit: "",
     commonErrors: [
       { value: round(1 - fpr, 4), feedback: "That's just (1 − false-positive rate); it ignores the tiny base rate, which dominates here.", misconception: "ignored_base_rate" },
@@ -601,7 +601,7 @@ function genBayesDisease(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: prevForHalf,
         decimals: 4,
-        modelReasoning: `Set the posterior to 1/2: p/(p + (1−p)·${fpr}) = 1/2 ⇒ p = ${fpr}/(1 + ${fpr}) = ${prevForHalf} (about ${round(prevForHalf * 100, 2)}%).`,
+        modelReasoning: `A positive becomes a coin-flip exactly when the true positives balance the false positives. Set the posterior to 1/2: p/(p + (1−p)·${fpr}) = 1/2 ⇒ p = ${fpr}/(1 + ${fpr}) = ${prevForHalf} (about ${round(prevForHalf * 100, 2)}%) — the disease would have to be far more common than it is.`,
         commonErrors: [
           { value: round(fpr, 4), feedback: "That's the false-positive rate, not the prevalence — solve p/(p+(1−p)·fpr)=1/2 for p.", misconception: "gave_fpr_not_prevalence" },
           { value: 0.5, feedback: "0.5 is the target POSTERIOR, not the prevalence that produces it.", misconception: "confused_posterior_and_prior" },
@@ -717,7 +717,7 @@ function genGamblersRuin(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Gambler's ruin (martingale)",
-    explanation: `With win prob p = 0.6, loss q = 0.4, let r = q/p = 2/3. The biased ruin formula gives P(reach ${N}) = (1 − r^${a})/(1 − r^${N}) = ${reach}. (The martingale is now r^{wealth}, not wealth itself, so the answer is NOT linear a/N.)`,
+    explanation: `Intuition first: with a 0.6 edge every step drifts you UPWARD, so your chance of reaching the top must beat the fair-coin baseline a/N = ${a}/${N}. Here's the clean way to see the exact value: under a bias the quantity that behaves like a fair game (a martingale) is r^{wealth} with r = q/p = 0.4/0.6 = 2/3 — NOT wealth itself, which is why the answer isn't linear. Balancing that martingale at the two barriers gives P(reach ${N}) = (1 − r^${a})/(1 − r^${N}) = ${reach}, comfortably above a/N.`,
     unit: "",
     commonErrors: [
       { value: reachFair, feedback: `${reachFair} is the FAIR-coin answer a/N. With a 0.6 edge your chance is higher — you must use (1 − r^a)/(1 − r^N).`, misconception: "used_fair_formula" },
@@ -774,7 +774,7 @@ function genThreeDiceMax(): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Order statistics",
-    explanation: `P(max ≤ m) = (m/6)³, so P(max = m) = (m³ − (m−1)³)/216 and E[max] = Σ m·P(max = m) = 119/24 ≈ ${eMax}.`,
+    explanation: `Intuition: keeping the biggest of THREE draws skews the result high — expect it well above a single die's mean of 3.5 (it lands ≈ 4.96). To pin it, notice "max ≤ m" happens exactly when all three dice are ≤ m, probability (m/6)³, so P(max = m) = (m³ − (m−1)³)/216. Summing gives E[max] = Σ m·P(max = m) = 119/24 ≈ ${eMax}.`,
     unit: "",
     commonErrors: [
       { value: 4.4722, feedback: "That's E[max] for TWO dice; a third die pulls the maximum higher still.", misconception: "used_two_dice" },
@@ -836,7 +836,7 @@ function genPatternFlips(rng: Rng): MockNumericQuestion {
     decimals: 0,
     difficulty: "expert",
     concept: "Expected waiting time (pattern overlap)",
-    explanation: `Set up the expected-wait recursion on the automaton of matched prefixes; solving it gives E[flips to "${pair.main}"] = ${mainE}. Self-overlap (a failed match that re-uses a prefix) is what makes some patterns wait longer than others of the same length.`,
+    explanation: `Intuition: you'd think two patterns of the same length are equally quick to appear, but they aren't. When a self-overlapping pattern like "HH" breaks (you flip H then T) the partial progress is wasted and you often restart from scratch, whereas "HT" never wastes progress — so overlapping patterns wait LONGER. Making that precise with the expected-wait recursion over matched-prefix states gives E[flips to "${pair.main}"] = ${mainE}.`,
     unit: "",
     commonErrors: [
       { value: 2 ** pair.main.length, feedback: "The expected wait is NOT just 2^length; overlap structure changes it (e.g. HH waits 6 but HT only 4).", misconception: "used_two_to_the_length" },
@@ -908,7 +908,7 @@ function genBankOrRoll(): MockNumericQuestion {
     decimals: 2,
     difficulty: "hard",
     concept: "Optimal stopping (bank-or-roll)",
-    explanation: `Reroll only when the first roll is below the continuation value 3.5 (so bank 4, 5, 6). EV = ½·(4+5+6)/3 + ½·3.5 = ½·5 + ½·3.5 = 4.25.`,
+    explanation: `The value of rolling again is just a fresh die's mean, 3.5 — so bank any first roll that beats it (4, 5, 6) and reroll the rest. Since the option can only help, the answer must exceed 3.5. Half the time you bank a high roll (average (4+5+6)/3 = 5), half the time you take the 3.5 continuation: EV = ½·5 + ½·3.5 = 4.25.`,
     unit: "",
     commonErrors: [
       { value: 3.5, feedback: "3.5 is the EV with NO option to reroll — the reroll strictly improves it.", misconception: "ignored_option" },
@@ -1028,7 +1028,7 @@ function genCitadelStones(): MockNumericQuestion {
     decimals: 4,
     difficulty: "expert",
     concept: "Bayesian updating (unknown composition) + commitment",
-    explanation: `Only k=2 or k=3 black can yield two black draws. P(2 black)=P(3 black)=1/4 prior; P(draw both black | k=2)=1/3, | k=3)=1. Posterior P(k=3 | both black)=(1/4·1)/(1/4·1/3 + 1/4·1)=3/4. If k=3 the last stone is black (prob 1); if k=2 it is white (prob 0). So P(third black)=3/4.`,
+    explanation: `Intuition: drawing two black stones is evidence the bag is black-heavy, so the answer should beat a naive 1/2. Only k=2 or k=3 black stones could have produced two black draws, and k=3 is THREE times as likely to yield "both black" as k=2 (probability 1 vs 1/3), so — starting from equal priors — seeing it tips the odds to 3:1 that the bag is all-black. The third stone is black exactly when k=3, so P(third black) = P(k=3 | both black) = (1/4·1)/(1/4·1/3 + 1/4·1) = 3/4.`,
     unit: "",
     commonErrors: [
       { value: 0.5, feedback: "The two black draws are evidence the bag is black-heavy — they shift the posterior toward all-black, so it is not 1/2.", misconception: "ignored_bayesian_update" },
@@ -1045,7 +1045,7 @@ function genCitadelStones(): MockNumericQuestion {
         answerKind: "numeric",
         answer: oneBlackPosterior,
         decimals: 4,
-        modelReasoning: `One black draw makes the posterior on the count ∝ k, so P(k=1,2,3) = 1/6, 2/6, 3/6. A remaining stone is black with probability Σ P(k)·(k−1)/2 = (2/6)(1/2) + (3/6)(1) = 2/3 ≈ ${oneBlackPosterior}.`,
+        modelReasoning: `One black is weaker evidence than two, so expect something below the two-draw 3/4 but still above 1/2. A single black draw makes the count-posterior proportional to k (more black stones ⇒ likelier to have drawn black), so P(k=1,2,3) = 1/6, 2/6, 3/6. A remaining stone is then black with probability Σ P(k)·(k−1)/2 = (2/6)(1/2) + (3/6)(1) = 2/3 ≈ ${oneBlackPosterior}.`,
         commonErrors: [
           { value: posterior, feedback: "That's the posterior after TWO black draws; one black is weaker evidence, so the probability is lower.", misconception: "reused_two_draw_posterior" },
           { value: 0.5, feedback: "It isn't a uniform 1/2 — even one black draw shifts the composition toward black-heavy bags.", misconception: "ignored_single_update" },
@@ -1095,7 +1095,7 @@ function genSigConfidenceBet(): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Confidence → bet-sizing (edge)",
-    explanation: `Law of total probability: P(win) = 1/2·P(die ≥ 2) + 1/2·P(die ≥ 3) = 1/2·(5/6) + 1/2·(4/6) = 5/12 + 4/12 = 9/12 = 3/4 = 0.75.`,
+    explanation: `Intuition: the coin decides which winning rule applies, and each is equally likely, so your overall chance is simply the AVERAGE of the two conditional win chances. Heads you win on a die ≥ 2 (5/6); tails you win on a die ≥ 3 (4/6). Averaging (law of total probability): P(win) = ½·(5/6) + ½·(4/6) = 5/12 + 4/12 = 9/12 = 3/4 = 0.75.`,
     unit: "",
     commonErrors: [
       { value: round(5 / 6, 4), feedback: "That's only the HEADS branch (die ≥ 2). You must weight both coin outcomes equally.", misconception: "single_branch" },
@@ -1113,7 +1113,7 @@ function genSigConfidenceBet(): MockNumericQuestion {
         answerKind: "numeric",
         answer: biasedWin,
         decimals: 4,
-        modelReasoning: `Re-weight the branches by the new coin: P(win) = (2/3)·(5/6) + (1/3)·(4/6) = 10/18 + 4/18 = 14/18 ≈ ${biasedWin}.`,
+        modelReasoning: `The coin now leans toward the easier heads rule (win on ≥ 2), so the edge nudges up. Re-weight the two branches by the new coin: P(win) = (2/3)·(5/6) + (1/3)·(4/6) = 10/18 + 4/18 = 14/18 ≈ ${biasedWin}.`,
         commonErrors: [
           { value: p, feedback: "That's the FAIR-coin edge (equal 1/2 weights); the biased coin now weights the heads branch 2/3.", misconception: "reused_fair_weights" },
           { value: givenTails, feedback: "That's just the tails branch; you must weight BOTH branches by the biased coin.", misconception: "single_branch_biased" },
@@ -1157,7 +1157,7 @@ function genCouponCollector(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Coupon collector (expected cover time)",
-    explanation: `Collecting the i-th new face is a geometric wait with success probability (${k}−(i−1))/${k}, so its mean is ${k}/(${k}−i+1). Summing over all faces: E = ${k}·(1 + 1/2 + ⋯ + 1/${k}) = ${k}·H_${k} = ${ev}.`,
+    explanation: `Intuition: at the start almost every roll reveals a NEW face, so progress is fast — but near the end, with only one or two faces missing, you wait a long time for each (the very last face alone averages ${k} rolls). The total is the sum of these growing waits. Concretely, collecting the i-th new face is a geometric wait with success probability (${k}−(i−1))/${k}, mean ${k}/(${k}−i+1), so E = ${k}·(1 + 1/2 + ⋯ + 1/${k}) = ${k}·H_${k} = ${ev}.`,
     unit: "",
     commonErrors: [
       { value: k, feedback: `${k} is the expected wait for just the FINAL missing face; the earlier faces also take time — sum all ${k} geometric waits.`, misconception: "used_last_face_only" },
@@ -1225,7 +1225,7 @@ function genBirthdayCollision(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "hard",
     concept: "Birthday paradox (collision probability)",
-    explanation: `Use the complement. P(all distinct) = (${d}/${d})·(${d - 1}/${d})·⋯·(${d - n + 1}/${d}) = ${noColl}, so P(some shared) = 1 − ${noColl} = ${ans}.`,
+    explanation: `Counting "some pair shares a day" directly is messy because the pairs overlap, so flip to the complement — everyone distinct. Seat people one at a time; each newcomer must dodge all previously-used days, giving P(all distinct) = (${d}/${d})·(${d - 1}/${d})·⋯·(${d - n + 1}/${d}) = ${noColl}. Then P(some shared) = 1 − ${noColl} = ${ans}. It's larger than most people guess because the number of PAIRS that could collide grows fast.`,
     unit: "",
     commonErrors: [
       { value: noColl, feedback: "That's the probability all birthdays are DISTINCT — the question asks for at least one shared, its complement.", misconception: "answered_complement" },
@@ -1244,7 +1244,7 @@ function genBirthdayCollision(rng: Rng): MockNumericQuestion {
         answerKind: "numeric",
         answer: tippingN,
         decimals: 0,
-        modelReasoning: `Grow the group until 1 − (${d}/${d})(${d - 1}/${d})⋯ first exceeds 1/2; that happens at ${tippingN} people.`,
+        modelReasoning: `A shared day tips past even odds once the fast-growing pair-count overwhelms the ${d} days. Grow the group until 1 − (${d}/${d})(${d - 1}/${d})⋯ first exceeds 1/2 — that happens at just ${tippingN} people, surprisingly few because the number of pairs grows like n²/2.`,
         commonErrors: [
           { value: 2, feedback: "Two people are nowhere near a coin-flip for a shared day; the probability rises much faster than you'd guess — solve 1 − Π(d−i)/d > 1/2.", misconception: "guessed_two_people" },
           { value: d, feedback: `You don't need all ${d} days filled — a majority chance of a shared day arrives well before ${d} people.`, misconception: "waited_for_pigeonhole" },
@@ -1287,7 +1287,7 @@ function genDerangement(rng: Rng): MockNumericQuestion {
     decimals: 4,
     difficulty: "expert",
     concept: "Derangements (inclusion–exclusion)",
-    explanation: `By inclusion–exclusion, P(no fixed point) = Σ_{k=0}^{${n}} (−1)^k/k! = 1 − 1 + 1/2! − ⋯ = !${n}/${n}! = ${count}/${factorial(n)} = ${ans}. This sits close to 1/e ≈ 0.3679.`,
+    explanation: `Intuition: you might start from 1 and subtract "some letter is home", but that double-counts the cases where two letters land home, so you add those back, subtract the triples, and so on — exactly inclusion–exclusion. That gives P(no fixed point) = Σ_{k=0}^{${n}} (−1)^k/k! = 1 − 1 + 1/2! − ⋯ = !${n}/${n}! = ${count}/${factorial(n)} = ${ans}, which sits close to 1/e ≈ 0.3679 and barely moves as n grows.`,
     unit: "",
     commonErrors: [
       { value: naive, feedback: `${naive} = 1/${n} assumes only one letter matters; you must exclude EVERY letter landing home, which is inclusion–exclusion.`, misconception: "used_single_letter" },
@@ -1757,9 +1757,10 @@ function genEstOptionsQuotes(rng: Rng): MockNumericQuestion {
     difficulty: "expert",
     concept: "Estimation (multi-constraint decomposition)",
     explanation:
-      `Contracts = ${underlyings} × ${expiries} × ${strikes} × 2 (call + put) = ${contracts.toLocaleString()}. ` +
-      `Messages = ${contracts.toLocaleString()} × ${refreshPerSec}/s × 23,400 s = ${ans.toLocaleString()}. ` +
-      `The two easy-to-miss steps are the ×2 for call/put and converting 6.5 hours to 23,400 seconds.`,
+      `Decompose the stream: total messages = (number of contracts) × (refreshes per second) × (seconds in the session). ` +
+      `Count contracts first — every strike lists BOTH a call and a put, so Contracts = ${underlyings} × ${expiries} × ${strikes} × 2 = ${contracts.toLocaleString()}. ` +
+      `Then Messages = ${contracts.toLocaleString()} × ${refreshPerSec}/s × 23,400 s = ${ans.toLocaleString()}. ` +
+      `The two easy-to-miss steps are that ×2 for call/put and converting the 6.5-hour session into 23,400 seconds.`,
     unit: "",
     commonErrors: [
       { value: contracts * refreshPerSec * 6.5, feedback: "You used 6.5 (hours) instead of 23,400 seconds — convert the session to seconds first.", misconception: "forgot_seconds_conversion" },
