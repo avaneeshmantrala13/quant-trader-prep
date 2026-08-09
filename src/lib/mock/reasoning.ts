@@ -658,6 +658,214 @@ export function isHedgedReasoning(text: string): boolean {
   return HEDGE_PATTERNS.some((re) => re.test(lower));
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Clause splitting (shared with the span-level annotator)                    */
+/* -------------------------------------------------------------------------- */
+
+/** A trimmed clause with char offsets into the original text. */
+export interface TextClause {
+  start: number;
+  end: number;
+  text: string;
+}
+
+/**
+ * Split text into clauses, preserving char offsets. Boundaries are clause
+ * terminators — `;`, a newline, an arrow (`→`), or a period that is NOT a
+ * decimal point (i.e. `.` not immediately followed by a digit, so `0.5` stays
+ * intact). Coarse on purpose so a highlighted/root-cause span is a readable
+ * phrase. Shared by the annotator (`./annotate`) and the premise-flaw localizer
+ * so the highlighted span and the graded verdict come from the SAME clauses.
+ */
+export function toClauses(text: string): TextClause[] {
+  const out: TextClause[] = [];
+  const pushRange = (rawStart: number, rawEnd: number) => {
+    const raw = text.slice(rawStart, rawEnd);
+    if (raw.trim() === "") return;
+    const lead = raw.length - raw.replace(/^\s+/, "").length;
+    const trail = raw.length - raw.replace(/\s+$/, "").length;
+    const start = rawStart + lead;
+    const end = rawEnd - trail;
+    if (end > start) out.push({ start, end, text: text.slice(start, end) });
+  };
+  const boundary = /[;\n→]|\.(?!\d)/g;
+  let cursor = 0;
+  let m: RegExpExecArray | null;
+  while ((m = boundary.exec(text)) !== null) {
+    const end = m.index + m[0].length; // include the delimiter in the clause
+    pushRange(cursor, end);
+    cursor = end;
+  }
+  pushRange(cursor, text.length);
+  return out;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Premise / decomposition / independence-abuse localization                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A LOAD-BEARING conceptual flaw located to a specific clause: not a false
+ * arithmetic step (that is `findFalseArithmetic`), but a broken PREMISE — a
+ * wrong decomposition, an invalid ordering imposed on simultaneous events,
+ * abused independence, or a bogus 50/50 assumption. This is the ROOT mistake
+ * that invalidates everything downstream, with a concrete "why".
+ */
+export interface PremiseFlaw {
+  /** Short id of the misconception (for eval labeling / metrics). */
+  kind: string;
+  /** The offending clause exactly as the candidate wrote it. */
+  claim: string;
+  /** Inclusive start / exclusive end char offsets into the original text. */
+  start: number;
+  end: number;
+  /** Specific explanation of WHY it's wrong and why it dooms the chain. */
+  why: string;
+}
+
+/** Options for {@link findPremiseFlaw}. */
+export interface PremiseFlawOptions {
+  /** The question prompt — gates which misconceptions can apply. */
+  prompt?: string;
+  /** The verifier's numeric answer (skips flagging derivations that REACH it). */
+  verifiedAnswer?: number | null;
+  /** The value the chain lands on (for the "lands at X instead of Y" copy). */
+  statedValue?: number | null;
+}
+
+/** One misconception detector: a prompt gate + a clause signal + an explanation. */
+interface PremiseFlawRule {
+  kind: string;
+  /** Whether this misconception can apply to a problem with this prompt. */
+  appliesToPrompt: (promptLower: string) => boolean;
+  /** Fires when a CLAUSE contains this signal (the flawed premise phrasing). */
+  signal: RegExp;
+  /** Build the specific explanation (may cite the stated vs verified values). */
+  why: (ctx: { statedStr: string | null; verifiedStr: string | null }) => string;
+}
+
+/** Append a "…lands at X instead of Y" tail only when both values are known. */
+function landsTail(
+  statedStr: string | null,
+  verifiedStr: string | null,
+  fallback: string,
+): string {
+  return statedStr !== null && verifiedStr !== null
+    ? `That broken step is why the whole chain lands at ${statedStr} instead of ${verifiedStr}.`
+    : fallback;
+}
+
+/**
+ * The misconception library. Deliberately CONSERVATIVE: each rule only applies
+ * to prompts where the misconception is possible, and every rule is checked ONLY
+ * on derivations that do NOT reach the verified answer (see `findPremiseFlaw`),
+ * so a correct derivation is never flagged.
+ */
+const PREMISE_FLAW_RULES: PremiseFlawRule[] = [
+  {
+    // Order statistics (max/min of dice/draws): treating a JOINT statistic as a
+    // sequential "first die / next die" split — the reported dice-max bug.
+    kind: "sequential-order-abuse",
+    appliesToPrompt: (p) =>
+      /\b(larger|largest|bigger|maximum|max|smaller|smallest|minimum|min|higher|lower)\b/.test(
+        p,
+      ) &&
+      /\b(dice|die|rolled?|rolls|two|three|numbers?|cards?|draws?|values?|coins?)\b/.test(
+        p,
+      ),
+    signal:
+      /\bone die\b|\b(next|other|first|second|either|that)\s+die\b|\bthe die\s+(rolls?|shows?|is|lands?)\b|\b50\s?%|\b50\/50\b|\bhalf(?:\s+the\s+time)?\b|\bthe larger is\b|\bthe (max(?:imum)?|min(?:imum)?) is (just|simply|only)\b/i,
+    why: ({ statedStr, verifiedStr }) =>
+      "This imposes a sequential \u201cfirst die / next die\u201d ordering on two dice that are rolled at the same time. " +
+      "There is no ordered \u201cfirst\u201d versus \u201cnext\u201d die, so the 50/50 case split \u2014 and treating the larger value as just one die\u2019s expected value \u2014 are invalid: the maximum depends on BOTH dice jointly, and larger values are weighted more heavily. " +
+      landsTail(
+        statedStr,
+        verifiedStr,
+        "That broken decomposition invalidates every step built on it.",
+      ),
+  },
+  {
+    // Dependent setup (without replacement / conditioning) treated as independent.
+    kind: "independence-abuse",
+    appliesToPrompt: (p) =>
+      /\bwithout replacement\b|\bconditional\b|\bgiven\b|\bat least one\b|\bmutually exclusive\b|\bdependent\b|\burn\b|\bcards?\b|\bdrawn?\b|\bboth red\b|\bposterior\b/.test(
+        p,
+      ),
+    signal:
+      /\bindependent\b|\bindependence\b|\bmultiply(?:ing)? the (?:two )?probabilit|\btreat(?:ed|ing)?[^.]*as independent\b|\bassume(?:d|s)? independence\b|\bp\s*[×*x]\s*p\b/i,
+    why: ({ statedStr, verifiedStr }) =>
+      "This assumes the events are independent, but the setup makes them dependent \u2014 drawing without replacement (or conditioning on what happened) changes the later probabilities. " +
+      "Multiplying the raw probabilities as if they were independent is the load-bearing error here. " +
+      landsTail(
+        statedStr,
+        verifiedStr,
+        "Every step built on that independence assumption is invalid.",
+      ),
+  },
+  {
+    // Monty-Hall / informed-reveal problems collapsed to a naive 50/50.
+    kind: "false-5050",
+    appliesToPrompt: (p) =>
+      /\bmonty\b|\bswitch\b|\bdoors?\b|\bhost\b|\breveal|\bgoat|\bprize\b/.test(p),
+    signal:
+      /\b50\/50\b|\b50\s?%|\bfifty[-\s]?fifty\b|\bequally likely\b|\bdoesn'?t matter\b|\bno difference\b|\bsame (?:either way|chance|odds)\b|\bcoin ?flip\b/i,
+    why: ({ statedStr, verifiedStr }) =>
+      "Treating the remaining options as a 50/50 coin-flip ignores that the reveal is INFORMED \u2014 the host deliberately avoids the prize, so the outcomes are not equally likely and switching is not a wash. " +
+      "This even-split premise is the root error. " +
+      landsTail(
+        statedStr,
+        verifiedStr,
+        "The whole conclusion inherits that wrong assumption.",
+      ),
+  },
+];
+
+/**
+ * Locate the single ROOT premise flaw in a derivation, or `null` when none is
+ * detected. Scans clauses in order and returns the EARLIEST clause that trips
+ * any applicable misconception rule (the root; downstream steps just carry the
+ * error). Conservative and non-jailbreakable: it NEVER flags a derivation that
+ * REACHES the verified answer, so a correct chain can never be reddened. Pure.
+ */
+export function findPremiseFlaw(
+  text: string,
+  opts: PremiseFlawOptions = {},
+): PremiseFlaw | null {
+  const t = text ?? "";
+  if (t.trim() === "") return null;
+  const verified = opts.verifiedAnswer ?? null;
+  // Guard: a derivation that ARRIVES AT the verified answer is not flagged (no
+  // false reds on correct reasoning) — mirrors the grader's "reaches" check.
+  if (verified !== null) {
+    const tol = 1e-3 + Math.abs(verified) * 1e-6;
+    if (statedResultValues(t).some((v) => Math.abs(v - verified) <= tol)) {
+      return null;
+    }
+  }
+  const promptLower = (opts.prompt ?? "").toLowerCase();
+  const statedStr = opts.statedValue != null ? fmtNum(opts.statedValue) : null;
+  const verifiedStr = verified != null ? fmtNum(verified) : null;
+  const clauses = toClauses(t);
+  const applicable = PREMISE_FLAW_RULES.filter((r) =>
+    r.appliesToPrompt(promptLower),
+  );
+  if (applicable.length === 0) return null;
+  for (const c of clauses) {
+    for (const rule of applicable) {
+      if (rule.signal.test(c.text)) {
+        return {
+          kind: rule.kind,
+          claim: c.text,
+          start: c.start,
+          end: c.end,
+          why: rule.why({ statedStr, verifiedStr }),
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Build a commitment-forcing clarify prompt for a MAIN question whose reasoning
  * was ambiguous (mixed / hedged / contradictory). Generic but still forces a
@@ -794,6 +1002,22 @@ export function gradeReasoningDeterministic(
   const hasMechanism = requiresMechanism && matchesMechanismSignal(text, mechSignals);
   const handWaveOnly = isHandWaveOnly(text, input.bannedAsSoleJustification ?? []);
 
+  // A broken PREMISE / decomposition / independence-abuse — the ROOT conceptual
+  // flaw, distinct from a false arithmetic step. Only consulted when the answer
+  // is WRONG (verifier says so) or the derivation contradicts the verified
+  // answer, and `findPremiseFlaw` itself never fires on a chain that reaches the
+  // verified answer — so a correct derivation is never mislabeled. This drives
+  // the verdict off the LOCALIZED root cause: a wrong-premise-wrong-answer
+  // derivation reads `flawed`, never a lenient "mostly there" partial.
+  const premiseFlaw =
+    !input.correct || brokenDerivation
+      ? findPremiseFlaw(text, {
+          prompt: input.prompt,
+          verifiedAnswer,
+          statedValue: landingValue,
+        })
+      : null;
+
   let quality: ReasoningQuality;
   const issues: string[] = [];
 
@@ -837,6 +1061,12 @@ export function gradeReasoningDeterministic(
     issues.push(
       "Your explanation points both ways instead of committing — pick ONE answer and give the single reason it's correct.",
     );
+  } else if (premiseFlaw) {
+    // ROOT PREMISE broken (wrong decomposition / imposed ordering / abused
+    // independence / bogus 50/50). This is a genuinely-flawed derivation, not a
+    // near-miss: the localized root cause invalidates everything downstream.
+    quality = "flawed";
+    issues.push(premiseFlaw.why);
   } else if (words < 4 || (!engagesQuantities && !hasMechanism)) {
     // Hand-wavy / buzzword-only — vague even if the final answer is correct.
     // A genuine MECHANISM statement counts as engaging the problem even when it
@@ -851,7 +1081,9 @@ export function gradeReasoningDeterministic(
     }
   } else if (!input.correct) {
     quality = "partial";
-    issues.push("Reasoning is structured but reaches the wrong result — locate the broken step.");
+    issues.push(
+      "Reasoning is structured but reaches the wrong result — the earliest broken step is highlighted above; fix that, since the later steps just carry the error forward.",
+    );
   } else if (brokenDerivation) {
     // Final number is right, but the written work doesn't actually support it.
     quality = "partial";

@@ -28,7 +28,7 @@ const QUALITY_META: Record<
     label: "Flawed",
     tone: "border-bear text-bear",
     blurb:
-      "A stated step is false or nonsensical — the answer may be right, but the reasoning is broken.",
+      "A load-bearing step is false or invalid — a wrong premise, decomposition, or arithmetic step (highlighted in red above) breaks the chain, even if a number happens to match.",
   },
   ambiguous: {
     label: "Needs a commit",

@@ -17,6 +17,9 @@ import {
   mockLlmExtractor,
   runReasoningEval,
   renderReportMarkdown,
+  runLocalizationEval,
+  renderLocalizationMarkdown,
+  LOCALIZATION_CASES,
   derivationsForQuestion,
   type LabeledDerivation,
 } from "./reasoningEval";
@@ -55,13 +58,22 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
         `canonicalFN=${t.canonicalFalseNegatives}`,
     );
 
-    // Emit the reproducible, checked-in metrics summary.
-    const md = renderReportMarkdown(
-      report,
-      `Corpus: ${corpus.length} labeled derivations over ${SEEDS.length} seeds ` +
-        `× the full question bank (probability/EV, sequences, estimation) + pinned ` +
-        `firm archetypes.`,
+    // ---- Localization metrics: does the review CAPTURE the mistake? ----
+    const loc = runLocalizationEval();
+    // eslint-disable-next-line no-console
+    console.log(
+      `[loc] span=${loc.spanCorrect}/${loc.total} why=${loc.whyCorrect}/${loc.total} ` +
+        `controlsClean=${loc.controlsClean}/${loc.controls}`,
     );
+
+    // Emit the reproducible, checked-in metrics summary (grader QA + localization).
+    const md =
+      renderReportMarkdown(
+        report,
+        `Corpus: ${corpus.length} labeled derivations over ${SEEDS.length} seeds ` +
+          `× the full question bank (probability/EV, sequences, estimation) + pinned ` +
+          `firm archetypes.`,
+      ) + renderLocalizationMarkdown(loc);
     try {
       writeFileSync(
         resolve(process.cwd(), "datasets/reasoning-eval-metrics.md"),
@@ -71,6 +83,16 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
     } catch {
       /* best-effort artifact write; never fails the test */
     }
+
+    // ---- Localization acceptance gates ----
+    expect(loc.total).toBe(LOCALIZATION_CASES.length);
+    expect(loc.spanCorrect, "every flawed case localizes to its root-cause span").toBe(
+      loc.total,
+    );
+    expect(loc.whyCorrect, "every localized span explains the right misconception").toBe(
+      loc.total,
+    );
+    expect(loc.controlsClean, "correct derivations get NO false red").toBe(loc.controls);
 
     // ---- Hard acceptance gates (per-archetype and total) ----
     for (const m of report.perArchetype) {

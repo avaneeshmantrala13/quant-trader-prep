@@ -126,6 +126,46 @@ describe("gradeReasoningDeterministic — genuine reasoning is still sound", () 
   });
 });
 
+describe("gradeReasoningDeterministic — the dice-MAX wrong-premise repro is FLAWED", () => {
+  // The exact reported live example: a wrong sequential decomposition of the
+  // maximum of two dice that lands at 4.25 instead of 161/36 ≈ 4.4722. This must
+  // read `flawed` (root premise broken), NEVER `partial` ("mostly there").
+  const DICE = {
+    prompt:
+      "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)?",
+    correctAnswer: "4.4722",
+    correct: false,
+    reasoning:
+      "There is a 50% chance that one die is 3 or less. This means the larger is just the EV of the next die, which is 3.5. The other 50% chance is that the die rolls 4, 5, or 6 which averages to 5 so the answer is 0.5(3.5) + 0.5(5) = 4.25.",
+    isMentalMath: false,
+    mechanismSignals: ["order statistic", "2m-1", "p(max"],
+  };
+
+  it("grades the wrong sequential decomposition as flawed, not partial", () => {
+    const g = gradeReasoningDeterministic(DICE);
+    expect(g.quality).toBe("flawed");
+    expect(g.quality).not.toBe("partial");
+  });
+
+  it("explains the sequential-ordering root cause and the 4.25-vs-4.4722 gap", () => {
+    const g = gradeReasoningDeterministic(DICE);
+    const joined = g.issues.join(" ");
+    expect(joined).toMatch(/sequential|ordering|next die|both dice|jointly/i);
+    expect(joined).toMatch(/4\.25/);
+    expect(joined).toMatch(/4\.4722/);
+  });
+
+  it("keeps a CORRECT order-statistics derivation sound (no over-reject)", () => {
+    const g = gradeReasoningDeterministic({
+      ...DICE,
+      correct: true,
+      reasoning:
+        "By order statistics P(max = m) = (2m − 1)/36, so E[max] = Σ m·(2m − 1)/36 = 161/36 ≈ 4.4722.",
+    });
+    expect(g.quality).toBe("sound");
+  });
+});
+
 describe("normalizeReasoningPayload — accepts the new 'flawed' quality", () => {
   it("passes through a valid 'flawed' verdict from the AI grader", () => {
     const g = normalizeReasoningPayload({

@@ -378,6 +378,8 @@ export function MathInterviewCard({
               text={response?.reasoningRaw}
               verifiedAnswer={step.answer}
               mechanismSignals={step.requiredReasoning?.mechanismSignals}
+              prompt={step.prompt}
+              answerWasWrong={!score.correct}
             />
           )}
 
@@ -594,6 +596,22 @@ function FollowupBlock({
         </div>
       ) : (
         <>
+          {/* The candidate's OWN follow-up reasoning, with the SAME green (good)
+              / red (flawed, root-cause-localized) highlighting as the base
+              question — wired through the same annotate + SubmittedReasoning
+              path. Shown for reasoning-graded follow-ups (incl. the adversarial). */}
+          {isReasoning && (
+            <div className="mt-3">
+              <SubmittedReasoning
+                text={followup.raw}
+                verifiedAnswer={p.conclusionTargets?.[0] ?? null}
+                mechanismSignals={p.mechanismSignals}
+                prompt={p.prompt}
+                answerWasWrong={!!fuScore && !fuScore.correct}
+                testId="followup-submitted-reasoning"
+              />
+            </div>
+          )}
           <div className="mt-3 border border-subtle">
             <div
               className={`px-4 py-2 font-mono text-xs font-semibold uppercase tracking-label ${

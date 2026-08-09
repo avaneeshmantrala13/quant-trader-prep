@@ -43,20 +43,34 @@ export function SubmittedReasoning({
   text,
   verifiedAnswer,
   mechanismSignals,
+  prompt,
+  answerWasWrong,
+  testId = "submitted-reasoning",
 }: {
   text: string | undefined;
   verifiedAnswer?: number | null;
   mechanismSignals?: string[];
+  /** The question prompt — enables root-cause / premise-flaw localization. */
+  prompt?: string;
+  /** Whether the verifier marked this answer wrong (drives the red root span). */
+  answerWasWrong?: boolean;
+  /** Test hook so the base and the follow-up highlight panels are addressable. */
+  testId?: string;
 }) {
   const trimmed = (text ?? "").trim();
   if (trimmed === "") return null;
-  const spans = annotateReasoning(text ?? "", { verifiedAnswer, mechanismSignals });
+  const spans = annotateReasoning(text ?? "", {
+    verifiedAnswer,
+    mechanismSignals,
+    prompt,
+    answerWasWrong,
+  });
   const parts = toParts(text ?? "", spans);
   const goodCount = spans.filter((s) => s.label === "good").length;
   const flawedCount = spans.filter((s) => s.label === "flawed").length;
 
   return (
-    <div className="aside" data-testid="submitted-reasoning">
+    <div className="aside" data-testid={testId}>
       <div className="flex items-center justify-between">
         <div className="label text-accent">Your reasoning</div>
         {(goodCount > 0 || flawedCount > 0) && (
@@ -126,8 +140,8 @@ export function SubmittedReasoning({
         </ul>
       ) : (
         <p className="mt-2 text-xs text-muted">
-          Nothing here read as a specific right-or-wrong step to highlight — see the
-          verdict below.
+          No single step stood out to highlight — see the overall reasoning verdict
+          below.
         </p>
       )}
     </div>

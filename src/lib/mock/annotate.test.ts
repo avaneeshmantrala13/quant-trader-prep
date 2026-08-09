@@ -79,3 +79,60 @@ describe("annotateReasoningForAnswer — string answer convenience", () => {
     expect(spans.some((s) => s.label === "good")).toBe(true);
   });
 });
+
+describe("annotateReasoning — ROOT-CAUSE localization (premise flaws)", () => {
+  const DICE_PROMPT =
+    "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)?";
+  const DICE_REASONING =
+    "There is a 50% chance that one die is 3 or less. This means the larger is just the EV of the next die, which is 3.5. The other 50% chance is that the die rolls 4, 5, or 6 which averages to 5 so the answer is 0.5(3.5) + 0.5(5) = 4.25.";
+
+  it("localizes the dice-max mistake to the FIRST sentence with a correct explanation", () => {
+    const spans = annotateReasoning(DICE_REASONING, {
+      prompt: DICE_PROMPT,
+      verifiedAnswer: 4.4722,
+      answerWasWrong: true,
+    });
+    const flawed = spans.filter((s) => s.label === "flawed");
+    expect(flawed.length).toBeGreaterThanOrEqual(1);
+    // The red span COVERS the first sentence (the imposed sequential ordering).
+    const root = flawed.find((s) =>
+      s.excerpt.includes("There is a 50% chance that one die is 3 or less"),
+    );
+    expect(root, "root cause is the first sentence").toBeTruthy();
+    // The explanation names the sequential-ordering error AND the 4.25-vs-4.4722 gap.
+    expect(root!.why).toMatch(/sequential|ordering|next die|both dice|jointly/i);
+    expect(root!.why).toMatch(/4\.25/);
+    expect(root!.why).toMatch(/4\.4722/);
+  });
+
+  it("does NOT falsely redden a CORRECT order-statistics derivation (green, no red)", () => {
+    const spans = annotateReasoning(
+      "By order statistics, P(max = m) = (2m − 1)/36, so E[max] = Σ m·(2m − 1)/36 = 161/36 ≈ 4.4722.",
+      {
+        prompt: DICE_PROMPT,
+        verifiedAnswer: 4.4722,
+        mechanismSignals: ["order statistic", "2m-1"],
+        answerWasWrong: false,
+      },
+    );
+    expect(spans.some((s) => s.label === "flawed")).toBe(false);
+    expect(spans.some((s) => s.label === "good")).toBe(true);
+  });
+
+  it("localizes an independence-abuse premise on a without-replacement problem", () => {
+    const spans = annotateReasoning(
+      "The draws are independent, so P(both red) = p × p = (5/8)(5/8) = 25/64.",
+      {
+        prompt:
+          "An urn has 5 red and 3 blue balls. Two are drawn WITHOUT replacement. What is P(both red)?",
+        verifiedAnswer: 0.3571,
+        answerWasWrong: true,
+      },
+    );
+    const flawed = spans.filter((s) => s.label === "flawed");
+    expect(flawed.length).toBeGreaterThanOrEqual(1);
+    expect(flawed.some((s) => /independent|dependent|without replacement/i.test(s.why))).toBe(
+      true,
+    );
+  });
+});

@@ -31,6 +31,7 @@ import {
   type MockNumericQuestion,
 } from "./questionPools";
 import { matchesMechanismSignal, type ReasoningInput } from "./reasoning";
+import { annotateReasoning, type ReasoningSpan } from "./annotate";
 import {
   extractClaimsDeterministic,
   gradeReasoningFromClaims,
@@ -434,6 +435,257 @@ export function renderReportMarkdown(report: EvalReport, note?: string): string 
     `| **TOTAL** | **${t.positivesAccepted}/${t.positives} (${pctS(t.recall)})** | **${t.negativesRejected}/${t.negatives} (${pctS(t.flawRejection)})** | **${t.canonicalFalseNegatives}** |`,
     "",
     `False-negative rate: **${pctS(t.falseNegativeRate)}**  ·  False-positive rate: **${pctS(t.falsePositiveRate)}**`,
+    "",
+  ].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Localization evaluation — does the annotator pick the RIGHT flawed span?    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A labeled FLAWED derivation with a KNOWN root-cause span. Beyond "is the
+ * reasoning rejected?" (the recall / flaw-rejection harness above), this
+ * measures whether the annotator LOCALIZES the mistake: does it flag a red span
+ * that COVERS the labeled root-cause substring, and is the explanation (`why`)
+ * about the RIGHT misconception? These are the exact failure the review must fix
+ * — telling the user to "locate the broken step" is not acceptable.
+ */
+export interface LocalizationCase {
+  archetype: string;
+  /** Human label of the misconception kind (for the report). */
+  kind: string;
+  prompt: string;
+  reasoning: string;
+  verifiedAnswer: number;
+  /** The exact substring that IS the root cause — the red span must cover it. */
+  rootCause: string;
+  /** The produced `why` for the covering span must match this (correct reason). */
+  whyPattern: RegExp;
+}
+
+/** A correct derivation used as a CONTROL: it must get NO false red span. */
+export interface LocalizationControl {
+  archetype: string;
+  prompt: string;
+  reasoning: string;
+  verifiedAnswer: number;
+}
+
+/**
+ * The labeled localization corpus: one flawed derivation per key misconception
+ * archetype WITH its root-cause span, plus a correct control per family (which
+ * must never be reddened). The dice-max case is the exact reported repro.
+ */
+export const LOCALIZATION_CASES: LocalizationCase[] = [
+  {
+    archetype: "pev-max2dice",
+    kind: "sequential-order-abuse",
+    prompt:
+      "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)?",
+    reasoning:
+      "There is a 50% chance that one die is 3 or less. This means the larger is just the EV of the next die, which is 3.5. The other 50% chance is that the die rolls 4, 5, or 6 which averages to 5 so the answer is 0.5(3.5) + 0.5(5) = 4.25.",
+    verifiedAnswer: 4.4722,
+    rootCause: "There is a 50% chance that one die is 3 or less",
+    whyPattern: /sequential|first die|next die|jointly|ordering|both dice/i,
+  },
+  {
+    archetype: "pev-urn",
+    kind: "independence-abuse",
+    prompt:
+      "An urn has 5 red and 3 blue balls. Two are drawn WITHOUT replacement. What is P(both red)?",
+    reasoning:
+      "The draws are independent, so P(both red) = p × p = (5/8)(5/8) = 25/64.",
+    verifiedAnswer: 0.3571,
+    rootCause: "The draws are independent",
+    whyPattern: /independent|dependent|without replacement/i,
+  },
+  {
+    archetype: "pev-monty",
+    kind: "false-5050",
+    prompt:
+      "Monty Hall: 3 doors, you pick one, the host opens a losing door and offers a switch. What is your probability of winning if you SWITCH?",
+    reasoning:
+      "After the host opens a door, two doors remain, so it's 50/50 and switching doesn't matter. The answer is 0.5.",
+    verifiedAnswer: 0.6667,
+    rootCause: "it's 50/50 and switching doesn't matter",
+    whyPattern: /informed|50\/50|equally likely|reveal|coin-?flip/i,
+  },
+];
+
+/** Correct derivations that must produce NO false red (localization precision). */
+export const LOCALIZATION_CONTROLS: LocalizationControl[] = [
+  {
+    archetype: "pev-max2dice",
+    prompt:
+      "Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)?",
+    reasoning:
+      "By order statistics, P(max = m) = (2m − 1)/36, so E[max] = Σ m·(2m − 1)/36 = 161/36 ≈ 4.4722.",
+    verifiedAnswer: 4.4722,
+  },
+  {
+    archetype: "pev-urn",
+    prompt:
+      "An urn has 5 red and 3 blue balls. Two are drawn WITHOUT replacement. What is P(both red)?",
+    reasoning:
+      "Without replacement the second draw depends on the first, so P = (5/8)(4/7) = 20/56.",
+    verifiedAnswer: 0.3571,
+  },
+  {
+    archetype: "pev-monty",
+    prompt:
+      "Monty Hall: 3 doors, you pick one, the host opens a losing door and offers a switch. What is your probability of winning if you SWITCH?",
+    reasoning:
+      "The host's reveal is informed, so your original 1/3 door stays 1/3 and the other door holds the remaining 2/3. Switching wins 2/3 ≈ 0.6667.",
+    verifiedAnswer: 0.6667,
+  },
+];
+
+export interface LocalizationCaseResult {
+  archetype: string;
+  kind: string;
+  /** A red (flawed) span was produced at all. */
+  flagged: boolean;
+  /** A red span COVERS the labeled root-cause substring. */
+  spanCorrect: boolean;
+  /** A covering red span's `why` matches the expected misconception. */
+  whyCorrect: boolean;
+  /** The excerpt of the covering span (for the report / debugging). */
+  span?: string;
+}
+
+export interface LocalizationMetrics {
+  total: number;
+  flagged: number;
+  spanCorrect: number;
+  whyCorrect: number;
+  controls: number;
+  controlsClean: number;
+  perCase: LocalizationCaseResult[];
+  /** True for any control that got a FALSE red (must be 0 for clean precision). */
+  falseReds: string[];
+}
+
+/** The annotator under test: text (+ context) → spans. Mockable / injectable. */
+export type Annotator = (
+  text: string,
+  opts: {
+    prompt?: string;
+    verifiedAnswer?: number | null;
+    answerWasWrong?: boolean;
+  },
+) => ReasoningSpan[];
+
+/** Does any flawed span in `spans` fully cover the substring at `[idx, idx+len)`? */
+function coveringFlawedSpan(
+  spans: ReasoningSpan[],
+  idx: number,
+  len: number,
+): ReasoningSpan | null {
+  if (idx < 0) return null;
+  for (const s of spans) {
+    if (s.label === "flawed" && s.start <= idx && idx + len <= s.end) return s;
+  }
+  return null;
+}
+
+/**
+ * Measure LOCALIZATION quality of the annotator on the labeled corpus: for each
+ * flawed case, whether a red span covers the root cause with a correct `why`;
+ * for each control, whether it stays clean (no false red). The annotator is
+ * injected (defaults to the real deterministic `annotateReasoning`) so the LLM
+ * layer stays mockable while the deterministic verdict remains authoritative.
+ */
+export function runLocalizationEval(
+  cases: LocalizationCase[] = LOCALIZATION_CASES,
+  controls: LocalizationControl[] = LOCALIZATION_CONTROLS,
+  annotate: Annotator = annotateReasoning,
+): LocalizationMetrics {
+  const perCase: LocalizationCaseResult[] = [];
+  let flagged = 0;
+  let spanCorrect = 0;
+  let whyCorrect = 0;
+  for (const c of cases) {
+    const spans = annotate(c.reasoning, {
+      prompt: c.prompt,
+      verifiedAnswer: c.verifiedAnswer,
+      answerWasWrong: true,
+    });
+    const anyFlaw = spans.some((s) => s.label === "flawed");
+    const idx = c.reasoning.indexOf(c.rootCause);
+    const cover = coveringFlawedSpan(spans, idx, c.rootCause.length);
+    const whyOk = cover !== null && c.whyPattern.test(cover.why);
+    if (anyFlaw) flagged++;
+    if (cover) spanCorrect++;
+    if (whyOk) whyCorrect++;
+    perCase.push({
+      archetype: c.archetype,
+      kind: c.kind,
+      flagged: anyFlaw,
+      spanCorrect: cover !== null,
+      whyCorrect: whyOk,
+      span: cover?.excerpt,
+    });
+  }
+
+  let controlsClean = 0;
+  const falseReds: string[] = [];
+  for (const ctrl of controls) {
+    const spans = annotate(ctrl.reasoning, {
+      prompt: ctrl.prompt,
+      verifiedAnswer: ctrl.verifiedAnswer,
+      answerWasWrong: false,
+    });
+    const red = spans.filter((s) => s.label === "flawed");
+    if (red.length === 0) controlsClean++;
+    else falseReds.push(`[${ctrl.archetype}] ${red.map((s) => s.excerpt).join(" | ")}`);
+  }
+
+  return {
+    total: cases.length,
+    flagged,
+    spanCorrect,
+    whyCorrect,
+    controls: controls.length,
+    controlsClean,
+    perCase,
+    falseReds,
+  };
+}
+
+/** Render the localization metrics as a Markdown section (appended to the doc). */
+export function renderLocalizationMarkdown(m: LocalizationMetrics): string {
+  const pctS = (n: number, d: number) => `${d > 0 ? ((n / d) * 100).toFixed(1) : "100.0"}%`;
+  const rows = m.perCase
+    .map(
+      (c) =>
+        `| \`${c.archetype}\` | ${c.kind} | ${c.flagged ? "✓" : "✗"} | ${c.spanCorrect ? "✓" : "✗"} | ${c.whyCorrect ? "✓" : "✗"} |`,
+    )
+    .join("\n");
+  return [
+    "",
+    "## Localization metrics — does the review CAPTURE the mistake?",
+    "",
+    "Beyond accept/reject, this measures whether the deterministic annotator",
+    "(`src/lib/mock/annotate.ts` + `findPremiseFlaw`) LOCALIZES the root cause:",
+    "flags a RED span that COVERS the labeled root-cause substring, with a `why`",
+    "about the correct misconception — and never reddens a correct derivation.",
+    "",
+    "- **Flagged** = a red (flawed) span was produced.",
+    "- **Span** = a red span COVERS the labeled root-cause substring.",
+    "- **Why** = that span's explanation matches the expected misconception.",
+    "",
+    "| Archetype | Misconception | Flagged | Span | Why |",
+    "|---|---|---|---|---|",
+    rows,
+    "",
+    `**Localized (span correct): ${m.spanCorrect}/${m.total} (${pctS(m.spanCorrect, m.total)})** · ` +
+      `**Why correct: ${m.whyCorrect}/${m.total} (${pctS(m.whyCorrect, m.total)})** · ` +
+      `**Controls clean (no false red): ${m.controlsClean}/${m.controls} (${pctS(m.controlsClean, m.controls)})**`,
+    "",
+    m.falseReds.length > 0
+      ? `False reds: ${m.falseReds.join("; ")}`
+      : "No false reds on correct derivations.",
     "",
   ].join("\n");
 }

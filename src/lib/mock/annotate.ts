@@ -21,14 +21,18 @@
  * `./reasoning` (one-directional; `reasoning.ts` never imports this module).
  */
 import {
+  allValuesIn,
   evalArithmetic,
   findFalseArithmetic,
+  findPremiseFlaw,
   hasArithmeticContradiction,
   isHedgedReasoning,
   isUninterpretable,
   matchesMechanismSignal,
   parseNumericValue,
   statedResultValues,
+  toClauses,
+  type TextClause,
 } from "./reasoning";
 
 /** GOOD (correct/green) vs FLAWED (incorrect/red). */
@@ -52,43 +56,20 @@ export interface AnnotateOptions {
   verifiedAnswer?: number | null;
   /** Accepted mechanism phrasings (question signals + rubric classes). */
   mechanismSignals?: string[];
+  /** The question prompt — enables PREMISE / decomposition flaw localization. */
+  prompt?: string;
+  /**
+   * Whether the verifier marked the ANSWER wrong. When true (or the derivation
+   * lands on a value contradicting `verifiedAnswer`), the annotator localizes
+   * the single ROOT flaw as a RED span — a broken premise/decomposition, or (as
+   * a fallback) the earliest load-bearing step — so the learner is never left to
+   * "find the broken step" themselves.
+   */
+  answerWasWrong?: boolean;
 }
 
 /** A trimmed clause with offsets into the original text. */
-interface Clause {
-  start: number;
-  end: number;
-  text: string;
-}
-
-/**
- * Split text into clauses, preserving char offsets. Boundaries are clause
- * terminators — `;`, a newline, an arrow (`→`), or a period that is NOT a
- * decimal point (i.e. `.` not immediately followed by a digit, so `0.5` stays
- * intact). Coarse on purpose so a highlighted span is a readable phrase.
- */
-function toClauses(text: string): Clause[] {
-  const out: Clause[] = [];
-  const pushRange = (rawStart: number, rawEnd: number) => {
-    const raw = text.slice(rawStart, rawEnd);
-    if (raw.trim() === "") return;
-    const lead = raw.length - raw.replace(/^\s+/, "").length;
-    const trail = raw.length - raw.replace(/\s+$/, "").length;
-    const start = rawStart + lead;
-    const end = rawEnd - trail;
-    if (end > start) out.push({ start, end, text: text.slice(start, end) });
-  };
-  const boundary = /[;\n→]|\.(?!\d)/g;
-  let cursor = 0;
-  let m: RegExpExecArray | null;
-  while ((m = boundary.exec(text)) !== null) {
-    const end = m.index + m[0].length; // include the delimiter in the clause
-    pushRange(cursor, end);
-    cursor = end;
-  }
-  pushRange(cursor, text.length);
-  return out;
-}
+type Clause = TextClause;
 
 /** Compact human-readable number. */
 function fmt(n: number): string {
@@ -182,7 +163,80 @@ export function annotateReasoning(
     const s = classifyClause(clause, opts);
     if (s) spans.push(s);
   }
+  localizeRootCause(text, spans, opts);
+  spans.sort((a, b) => a.start - b.start);
   return spans;
+}
+
+/**
+ * When the derivation is WRONG, ensure the single ROOT flaw is highlighted RED
+ * so the learner sees exactly where it breaks (never "locate it yourself"):
+ *   1. a specific broken PREMISE / decomposition / independence-abuse / bogus
+ *      50/50 (shared with the grader's `findPremiseFlaw`, so the highlighted
+ *      span and the graded verdict come from the SAME root cause); else
+ *   2. if nothing is highlighted flawed yet, the EARLIEST load-bearing clause —
+ *      the chain built on it carries the error forward.
+ * A derivation that REACHES the verified answer is never reddened, so a correct
+ * chain can't get a false red. Mutates `spans` in place.
+ */
+function localizeRootCause(
+  text: string,
+  spans: ReasoningSpan[],
+  opts: AnnotateOptions,
+): void {
+  const verified = opts.verifiedAnswer ?? null;
+  const tol = verified !== null ? 1e-3 + Math.abs(verified) * 1e-6 : 0;
+  const reaches =
+    verified !== null &&
+    statedResultValues(text).some((v) => Math.abs(v - verified) <= tol);
+  if (reaches) return; // correct chain — never redden
+  const all = allValuesIn(text);
+  const landing = all.length > 0 ? all[all.length - 1] : null;
+  const contradicts =
+    verified !== null &&
+    landing !== null &&
+    Math.abs(landing - verified) > tol;
+  const wrong = opts.answerWasWrong === true || contradicts;
+  if (!wrong) return;
+
+  const flaw = findPremiseFlaw(text, {
+    prompt: opts.prompt,
+    verifiedAnswer: verified,
+    statedValue: landing,
+  });
+  if (flaw) {
+    // The root cause wins over any overlapping decoration at that span.
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (!(spans[i].end <= flaw.start || spans[i].start >= flaw.end)) {
+        spans.splice(i, 1);
+      }
+    }
+    spans.push({
+      start: flaw.start,
+      end: flaw.end,
+      excerpt: text.slice(flaw.start, flaw.end),
+      label: "flawed",
+      why: flaw.why,
+    });
+    return;
+  }
+
+  // Generic fallback: nothing specific matched, but the chain is wrong. Point at
+  // the earliest substantive, not-yet-highlighted clause instead of punting.
+  if (spans.some((s) => s.label === "flawed")) return;
+  for (const c of toClauses(text)) {
+    if (c.text.trim().split(/\s+/).filter(Boolean).length < 3) continue;
+    if (spans.some((s) => !(c.end <= s.start || c.start >= s.end))) continue;
+    spans.push({
+      start: c.start,
+      end: c.end,
+      excerpt: c.text,
+      label: "flawed",
+      why:
+        "This is the earliest load-bearing step, and the chain built on it reaches the wrong result — the error originates here and the later steps carry it forward. Recheck this assumption against the setup.",
+    });
+    return;
+  }
 }
 
 /**

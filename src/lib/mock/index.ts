@@ -33,8 +33,15 @@ export {
   isHedgedReasoning,
   isUninterpretable,
   buildReasoningClarifyPrompt,
+  findPremiseFlaw,
+  toClauses,
 } from "./reasoning";
-export type { ReasoningInput } from "./reasoning";
+export type {
+  ReasoningInput,
+  PremiseFlaw,
+  PremiseFlawOptions,
+  TextClause,
+} from "./reasoning";
 export {
   gradeConclusion,
   buildClarifyPrompt,

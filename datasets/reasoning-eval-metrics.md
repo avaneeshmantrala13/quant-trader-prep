@@ -37,3 +37,24 @@ npx vitest run src/lib/mock/reasoningEval.test.ts
 | **TOTAL** | **2460/2460 (100.0%)** | **3780/3780 (100.0%)** | **0** |
 
 False-negative rate: **0.0%**  ·  False-positive rate: **0.0%**
+
+## Localization metrics — does the review CAPTURE the mistake?
+
+Beyond accept/reject, this measures whether the deterministic annotator
+(`src/lib/mock/annotate.ts` + `findPremiseFlaw`) LOCALIZES the root cause:
+flags a RED span that COVERS the labeled root-cause substring, with a `why`
+about the correct misconception — and never reddens a correct derivation.
+
+- **Flagged** = a red (flawed) span was produced.
+- **Span** = a red span COVERS the labeled root-cause substring.
+- **Why** = that span's explanation matches the expected misconception.
+
+| Archetype | Misconception | Flagged | Span | Why |
+|---|---|---|---|---|
+| `pev-max2dice` | sequential-order-abuse | ✓ | ✓ | ✓ |
+| `pev-urn` | independence-abuse | ✓ | ✓ | ✓ |
+| `pev-monty` | false-5050 | ✓ | ✓ | ✓ |
+
+**Localized (span correct): 3/3 (100.0%)** · **Why correct: 3/3 (100.0%)** · **Controls clean (no false red): 3/3 (100.0%)**
+
+No false reds on correct derivations.
