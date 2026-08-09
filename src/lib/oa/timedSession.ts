@@ -21,6 +21,17 @@ import type { OaFormatConfig, OaQuestion, OaSessionState } from "./types";
 import { resolveScoring } from "./config";
 
 /**
+ * The shot-clock budget (ms) for sprint question `index`. Prefers an explicit
+ * per-question budget (`state.questionBudgetsMs[index]`, additive variant used
+ * by the timed-diagnostic mental-math sprint) and falls back to the uniform
+ * `state.budgetMs` — so classic sprints (no per-question array) are unchanged.
+ */
+export function sprintBudgetMs(state: OaSessionState, index: number): number {
+  const per = state.questionBudgetsMs?.[index];
+  return typeof per === "number" && per > 0 ? per : state.budgetMs;
+}
+
+/**
  * Create a fresh, running session for `config` over `questions`. Deadlines are
  * seeded as absolute epoch-ms from `opts.nowTs` per kind:
  *  - section  ⇒ `deadlineTs = nowTs + sectionSec·1000` (one running clock),
@@ -31,19 +42,33 @@ import { resolveScoring } from "./config";
 export function createOaSession(
   config: OaFormatConfig,
   questions: OaQuestion[],
-  opts: { hardMode?: boolean; nowTs: number },
+  opts: { hardMode?: boolean; nowTs: number; questionBudgetsMs?: number[] },
 ): OaSessionState {
   const { nowTs } = opts;
   const hardMode = !!opts.hardMode;
+
+  // Optional additive per-question shot-clock budgets (sprint only). Kept only
+  // when it actually matches the sprint question set, so every other format's
+  // persisted shape stays byte-identical to before this variant existed.
+  const questionBudgetsMs =
+    config.kind === "sprint" &&
+    opts.questionBudgetsMs &&
+    opts.questionBudgetsMs.length === questions.length
+      ? opts.questionBudgetsMs.slice()
+      : undefined;
 
   const deadlineTs =
     config.kind === "section" && config.sectionSec
       ? nowTs + config.sectionSec * 1000
       : undefined;
+  const firstBudgetMs =
+    questionBudgetsMs && questionBudgetsMs.length > 0
+      ? questionBudgetsMs[0]
+      : config.perQuestionSec
+        ? config.perQuestionSec * 1000
+        : undefined;
   const questionDeadlineTs =
-    config.kind === "sprint" && config.perQuestionSec
-      ? nowTs + config.perQuestionSec * 1000
-      : undefined;
+    config.kind === "sprint" && firstBudgetMs ? nowTs + firstBudgetMs : undefined;
 
   // Module-lock only applies to a section-clock format that disables free
   // navigation (IMC-style). We carry it as an OPTIONAL flag so every other
@@ -61,6 +86,7 @@ export function createOaSession(
     deadlineTs,
     questionDeadlineTs,
     ...(noBack ? { noBack } : {}),
+    ...(questionBudgetsMs ? { questionBudgetsMs } : {}),
     questions,
     answers: questions.map((q) => ({
       questionId: q.id,
@@ -163,7 +189,7 @@ export function advanceSprint(
   return {
     ...state,
     index,
-    questionDeadlineTs: nowTs + state.budgetMs,
+    questionDeadlineTs: nowTs + sprintBudgetMs(state, index),
   };
 }
 
@@ -240,9 +266,10 @@ export function resumeOaSession(
     ) {
       const timedOutAt = next.questionDeadlineTs;
       const index = next.index;
-      // The question timed out while away ⇒ skipped, full budget spent.
+      // The question timed out while away ⇒ skipped, full (per-question) budget spent.
+      const spentMs = sprintBudgetMs(next, index);
       const answers = next.answers.map((a, i) =>
-        i === index ? { ...a, elapsedMs: next.budgetMs } : a,
+        i === index ? { ...a, elapsedMs: spentMs } : a,
       );
       const nextIndex = index + 1;
       if (nextIndex >= next.questions.length) {
@@ -261,7 +288,7 @@ export function resumeOaSession(
         answers,
         index: nextIndex,
         // The newly-shown question wasn't visible while away ⇒ fresh clock.
-        questionDeadlineTs: nowTs + next.budgetMs,
+        questionDeadlineTs: nowTs + sprintBudgetMs(next, nextIndex),
       };
     }
     return next;

@@ -212,6 +212,50 @@ export const TIMED_DIAGNOSTIC_FORMAT: OaFormatConfig = {
 };
 
 /**
+ * MENTAL-MATH SPRINT — the timed mental-arithmetic burst that runs as the FIRST
+ * phase of the guided pipeline's Timed Diagnostic (Stage 3), BEFORE the 30-Q hard
+ * section. It makes mental math a REAL, time-pressured, scored skill: a short
+ * burst of exact-arithmetic items, each on its OWN per-question shot clock so an
+ * easy add gets ~10 s while an odds→probability conversion gets ~18 s (the actual
+ * budget per item comes from `MENTAL_MATH_SPRINT_BUDGETS_MS` in
+ * `lib/oa/mentalMathSprint.ts`, threaded through the session's optional
+ * `questionBudgetsMs`; `perQuestionSec`/`budgetMs` here are only the uniform
+ * FALLBACK the engine uses if that array is ever absent).
+ *
+ * It is a `sprint` kind, so it reuses the EXACT reload-proof per-question engine
+ * (`timedSession.ts`: an absolute `questionDeadlineTs` recomputed as `deadline −
+ * now`, auto-advancing on timeout so a TIMEOUT = MISS) and the shared `OaRunner`
+ * shot-clock kit every other sprint uses. Its speed-weighted results (fast+correct
+ * > slow+correct > wrong/timeout) are the AUTHORITATIVE scored signal for the
+ * `mental-math::_core` KST node — see `mentalMathSprint.ts`.
+ *
+ * DELIBERATELY NOT in {@link OA_FORMATS}: like {@link TIMED_DIAGNOSTIC_FORMAT} it
+ * is not a user-pickable `/oa` preset; the `TimedDiagnosticStage` references it
+ * directly (`contentPool` omitted — it draws its own mental-math items).
+ */
+export const MENTAL_MATH_SPRINT_ITEM_COUNT = 12;
+
+export const MENTAL_MATH_SPRINT_FORMAT: OaFormatConfig = {
+  id: "timed-diagnostic-mm-sprint",
+  kind: "sprint",
+  label: "Mental-math sprint",
+  blurb:
+    "A rapid burst of exact mental arithmetic — each question on its own short shot clock (≈10–18 s by difficulty). It auto-advances when the clock runs out and you can't go back; a timeout counts as a miss. Scored on SPEED + accuracy.",
+  questionCount: MENTAL_MATH_SPRINT_ITEM_COUNT,
+  // Uniform FALLBACK pace only; the real per-question budgets come from
+  // MENTAL_MATH_SPRINT_BUDGETS_MS via the session's optional questionBudgetsMs.
+  perQuestionSec: 12,
+  freeNavigation: false,
+  autoAdvance: true,
+  // The sprint is scored by the SPEED-WEIGHTED credit in mentalMathSprint.ts, not
+  // by this rule (kept only to satisfy the shared session/scoring contract).
+  scoring: COUNT_STYLE,
+  budgetMs: 12_000,
+  sourceNote:
+    "GUIDED_PIPELINE_PLAN.md §3.3 metric (b): mental math as a time-pressured scored skill. Per-question shot clock (≈10–18 s by subtopic), timeout = miss, speed-weighted (fast+correct > slow+correct > wrong). Feeds mental-math::_core mastery + the 0.90 timed gate.",
+};
+
+/**
  * All timed formats, ordered fastest-pace → slowest (the UI difficulty
  * gradient), with the untimed Measured mode last. Per-question pace (sec/q):
  * Rapid 15 · Blitz 48 · Sprint 90 · Section ~106 · Derivation 180 · Deep 360.

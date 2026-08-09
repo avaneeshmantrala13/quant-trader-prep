@@ -9,6 +9,7 @@ import { diagnosticToSeeds, type TopicSeed } from "./diagnosticSeed";
 import type { DiagnosticOutcome } from "./diagnosticSeed";
 import { resolveStage } from "@/lib/pipeline/stateMachine";
 import {
+  isUntimedNonAuthoritativeTopic,
   UNTIMED_BLUEPRINT,
   type UntimedItem,
 } from "@/content/diagnostic/untimedBlueprint";
@@ -208,10 +209,18 @@ export interface UntimedOutcome {
  * Fold the NUMERIC (KST) outcomes into per-topic diagnostic seeds via the SAME
  * `diagnosticToSeeds` the existing diagnostic uses — each seed writes the item's
  * scored KST node (α = 1 + successes, β = 1 + failures, θ from the tier crossing).
+ *
+ * NON-AUTHORITATIVE topics are EXCLUDED here (`isUntimedNonAuthoritativeTopic`):
+ * untimed mental-math items still render + count toward the run result, but they
+ * must NOT seed `mental-math::_core` mastery — that node's real skill is SPEED and
+ * is scored by the timed mental-math SPRINT (`lib/oa/mentalMathSprint.ts`), the
+ * authoritative source. This is the ONLY behavioral change; every other topic
+ * seeds exactly as before.
  */
 export function untimedToDiagnosticSeeds(outcomes: UntimedOutcome[]): TopicSeed[] {
   const numericOutcomes: DiagnosticOutcome[] = outcomes
     .filter((o) => o.kind === "numeric")
+    .filter((o) => !isUntimedNonAuthoritativeTopic(o.topicKey))
     .map((o) => ({
       topicKey: o.topicKey,
       tier: o.tier,

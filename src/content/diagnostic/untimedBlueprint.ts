@@ -70,6 +70,28 @@ import {
 
 /* -- Scored KST node keys (mirror `@/lib/roadmap/skillGraph`) --------------- */
 const MENTAL = topicKeyOf("mental-math");
+
+/**
+ * Topic nodes whose UNTIMED diagnostic items are NON-AUTHORITATIVE for mastery —
+ * they still render (so untimed COVERAGE and the per-run result are unchanged) but
+ * they must NOT SEED mastery, because a "free" untimed attempt would inflate the
+ * skill without testing what actually matters for it.
+ *
+ * Mental arithmetic (`mental-math::_core`) is the one such node: its REAL skill is
+ * SPEED, and the pipeline now scores it with the time-pressured, speed-weighted
+ * mental-math SPRINT in the Timed Diagnostic (`lib/oa/mentalMathSprint.ts`), which
+ * is the AUTHORITATIVE source for the node. So the untimed mental-math items here
+ * are kept for coverage but excluded from seeding (`untimedToDiagnosticSeeds`
+ * honors this set), leaving the sprint as the single real signal.
+ */
+export const UNTIMED_NON_AUTHORITATIVE_TOPIC_KEYS: ReadonlySet<string> = new Set([
+  MENTAL,
+]);
+
+/** True when an untimed outcome for `topicKey` must NOT seed mastery (see above). */
+export function isUntimedNonAuthoritativeTopic(topicKey: string): boolean {
+  return UNTIMED_NON_AUTHORITATIVE_TOPIC_KEYS.has(topicKey);
+}
 const RATES = topicKeyOf("math-questions", "Rates, Algebra & Word Problems");
 const NUMBER_THEORY = topicKeyOf("math-questions", "Number Theory & Counting");
 const GEOMETRY = topicKeyOf("math-questions", "Geometry & Derivations");

@@ -128,6 +128,16 @@ export interface OaSessionState {
   deadlineTs?: number;
   /** Sprint only: absolute deadline for the CURRENT question (epoch ms). */
   questionDeadlineTs?: number;
+  /**
+   * SPRINT only, OPTIONAL & additive: a PER-QUESTION shot-clock budget (ms),
+   * parallel to `questions`. When present the sprint clock uses
+   * `questionBudgetsMs[index]` for question `index` instead of the uniform
+   * `budgetMs`, so a burst can pace each item to its own difficulty (e.g. the
+   * timed diagnostic's mental-math sprint: ~10 s arithmetic → ~18 s odds). Absent
+   * ⇒ every question uses `budgetMs` exactly as before (byte-identical persisted
+   * shape for the `/oa` sprints), so this is fully backward-compatible.
+   */
+  questionBudgetsMs?: number[];
   questions: OaQuestion[];
   /** Parallel to `questions`: chosen index (or null) + per-question elapsed. */
   answers: OaAnswer[];
@@ -147,6 +157,23 @@ export interface OaSessionState {
    * section, sprint, and measured formats so their persisted shape is unchanged.
    */
   noBack?: boolean;
+  /**
+   * OPTIONAL & additive (guided pipeline Stage 3 ONLY): per-topic timed sections
+   * carried forward from a PRIOR phase of a multi-phase stage, so a reload during
+   * the later phase can still recover the earlier phase's already-scored result.
+   * Concretely: the Timed Diagnostic runs the mental-math SPRINT first, then the
+   * hard SECTION; when the hard section is created it carries the finished
+   * sprint's aggregate section here, so a phase-2 reload never loses it. Ignored
+   * by the pure engine and every other format (their persisted shape is
+   * unchanged); it is plain-serializable `{label,correct,total,topicKeys?,at?}`.
+   */
+  carriedSections?: {
+    label: string;
+    correct: number;
+    total: number;
+    topicKeys?: string[];
+    at?: string;
+  }[];
   /** Absolute completion timestamp once submitted / expired (epoch ms). */
   completedAtTs?: number;
 }

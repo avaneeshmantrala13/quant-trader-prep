@@ -13,6 +13,8 @@ import {
   withUntimedResult,
   type UntimedOutcome,
 } from "@/lib/diagnostic/untimedRun";
+import { isUntimedNonAuthoritativeTopic } from "@/content/diagnostic/untimedBlueprint";
+import { MENTAL_MATH_TOPIC_KEY } from "@/content/mentalMath/subtopics";
 
 const AT = "2026-01-01T00:00:00.000Z";
 
@@ -162,7 +164,30 @@ describe("untimedRun: a fully-correct run seeds every scored topic", () => {
     );
     const seededTopics = new Set(untimedToDiagnosticSeeds(outcomes).map((s) => s.topicKey));
     for (const topicKey of scoredContentTopicKeys()) {
+      // Mental arithmetic is NON-AUTHORITATIVE for the untimed diagnostic: its
+      // real skill (speed) is scored by the timed mental-math sprint, so untimed
+      // items no longer seed it. Every OTHER scored content node still seeds.
+      if (isUntimedNonAuthoritativeTopic(topicKey)) continue;
       expect(seededTopics.has(topicKey), `seed for ${topicKey}`).toBe(true);
     }
+  });
+
+  it("does NOT seed mental-math from the untimed run (no free-point inflation)", () => {
+    const items = materializeUntimedRun(555);
+    const outcomes: UntimedOutcome[] = items.map((m) => ({
+      topicKey: m.topicKey,
+      subtopic: m.subtopic,
+      kind: m.kind,
+      tier: m.kind === "numeric" ? m.tier : ("medium" as const),
+      correct: true,
+      at: AT,
+    }));
+    // The untimed run DOES render mental-math items (coverage preserved)…
+    expect(outcomes.some((o) => o.topicKey === MENTAL_MATH_TOPIC_KEY)).toBe(true);
+    // …but NONE of them seed the mental-math node.
+    const seededTopics = new Set(
+      untimedToDiagnosticSeeds(outcomes).map((s) => s.topicKey),
+    );
+    expect(seededTopics.has(MENTAL_MATH_TOPIC_KEY)).toBe(false);
   });
 });
