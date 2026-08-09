@@ -8,7 +8,14 @@ plus the Custom Drill Builder's **`parse-drill-intent`** mode (see
 strictly against this document.
 
 - **Endpoint:** `POST ${VITE_AI_ENDPOINT}/ai`
-  (live: `https://a3uyqqj6s0.execute-api.us-east-1.amazonaws.com/ai`)
+  (AWS: `https://<api-id>.execute-api.<region>.amazonaws.com/ai`; local dev:
+  `http://localhost:8788/ai` via `npm run ai:dev` — see
+  [`infra/AI_ENABLE.md`](../infra/AI_ENABLE.md)).
+- **One router, two hosts:** the prompt builders + guardrails + mode dispatch
+  live in `infra/lambda/ai-flavor/core.mjs` (`routeAiRequest`), imported by BOTH
+  the AWS Lambda (`index.mjs`) and the local dev server
+  (`scripts/ai-dev-server.mjs`), so localhost behavior === prod behavior for
+  every mode below.
 - **Transport:** same as every existing mode — call `postAi(cfg, env, body, signal)`
   from `src/lib/aiFlavor.ts`. Dispatch is by the request `body.mode` string.
 - **Auth:** the route has a **Cognito JWT authorizer**. `postAi` already attaches

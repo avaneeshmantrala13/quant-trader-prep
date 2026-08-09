@@ -1,5 +1,10 @@
 # Optional AI "flavor / open-ended" layer — USER RUNBOOK
 
+> **Just want the real LLM grader on right now?** See
+> [`AI_ENABLE.md`](./AI_ENABLE.md) for the short **localhost-now / AWS-later**
+> runbook (a local `npm run ai:dev` server keeps your key server-side). This file
+> is the full AWS design + cost/safety reference.
+
 This is the exact, ordered set of steps **you** run to switch on the optional
 LLM layer that sits **on top of** the parametric generators + exact solvers.
 
@@ -143,10 +148,12 @@ aws cloudformation deploy \
   --parameter-overrides UserPoolId="$UP" UserPoolClientId="$CL" \
     AiProvider=openai AiModel=gpt-4o-mini DailyQuota=50
 
-# upload the real Lambda code (the template ships a fail-safe placeholder):
+# upload the real Lambda code (the template ships a fail-safe placeholder).
+# NOTE: ship BOTH index.mjs AND core.mjs — index.mjs imports the shared router
+# from core.mjs (the same module the local dev server uses):
 FN=$(aws cloudformation describe-stacks --stack-name quant-trader-prep-ai \
   --query "Stacks[0].Outputs[?OutputKey=='AiFunctionName'].OutputValue" --output text)
-( cd infra/lambda/ai-flavor && zip -q -r /tmp/ai.zip index.mjs )
+( cd infra/lambda/ai-flavor && zip -q -r /tmp/ai.zip index.mjs core.mjs )
 aws lambda update-function-code --function-name "$FN" --zip-file fileb:///tmp/ai.zip
 ```
 

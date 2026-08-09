@@ -122,14 +122,16 @@ AI_ENDPOINT="$(get_ai_out AiEndpoint)"
 AI_FUNCTION="$(get_ai_out AiFunctionName)"
 AI_TTS_FUNCTION="$(get_ai_out AiTtsFunctionName)"
 
-# Package + upload a single-file .mjs handler to a Lambda function.
+# Package + upload the .mjs handler(s) to a Lambda function. Zips EVERY .mjs in
+# the dir so shared modules (e.g. ai-flavor/core.mjs, imported by index.mjs AND
+# the local dev server) ship alongside the handler.
 upload_lambda() {
   local dir="$1" fn="$2"
   echo "==> Uploading real Lambda code from $dir"
   local zip
   zip="$(mktemp -t qtp-ai.XXXXXX.zip)"
   rm -f "$zip"   # mktemp pre-creates a 0-byte file; macOS `zip` refuses it, so remove it first
-  ( cd "$dir" && zip -q -r "$zip" index.mjs )
+  ( cd "$dir" && zip -q -r "$zip" ./*.mjs )
   aws lambda update-function-code \
     --region "$AWS_REGION" \
     --function-name "$fn" \
