@@ -120,6 +120,7 @@ export function computePerformance(session: MockSession): MockPerformance {
     vague: 0,
     absent: 0,
     ambiguous: 0,
+    uninterpretable: 0,
   };
   let correctButVagueCount = 0;
   for (const step of script.steps) {
@@ -137,19 +138,23 @@ export function computePerformance(session: MockSession): MockPerformance {
     if (step.kind === "math") {
       if (
         answerCorrect &&
-        (grade.quality === "flawed" || grade.quality === "ambiguous")
+        (grade.quality === "flawed" ||
+          grade.quality === "ambiguous" ||
+          grade.quality === "uninterpretable")
       )
         correctButVagueCount += 1;
       continue;
     }
-    // Non-MM: charge vague/absent (can't defend), flawed (false step), and
-    // ambiguous (couldn't commit to one clean answer under a clarify).
+    // Non-MM: charge vague/absent (can't defend), flawed (false step),
+    // ambiguous (couldn't commit to one clean answer), and uninterpretable
+    // (couldn't be understood at all — the interviewer can't credit it).
     if (
       answerCorrect &&
       (grade.quality === "vague" ||
         grade.quality === "absent" ||
         grade.quality === "flawed" ||
-        grade.quality === "ambiguous")
+        grade.quality === "ambiguous" ||
+        grade.quality === "uninterpretable")
     ) {
       correctButVagueCount += 1;
     }
@@ -294,6 +299,12 @@ export function deterministicDiagnosis(perf: MockPerformance): MockDiagnosis {
       `${ambiguousCount} answer${ambiguousCount > 1 ? "s" : ""} were MIXED / contradictory — you pointed both ways and, even when pressed to commit, didn't land a clean single answer. Interviewers read this as not actually understanding it.`,
     );
   }
+  const uninterpretableCount = perf.reasoningTags.uninterpretable ?? 0;
+  if (uninterpretableCount > 0) {
+    weaknesses.push(
+      `${uninterpretableCount} response${uninterpretableCount > 1 ? "s" : ""} couldn't be understood at all — write your reasoning as a clear, plain-language claim about the problem; an interviewer can't credit what they can't parse.`,
+    );
+  }
   if (perf.correctButVagueCount > 0) {
     weaknesses.push(
       `${perf.correctButVagueCount} item${perf.correctButVagueCount > 1 ? "s" : ""} answered correctly but with vague or flawed reasoning — you got the number right but couldn't cleanly defend it; interviewers will press and you'll fold.`,
@@ -331,7 +342,8 @@ export function deterministicDiagnosis(perf: MockPerformance): MockDiagnosis {
     perf.reasoningTags.vague +
       perf.reasoningTags.absent +
       perf.reasoningTags.flawed +
-      (perf.reasoningTags.ambiguous ?? 0) >
+      (perf.reasoningTags.ambiguous ?? 0) +
+      (perf.reasoningTags.uninterpretable ?? 0) >
       0
   ) {
     nextSteps.push("Critical thinking: for every answer, write the full reasoning chain before revealing, then re-run this mock (/mock) and, on each follow-up, defend WHY it holds and generalize it — that's where the adversarial press decides offers.");
@@ -353,6 +365,7 @@ export function deterministicDiagnosis(perf: MockPerformance): MockDiagnosis {
     perf.correctButVagueCount <= 1 &&
     perf.reasoningTags.flawed === 0 &&
     (perf.reasoningTags.ambiguous ?? 0) === 0 &&
+    (perf.reasoningTags.uninterpretable ?? 0) === 0 &&
     (perf.adversarialTotal === 0 || advPct >= 50)
   ) {
     wouldPass = "yes";

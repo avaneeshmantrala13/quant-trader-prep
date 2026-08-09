@@ -26,6 +26,27 @@ import type {
   TopicFamily,
 } from "./types";
 import type { ArchetypeId } from "./questionPools";
+import { FAMILY_DIFFICULTY, EASY_FAMILY_CAP } from "./interviewGate";
+
+/* -------------------------------------------------------------------------- */
+/*  Per-family difficulty class (re-exported single source of truth)          */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Re-export of the canonical per-family DIFFICULTY classification (defined once
+ * in `interviewGate.ts`). An `"easy"`/not-super-difficult family — sequences,
+ * basic mental arithmetic, simple fraction/percent estimation — is a low-signal
+ * warm-up and is HARD-CAPPED at {@link EASY_FAMILY_CAP} (one) per mock; every
+ * genuinely-hard family may legitimately repeat. The blueprint surfaces this so
+ * a firm's round `families` can be reasoned about by difficulty class without
+ * duplicating the table. See {@link INTERVIEW_BLUEPRINT_2026}.
+ */
+export { FAMILY_DIFFICULTY, EASY_FAMILY_CAP };
+
+/** The `"easy"` families in a blueprint round (each hard-capped at one/mock). */
+export function easyFamiliesInRound(round: RoundBlueprint): TopicFamily[] {
+  return round.families.filter((f) => FAMILY_DIFFICULTY[f] === "easy");
+}
 
 /* -------------------------------------------------------------------------- */
 /*  Gold anchors — the difficulty floor for a valid opener                    */

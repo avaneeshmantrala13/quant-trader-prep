@@ -538,18 +538,95 @@ export function isHandWaveOnly(
   residual = residual
     .replace(/[0-9]+(?:\.[0-9]+)?/g, " ")
     .replace(/[=+\-*/×÷→^]/g, " ");
-  const CONTENT_MARKERS = [
-    "difference", "differences", "ratio", "expected", "probability",
-    "complement", "independent", "variance", "pattern", "gap", "gaps",
-    "grow", "growing", "constant", "sum", "average", "per", "rate",
-    "distribut", "conditional", "symmetr", "combinat", "permut", "factor",
-    "quadratic", "cubic", "geometric", "arithmetic", "fibonacci", "recurrence",
-    "posterior", "prior", "bayes", "kelly", "edge", "linear", "scales",
-    "second diff", "third diff", "square", "closed form", "coefficient",
-    "double", "triple", "multiply", "add", "subtract", "divide", "count",
-    "mutually", "exclusive", "memoryless", "threshold", "continuation",
-  ];
   return !CONTENT_MARKERS.some((m) => residual.includes(m));
+}
+
+/**
+ * Substantive content-bearing terms that signal genuine engagement with a quant
+ * mechanism (as opposed to hand-wave). Shared by {@link isHandWaveOnly} and the
+ * {@link isUninterpretable} gate.
+ */
+const CONTENT_MARKERS = [
+  "difference", "differences", "ratio", "expected", "probability",
+  "complement", "independent", "variance", "pattern", "gap", "gaps",
+  "grow", "growing", "constant", "sum", "average", "per", "rate",
+  "distribut", "conditional", "symmetr", "combinat", "permut", "factor",
+  "quadratic", "cubic", "geometric", "arithmetic", "fibonacci", "recurrence",
+  "posterior", "prior", "bayes", "kelly", "edge", "linear", "scales",
+  "second diff", "third diff", "square", "closed form", "coefficient",
+  "double", "triple", "multiply", "add", "subtract", "divide", "count",
+  "mutually", "exclusive", "memoryless", "threshold", "continuation",
+];
+
+/**
+ * Common English words used as a light lexicon for the {@link isUninterpretable}
+ * gate: a response built from real words (even if wrong or hand-wavy) is
+ * READABLE — only genuine gibberish (keyboard-mash / symbol-soup / word-salad)
+ * with almost no recognizable words is "uninterpretable".
+ */
+const COMMON_WORDS = new Set<string>([
+  "the", "a", "an", "and", "or", "but", "if", "then", "so", "because", "since",
+  "is", "are", "was", "were", "be", "been", "being", "it", "its", "this", "that",
+  "these", "those", "i", "you", "we", "they", "he", "she", "to", "of", "in", "on",
+  "for", "with", "as", "by", "at", "from", "not", "no", "yes", "will", "would",
+  "can", "could", "should", "may", "might", "must", "do", "does", "did", "has",
+  "have", "had", "get", "got", "one", "two", "three", "half", "same", "different",
+  "more", "less", "than", "answer", "reason", "think", "know", "sure", "right",
+  "wrong", "correct", "true", "false", "value", "number", "chance", "odds",
+  "event", "events", "case", "cases", "each", "both", "all", "any", "some",
+  "there", "here", "which", "what", "why", "how", "when", "out", "up", "down",
+  "over", "under", "about", "just", "only", "still", "also", "very", "much",
+  "many", "first", "next", "last", "total", "times", "equal", "equals", "means",
+]);
+
+/** Polarity / commitment phrasing that proves the text states a readable stance. */
+const POLARITY_MARKERS: RegExp[] = [
+  /\b(?:yes|yeah|yep|no|nope|nah|true|false|correct|incorrect)\b/i,
+  /\b(?:same|different|unchanged|changes?|increases?|decreases?|higher|lower)\b/i,
+];
+
+/**
+ * Is a single token PLAUSIBLY an English word (vs keyboard-mash)? A token counts
+ * when it is a known common word, OR it looks word-shaped: alphabetic, of
+ * reasonable length, containing a vowel, and WITHOUT a long unpronounceable run
+ * of consonants (which betrays mashing like "asdkfj"). Conservative on purpose —
+ * it errs toward calling things words, so real prose is never "uninterpretable".
+ */
+function isWordLike(tokenRaw: string): boolean {
+  const t = tokenRaw.toLowerCase().replace(/[^a-z]/g, "");
+  if (t === "") return false;
+  if (COMMON_WORDS.has(t)) return true;
+  if (t.length < 2 || t.length > 18) return t.length >= 2; // very long strings: don't judge
+  if (!/[aeiouy]/.test(t)) return false; // no vowel ⇒ not word-like ("pqrst")
+  if (/[^aeiouy]{4,}/.test(t)) return false; // 4+ consonants in a row ⇒ mash
+  return true;
+}
+
+/**
+ * Is the reasoning GARBLED / nonsensical — i.e. it cannot be parsed into ANY
+ * meaningful claim? This is the "Response not understood" case, DISTINCT from a
+ * hedge/contradiction (`ambiguous`) or a readable-but-hand-wavy assertion
+ * (`vague`). Deliberately CONSERVATIVE so real English — even weak, wrong, or
+ * terse — is never misflagged: it fires only when the text carries NO number, NO
+ * reasoning marker, NO content term, NO polarity/commitment, NO hand-wave, and
+ * is dominated by non-word tokens (keyboard-mash / symbol-soup). Pure and total.
+ */
+export function isUninterpretable(text: string): boolean {
+  const t = (text ?? "").trim();
+  if (t === "") return false; // empty is `absent`, not garbled
+  // Any numeric value is itself a readable claim.
+  if (numbersIn(t).size > 0) return false;
+  const lower = t.toLowerCase();
+  if (isHedgedReasoning(t)) return false; // a readable hedge ⇒ ambiguous, not garbled
+  if (REASONING_MARKERS.some((m) => lower.includes(m))) return false;
+  if (CONTENT_MARKERS.some((m) => lower.includes(m))) return false;
+  if (POLARITY_MARKERS.some((re) => re.test(lower))) return false;
+  if (HANDWAVE_PATTERNS.some((re) => re.test(lower))) return false; // readable ⇒ vague
+  const tokens = lower.match(/[a-z']+/gi) ?? [];
+  if (tokens.length === 0) return true; // pure symbols/punctuation ⇒ not understood
+  const recognizable = tokens.filter(isWordLike).length;
+  // Mostly non-words ⇒ genuine gibberish.
+  return recognizable / tokens.length < 0.5;
 }
 
 /**
@@ -742,6 +819,15 @@ export function gradeReasoningDeterministic(
       quality = "vague";
       issues.push("Just a number with no check — show the shortcut you used.");
     }
+  } else if (isUninterpretable(text)) {
+    // GARBLED / nonsensical: the text cannot be parsed into any claim. This is
+    // the "Response not understood" case — DISTINCT from a both-sides hedge
+    // (`ambiguous`) and from a readable hand-wave (`vague`). Never correct,
+    // never silently wrong; the UI shows an accurate not-understood message.
+    quality = "uninterpretable";
+    issues.push(
+      "I couldn't understand that response — it doesn't read as a claim about the problem. Restate your reasoning in plain words and commit to ONE answer.",
+    );
   } else if (isHedgedReasoning(text)) {
     // MIXED / both-sides / hedged reasoning: the candidate points both ways
     // instead of committing. NEVER treat this as sound and NEVER silently mark
@@ -816,6 +902,7 @@ export function normalizeReasoningPayload(
     "partial",
     "flawed",
     "ambiguous",
+    "uninterpretable",
     "vague",
     "absent",
   ];

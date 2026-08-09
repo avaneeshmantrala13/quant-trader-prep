@@ -24,7 +24,12 @@ import { writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { buildInterview } from "@/lib/mock/engine";
 import { PRESET_ORDER } from "@/lib/mock/presets";
-import { auditScript } from "@/lib/mock/interviewGate";
+import {
+  auditScript,
+  isEasyFamily,
+  EASY_FAMILY_CAP,
+} from "@/lib/mock/interviewGate";
+import type { TopicFamily } from "@/lib/mock/types";
 import {
   reviewScript,
   summarizeVerdicts,
@@ -44,6 +49,10 @@ interface FirmMetrics {
   rubricInterviewGrade: number;
   flagCounts: Record<string, number>;
   avgDistinctFamilies: number;
+  /** Largest count of ANY single easy-family item observed in one mock. */
+  maxEasyFamilyCount: number;
+  /** Mocks in which some easy family appeared more than {@link EASY_FAMILY_CAP}. */
+  easyCapViolations: number;
 }
 
 async function sampleFirm(preset: string): Promise<FirmMetrics> {
@@ -51,6 +60,8 @@ async function sampleFirm(preset: string): Promise<FirmMetrics> {
   let structuralViolations = 0;
   let scoredItems = 0;
   let familiesTotal = 0;
+  let maxEasyFamilyCount = 0;
+  let easyCapViolations = 0;
   const verdicts: RubricVerdict[] = [];
 
   for (const seed of SEEDS) {
@@ -60,6 +71,16 @@ async function sampleFirm(preset: string): Promise<FirmMetrics> {
     structuralViolations += report.violations.length;
     scoredItems += report.scoredItems;
     familiesTotal += report.families.length;
+    // Easy-family hard cap: assert no "easy"/not-super-difficult family (sequences,
+    // mental-math, estimation) appears more than once in any single sampled mock.
+    let mockEasyMax = 0;
+    for (const [fam, count] of Object.entries(report.familyCounts)) {
+      if (isEasyFamily(fam as TopicFamily)) {
+        mockEasyMax = Math.max(mockEasyMax, count);
+      }
+    }
+    maxEasyFamilyCount = Math.max(maxEasyFamilyCount, mockEasyMax);
+    if (mockEasyMax > EASY_FAMILY_CAP) easyCapViolations += 1;
     // Offline heuristic reviewer (deterministic). Swap in an llm for a model run.
     verdicts.push(...(await reviewScript(script)));
   }
@@ -75,6 +96,8 @@ async function sampleFirm(preset: string): Promise<FirmMetrics> {
     rubricInterviewGrade: summary.interviewGrade,
     flagCounts: summary.flagCounts,
     avgDistinctFamilies: familiesTotal / SEEDS.length,
+    maxEasyFamilyCount,
+    easyCapViolations,
   };
 }
 
@@ -103,14 +126,22 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
   lines.push("## Structural gate (deterministic)");
   lines.push("");
   lines.push(
-    "| Firm | Mocks | Mocks passing | Total violations | Scored items | Avg distinct families |",
+    "| Firm | Mocks | Mocks passing | Total violations | Scored items | Avg distinct families | Max easy-family/mock | Easy-cap violations |",
   );
-  lines.push("|---|---|---|---|---|---|");
+  lines.push("|---|---|---|---|---|---|---|---|");
   for (const m of metrics) {
     lines.push(
-      `| ${m.preset} | ${m.mocks} | ${m.structuralPassMocks} (${pct(m.structuralPassMocks, m.mocks)}) | ${m.structuralViolations} | ${m.scoredItems} | ${m.avgDistinctFamilies.toFixed(2)} |`,
+      `| ${m.preset} | ${m.mocks} | ${m.structuralPassMocks} (${pct(m.structuralPassMocks, m.mocks)}) | ${m.structuralViolations} | ${m.scoredItems} | ${m.avgDistinctFamilies.toFixed(2)} | ${m.maxEasyFamilyCount} | ${m.easyCapViolations} |`,
     );
   }
+  lines.push("");
+  lines.push(
+    `> **Easy-family hard cap:** an "easy"/not-super-difficult family (sequences, ` +
+      `mental-math, estimation) may appear at most ${EASY_FAMILY_CAP}× per mock. ` +
+      "\"Max easy-family/mock\" is the largest single easy-family count seen across " +
+      "all sampled mocks (must be ≤ 1); \"Easy-cap violations\" counts mocks that " +
+      "exceeded it (must be 0).",
+  );
   lines.push("");
   lines.push("## Senior-quant rubric reviewer (offline heuristic)");
   lines.push("");
@@ -128,14 +159,16 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
   lines.push("");
   const allClean =
     metrics.every((m) => m.structuralPassMocks === m.mocks) &&
-    metrics.every((m) => m.rubricInterviewGrade === m.rubricItems);
+    metrics.every((m) => m.rubricInterviewGrade === m.rubricItems) &&
+    metrics.every((m) => m.easyCapViolations === 0 && m.maxEasyFamilyCount <= EASY_FAMILY_CAP);
   lines.push("## Verdict");
   lines.push("");
   lines.push(
     allClean
       ? "**PASS** — every sampled mock cleared both the structural gate and the " +
           "senior-quant rubric: no decomposition follow-ups, no easier-than-base " +
-          "follow-ups, no back-to-back topic families, and no trivial items."
+          "follow-ups, no back-to-back topic families, no easy family (sequences / " +
+          "mental-math / estimation) appearing more than once, and no trivial items."
       : "**FAIL** — one or more sampled mocks tripped the gate; see the tables above.",
   );
   lines.push("");

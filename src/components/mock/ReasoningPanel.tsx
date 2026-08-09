@@ -36,6 +36,12 @@ const QUALITY_META: Record<
     blurb:
       "Mixed / both-sides reasoning — you pointed both ways. Commit to ONE answer below.",
   },
+  uninterpretable: {
+    label: "Not understood",
+    tone: "border-bear text-bear",
+    blurb:
+      "Response not understood — I couldn't read that as a claim about the problem. Restate your reasoning in plain words.",
+  },
   vague: {
     label: "Vague",
     tone: "border-bear text-bear",

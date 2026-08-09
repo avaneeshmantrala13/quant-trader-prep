@@ -325,7 +325,10 @@ export function gradeReasoningConclusion(
     score: correct ? 1 : 0,
     verdict: result.verdict,
     ...(result.verdict === "clarify"
-      ? { clarifyPrompt: buildClarifyPrompt(result) }
+      ? {
+          clarifyPrompt: buildClarifyPrompt(result),
+          ...(result.clarifyKind ? { clarifyKind: result.clarifyKind } : {}),
+        }
       : {}),
   };
 }

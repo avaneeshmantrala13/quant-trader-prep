@@ -72,29 +72,30 @@ export interface MockPreset {
 const OPTIVER: MockPreset = {
   id: "optiver",
   name: "Optiver Style — Sequences & Odds",
-  tagline: "Progressive number-pattern sequences + rapid probability under a relentless clock.",
+  tagline: "One signature number-pattern sequence + rapid probability under a relentless clock.",
   tier: "hard",
   scoringNote:
-    "Optiver's 2026 OA is progressive number-sequence patterns (NumberLogic) and rapid probability / expected-value (Beat the Odds) — not an arithmetic sprint. So this mock LEADS with escalating sequences and fast prob/EV under time (no back-navigation), then market-making. Speed is graded but a correct answer is always correct.",
+    "Optiver's 2026 OA is progressive number-sequence patterns (NumberLogic) and rapid probability / expected-value (Beat the Odds) — not an arithmetic sprint. So this mock OPENS with a signature sequence, then spends the rest on fast prob/EV under time (no back-navigation) before market-making. Sequences are an easy family, so exactly ONE appears; the discriminating signal is the probability/EV run. Speed is graded but a correct answer is always correct.",
   adversary: "Pickoff bot + relentless clock.",
   intro:
     "Optiver style. Optiver's 2026 assessment is progressive number-sequence " +
     "patterns and rapid probability/EV — not the old arithmetic sprint — so we open " +
-    "with sequences that escalate, then fast probability and expected-value " +
-    "questions under time (each right answer earns a concept follow-up that presses " +
-    "whether you actually understand it), an estimate, and two market-making rounds " +
+    "with ONE signature sequence, then spend the rest on fast probability and " +
+    "expected-value questions under time (each right answer earns a concept follow-up " +
+    "that presses whether you actually understand it) before two market-making rounds " +
     "where I pick off any quote that's off.",
   // ORDER interleaves families so no two adjacent scored items share a topic:
-  // the pinned quadratic demo opens, then sequences and prob/EV alternate (the
-  // 3 sequence slots are never back-to-back), the lattice anchor sits in the
-  // prob/EV run, and market-making closes. The family-aware assembler further
-  // guarantees adjacent prob/EV draws pull DISTINCT sub-families.
+  // the pinned quadratic demo opens as the ONE (easy-family) sequence, the rest
+  // of the pre-MM run is prob/EV (the discriminating signal) with the lattice
+  // anchor in it, and market-making closes. The family-aware assembler further
+  // guarantees adjacent prob/EV draws pull DISTINCT sub-families. Sequences are
+  // an EASY family (see `interviewGate#FAMILY_DIFFICULTY`) — hard-capped at ONE.
   items: [
     { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "NumberLogic-style: next-in-sequence (quadratic; constant 2nd difference)", archetype: "optiver-quadratic-demo" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "Beat-the-Odds: conditional draw without replacement" },
-    { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "progressive pattern; continue it" },
+    { kind: "probability-ev", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "Beat-the-Odds: independence / two-of-three" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 75, regime: "reasoning", note: "expected flips = 1/p; memorylessness" },
-    { kind: "sequences", difficulty: "hard", targetSec: 55, regime: "reasoning", note: "pattern with a twist; state the rule" },
+    { kind: "probability-ev", difficulty: "hard", targetSec: 75, regime: "reasoning", note: "combinatorics / counting with a constraint" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 120, regime: "reasoning", note: "lattice random-walk meeting + parity trap (anchor)", archetype: "lattice-paths" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 90, regime: "reasoning", note: "order statistics (max/min of dice)" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 100, regime: "reasoning", note: "pattern-wait / gambler's ruin (self-overlap trap)" },

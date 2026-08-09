@@ -27,9 +27,15 @@ import {
   belowFloorReason,
   decompositionReason,
   difficultyRank,
+  familyCap,
+  familyOfStep,
+  isEasyFamily,
+  EASY_FAMILY_CAP,
+  FAMILY_DIFFICULTY,
   missingTypeReason,
   type FollowupBase,
 } from "./interviewGate";
+import type { TopicFamily } from "./types";
 import {
   buildRubricPrompt,
   parseRubricResponse,
@@ -71,6 +77,80 @@ describe("interview gate — every firm preset assembles interview-grade", () =>
       expect(report.violations.filter((v) => v.includes("back-to-back"))).toHaveLength(0);
     });
   }
+});
+
+/* -------------------------------------------------------------------------- */
+/*  1b. Difficulty-aware per-topic caps — EASY families ≤ 1 per mock          */
+/* -------------------------------------------------------------------------- */
+
+describe("interview gate — easy-family hard cap (≤ 1 per mock)", () => {
+  const EASY: TopicFamily[] = ["sequences", "mental-math", "estimation"];
+
+  it("classifies sequences / mental-math / estimation as EASY and caps them at one", () => {
+    for (const fam of EASY) {
+      expect(FAMILY_DIFFICULTY[fam]).toBe("easy");
+      expect(isEasyFamily(fam)).toBe(true);
+      expect(familyCap(fam)).toBe(EASY_FAMILY_CAP);
+      expect(familyCap(fam)).toBe(1);
+    }
+  });
+
+  it("classifies genuinely-hard families as HARD and lets them exceed one", () => {
+    for (const fam of ["conditional-prob", "bayes", "gamblers-ruin", "combinatorics"] as TopicFamily[]) {
+      expect(FAMILY_DIFFICULTY[fam]).toBe("hard");
+      expect(isEasyFamily(fam)).toBe(false);
+      expect(familyCap(fam)).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("no assembled firm mock contains an easy family more than once (all seeds)", () => {
+    const failures: string[] = [];
+    for (const preset of PRESET_ORDER) {
+      for (const seed of SEEDS) {
+        const script = buildInterview({ seed, preset });
+        const counts: Record<string, number> = {};
+        for (const step of script.steps) {
+          const fam = familyOfStep(step);
+          if (fam) counts[fam] = (counts[fam] ?? 0) + 1;
+        }
+        for (const [fam, n] of Object.entries(counts)) {
+          if (isEasyFamily(fam as TopicFamily) && n > EASY_FAMILY_CAP) {
+            failures.push(`${preset} seed ${seed}: easy family "${fam}" ×${n}`);
+          }
+        }
+      }
+    }
+    expect(failures, failures.slice(0, 8).join("\n")).toHaveLength(0);
+  });
+
+  it("auditScript reports the easy-family cap as a STRUCTURAL violation when tripped", () => {
+    // Hand-build a script with two `sequences` (an easy family) items.
+    const seqStep = (id: string) =>
+      ({
+        kind: "math",
+        id,
+        qtype: "sequences",
+        family: "sequences",
+        difficulty: "hard",
+        prompt: "next term?",
+        answer: 42,
+        targetMs: 45000,
+      }) as unknown as MathStep;
+    const script = {
+      seed: 1,
+      tier: "hard",
+      presetId: "optiver",
+      presetName: "x",
+      scoringNote: "x",
+      calculatorAllowed: false,
+      intro: "x",
+      steps: [seqStep("a"), { kind: "behavioral", id: "b", prompt: "p" } as never, seqStep("c")],
+    } as never;
+    const report = auditScript(script);
+    expect(report.familyCounts.sequences).toBe(2);
+    expect(report.ok).toBe(false);
+    expect(report.violations.some((v) => /easy family "sequences"/.test(v))).toBe(true);
+  });
 });
 
 /* -------------------------------------------------------------------------- */

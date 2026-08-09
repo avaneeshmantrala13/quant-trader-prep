@@ -130,6 +130,13 @@ export type TopicFamily =
  *                   committed conclusion. This is the trigger for a CLARIFYING
  *                   follow-up — the candidate must commit to ONE answer. It is
  *                   NEVER treated as correct and NEVER silently marked wrong;
+ *   • `uninterpretable` — GARBLED / nonsensical / incoherent text that cannot be
+ *                   parsed into ANY meaningful claim (keyboard-mash, symbol soup,
+ *                   word-salad). Distinct from `ambiguous` (which is a genuine
+ *                   hedge/contradiction between two READABLE positions) and from
+ *                   `vague` (a readable but hand-wavy assertion). The UI renders
+ *                   this as "Response not understood", NOT a both-sides/conflict
+ *                   message. Never correct, never silently wrong;
  *   • `vague`     — hand-wavy assertion without work (not necessarily wrong);
  *   • `absent`    — no real reasoning.
  */
@@ -138,8 +145,23 @@ export type ReasoningQuality =
   | "partial"
   | "flawed"
   | "ambiguous"
+  | "uninterpretable"
   | "vague"
   | "absent";
+
+/**
+ * WHY a reasoning-graded answer routed to `clarify` / needs a commit. This lets
+ * the UI pick ACCURATE copy instead of always saying "points both ways":
+ *   • `hedge`          — both-sides / refused to commit → ask them to pick one;
+ *   • `contradiction`  — a correct part AND a contradictory wrong-side commit;
+ *   • `unconfirmed`    — readable, but no correct committed conclusion detected;
+ *   • `uninterpretable`— garbled / nonsensical → "Response not understood".
+ */
+export type ClarifyKind =
+  | "hedge"
+  | "contradiction"
+  | "unconfirmed"
+  | "uninterpretable";
 
 /**
  * PER-QUESTION REQUIRED-JUSTIFICATION signals. The reasoning-quality grader uses
@@ -688,6 +710,12 @@ export interface MathScore {
   verdict?: FollowupVerdict;
   /** When `verdict === "clarify"`, the specific commitment-forcing prompt. */
   clarifyPrompt?: string;
+  /**
+   * When `verdict === "clarify"`, WHY it clarified — drives accurate UI copy so
+   * a GARBLED answer reads "Response not understood" rather than a both-sides /
+   * contradiction message. Absent ⇒ treat as a generic hedge/unconfirmed.
+   */
+  clarifyKind?: ClarifyKind;
 }
 
 /**
@@ -796,6 +824,12 @@ export interface ReasoningTags {
    * when absent.
    */
   ambiguous?: number;
+  /**
+   * GARBLED / nonsensical reasoning that could not be parsed into any claim
+   * ("Response not understood"). Optional for back-compat; treated as 0 when
+   * absent.
+   */
+  uninterpretable?: number;
 }
 
 /**

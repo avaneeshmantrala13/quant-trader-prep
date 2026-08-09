@@ -30,8 +30,13 @@
  *
  * PURE: no React, DOM, storage, or network. Same inputs ⇒ same verdict.
  */
-import { parseNumericValue, matchesMechanismSignal, isHandWaveOnly } from "./reasoning";
-import type { ConclusionMode } from "./types";
+import {
+  parseNumericValue,
+  matchesMechanismSignal,
+  isHandWaveOnly,
+  isUninterpretable,
+} from "./reasoning";
+import type { ClarifyKind, ConclusionMode } from "./types";
 
 /** The three-way verdict of the committed-conclusion grader. */
 export type ConclusionVerdict = "correct" | "missed" | "clarify";
@@ -83,6 +88,11 @@ export interface ConclusionResult {
   reason: string;
   /** The two sides in tension when `clarify` (for a specific clarify prompt). */
   tension?: { concluded: string; suggests: string };
+  /**
+   * WHY it routed to `clarify`, so the UI can pick accurate copy (a garbled
+   * answer must NOT read "points both ways"). Present only on `clarify`.
+   */
+  clarifyKind?: ClarifyKind;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -263,11 +273,12 @@ export function gradeConclusion(
   const strict = opts.strict === true;
   const clarifyOr = (
     reason: string,
+    kind: ClarifyKind,
     tension?: { concluded: string; suggests: string },
   ): ConclusionResult =>
     strict
       ? { verdict: "missed", reason }
-      : { verdict: "clarify", reason, ...(tension ? { tension } : {}) };
+      : { verdict: "clarify", reason, clarifyKind: kind, ...(tension ? { tension } : {}) };
 
   const text = (raw ?? "").trim();
   const lower = text.toLowerCase();
@@ -336,6 +347,7 @@ export function gradeConclusion(
   if (isHedged(text, spec)) {
     return clarifyOr(
       "Hedged / both-sides: no single committed answer.",
+      "hedge",
       { concluded: "both/either", suggests: correctSide },
     );
   }
@@ -345,6 +357,7 @@ export function gradeConclusion(
   if (correctPresent && wrongSignal) {
     return clarifyOr(
       "Mixed: a correct part and a contradictory wrong-side commitment.",
+      "contradiction",
       { concluded: wrongSide, suggests: correctSide },
     );
   }
@@ -366,6 +379,7 @@ export function gradeConclusion(
     if (requiresMechanism && !hasMechanism) {
       return clarifyOr(
         "Committed to the right side but did not state the mechanism/justification.",
+        "unconfirmed",
         { concluded: "answer only", suggests: correctSide },
       );
     }
@@ -374,9 +388,18 @@ export function gradeConclusion(
 
   // --- 6) verifiable but unsatisfied → clarify (safe default) -------------
   if (correctSignal === false || (hasSpec && !correctPresent)) {
+    // GARBLED text (keyboard-mash / symbol-soup) that cannot be parsed into a
+    // claim gets an accurate "Response not understood" clarify, distinct from a
+    // both-sides / contradiction message.
+    const kind: ClarifyKind = isUninterpretable(text)
+      ? "uninterpretable"
+      : "unconfirmed";
     return clarifyOr(
-      "Could not confirm a correct committed conclusion.",
-      { concluded: "unclear", suggests: correctSide },
+      kind === "uninterpretable"
+        ? "Response not understood — the text could not be parsed into a claim."
+        : "Could not confirm a correct committed conclusion.",
+      kind,
+      { concluded: kind === "uninterpretable" ? "not understood" : "unclear", suggests: correctSide },
     );
   }
 
@@ -388,6 +411,7 @@ export function gradeConclusion(
   if (substantive && requiresMechanism && !hasMechanism) {
     return clarifyOr(
       "Substantive but did not state the required mechanism/justification.",
+      "unconfirmed",
       { concluded: "answer only", suggests: correctSide },
     );
   }
@@ -403,6 +427,13 @@ export function gradeConclusion(
  */
 export function buildClarifyPrompt(result: ConclusionResult): string {
   const t = result.tension;
+  if (result.clarifyKind === "uninterpretable") {
+    return (
+      `I couldn't understand your response — it didn't read as a claim about the ` +
+      `problem. State your ONE final answer in plain words and the single reason ` +
+      `it's correct.`
+    );
+  }
   if (t && t.concluded === "both/either") {
     return (
       `Your explanation points both ways instead of committing. Pick ONE answer — ` +

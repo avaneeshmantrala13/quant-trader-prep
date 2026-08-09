@@ -31,6 +31,7 @@ export {
   normalizeReasoningPayload,
   numbersIn,
   isHedgedReasoning,
+  isUninterpretable,
   buildReasoningClarifyPrompt,
 } from "./reasoning";
 export type { ReasoningInput } from "./reasoning";
@@ -46,6 +47,15 @@ export type {
   ConclusionResult,
   Polarity,
 } from "./conclusion";
+export {
+  annotateReasoning,
+  annotateReasoningForAnswer,
+} from "./annotate";
+export type {
+  ReasoningSpan,
+  SpanLabel,
+  AnnotateOptions,
+} from "./annotate";
 export {
   buildFollowupPresentations,
   buildAiFollowup,
@@ -92,6 +102,9 @@ export {
   familyCap,
   DEFAULT_FAMILY_CAP,
   FAMILY_CAP_BY_FAMILY,
+  FAMILY_DIFFICULTY,
+  isEasyFamily,
+  EASY_FAMILY_CAP,
   MIN_DISTINCT_FAMILIES,
 } from "./interviewGate";
 export type { FollowupBase, FollowupLike, GateReport } from "./interviewGate";

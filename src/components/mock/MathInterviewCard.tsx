@@ -11,6 +11,7 @@ import {
 import { formatNumericAnswer } from "@/lib/numeric";
 import { AnswerField } from "./AnswerField";
 import { ReasoningPanel } from "./ReasoningPanel";
+import { SubmittedReasoning } from "./SubmittedReasoning";
 import { ClarifyBlock } from "./ClarifyBlock";
 import type { UseMockSpeech } from "./useMockSpeech";
 
@@ -369,6 +370,17 @@ export function MathInterviewCard({
             </div>
           </div>
 
+          {/* The candidate's OWN submitted reasoning, with model-highlighted
+              GOOD (green) and FLAWED (red) spans — shown ABOVE the verdict so
+              they see exactly which of their words were right/wrong. */}
+          {!isSprintGate && (
+            <SubmittedReasoning
+              text={response?.reasoningRaw}
+              verifiedAnswer={step.answer}
+              mechanismSignals={step.requiredReasoning?.mechanismSignals}
+            />
+          )}
+
           <ReasoningPanel grade={grade} loading={!grade} />
 
           {/* MAIN clarify — force a single committed answer when ambiguous */}
@@ -520,6 +532,8 @@ function FollowupBlock({
   const isProbe = p.role === "probe";
   const isReasoning = p.answerKind === "reasoning";
   const needsClarify = fuScore?.verdict === "clarify" && !followup.clarify?.graded;
+  const clarifyKind = fuScore?.clarifyKind;
+  const notUnderstood = clarifyKind === "uninterpretable";
 
   // The canonical answer to REVEAL when this follow-up was not fully correct: a
   // reasoning follow-up uses its authored `modelAnswer` stance; a numeric one
@@ -591,7 +605,13 @@ function FollowupBlock({
               }`}
             >
               {needsClarify
-                ? "● Points both ways — commit below"
+                ? notUnderstood
+                  ? "● Response not understood — restate below"
+                  : clarifyKind === "hedge"
+                    ? "● Points both ways — commit below"
+                    : clarifyKind === "contradiction"
+                      ? "● Contradiction — commit below"
+                      : "● Couldn't confirm — commit below"
                 : fuScore?.correct
                   ? "● Follow-up correct"
                   : fuScore
@@ -600,7 +620,13 @@ function FollowupBlock({
             </div>
             <div className="bg-surface p-3 text-sm text-secondary">
               {needsClarify
-                ? "Your explanation mixes a correct part with a contradictory one — commit to one answer below."
+                ? notUnderstood
+                  ? "I couldn't understand that response — it didn't read as a claim about the problem. Restate your reasoning in plain words below."
+                  : clarifyKind === "contradiction"
+                    ? "Your explanation mixes a correct part with a contradictory one — commit to one answer below."
+                    : clarifyKind === "hedge"
+                      ? "Your explanation points both ways instead of committing — pick one answer below."
+                      : "I couldn't confirm a clean committed conclusion — state your one answer below."
                 : fuScore
                   ? fuScore.correct
                     ? isReasoning

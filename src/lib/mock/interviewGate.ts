@@ -188,20 +188,69 @@ export function auditFollowup(base: FollowupBase, fu: FollowupLike): string[] {
 /*  Topic-family diversity constants                                          */
 /* -------------------------------------------------------------------------- */
 
+/* -------------------------------------------------------------------------- */
+/*  Per-family DIFFICULTY classification + the easy-family hard cap            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * DIFFICULTY CLASS of every topic family. An `"easy"` (i.e. "not super
+ * difficult") family — sequences, basic mental arithmetic, simple
+ * fraction/percent estimation — is a low-signal warm-up that a real screen would
+ * never repeat: seeing two of them in one mock (e.g. the reported Optiver mock
+ * with 2 sequence problems) means an easy topic is crowding out a harder one.
+ * Every genuinely-hard family (conditional probability, Bayes, gambler's ruin,
+ * combinatorics, market-making, …) is `"hard"` and may legitimately appear more
+ * than once. This drives {@link familyCap} and the structural easy-cap rule in
+ * {@link auditScript}, and is consumed by the assembler (`engine.ts`) + presets.
+ */
+export const FAMILY_DIFFICULTY: Record<TopicFamily, "easy" | "hard"> = {
+  // Easy / "not super difficult" — HARD-CAPPED to ONE per mock.
+  "mental-math": "easy",
+  sequences: "easy",
+  estimation: "easy",
+  // Hard families — may exceed one (subject to the per-family cap below).
+  "market-making": "hard",
+  brainteaser: "hard",
+  "independent-events": "hard",
+  "conditional-prob": "hard",
+  "geometric-race": "hard",
+  "optimal-stopping": "hard",
+  "order-statistics": "hard",
+  bayes: "hard",
+  "random-walk": "hard",
+  "gamblers-ruin": "hard",
+  "waiting-time": "hard",
+  combinatorics: "hard",
+  monty: "hard",
+  "coupon-collector": "hard",
+  birthday: "hard",
+  derangements: "hard",
+  "bet-sizing": "hard",
+};
+
+/** Whether a family is classified "easy" (⇒ hard-capped at one per mock). */
+export function isEasyFamily(family: TopicFamily): boolean {
+  return FAMILY_DIFFICULTY[family] === "easy";
+}
+
+/** The HARD CAP on how many items of an EASY family a mock may contain. */
+export const EASY_FAMILY_CAP = 1;
+
 /**
  * Per-family CAP on how many scored items of one family a mock may contain.
- * Sequences are Optiver's signature, so a few (non-adjacent) are allowed; every
- * fine-grained probability/EV family is capped at 2 so no sub-topic dominates.
+ * EASY families are hard-capped at {@link EASY_FAMILY_CAP} (one). Among HARD
+ * families the escalating market-making finale and brainteasers may repeat a few
+ * times; every fine-grained probability/EV family is capped at 2 so no sub-topic
+ * dominates.
  */
 export const DEFAULT_FAMILY_CAP = 2;
 export const FAMILY_CAP_BY_FAMILY: Partial<Record<TopicFamily, number>> = {
-  sequences: 3,
   "market-making": 3, // the escalating MM finale
   brainteaser: 3,
-  "mental-math": 2,
 };
 
 export function familyCap(family: TopicFamily): number {
+  if (isEasyFamily(family)) return EASY_FAMILY_CAP;
   return FAMILY_CAP_BY_FAMILY[family] ?? DEFAULT_FAMILY_CAP;
 }
 
@@ -301,9 +350,21 @@ export function auditScript(script: MockScript): GateReport {
     prevFamily = fam;
   }
 
-  // 2) Per-family cap.
+  // 2) Per-family cap — with the EASY-family HARD CAP of one broken out as its
+  //    own structural rule (an "easy"/not-super-difficult family may appear at
+  //    most once per mock; harder families may exceed one).
   for (const [fam, count] of Object.entries(familyCounts)) {
-    const cap = familyCap(fam as TopicFamily);
+    const family = fam as TopicFamily;
+    if (isEasyFamily(family)) {
+      if (count > EASY_FAMILY_CAP) {
+        violations.push(
+          `easy family "${fam}" appears ${count}× (hard cap ${EASY_FAMILY_CAP}/mock — ` +
+            `an easy/not-super-difficult topic may appear at most once)`,
+        );
+      }
+      continue;
+    }
+    const cap = familyCap(family);
     if (count > cap) {
       violations.push(`family "${fam}" appears ${count}× (cap ${cap})`);
     }
