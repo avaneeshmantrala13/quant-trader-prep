@@ -23,7 +23,7 @@ import {
 import { pickNextDrillTarget } from "@/lib/pipeline/drilling";
 
 /**
- * Stage-4 (game-OA) tests. The stage is now the full Optiver BATTERY: it
+ * Stage-4 (game-OA) tests. The stage is now the full trading-intuition BATTERY: it
  * sequences the eleven embedded game stations, each of which reuses its game's
  * pure engine and folds into its OWN trading-intuition subtopic. These tests
  * lock (a) the P2 make-a-market scorer still maps outcomes → credit and reaches

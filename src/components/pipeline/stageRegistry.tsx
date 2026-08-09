@@ -90,9 +90,9 @@ const STAGE_PLAN: Record<
   },
   "game-oa": {
     label: "Game-OA",
-    title: "Make-a-market game",
+    title: "Trading-intuition games",
     blurb:
-      "Quote two-sided markets against an informed bot to gauge your trading intuition.",
+      "Play a battery of market & cognitive games to gauge your trading intuition.",
     plannedPath: "src/components/pipeline/stages/GameOaStage.tsx",
     ownedBy: "P5",
   },

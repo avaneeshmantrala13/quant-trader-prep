@@ -9,7 +9,7 @@ import type { StationSummary } from "./gameOa/kit";
  * ============================================================================
  *  STAGE 4 — GAME-OA / TRADING-INTUITION BATTERY  (guided pipeline)
  * ============================================================================
- * The Game-OA stage is a full Optiver-style BATTERY played entirely INSIDE the
+ * The Game-OA stage is a full trading-intuition BATTERY played entirely INSIDE the
  * guided shell (no free-roam nav, no games hub). It sequences the learner
  * through the eleven embedded game stations in {@link BATTERY} — make-a-market,
  * the trading floor, cards MM, next-card betting, arbitrage & de-vig, Fermi,
@@ -78,7 +78,7 @@ export default function GameOaStage({ onComplete }: StageComponentProps) {
       <header className="space-y-1">
         <span className="label text-accent">Stage 4 · Trading intuition</span>
         <h2 className="font-display text-2xl font-bold text-primary">
-          The Optiver battery
+          Trading-intuition games
         </h2>
         <p className="text-sm text-secondary">
           A sequence of {BATTERY.length} market &amp; cognitive games. Each one

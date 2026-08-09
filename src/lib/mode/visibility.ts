@@ -479,7 +479,7 @@ export const GUIDED_HIDDEN_ROUTES: string[] = [
   "/ev-timed",
   "/fermi",
   "/drill",
-  // Optiver assessment cluster
+  // Cognitive assessment cluster
   "/numberlogic",
   "/beat-the-odds",
   "/stockmaster",

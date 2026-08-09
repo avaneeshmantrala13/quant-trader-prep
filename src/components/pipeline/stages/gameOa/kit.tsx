@@ -426,7 +426,7 @@ export function TimerBar({
 /* ========================================================================== */
 
 /**
- * A whole-run, time-pressured MCQ runner for the rapid Optiver Zap-N / OA papers
+ * A whole-run, time-pressured MCQ runner for the rapid go/no-go / OA papers
  * (Number Box, Shape Shift, NumberLogic) whose stand-alone modes stream items
  * against a SINGLE paper clock. Unlike {@link McqStation} it does NOT pause on a
  * per-item reveal — it streams forward the instant an option is picked, and when

@@ -39,7 +39,7 @@ function outcomeLabel(o: Outcome): string {
 }
 
 /**
- * Stockmaster battery station — the Optiver Zap-N go/no-go attention screen, run
+ * Stockmaster battery station — a rapid go/no-go attention screen, run
  * LIVE against the engine's per-trial shot clock (`DEFAULT_TRIAL_WINDOW_MS`,
  * ~1.4s). It STREAMS like the stand-alone page: each tick is shown for the
  * window, then either the player reacts or the clock lapses into an auto
