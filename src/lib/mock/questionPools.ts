@@ -23,8 +23,10 @@ import type { Rng } from "@/lib/rng";
 import type { Difficulty, NumericQuestion } from "@/types/content";
 import type {
   MockQuestionType,
+  PoolDifficultyLike,
   QuestionFollowups,
   RequiredReasoning,
+  TopicFamily,
 } from "./types";
 import {
   latticePathsIntersectProb,
@@ -50,6 +52,21 @@ export interface MockNumericQuestion extends NumericQuestion {
    * `MathStep` and consulted by the deterministic reasoning grader.
    */
   requiredReasoning?: RequiredReasoning;
+  /**
+   * Coarse topic-FAMILY tag (see `TopicFamily`). Populated by `familyForId` in
+   * the draw functions and threaded onto the `MathStep`, so the assembler can
+   * enforce diversity (no two adjacent scored items of the same family, per-
+   * family caps, N distinct families) and the acceptance gate can audit it.
+   */
+  family?: TopicFamily;
+  /**
+   * The values ALREADY COMPUTED while solving the base — the numerator, the
+   * denominator, a sub-count, a threshold, etc. The acceptance gate rejects any
+   * numeric follow-up whose answer equals one of these (a DECOMPOSITION: asking
+   * the candidate for a sub-step they already did). Author the true intermediates
+   * so the gate has teeth; the base `answer` itself is always implicitly included.
+   */
+  baseIntermediates?: number[];
 }
 
 /**
@@ -127,6 +144,8 @@ function genExactlyTwoOfThree(rng: Rng): MockNumericQuestion {
   const p = pPct / 100;
   const ans = round(3 * p * p * (1 - p), 4);
   const atLeastOne = round(1 - (1 - p) ** 3, 4);
+  const exactlyThree = round(p ** 3, 4);
+  const atLeastTwo = round(3 * p * p * (1 - p) + p ** 3, 4); // exactly-two OR all-three
   return {
     id: `pev-twoof3-${pPct}`,
     prompt: `Three independent events each occur with probability ${pPct}%. What is the probability that EXACTLY two of the three occur?`,
@@ -140,19 +159,28 @@ function genExactlyTwoOfThree(rng: Rng): MockNumericQuestion {
       { value: round(p * p, 4), feedback: "You computed p² for one specific pair but forgot (1−p) for the third event and the ×3 choices.", misconception: "forgot_complement_and_count" },
       { value: round(p * p * p, 4), feedback: "That's all three occurring — you need exactly two.", misconception: "all_three" },
     ],
+    baseIntermediates: [round(p * p, 4), exactlyThree, round(1 - p, 4), round(3 * p, 4), atLeastOne, ans],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `For the SAME three independent ${pPct}% events, what is the probability that AT LEAST ONE occurs?`,
+        // ADD-CONSTRAINT: escalate "exactly two" to "at least two" (adds the
+        // all-three leg) — a strictly harder related computation, not the base
+        // sub-steps (p², 1−p) the candidate already had.
+        type: "add-constraint",
+        difficulty: "hard",
+        prompt: `For the SAME three independent ${pPct}% events, what is the probability that AT LEAST TWO of them occur (that is, exactly two OR all three)?`,
         answerKind: "numeric",
-        answer: atLeastOne,
+        answer: atLeastTwo,
         decimals: 4,
-        modelReasoning: `Use the complement: P(at least one) = 1 − P(none) = 1 − (1−p)³ = 1 − ${round(1 - p, 2)}³ = ${atLeastOne}.`,
+        modelReasoning: `Add the two disjoint cases: P(exactly two) + P(all three) = 3·p²·(1−p) + p³ = ${ans} + ${exactlyThree} = ${atLeastTwo}.`,
         commonErrors: [
-          { value: round(3 * p, 4), feedback: "You added the probabilities (3p); overlapping events are double-counted. Use 1 − (1−p)³.", misconception: "added_probabilities" },
+          { value: ans, feedback: "That's only EXACTLY two — you must also add the all-three case p³.", misconception: "forgot_all_three_leg" },
+          { value: exactlyThree, feedback: "That's only all three (p³); add the exactly-two term 3·p²·(1−p) as well.", misconception: "only_all_three" },
         ],
       },
       adversarial: {
+        type: "change-regime",
+        difficulty: "hard",
         prompt: `Suppose the three events were MUTUALLY EXCLUSIVE instead of independent (still each ${pPct}%). Is 3·p²·(1−p) still the probability that exactly two occur? State the correct probability of "exactly two" under mutual exclusivity and explain why.`,
         answerKind: "reasoning",
         modelAnswer: `No — the probability is exactly 0.`,
@@ -196,6 +224,12 @@ function genConditionalUrn(rng: Rng): MockNumericQuestion {
   const bothRedUncond = round(bothRed / allPairs, 4); // P(both red), no conditioning
   const withReplacement = round((red / T) * (red / T), 4);
   const secondGivenFirst = round((red - 1) / (T - 1), 4);
+  const atLeastOneRed = round(atLeastOneRedPairs / allPairs, 4);
+  // PROBE curveball — escalate to THREE draws, conditioning on "at least two red".
+  const red3 = choose(red, 3);
+  const exactlyTwoRed3 = choose(red, 2) * choose(blue, 1);
+  const atLeastTwoRed3 = red3 + exactlyTwoRed3;
+  const allThreeGivenTwo = round(red3 / atLeastTwoRed3, 4); // P(all 3 red | ≥2 red)
   return {
     id: `pev-urn-${red}-${blue}`,
     prompt: `An urn has ${red} red and ${blue} blue balls. You draw two without replacement. Given that AT LEAST ONE of the two drawn balls is red, what is the probability that BOTH are red?`,
@@ -209,19 +243,28 @@ function genConditionalUrn(rng: Rng): MockNumericQuestion {
       { value: bothRedUncond, feedback: "That's the UNCONDITIONAL P(both red). You must divide by P(at least one red) (< 1), so the conditional is larger.", misconception: "forgot_to_condition" },
       { value: secondGivenFirst, feedback: "That's P(second red | first red) — a different, simpler conditioning. Here you condition on 'at least one of the two is red'.", misconception: "wrong_conditioning_event" },
     ],
+    baseIntermediates: [bothRedUncond, secondGivenFirst, withReplacement, atLeastOneRed, ans],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `First nail the piece that drives it: drawing two without replacement, what is the probability that BOTH balls are red (no conditioning)?`,
+        // ADD-CONSTRAINT / generalize: escalate to THREE draws with a HARDER
+        // conditioning event ("at least two red"). Genuinely new work — a fresh
+        // C(·,3) ratio — NOT the numerator sub-step the candidate already computed.
+        type: "add-constraint",
+        difficulty: "stretch",
+        prompt: `Now draw THREE balls without replacement instead of two. Given that AT LEAST TWO of the three drawn are red, what is the probability that ALL THREE are red?`,
         answerKind: "numeric",
-        answer: bothRedUncond,
+        answer: allThreeGivenTwo,
         decimals: 4,
-        modelReasoning: `Without replacement, P(both red) = (${red}/${T})·(${red - 1}/${T - 1}) = ${bothRedUncond} — the second draw has one fewer red out of one fewer ball.`,
+        modelReasoning: `Condition on "≥2 red among 3": P(all 3 red | ≥2 red) = C(${red},3) / [C(${red},3) + C(${red},2)·C(${blue},1)] = ${red3} / (${red3} + ${exactlyTwoRed3}) = ${allThreeGivenTwo}.`,
         commonErrors: [
-          { value: withReplacement, feedback: "That treats the draws as WITH replacement ((red/total)²). Without replacement the second draw has one fewer red of one fewer ball.", misconception: "used_with_replacement" },
+          { value: round(red3 / choose(T, 3), 4), feedback: "That's the UNCONDITIONAL P(all three red); you must divide by P(at least two red), not by all triples.", misconception: "forgot_to_condition_three" },
+          { value: ans, feedback: "That's the two-draw answer; the three-draw conditioning event and count are different.", misconception: "reused_two_draw" },
         ],
       },
       adversarial: {
+        type: "adversarial-trap",
+        difficulty: "hard",
         prompt: `Is P(both red | at least one red) LARGER or SMALLER than the unconditional P(both red), and why? Commit to a side and justify.`,
         answerKind: "reasoning",
         modelAnswer: `Larger.`,
@@ -247,6 +290,9 @@ function genGeometricFlips(rng: Rng): MockNumericQuestion {
   const k = rng.pick([3, 4, 5, 6]); // per-attempt success prob p = 1/k
   const first = round(k / (2 * k - 1), 4); // P(first mover wins) = 1/(2 − p)
   const second = round((k - 1) / (2 * k - 1), 4); // P(second mover wins)
+  const pp = 1 / k;
+  const qq = 1 - pp;
+  const firstOfThree = round(pp / (1 - qq ** 3), 4); // P(first of THREE players wins)
   return {
     id: `pev-geo-${k}`,
     prompt: `Two players alternate attempts at a task; on each attempt a player succeeds with probability 1/${k}, independently. They take turns until someone succeeds, and whoever succeeds FIRST wins. What is the probability that the player who moves first wins?`,
@@ -260,19 +306,27 @@ function genGeometricFlips(rng: Rng): MockNumericQuestion {
       { value: 0.5, feedback: "It isn't 50/50 — moving first is a real edge because you get the first attempt every round.", misconception: "assumed_symmetric" },
       { value: round(1 / k, 4), feedback: `1/${k} is the single-attempt success chance, not the whole-game win probability (you must sum the geometric series over your own turns).`, misconception: "used_single_attempt" },
     ],
+    baseIntermediates: [first, second, round(1 / k, 4), 0.5],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `In the SAME alternating game, what is the probability that the SECOND player (who moves second) wins?`,
+        // GENERALIZE-N: three players cycling instead of two — the geometric sum
+        // now runs over every third turn, a genuinely harder setup (not 1 − first).
+        type: "generalize-n",
+        difficulty: "stretch",
+        prompt: `Now THREE players take turns in a fixed cyclic order (still succeeding with probability 1/${k} per attempt, first success wins). What is the probability that the player who moves FIRST wins?`,
         answerKind: "numeric",
-        answer: second,
+        answer: firstOfThree,
         decimals: 4,
-        modelReasoning: `A draw is impossible, so the second mover wins whenever the first doesn't: 1 − ${first} = ${second}.`,
+        modelReasoning: `The first of three wins on attempts 1, 4, 7, …: P = p·Σ(1−p)^{3j} = p/(1−(1−p)³). With p = 1/${k} that is ${firstOfThree}.`,
         commonErrors: [
-          { value: first, feedback: "That's the FIRST mover's win probability. Since a draw is impossible, the second mover's is 1 minus it.", misconception: "swapped_players" },
+          { value: first, feedback: "That's the TWO-player first-mover probability; with three players the geometric sum runs over every THIRD attempt.", misconception: "reused_two_player" },
+          { value: round(1 / 3, 4), feedback: "It isn't a symmetric 1/3 — moving first is an edge because you get the first attempt each cycle.", misconception: "assumed_symmetric_three" },
         ],
       },
       adversarial: {
+        type: "change-regime",
+        difficulty: "hard",
         prompt: `Now let the per-attempt success probability shrink toward 0 (the task becomes nearly impossible on any single try). What value does the FIRST mover's win probability approach, and why does the first-move advantage fade?`,
         answerKind: "reasoning",
         modelAnswer: `It approaches 1/2 (even odds).`,
@@ -299,6 +353,8 @@ function genConditionalGeometric(rng: Rng): MockNumericQuestion {
   const ans = round(q ** (m - 2) * p, 4); // P(N = m | N > 1)
   const nextM = round(q ** (m - 1) * p, 4); // P(N = m+1 | N > 1)
   const uncond = round(q ** (m - 1) * p, 4); // P(N = m) unconditional (a decoy)
+  const tailGivenGt1 = round(q ** (m - 1), 4); // P(N > m | N > 1) = q^{m-1}
+  const tailUncond = round(q ** m, 4); // P(N > m) unconditional (a decoy)
   return {
     id: `pev-condgeo-${m}`,
     prompt: `You flip a biased coin that lands HEADS with probability 1/3, repeatedly, until the first heads. Given that you needed MORE than one flip, what is the probability you needed exactly ${m} flips?`,
@@ -311,16 +367,28 @@ function genConditionalGeometric(rng: Rng): MockNumericQuestion {
     commonErrors: [
       { value: uncond, feedback: `That's the UNCONDITIONAL P(exactly ${m} flips); you must divide by P(>1 flip) = 2/3.`, misconception: "forgot_conditioning" },
     ],
+    baseIntermediates: [ans, uncond, nextM, round(q, 4), round(p, 4)],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `Same biased coin — given you needed more than one flip, what is the probability you needed exactly ${m + 1} flips?`,
+        // INVERT / add-constraint: from an EXACTLY-m probability to the TAIL
+        // "MORE than m flips" — a cumulative sum, not the same point mass one step
+        // out. Requires P(N>m | N>1) = q^{m−1}, genuinely different reasoning.
+        type: "invert",
+        difficulty: "hard",
+        prompt: `Same biased coin — given you needed more than one flip, what is the probability you needed MORE than ${m} flips (i.e. at least ${m + 1})?`,
         answerKind: "numeric",
-        answer: nextM,
+        answer: tailGivenGt1,
         decimals: 4,
-        modelReasoning: `Same conditional form one step further out: P(N=${m + 1} | N>1) = (2/3)^${m - 1}·(1/3) = ${nextM}.`,
+        modelReasoning: `The tail is P(N>${m}) = (2/3)^${m}, and conditioning on N>1 divides by P(N>1) = 2/3: P(N>${m} | N>1) = (2/3)^${m}/(2/3) = (2/3)^${m - 1} = ${tailGivenGt1}.`,
+        commonErrors: [
+          { value: tailUncond, feedback: `That's the UNCONDITIONAL tail P(N>${m}) = (2/3)^${m}; you must still divide by P(N>1) = 2/3.`, misconception: "forgot_conditioning_tail" },
+          { value: ans, feedback: `That's P(N=${m} | N>1), a single point mass — the question asks for the whole tail beyond ${m}.`, misconception: "point_not_tail" },
+        ],
       },
       adversarial: {
+        type: "change-regime",
+        difficulty: "hard",
         prompt: `Does the answer depend on HOW MANY early flips you're told came up tails before you start counting? Explain in one line using the memorylessness of the geometric distribution.`,
         answerKind: "reasoning",
         conclusionKeywords: [["memoryless", "no memory", "doesn't depend", "independent", "same distribution", "resets", "geometric"]],
@@ -346,6 +414,8 @@ function genCombosConstraint(rng: Rng): MockNumericQuestion {
   const bothTogether = choose(n - 2, k - 2); // committees containing BOTH A and B
   const ans = total - bothTogether; // committees NOT containing both
   const ordered = permute(n, k); // distinct roles from all n
+  const trioTogether = choose(n - 3, k - 3); // committees containing ALL of A,B,C
+  const ansTrio = total - trioTogether; // committees NOT containing all three
   return {
     id: `pev-choose-${n}-${k}`,
     prompt: `A committee of ${k} must be chosen from ${n} distinct candidates, but two of them (A and B) refuse to serve TOGETHER — a committee may contain A, or B, or neither, but never both. How many valid committees are there? (Order doesn't matter.)`,
@@ -358,19 +428,28 @@ function genCombosConstraint(rng: Rng): MockNumericQuestion {
       { value: total, feedback: "That's ALL committees; you still have to remove the ones with A and B together.", misconception: "ignored_constraint" },
       { value: ordered, feedback: "That counts ORDERED selections (permutations); a committee is unordered — divide by k!.", misconception: "permutation_not_combination" },
     ],
+    baseIntermediates: [total, bothTogether, ordered, choose(n - 2, k - 1)],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `From the same ${n} candidates, how many committees of ${k} contain BOTH A and B (exactly the ones the rule forbids)?`,
+        // ADD-CONSTRAINT: a HARDER exclusion — now THREE people can't all serve
+        // together. Same complementary-counting principle, escalated to a trio;
+        // NOT the C(n−2,k−2) subtracted term the base already computed.
+        type: "add-constraint",
+        difficulty: "stretch",
+        prompt: `Change the rule: now THREE people (A, B, and C) refuse to ALL serve together — a committee of ${k} may include any two of them, but never all three. How many valid committees are there now?`,
         answerKind: "numeric",
-        answer: bothTogether,
+        answer: ansTrio,
         decimals: 0,
-        modelReasoning: `Fix A and B into 2 of the ${k} seats, then choose the remaining ${k - 2} from the other ${n - 2}: C(${n - 2},${k - 2}) = ${bothTogether}.`,
+        modelReasoning: `Take all C(${n},${k}) = ${total}, then subtract committees containing ALL of A, B, C (fix their 3 seats, choose the rest): C(${n - 3},${k - 3}) = ${trioTogether}. Valid = ${total} − ${trioTogether} = ${ansTrio}.`,
         commonErrors: [
-          { value: choose(n - 2, k - 1), feedback: `That fixes only ONE required seat. To force BOTH A and B in, fix 2 seats and choose the remaining ${k - 2} from the other ${n - 2}.`, misconception: "fixed_one_not_both" },
+          { value: total, feedback: "That's ALL committees; still subtract the ones that seat all three of A, B, C.", misconception: "ignored_trio_constraint" },
+          { value: bothTogether, feedback: "That's the two-person forbidden count from the base; the new rule forbids only the full TRIO — subtract C(n−3,k−3).", misconception: "reused_pair_count" },
         ],
       },
       adversarial: {
+        type: "change-regime",
+        difficulty: "hard",
         prompt: `Ignore the restriction for a moment. If the ${k} chosen were instead given DISTINCT numbered roles (order matters), how many ways are there to fill them from all ${n} candidates? State the count and explain why it is exactly ${factorial(k)}× the unrestricted committee count C(${n},${k}).`,
         answerKind: "reasoning",
         conclusionTargets: [ordered],
@@ -386,6 +465,9 @@ function genCombosConstraint(rng: Rng): MockNumericQuestion {
 function genDieReroll(): MockNumericQuestion {
   // Reroll if first roll < 3.5 (i.e. 1,2,3); keep 4,5,6. Continuation value 3.5.
   const ev = 4.25; // ½·E[keep 4,5,6]=5 + ½·3.5
+  // With TWO rerolls: last-stage continuation 3.5 → the one-reroll value is 4.25,
+  // so on the first roll keep only 5,6 (they beat 4.25), else fall back to 4.25.
+  const evTwoRerolls = round((2 / 6) * 5.5 + (4 / 6) * 4.25, 4); // ≈ 4.6667
   return {
     id: `pev-die-reroll`,
     prompt: `You roll a fair six-sided die. You may keep it, or reroll ONCE and must then take the second roll. Playing optimally, what is the expected value of your final number?`,
@@ -399,19 +481,27 @@ function genDieReroll(): MockNumericQuestion {
       { value: 3.5, feedback: "3.5 is the EV with NO option to reroll — the reroll strictly improves it.", misconception: "ignored_option" },
       { value: 5, feedback: "That's the EV of the kept high rolls only; you also reroll half the time (EV 3.5).", misconception: "kept_leg_only" },
     ],
+    baseIntermediates: [ev, 3.5, 3, 5],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `In the optimal strategy, what is the HIGHEST first-roll value on which you still choose to REROLL?`,
+        // GENERALIZE-N: add a second reroll and re-solve the multi-stage EV —
+        // a full backward-induction, not the base's keep-threshold sub-fact.
+        type: "generalize-n",
+        difficulty: "stretch",
+        prompt: `Now you may reroll up to TWICE (three rolls total; you must take the last roll you land on). Playing optimally, what is the expected value of your final number?`,
         answerKind: "numeric",
-        answer: 3,
-        decimals: 0,
-        modelReasoning: `The continuation value is 3.5, so you reroll anything below it — 1, 2, and 3 — and keep 4, 5, 6. The highest reroll value is 3.`,
+        answer: evTwoRerolls,
+        decimals: 4,
+        modelReasoning: `Backward induction: with one reroll left the value is 4.25, so on the first roll you keep only 5 or 6 (they beat 4.25) and otherwise fall back to 4.25. EV = (2/6)·5.5 + (4/6)·4.25 = ${evTwoRerolls}.`,
         commonErrors: [
-          { value: 4, feedback: "You'd keep a 4 (it beats the reroll value of 3.5); you only reroll 1, 2, 3.", misconception: "threshold_off_by_one" },
+          { value: ev, feedback: "That's the ONE-reroll EV; a second reroll strictly improves it — you now keep only 5,6 on the first roll.", misconception: "ignored_second_reroll" },
+          { value: 5, feedback: "That's the EV of the kept high rolls only; you also fall back to the 4.25 continuation two-thirds of the time.", misconception: "kept_leg_only_two" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `If you were allowed TWO rerolls (three rolls total), would your optimal FIRST-roll keep-threshold go UP, DOWN, or stay the same? Explain.`,
         answerKind: "reasoning",
         conclusionKeywords: [["up", "higher", "increase", "rises", "more selective", "stricter", "raise"]],
@@ -427,6 +517,7 @@ function genExpectedMaxTwoDice(): MockNumericQuestion {
   // E[max] = Σ m·(2m−1)/36 = 161/36 ≈ 4.4722; E[min] = 7 − E[max] = 91/36.
   const eMax = round(161 / 36, 4);
   const eMin = round(91 / 36, 4);
+  const eDiff = round(70 / 36, 4); // E[|a−b|] = E[max] − E[min] = 70/36 ≈ 1.9444
   return {
     id: `pev-max2dice`,
     prompt: `Two fair six-sided dice are rolled. What is the expected value of the LARGER of the two (the maximum)?`,
@@ -439,16 +530,27 @@ function genExpectedMaxTwoDice(): MockNumericQuestion {
     commonErrors: [
       { value: 3.5, feedback: "3.5 is the EV of one die; the max of two is pulled higher.", misconception: "used_single_die" },
     ],
+    baseIntermediates: [eMax, eMin, 3.5, 7],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `For the same two dice, what is the expected value of the SMALLER of the two (the minimum)?`,
+        // INVERT: from the max to the expected GAP between the dice — a new
+        // order-statistics computation (E[max] − E[min]), not the sibling E[min].
+        type: "invert",
+        difficulty: "hard",
+        prompt: `For the same two dice, what is the expected value of the ABSOLUTE DIFFERENCE between them, E[ |a − b| ]?`,
         answerKind: "numeric",
-        answer: eMin,
+        answer: eDiff,
         decimals: 4,
-        modelReasoning: `By symmetry E[max] + E[min] = E[sum] = 7, so E[min] = 7 − 161/36 = 91/36 ≈ ${eMin}.`,
+        modelReasoning: `|a − b| = max − min on every roll, so E[|a−b|] = E[max] − E[min] = 161/36 − 91/36 = 70/36 ≈ ${eDiff}.`,
+        commonErrors: [
+          { value: eMin, feedback: "That's E[min]; the expected gap is E[max] − E[min], not the minimum itself.", misconception: "gave_min_not_gap" },
+          { value: 0, feedback: "The dice aren't equal on average — E[|a−b|] = E[max]−E[min] > 0.", misconception: "assumed_zero_gap" },
+        ],
       },
       adversarial: {
+        type: "adversarial-trap",
+        difficulty: "hard",
         prompt: `Since one die is always the max and the other the min, E[max] + E[min] should equal E[sum of two dice]. Use this to CHECK your answer — state E[max] + E[min].`,
         answerKind: "reasoning",
         conclusionTargets: [7],
@@ -469,6 +571,9 @@ function genBayesDisease(rng: Rng): MockNumericQuestion {
   // Sensitivity 100% for a clean, still-counterintuitive posterior.
   const post = round((p * 1) / (p * 1 + (1 - p) * fpr), 4);
   const positivesPer10k = Math.round(10000 * (p * 1 + (1 - p) * fpr));
+  // INVERT target: the prevalence making a positive a coin-flip (posterior 0.5):
+  // p/(p + (1−p)·fpr) = 1/2  ⇒  p = fpr/(1 + fpr).
+  const prevForHalf = round(fpr / (1 + fpr), 4);
   return {
     id: `pev-bayes-${prevPct}-${fprPct}`,
     prompt: `A disease affects ${prevPct}% of people. A test is 100% sensitive (never misses a real case) but has a ${fprPct}% false-positive rate. Given a POSITIVE test, what is the probability the person actually has the disease?`,
@@ -481,16 +586,27 @@ function genBayesDisease(rng: Rng): MockNumericQuestion {
     commonErrors: [
       { value: round(1 - fpr, 4), feedback: "That's just (1 − false-positive rate); it ignores the tiny base rate, which dominates here.", misconception: "ignored_base_rate" },
     ],
+    baseIntermediates: [post, positivesPer10k, round(1 - fpr, 4), round(p, 4), round(fpr, 4)],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `Think in natural frequencies: out of 10,000 people tested, roughly how many test POSITIVE in total (true + false positives)?`,
+        // INVERT: solve for the PREVALENCE that would make a positive a 50/50 —
+        // reversing the Bayes formula, not reading off its denominator.
+        type: "invert",
+        difficulty: "stretch",
+        prompt: `Keeping the test the same (100% sensitive, ${fprPct}% false-positive rate), how COMMON would the disease have to be (what prevalence) for a positive test to mean a 50/50 chance of actually having it?`,
         answerKind: "numeric",
-        answer: positivesPer10k,
-        decimals: 0,
-        modelReasoning: `Of 10,000, about ${Math.round(10000 * p)} truly have it (all test positive) and ${Math.round(10000 * (1 - p) * fpr)} healthy people false-positive, totalling ≈ ${positivesPer10k.toLocaleString()} positives.`,
+        answer: prevForHalf,
+        decimals: 4,
+        modelReasoning: `Set the posterior to 1/2: p/(p + (1−p)·${fpr}) = 1/2 ⇒ p = ${fpr}/(1 + ${fpr}) = ${prevForHalf} (about ${round(prevForHalf * 100, 2)}%).`,
+        commonErrors: [
+          { value: round(fpr, 4), feedback: "That's the false-positive rate, not the prevalence — solve p/(p+(1−p)·fpr)=1/2 for p.", misconception: "gave_fpr_not_prevalence" },
+          { value: 0.5, feedback: "0.5 is the target POSTERIOR, not the prevalence that produces it.", misconception: "confused_posterior_and_prior" },
+        ],
       },
       adversarial: {
+        type: "adversarial-trap",
+        difficulty: "expert",
         prompt: `A positive result here still means the person probably does NOT have the disease. Which quantity, if it ROSE, would most increase P(disease | positive): the disease's prevalence or the false-positive rate? Answer and explain.`,
         answerKind: "reasoning",
         conclusionKeywords: [["prevalence", "base rate", "base-rate", "prior", "how common"]],
@@ -543,9 +659,14 @@ function genLatticePaths(rng: Rng): MockNumericQuestion {
       { value: intersect, feedback: "That's the probability their PATHS ever cross (ignoring time). The question asks for the SAME point at the SAME time, which parity forbids here.", misconception: "answered_path_intersection" },
       { value: 0.5, feedback: "It isn't a coin flip: with an odd Manhattan distance the walkers are always on opposite parities, so they can NEVER coincide in time.", misconception: "guessed_half" },
     ],
+    baseIntermediates: [intersect, 0.5],
     source: "mock probability/EV",
     followups: {
       probe: {
+        // CHANGE-REGIME: flip the parity (even gap) so a same-time meeting becomes
+        // possible — a fresh binomial, not a sub-step of the parity-zero base.
+        type: "change-regime",
+        difficulty: "stretch",
         prompt: `Now move B to (${bx}, ${ey}) so the Manhattan distance ${es} is EVEN. At the only time they could coincide (t = ${es}/2), what is the probability they actually occupy the same point?`,
         answerKind: "numeric",
         answer: meetEven,
@@ -556,6 +677,8 @@ function genLatticePaths(rng: Rng): MockNumericQuestion {
         ],
       },
       adversarial: {
+        type: "adversarial-trap",
+        difficulty: "stretch",
         prompt: `Forget timing. Considering the SET of points each walker visits, do the two PATHS intersect with probability GREATER or LESS than 1/2? Commit to a side and justify — you do not need the exact value.`,
         answerKind: "reasoning",
         modelAnswer: `GREATER than 1/2 (about ${intersect}).`,
@@ -583,6 +706,7 @@ function genGamblersRuin(rng: Rng): MockNumericQuestion {
   const p = 0.6; // win probability each bet (favorable)
   const reach = round(gamblersRuinReachTop(a, N, p), 4); // (1 − r^a)/(1 − r^N)
   const reachFair = round(a / N, 4);
+  const reachUnfav = round(gamblersRuinReachTop(a, N, 0.4), 4); // r = q/p = 1.5 (adverse)
   return {
     id: `pev-ruin-${a}-${N}`,
     prompt: `You start with $${a} and bet $1 at a time on a coin that pays you with probability 0.6 each flip (win +$1, lose −$1), stopping only when you reach $0 (broke) or $${N} (target). What is the probability you reach $${N} before going broke?`,
@@ -596,19 +720,28 @@ function genGamblersRuin(rng: Rng): MockNumericQuestion {
       { value: reachFair, feedback: `${reachFair} is the FAIR-coin answer a/N. With a 0.6 edge your chance is higher — you must use (1 − r^a)/(1 − r^N).`, misconception: "used_fair_formula" },
       { value: 0.6, feedback: "0.6 is the per-flip win probability, not the whole-game survival probability.", misconception: "used_single_flip" },
     ],
+    baseIntermediates: [reach, reachFair, 0.6, 0.5],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `Baseline check: if the coin were instead FAIR (win probability 0.5), what would the probability of reaching $${N} from $${a} be?`,
+        // CHANGE-REGIME: flip the edge AGAINST you (win prob 0.4, r = 1.5). Same
+        // ratio formula but now r > 1 — a strictly harder instance, not the easy
+        // fair-coin baseline the base already contrasts against.
+        type: "change-regime",
+        difficulty: "hard",
+        prompt: `Now the coin is against you: it pays with probability only 0.4 each flip (lose −$1 with probability 0.6). From the same $${a}, what is the probability you reach $${N} before going broke?`,
         answerKind: "numeric",
-        answer: reachFair,
+        answer: reachUnfav,
         decimals: 4,
-        modelReasoning: `A fair random walk hits the target with probability equal to your stake over the target: a/N = ${a}/${N} = ${reachFair}.`,
+        modelReasoning: `Now r = q/p = 0.6/0.4 = 1.5 (> 1). P(reach ${N}) = (1 − r^${a})/(1 − r^${N}) = ${reachUnfav} — much lower than the favorable case because the walk now drifts toward ruin.`,
         commonErrors: [
-          { value: 0.5, feedback: "It isn't 50/50 unless you start halfway — the fair-walk hitting probability is your stake over the target, a/N.", misconception: "assumed_half" },
+          { value: reachFair, feedback: "That's the FAIR-coin a/N; with an adverse 0.4 edge your chance is far lower — use (1 − r^a)/(1 − r^N) with r = 1.5.", misconception: "used_fair_formula_unfav" },
+          { value: reach, feedback: "That's the FAVORABLE (0.6) answer; flipping the edge to 0.4 inverts r to 1.5 and lowers the probability.", misconception: "reused_favorable" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `As your per-flip edge grows even further (win probability rising toward 1), does your probability of reaching $${N} go UP or DOWN, and what value does it approach?`,
         answerKind: "reasoning",
         modelAnswer: `It goes UP, approaching 1.`,
@@ -630,6 +763,7 @@ function genGamblersRuin(rng: Rng): MockNumericQuestion {
 function genThreeDiceMax(): MockNumericQuestion {
   const eMax = round(expectedMaxDice(3, 6), 4); // 4.9583
   const eMin = round(expectedMinDice(3, 6), 4); // 2.0417
+  const eMax4 = round(expectedMaxDice(4, 6), 4); // max of FOUR dice (probe)
   return {
     id: `pev-ord3-max`,
     prompt: `Three fair six-sided dice are rolled. What is the expected value of the LARGEST of the three?`,
@@ -643,19 +777,27 @@ function genThreeDiceMax(): MockNumericQuestion {
       { value: 4.4722, feedback: "That's E[max] for TWO dice; a third die pulls the maximum higher still.", misconception: "used_two_dice" },
       { value: 3.5, feedback: "3.5 is one die's mean; the max of three is well above it.", misconception: "used_single_die" },
     ],
+    baseIntermediates: [eMax, eMin, 3.5, 7],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `For the same three dice, what is the expected value of the SMALLEST of the three?`,
+        // GENERALIZE-N: add a fourth die and recompute E[max] from the CDF — a
+        // fresh (m/6)^4 order-statistics computation, not the symmetric E[min].
+        type: "generalize-n",
+        difficulty: "hard",
+        prompt: `Now roll FOUR fair six-sided dice. What is the expected value of the LARGEST of the four?`,
         answerKind: "numeric",
-        answer: eMin,
+        answer: eMax4,
         decimals: 4,
-        modelReasoning: `By symmetry E[min] = 7 − E[max] = 7 − 119/24 = 49/24 ≈ ${eMin} (min of three sits well below the single-die mean 3.5).`,
+        modelReasoning: `P(max ≤ m) = (m/6)⁴, so P(max = m) = (m⁴ − (m−1)⁴)/6⁴ and E[max] = Σ m·P(max = m) ≈ ${eMax4} — higher than the three-die 119/24 because a fourth die can only raise the maximum.`,
         commonErrors: [
-          { value: 3.5, feedback: "The minimum of three dice is pulled BELOW one die's mean of 3.5.", misconception: "used_single_die" },
+          { value: eMax, feedback: "That's E[max] for THREE dice; a fourth die pulls the maximum higher still.", misconception: "reused_three_dice_max" },
+          { value: 6, feedback: "It isn't 6 yet — with only four dice the maximum is high but not almost-certainly the top face.", misconception: "assumed_limit_reached" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `As you roll MORE and more dice, does E[max] keep rising, and what value does it approach? Commit to a direction and the limit.`,
         answerKind: "reasoning",
         modelAnswer: `It keeps RISING, approaching 6.`,
@@ -696,9 +838,17 @@ function genPatternFlips(rng: Rng): MockNumericQuestion {
     commonErrors: [
       { value: 2 ** pair.main.length, feedback: "The expected wait is NOT just 2^length; overlap structure changes it (e.g. HH waits 6 but HT only 4).", misconception: "used_two_to_the_length" },
     ],
+    // Only the genuinely-computed base value goes here (the 2^length figure is a
+    // MISCONCEPTION decoy, tracked in commonErrors — NOT a computed sub-step —
+    // and must not gate the probe, whose fresh answer can legitimately coincide).
+    baseIntermediates: [mainE],
     source: "mock probability/EV",
     followups: {
       probe: {
+        // CHANGE-REGIME: a DIFFERENT same-length pattern whose overlap structure
+        // changes the wait — a fresh automaton recursion, not a base sub-step.
+        type: "change-regime",
+        difficulty: "stretch",
         prompt: `Now the pattern "${pair.probe}" instead. What is the expected number of flips until "${pair.probe}" first appears?`,
         answerKind: "numeric",
         answer: probeE,
@@ -709,6 +859,8 @@ function genPatternFlips(rng: Rng): MockNumericQuestion {
         ],
       },
       adversarial: {
+        type: "adversarial-trap",
+        difficulty: "expert",
         prompt: `Two patterns of the SAME length can have different expected waits. Does a pattern that can OVERLAP itself (like HH) take LONGER or SHORTER to appear than one that cannot (like HT)? Commit and explain.`,
         answerKind: "reasoning",
         conclusionKeywords: [["longer", "more flips", "greater", "waits longer", "takes longer", "larger", "higher", "more"]],
@@ -750,10 +902,15 @@ function genBankOrRoll(): MockNumericQuestion {
       { value: 3.5, feedback: "3.5 is the EV with NO option to reroll — the reroll strictly improves it.", misconception: "ignored_option" },
       { value: 5, feedback: "That's the EV of only the banked high rolls; you also reroll half the time (EV 3.5).", misconception: "kept_leg_only" },
     ],
+    baseIntermediates: [ev, 3.5, 5],
     source: "mock probability/EV",
     followups: {
       probe: {
-        // MUTATION 1: change a structural rule (a reroll now costs 0.5).
+        // CHANGE-REGIME (Jane Street mutation): a reroll now costs 0.5, dropping
+        // the continuation value and shifting the keep-threshold — a re-solve, not
+        // arithmetic on the base answer.
+        type: "change-regime",
+        difficulty: "hard",
         prompt: `Now CHANGE THE RULE: each reroll costs you 0.5 (subtracted from your final banked number). Playing optimally under that cost, what is the new expected value?`,
         answerKind: "numeric",
         answer: withCostEv,
@@ -766,6 +923,8 @@ function genBankOrRoll(): MockNumericQuestion {
       },
       adversarial: {
         // MUTATION 2: generalize-to-n rerolls; reason about the limit.
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `Now GENERALIZE: back to free rerolls, but suppose you may reroll up to n times (each time you must eventually take a roll). As n → ∞, what value does the optimal expected banked number approach, and WHY?`,
         answerKind: "reasoning",
         conclusionTargets: [6],
@@ -799,10 +958,14 @@ function genMontyHall(): MockNumericQuestion {
     commonErrors: [
       { value: 0.5, feedback: "Two doors remaining does NOT make it 50/50 — the host's reveal is informed, so the 2/3 from your unpicked doors concentrates on the switch door.", misconception: "ignored_host_information" },
     ],
+    baseIntermediates: [twoThirds, round(1 / 3, 4), 0.5],
     source: "mock probability/EV",
     followups: {
       probe: {
-        // Deepen: same principle scaled to 10 doors (a pattern-matcher slips).
+        // GENERALIZE-N: scale to 10 doors (host opens 8) — the same conditional
+        // funnel taken to n, a genuinely new value (9/10), not a base sub-step.
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `Same game but with 10 doors: you pick one, then the host opens 8 OTHER doors that are all empty, leaving one unopened door besides yours. What is your probability of winning if you SWITCH?`,
         answerKind: "numeric",
         answer: nineTenths,
@@ -815,6 +978,8 @@ function genMontyHall(): MockNumericQuestion {
       adversarial: {
         // IMC hold-firm: push back on the correct answer; credit only if they
         // hold 2/3 WITH justification. Caving to 1/2 misses the target ⇒ wrong.
+        type: "adversarial-trap",
+        difficulty: "hard",
         prompt: `Plenty of candidates insist that once two doors are left it is simply 50/50 — are you SURE? State the probability of winning by switching in the original 3-door game and defend WHY it is not 1/2.`,
         answerKind: "reasoning",
         conclusionTargets: [twoThirds],
@@ -839,6 +1004,10 @@ function genCitadelStones(): MockNumericQuestion {
   const posterior = 0.75;
   const bothBlack = round(1 / 3, 4); // P(first two both black), marginal
   const betEv = -0.5; // even-money bet the stone is WHITE, at your P(white)=1/4
+  // INVERT probe: weaker evidence — only ONE black drawn. Posterior on a remaining
+  // stone: weights ∝ k give P(k)=1/6,2/6,3/6 for k=1,2,3, and the expected share
+  // of remaining black works out to 2/3.
+  const oneBlackPosterior = round(2 / 3, 4);
   return {
     id: `pev-citadel-stones`,
     prompt: `A bag has 3 stones; each was independently colored black or white by a fair coin, so the number of black stones is equally likely to be 0, 1, 2, or 3. You draw two stones WITHOUT replacement and both are black. What is the probability the remaining (third) stone is also black?`,
@@ -851,18 +1020,28 @@ function genCitadelStones(): MockNumericQuestion {
     commonErrors: [
       { value: 0.5, feedback: "The two black draws are evidence the bag is black-heavy — they shift the posterior toward all-black, so it is not 1/2.", misconception: "ignored_bayesian_update" },
     ],
+    baseIntermediates: [posterior, bothBlack, 0.5, betEv],
     source: "mock probability/EV",
     followups: {
       probe: {
-        // Deepen: the marginal that drives the Bayes denominator.
-        prompt: `In that same setup, BEFORE conditioning, what is the probability that the first two draws are both black? (The denominator of your Bayes update.)`,
+        // INVERT: WEAKER evidence — you drew only ONE black. Re-run the whole
+        // Bayes update from a different observation, not the base's denominator.
+        type: "invert",
+        difficulty: "stretch",
+        prompt: `Change the evidence: suppose you had drawn just ONE stone and it was black (not two). Now what is the probability that a specific one of the two remaining stones is also black?`,
         answerKind: "numeric",
-        answer: bothBlack,
+        answer: oneBlackPosterior,
         decimals: 4,
-        modelReasoning: `Average over compositions: only k=2 (prob 1/4, draw-both-black chance 1/3) and k=3 (prob 1/4, chance 1) contribute, giving 1/4·1/3 + 1/4·1 = 1/3 ≈ ${bothBlack}.`,
+        modelReasoning: `One black draw makes the posterior on the count ∝ k, so P(k=1,2,3) = 1/6, 2/6, 3/6. A remaining stone is black with probability Σ P(k)·(k−1)/2 = (2/6)(1/2) + (3/6)(1) = 2/3 ≈ ${oneBlackPosterior}.`,
+        commonErrors: [
+          { value: posterior, feedback: "That's the posterior after TWO black draws; one black is weaker evidence, so the probability is lower.", misconception: "reused_two_draw_posterior" },
+          { value: 0.5, feedback: "It isn't a uniform 1/2 — even one black draw shifts the composition toward black-heavy bags.", misconception: "ignored_single_update" },
+        ],
       },
       adversarial: {
         // Citadel: bet on your OWN number. You believe black w.p. 0.75.
+        type: "act-on-it",
+        difficulty: "expert",
         prompt: `You believe the third stone is black with probability 0.75. I offer you EVEN MONEY that it is WHITE: you win $1 if it is white, lose $1 if it is black. Using YOUR own probability, should you TAKE or PASS this bet — and what is its EV per $1 to you?`,
         answerKind: "reasoning",
         conclusionTargets: [betEv],
@@ -889,6 +1068,8 @@ function genSigConfidenceBet(): MockNumericQuestion {
   const p = 0.75; // 1/2·(5/6) + 1/2·(4/6) = 3/4
   const givenTails = round(4 / 6, 4); // P(win | tails) = 2/3
   const stake = 50; // Kelly f = 2p − 1 = 0.5 of a $100 bankroll
+  // CHANGE-REGIME probe: bias the coin to 2/3 heads and re-weight the branches.
+  const biasedWin = round((2 / 3) * (5 / 6) + (1 / 3) * (4 / 6), 4); // = 14/18 ≈ 0.7778
   return {
     id: `pev-sig-confbet`,
     prompt: `A fair coin is flipped and then a fair six-sided die is rolled. If the coin came up HEADS, you win when the die shows 2 or higher; if it came up TAILS, you win when the die shows 3 or higher. What is the probability that you win? (This is the edge you will size a bet to in the follow-ups.)`,
@@ -902,18 +1083,28 @@ function genSigConfidenceBet(): MockNumericQuestion {
       { value: round(5 / 6, 4), feedback: "That's only the HEADS branch (die ≥ 2). You must weight both coin outcomes equally.", misconception: "single_branch" },
       { value: 0.5, feedback: "Average the two conditional win probabilities (5/6 and 2/3), each with weight 1/2 — that gives 3/4, not 1/2.", misconception: "ignored_conditionals" },
     ],
+    baseIntermediates: [p, givenTails, round(5 / 6, 4), 0.5, stake],
     source: "mock probability/EV",
     followups: {
       probe: {
-        // Deepen: isolate one branch of the total-probability decomposition.
-        prompt: `Break it into cases: GIVEN the coin came up tails, what is the probability you win?`,
+        // CHANGE-REGIME: bias the coin (2/3 heads) and re-weight the two branches
+        // — the full law-of-total-probability again, not one isolated branch.
+        type: "change-regime",
+        difficulty: "hard",
+        prompt: `Now suppose the coin is BIASED — it lands heads with probability 2/3 (tails 1/3), same die rule. What is the new probability that you win?`,
         answerKind: "numeric",
-        answer: givenTails,
+        answer: biasedWin,
         decimals: 4,
-        modelReasoning: `Given tails you win when the die shows 3 or higher — that's 4 of 6 faces, so P(win | tails) = 4/6 ≈ ${givenTails}.`,
+        modelReasoning: `Re-weight the branches by the new coin: P(win) = (2/3)·(5/6) + (1/3)·(4/6) = 10/18 + 4/18 = 14/18 ≈ ${biasedWin}.`,
+        commonErrors: [
+          { value: p, feedback: "That's the FAIR-coin edge (equal 1/2 weights); the biased coin now weights the heads branch 2/3.", misconception: "reused_fair_weights" },
+          { value: givenTails, feedback: "That's just the tails branch; you must weight BOTH branches by the biased coin.", misconception: "single_branch_biased" },
+        ],
       },
       adversarial: {
         // SIG confidence→bet-size: size to edge; more edge ⇒ more stake.
+        type: "act-on-it",
+        difficulty: "hard",
         prompt: `Now bet on it. You are 75% to win an EVEN-MONEY bet (win $1 / lose $1). The Kelly rule sizes your stake at fraction f = (2p − 1) of your bankroll. How many dollars of a $100 bankroll should you stake — and should that stake be MORE or LESS than if you were only 60% confident?`,
         answerKind: "reasoning",
         conclusionTargets: [stake],
@@ -938,6 +1129,9 @@ function genCouponCollector(rng: Rng): MockNumericQuestion {
   const last = couponCollectorLastFaceExpected(k); // k
   const nextK = rng.pick([8, 10, 12].filter((x) => x !== k));
   const evNext = round(couponCollectorExpected(nextK), 4);
+  // INVERT probe: probability of the PERFECT run — all k faces in exactly k rolls
+  // (no repeats) = k!/k^k. A fresh counting argument, not a term of the EV sum.
+  const perfectRun = round(factorial(k) / k ** k, 4);
   return {
     id: `pev-coupon-${k}`,
     prompt: `You roll a fair ${k}-sided die repeatedly. What is the expected number of rolls until you have seen ALL ${k} distinct faces at least once?`,
@@ -951,19 +1145,28 @@ function genCouponCollector(rng: Rng): MockNumericQuestion {
       { value: k, feedback: `${k} is the expected wait for just the FINAL missing face; the earlier faces also take time — sum all ${k} geometric waits.`, misconception: "used_last_face_only" },
       { value: round(couponCollectorExpected(k) - k, 4), feedback: `You dropped the last (hardest) term k/1 = ${k}; include the wait for the final face.`, misconception: "dropped_last_term" },
     ],
+    baseIntermediates: [ev, last, round(couponCollectorExpected(k) - k, 4)],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `In that same process, once you already hold ${k - 1} of the ${k} faces, what is the expected number of ADDITIONAL rolls to finally get the one missing face?`,
+        // INVERT: from an EXPECTED time to the PROBABILITY of the fastest possible
+        // run (all faces in exactly k rolls) — a counting argument, k!/k^k, not a
+        // summand of the base's expected-time sum.
+        type: "invert",
+        difficulty: "hard",
+        prompt: `What is the probability that you collect all ${k} faces in exactly ${k} rolls — the fastest possible, with no face ever repeating?`,
         answerKind: "numeric",
-        answer: last,
-        decimals: 0,
-        modelReasoning: `Each roll shows the missing face with probability 1/${k}, a geometric wait with mean ${k}. This single term is the largest in the coupon-collector sum.`,
+        answer: perfectRun,
+        decimals: 4,
+        modelReasoning: `Every roll must land on a NEW face: the number of no-repeat sequences is ${k}!, out of ${k}^${k} equally-likely roll strings, so P = ${k}!/${k}^${k} = ${perfectRun}.`,
         commonErrors: [
-          { value: 1, feedback: `It isn't one roll on average — the missing face appears with probability 1/${k}, so you wait ${k} rolls on average.`, misconception: "ignored_geometric_wait" },
+          { value: round(1 / k, 4), feedback: "That's the chance a single later roll is the missing face; the perfect run requires EVERY roll to be new, k!/k^k.", misconception: "single_step_not_run" },
+          { value: last, feedback: `${last} is an expected wait, not a probability — the no-repeat run probability is k!/k^k.`, misconception: "gave_wait_not_prob" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `A fair ${nextK}-sided die instead of a ${k}-sided one: does the expected number of rolls to collect all faces grow in PROPORTION to the number of faces, or FASTER than proportionally? Commit to a side and explain, and state the value for the ${nextK}-sided die.`,
         answerKind: "reasoning",
         modelAnswer: `Faster than proportionally (≈ k·ln k), and for ${nextK} faces it is ${evNext}.`,
@@ -993,6 +1196,10 @@ function genBirthdayCollision(rng: Rng): MockNumericQuestion {
   const ans = round(birthdayCollisionProb(n, d), 4);
   const noColl = round(birthdayNoCollisionProb(n, d), 4);
   const linear = round((n * (n - 1)) / (2 * d), 4); // pair-count approximation
+  // INVERT probe: the smallest headcount at which a shared day is MORE likely than
+  // not (collision probability first exceeds 1/2).
+  let tippingN = 1;
+  while (birthdayCollisionProb(tippingN, d) <= 0.5) tippingN++;
   return {
     id: `pev-birthday-${n}-${d}`,
     prompt: `A room has ${n} people, each equally likely to have been born on any of ${d} days (independently). What is the probability that AT LEAST TWO of them share a birthday (the same day)?`,
@@ -1006,19 +1213,28 @@ function genBirthdayCollision(rng: Rng): MockNumericQuestion {
       { value: noColl, feedback: "That's the probability all birthdays are DISTINCT — the question asks for at least one shared, its complement.", misconception: "answered_complement" },
       { value: linear, feedback: `${linear} counts the ${n}·(${n}−1)/2 pairs each colliding with probability 1/${d} — a first-order approximation that ignores overlap. Use 1 − Π(d−i)/d.`, misconception: "used_pair_approximation" },
     ],
+    baseIntermediates: [ans, noColl, linear],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `First nail the piece that drives it: with those same ${n} people and ${d} days, what is the probability that ALL ${n} birthdays are DISTINCT (no two shared)?`,
+        // INVERT: instead of "probability for n people", find the smallest n at
+        // which a shared day becomes more likely than not — a search over the
+        // same product, genuinely new work (not the all-distinct sub-step).
+        type: "invert",
+        difficulty: "hard",
+        prompt: `With the same ${d} equally-likely days, how many people must be in the room for a shared birthday to be MORE likely than not (probability just over 1/2)?`,
         answerKind: "numeric",
-        answer: noColl,
-        decimals: 4,
-        modelReasoning: `Place people one at a time; each must avoid the days already used: (${d}/${d})·(${d - 1}/${d})·⋯·(${d - n + 1}/${d}) = ${noColl}.`,
+        answer: tippingN,
+        decimals: 0,
+        modelReasoning: `Grow the group until 1 − (${d}/${d})(${d - 1}/${d})⋯ first exceeds 1/2; that happens at ${tippingN} people.`,
         commonErrors: [
-          { value: ans, feedback: "That's P(some shared); the all-distinct probability is its complement.", misconception: "swapped_complement" },
+          { value: 2, feedback: "Two people are nowhere near a coin-flip for a shared day; the probability rises much faster than you'd guess — solve 1 − Π(d−i)/d > 1/2.", misconception: "guessed_two_people" },
+          { value: d, feedback: `You don't need all ${d} days filled — a majority chance of a shared day arrives well before ${d} people.`, misconception: "waited_for_pigeonhole" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: `Now suppose the room holds MORE than ${d} people (more people than possible days). What is the probability that at least two share a day, and what principle forces it? Commit to a value and name the principle.`,
         answerKind: "reasoning",
         modelAnswer: `Exactly 1 (certain), by the pigeonhole principle.`,
@@ -1044,6 +1260,8 @@ function genDerangement(rng: Rng): MockNumericQuestion {
   const count = derangementCount(n);
   const naive = round(1 / n, 4); // "1/n" reflex
   const oneMinus = round(1 - 1 / n, 4); // "1 − 1/n" reflex
+  // INVERT probe: P(EXACTLY ONE letter correct) = C(n,1)·!(n−1)/n! = !(n−1)/(n−1)!.
+  const exactlyOne = round((n * derangementCount(n - 1)) / factorial(n), 4);
   return {
     id: `pev-derange-${n}`,
     prompt: `${n} distinct letters are placed at random into ${n} addressed envelopes (one per envelope, a uniformly random matching). What is the probability that NO letter ends up in its own correct envelope?`,
@@ -1057,19 +1275,28 @@ function genDerangement(rng: Rng): MockNumericQuestion {
       { value: naive, feedback: `${naive} = 1/${n} assumes only one letter matters; you must exclude EVERY letter landing home, which is inclusion–exclusion.`, misconception: "used_single_letter" },
       { value: oneMinus, feedback: `${oneMinus} = 1 − 1/${n} only removes the first letter being correct; the other correct-placements must be inclusion–excluded too.`, misconception: "removed_one_only" },
     ],
+    baseIntermediates: [ans, count, naive, oneMinus, factorial(n)],
     source: "mock probability/EV",
     followups: {
       probe: {
-        prompt: `For those same ${n} letters, how many of the ${n}! arrangements are derangements (COUNT the arrangements with no letter in its own envelope)?`,
+        // INVERT: from "NO letter correct" to "EXACTLY ONE correct" — a new
+        // inclusion–exclusion count (choose the fixed letter, derange the rest),
+        // not the !n numerator the base already produced.
+        type: "invert",
+        difficulty: "stretch",
+        prompt: `For those same ${n} letters, what is the probability that EXACTLY ONE letter ends up in its own correct envelope (and the other ${n - 1} do not)?`,
         answerKind: "numeric",
-        answer: count,
-        decimals: 0,
-        modelReasoning: `!${n} = ${n}!·Σ_{k=0}^{${n}}(−1)^k/k! = ${count}. (Check: ${count}/${factorial(n)} = ${ans} matches the probability.)`,
+        answer: exactlyOne,
+        decimals: 4,
+        modelReasoning: `Choose which 1 of ${n} is correct (${n} ways) and derange the other ${n - 1}: P = ${n}·!${n - 1}/${n}! = ${n}·${derangementCount(n - 1)}/${factorial(n)} = ${exactlyOne}. (Curiously also ≈ 1/e.)`,
         commonErrors: [
-          { value: factorial(n), feedback: `${factorial(n)} = ${n}! counts ALL arrangements; only the derangements have no fixed point.`, misconception: "counted_all_permutations" },
+          { value: ans, feedback: "That's the probability of ZERO correct (a full derangement); here exactly one letter is home.", misconception: "gave_zero_fixed" },
+          { value: naive, feedback: `${naive} = 1/${n} is the chance ONE specific letter is home — you must also derange the rest and count which letter is fixed.`, misconception: "ignored_rest_derangement" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "expert",
         prompt: `As the number of letters grows very large, what value does the probability of a complete derangement approach, and why does it NOT go to 0 or 1? Commit to the limit.`,
         answerKind: "reasoning",
         modelAnswer: `It approaches 1/e ≈ 0.3679.`,
@@ -1113,8 +1340,14 @@ function makeSeq(b: SeqBuildFull): MockNumericQuestion {
   const shownTerms = Array.from({ length: b.shown }, (_, i) => b.term(i));
   const answer = b.term(b.shown);
   const nextNext = b.term(b.shown + 1);
-  const farPos = b.shown + 4;
+  // PROBE jumps several steps out (not just "one more"), forcing the rule/closed
+  // form rather than eyeballing a single gap.
+  const jumpPos = b.shown + 3; // 3 positions past the blank
+  const jumpValue = b.term(jumpPos);
+  const farPos = b.shown + 6; // adversarial reaches even further out
   const farValue = b.term(farPos - 1);
+  const harderThanMedium: PoolDifficultyLike =
+    b.difficulty === "hard" || b.difficulty === "expert" ? b.difficulty : "hard";
   return {
     id: `${b.idBase}-${shownTerms.join("-")}`,
     prompt: `What number comes next in the sequence?  ${shownTerms.join(", ")}, ___`,
@@ -1124,19 +1357,27 @@ function makeSeq(b: SeqBuildFull): MockNumericQuestion {
     concept: b.concept,
     explanation: `${b.ruleText} So the next term is ${answer}.`,
     commonErrors: b.errors ? b.errors(b.term, b.shown) : undefined,
+    baseIntermediates: [answer, nextNext],
     source: "Sequences & Pattern Recognition",
     followups: {
       probe: {
-        prompt: `Continue the SAME sequence one more step: what is the term AFTER ${answer}?`,
+        // GENERALIZE-N: jump SEVERAL steps past the blank, so a candidate who only
+        // eyeballed one gap can't coast — they must apply the rule / closed form.
+        type: "generalize-n",
+        difficulty: harderThanMedium,
+        prompt: `Skip ahead: what is the value THREE positions after the blank (i.e. the term after the next two)?`,
         answerKind: "numeric",
-        answer: nextNext,
+        answer: jumpValue,
         decimals: 0,
-        modelReasoning: `${b.ruleText} Applying it once more after ${answer} gives ${nextNext}.`,
+        modelReasoning: `${b.ruleText} Applying it repeatedly from ${answer} (→ ${nextNext} → …) lands on ${jumpValue} three steps out.`,
         commonErrors: [
-          { value: answer, feedback: "That's the term you just gave — advance one more step by the same rule.", misconception: "repeated_answer" },
+          { value: answer, feedback: "That's the blank itself — advance three more steps by the rule.", misconception: "gave_blank" },
+          { value: nextNext, feedback: "That's only one step past the blank; go three steps out.", misconception: "off_by_two_steps" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: harderThanMedium,
         prompt: `State the RULE generating this sequence in one phrase, and give the value at position ${farPos} (counting the first shown term as position 1).`,
         answerKind: "reasoning",
         conclusionTargets: [farValue],
@@ -1392,9 +1633,14 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
     commonErrors: [
       { value: 89, feedback: "You held the FIRST differences constant (added 24 again — a linear guess). Here the SECOND differences are constant, so the next gap is 30, giving 65 + 30 = 95.", misconception: "constant_first_difference" },
     ],
+    baseIntermediates: [95, 89],
     source: "Sequences & Pattern Recognition",
     followups: {
       probe: {
+        // GENERALIZE-N: extend the SAME quadratic one growing-gap step further —
+        // the demo's approachable second beat (kept intact by design).
+        type: "generalize-n",
+        difficulty: "hard",
         prompt: "Continue the SAME sequence one more step: what is the term AFTER 95?",
         answerKind: "numeric",
         answer: 131,
@@ -1407,6 +1653,10 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
         ],
       },
       adversarial: {
+        // GENERALIZE / invert: fit the closed-form coefficients of a NEW quadratic
+        // from scratch — strictly harder than continuing the demo.
+        type: "generalize-n",
+        difficulty: "stretch",
         prompt:
           "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … It is also quadratic, aₙ = a·n² + b·n + c (with n = 1 for the first term). What are a, b, and c — and why do just three of the shown terms pin all three down?",
         answerKind: "reasoning",
@@ -1470,6 +1720,10 @@ function genEstOptionsQuotes(rng: Rng): MockNumericQuestion {
   const ans = contracts * refreshPerSec * SESSION_SECONDS;
   const doubled = ans * 2;
   const droppedCallPut = contracts / 2; // forgot the call+put doubling
+  // ADD-CONSTRAINT probe: layer a bandwidth estimate on top — 40 bytes/message,
+  // expressed in gigabytes (a further multi-factor step + unit conversion).
+  const BYTES_PER_MSG = 40;
+  const gb = round((ans * BYTES_PER_MSG) / 1e9, 2); // total gigabytes
   return {
     id: `est-mmquotes-${underlyings}-${expiries}-${strikes}-${refreshPerSec}`,
     prompt:
@@ -1491,19 +1745,28 @@ function genEstOptionsQuotes(rng: Rng): MockNumericQuestion {
       { value: contracts * refreshPerSec * 6.5, feedback: "You used 6.5 (hours) instead of 23,400 seconds — convert the session to seconds first.", misconception: "forgot_seconds_conversion" },
       { value: droppedCallPut * refreshPerSec * SESSION_SECONDS, feedback: "You dropped the ×2 — each strike lists BOTH a call and a put.", misconception: "dropped_call_put" },
     ],
+    baseIntermediates: [contracts, ans, doubled, droppedCallPut, contracts * refreshPerSec * 6.5],
     source: "mock estimation",
     followups: {
       probe: {
-        prompt: `First nail the sub-estimate: how many distinct option CONTRACTS (calls and puts, across all strikes and expirations) is the maker quoting?`,
+        // ADD-CONSTRAINT: extend the throughput estimate into a BANDWIDTH estimate
+        // (bytes → gigabytes) — a further multi-factor chain with a unit trap, not
+        // the contract-count sub-estimate the base already required.
+        type: "add-constraint",
+        difficulty: "stretch",
+        prompt: `Each quote message is about ${BYTES_PER_MSG} bytes on the wire. Estimate the TOTAL data volume of the session in GIGABYTES (1 GB = 1,000,000,000 bytes).`,
         answerKind: "numeric",
-        answer: contracts,
-        decimals: 0,
-        modelReasoning: `Contracts = underlyings × expirations × strikes × 2 (a call AND a put per strike) = ${underlyings} × ${expiries} × ${strikes} × 2 = ${contracts.toLocaleString()}.`,
+        answer: gb,
+        decimals: 2,
+        modelReasoning: `Bytes = ${ans.toLocaleString()} messages × ${BYTES_PER_MSG} bytes = ${(ans * BYTES_PER_MSG).toLocaleString()} bytes; ÷ 1e9 ≈ ${gb} GB.`,
         commonErrors: [
-          { value: droppedCallPut, feedback: "That's strikes×expirations×underlyings but forgets that each strike has a call AND a put — double it.", misconception: "dropped_call_put" },
+          { value: ans, feedback: "That's the message COUNT; multiply by 40 bytes and convert to GB (÷ 1e9).", misconception: "gave_count_not_bytes" },
+          { value: round(ans * BYTES_PER_MSG, 0), feedback: "Those are BYTES; divide by 1,000,000,000 to get gigabytes.", misconception: "forgot_gb_conversion" },
         ],
       },
       adversarial: {
+        type: "generalize-n",
+        difficulty: "expert",
         prompt: `Suppose the maker DOUBLED its refresh rate (to ${refreshPerSec * 2} per second), holding everything else fixed. What would the session message total be, and is the total LINEAR or non-linear in the refresh rate?`,
         answerKind: "reasoning",
         conclusionTargets: [doubled],
@@ -1727,6 +1990,53 @@ function mechanismSignalsForId(id: string): string[] | undefined {
 }
 
 /**
+ * TOPIC-FAMILY map, keyed by question-id PREFIX (longest match wins). Broad for
+ * sequences (one family so three sequence problems never run back-to-back) and
+ * FINE-GRAINED for probability/EV so two adjacent prob-EV slots draw genuinely
+ * different topics. Consumed by `familyForId` → `MockNumericQuestion.family` →
+ * the assembler's diversity constraints and the acceptance gate.
+ */
+const FAMILY_BY_ID_PREFIX: Record<string, TopicFamily> = {
+  "pev-twoof3": "independent-events",
+  "pev-urn": "conditional-prob",
+  "pev-condgeo": "conditional-prob",
+  "pev-geo": "geometric-race",
+  "pev-choose": "combinatorics",
+  "pev-die-reroll": "optimal-stopping",
+  "pev-bankroll": "optimal-stopping",
+  "pev-max2dice": "order-statistics",
+  "pev-ord3": "order-statistics",
+  "pev-bayes": "bayes",
+  "pev-citadel": "bayes",
+  "pev-lattice": "random-walk",
+  "pev-ruin": "gamblers-ruin",
+  "pev-monty": "monty",
+  "pev-sig-confbet": "bet-sizing",
+  "pev-coupon": "coupon-collector",
+  "pev-birthday": "birthday",
+  "pev-derange": "derangements",
+  "pev-pattern": "waiting-time",
+  "est-": "estimation",
+  "seqn-": "sequences",
+};
+
+/** The topic-FAMILY for a question id (longest id-prefix wins), or undefined. */
+export function familyForId(id: string): TopicFamily | undefined {
+  const keys = Object.keys(FAMILY_BY_ID_PREFIX).sort(
+    (a, b) => b.length - a.length,
+  );
+  for (const k of keys) if (id.startsWith(k)) return FAMILY_BY_ID_PREFIX[k];
+  return undefined;
+}
+
+/** Attach the topic-family tag (from the id) if the generator didn't set one. */
+export function attachFamily(q: MockNumericQuestion): MockNumericQuestion {
+  if (q.family) return q;
+  const family = familyForId(q.id);
+  return family ? { ...q, family } : q;
+}
+
+/**
  * Attach the MAIN reasoning-quality mechanism gate to a freshly-drawn question
  * (if the generator did not already author one). Pure: returns the same object
  * with `requiredReasoning` populated when signals exist for its id.
@@ -1760,14 +2070,37 @@ export function drawNumericQuestion(
         : difficulty === "hard"
           ? PROB_EV_HARD
           : PROB_EV_MEDIUM;
-    return attachRequiredReasoning(rng.pick(pool)(rng));
+    return attachFamily(attachRequiredReasoning(rng.pick(pool)(rng)));
   }
   if (qtype === "sequences") {
     const pool = difficulty === "medium" ? SEQUENCE_MEDIUM : SEQUENCE_HARD;
-    return attachRequiredReasoning(rng.pick(pool)(rng));
+    return attachFamily(attachRequiredReasoning(rng.pick(pool)(rng)));
   }
   // estimation
-  return attachRequiredReasoning(rng.pick(ESTIMATION_POOL)(rng));
+  return attachFamily(attachRequiredReasoning(rng.pick(ESTIMATION_POOL)(rng)));
+}
+
+/**
+ * Draw a numeric question whose topic-family is NOT in `avoid` (so the assembler
+ * never places two same-family scored items back-to-back and can cap a family).
+ * Deterministic rejection sampling over the seeded RNG; if every family in the
+ * pool is excluded (small pools), it falls back to an unconstrained draw so a
+ * build never fails. `sequences`/`estimation` pools are single-family, so `avoid`
+ * only meaningfully constrains the fine-grained probability/EV pools.
+ */
+export function drawNumericQuestionAvoiding(
+  rng: Rng,
+  qtype: Exclude<MockQuestionType, "mental-math">,
+  difficulty: PoolDifficulty,
+  avoid: ReadonlySet<TopicFamily>,
+  cap = 64,
+): MockNumericQuestion {
+  let last = drawNumericQuestion(rng, qtype, difficulty);
+  for (let i = 0; i < cap; i++) {
+    if (!last.family || !avoid.has(last.family)) return last;
+    last = drawNumericQuestion(rng, qtype, difficulty);
+  }
+  return last;
 }
 
 /**
@@ -1792,9 +2125,24 @@ const ARCHETYPE_GENS: Record<ArchetypeId, Gen> = {
   "optiver-quadratic-demo": () => genOptiverQuadraticDemo(),
 };
 
+/** The topic-family each pinned archetype belongs to (for assembler diversity). */
+const ARCHETYPE_FAMILY: Record<ArchetypeId, TopicFamily> = {
+  "lattice-paths": "random-walk",
+  "bank-or-roll": "optimal-stopping",
+  "sig-confidence-bet": "bet-sizing",
+  "monty-hold-firm": "monty",
+  "citadel-bet": "bayes",
+  "optiver-quadratic-demo": "sequences",
+};
+
+/** The topic-family of a pinned archetype id. */
+export function archetypeFamily(id: ArchetypeId): TopicFamily {
+  return ARCHETYPE_FAMILY[id];
+}
+
 /** Draw ONE pinned firm-signature archetype question (with its follow-ups). */
 export function drawArchetype(rng: Rng, id: ArchetypeId): MockNumericQuestion {
-  return attachRequiredReasoning(ARCHETYPE_GENS[id](rng));
+  return attachFamily(attachRequiredReasoning(ARCHETYPE_GENS[id](rng)));
 }
 
 /** Exposed for tests. */

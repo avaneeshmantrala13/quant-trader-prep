@@ -69,12 +69,51 @@ export {
 } from "./marketMaking";
 export {
   drawNumericQuestion,
+  drawNumericQuestionAvoiding,
   drawArchetype,
+  archetypeFamily,
   toContentDifficulty,
   type PoolDifficulty,
   type MockNumericQuestion,
   type ArchetypeId,
 } from "./questionPools";
+export {
+  difficultyRank,
+  MIN_ITEM_DIFFICULTY_RANK,
+  FOLLOWUP_TYPES,
+  DECOMPOSITION_PHRASES,
+  decompositionReason,
+  belowFloorReason,
+  missingTypeReason,
+  auditFollowup,
+  auditMathStepFollowups,
+  auditScript,
+  familyOfStep,
+  familyCap,
+  DEFAULT_FAMILY_CAP,
+  FAMILY_CAP_BY_FAMILY,
+  MIN_DISTINCT_FAMILIES,
+} from "./interviewGate";
+export type { FollowupBase, FollowupLike, GateReport } from "./interviewGate";
+export {
+  rubricItemsFromScript,
+  reviewItem,
+  reviewItemHeuristic,
+  reviewItemWithLlm,
+  reviewScript,
+  buildRubricPrompt,
+  parseRubricResponse,
+  summarizeVerdicts,
+  RUBRIC_SYSTEM_PREAMBLE,
+} from "./interviewRubric";
+export type {
+  RubricItem,
+  RubricFollowup,
+  RubricFlag,
+  RubricVerdict,
+  RubricLlm,
+  RubricSummary,
+} from "./interviewRubric";
 export {
   MOCK_PRESETS,
   PRESET_ORDER,
@@ -83,6 +122,23 @@ export {
   type PresetItem,
   type PresetItemKind,
 } from "./presets";
+export {
+  INTERVIEW_BLUEPRINT_2026,
+  GOLD_ANCHORS,
+  FOLLOWUP_TAXONOMY,
+  blueprintForPreset,
+  requiredArchetypes,
+} from "./blueprint";
+export type {
+  FirmBlueprint,
+  RoundBlueprint,
+  RoundKind,
+  TimingRegime,
+  GoldAnchor,
+  FollowupPatternSpec,
+  FirmPriority,
+  Confidence,
+} from "./blueprint";
 export {
   computePerformance,
   deterministicDiagnosis,

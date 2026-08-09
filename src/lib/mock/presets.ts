@@ -84,15 +84,20 @@ const OPTIVER: MockPreset = {
     "questions under time (each right answer earns a concept follow-up that presses " +
     "whether you actually understand it), an estimate, and two market-making rounds " +
     "where I pick off any quote that's off.",
+  // ORDER interleaves families so no two adjacent scored items share a topic:
+  // the pinned quadratic demo opens, then sequences and prob/EV alternate (the
+  // 3 sequence slots are never back-to-back), the lattice anchor sits in the
+  // prob/EV run, and market-making closes. The family-aware assembler further
+  // guarantees adjacent prob/EV draws pull DISTINCT sub-families.
   items: [
     { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "NumberLogic-style: next-in-sequence (quadratic; constant 2nd difference)", archetype: "optiver-quadratic-demo" },
-    { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "progressive pattern; continue it" },
-    { kind: "sequences", difficulty: "hard", targetSec: 55, regime: "reasoning", note: "pattern with a twist; state the rule" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "Beat-the-Odds: conditional draw without replacement" },
+    { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "progressive pattern; continue it" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 75, regime: "reasoning", note: "expected flips = 1/p; memorylessness" },
+    { kind: "sequences", difficulty: "hard", targetSec: 55, regime: "reasoning", note: "pattern with a twist; state the rule" },
+    { kind: "probability-ev", difficulty: "stretch", targetSec: 120, regime: "reasoning", note: "lattice random-walk meeting + parity trap (anchor)", archetype: "lattice-paths" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 90, regime: "reasoning", note: "order statistics (max/min of dice)" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 100, regime: "reasoning", note: "pattern-wait / gambler's ruin (self-overlap trap)" },
-    { kind: "probability-ev", difficulty: "stretch", targetSec: 120, regime: "reasoning", note: "lattice random-walk meeting + parity trap (anchor)", archetype: "lattice-paths" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 90, regime: "reasoning", note: "optimal stopping / bank-or-roll EV" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 120, regime: "reasoning", note: "Bayes / combinatorics with a constraint" },
     { kind: "market-making", difficulty: "hard", targetSec: 120, regime: "reasoning", note: "face-down cards: quote a two-way market; bot picks off" },
@@ -121,12 +126,15 @@ const JANE_STREET: MockPreset = {
     "generalize to n), probability with a twist, a Fermi estimate, and an escalating " +
     "make-a-market finale where I trade against your quotes and reveal information " +
     "between rounds. I'll press every correct answer to see if your framework holds.",
+  // ORDER interleaves so the two brainteasers are never adjacent and each is
+  // separated from the prob/EV run; the pinned bank-or-roll cascade is flanked
+  // by a brainteaser and a distinct prob/EV draw. Market-making closes.
   items: [
     { kind: "mental-math", difficulty: "hard", targetSec: 8, regime: "sprint", note: "one hard numeric warm-up (math is screened separately)" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 120, regime: "reasoning", note: "conditional / gambler's ruin — narrate, then change an assumption" },
-    { kind: "probability-ev", difficulty: "stretch", targetSec: 140, regime: "reasoning", note: "hard conditional/pattern-wait; change an assumption" },
-    { kind: "probability-ev", difficulty: "hard", targetSec: 150, regime: "reasoning", note: "bank-or-roll cascade: rule change → generalize-to-n", archetype: "bank-or-roll" },
     { kind: "brainteaser", difficulty: "hard", targetSec: 120, regime: "reasoning", note: "logic puzzle under pressure; clarify the rules" },
+    { kind: "probability-ev", difficulty: "hard", targetSec: 150, regime: "reasoning", note: "bank-or-roll cascade: rule change → generalize-to-n", archetype: "bank-or-roll" },
+    { kind: "probability-ev", difficulty: "stretch", targetSec: 140, regime: "reasoning", note: "hard conditional/pattern-wait; change an assumption" },
     { kind: "brainteaser", difficulty: "hard", targetSec: 150, regime: "reasoning", note: "generalize-to-n variant" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 120, regime: "reasoning", note: "optimal-stopping EV — narrate, then mutate a rule" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 140, regime: "reasoning", note: "hard Bayes / combinatorics with a constraint" },
@@ -156,15 +164,18 @@ const SIG: MockPreset = {
     "allowed and the difficulty is framing the problem correctly. After each answer " +
     "I'll ask how sure you are and how much you'd bet on it, and we finish with " +
     "bet-sizing / pot-odds decisions.",
+  // ORDER interleaves the three brainteasers between prob/EV items so none are
+  // back-to-back; the pinned confidence→bet-size item opens the reasoning run,
+  // and market-making closes. Adjacent prob/EV draws pull distinct sub-families.
   items: [
     { kind: "mental-math", difficulty: "hard", targetSec: 20, regime: "sprint", note: "one hard numeric warm-up (do it in your head)" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 180, regime: "reasoning", note: "confidence → how much would you bet?", archetype: "sig-confidence-bet" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 180, regime: "reasoning", note: "conditional draw / independence, multi-step" },
-    { kind: "probability-ev", difficulty: "hard", targetSec: 210, regime: "reasoning", note: "conditional / Bayes, multi-step" },
-    { kind: "probability-ev", difficulty: "hard", targetSec: 210, regime: "reasoning", note: "geometric expected waiting-time" },
-    { kind: "probability-ev", difficulty: "stretch", targetSec: 240, regime: "reasoning", note: "combinatorics with a constraint" },
     { kind: "brainteaser", difficulty: "hard", targetSec: 240, regime: "reasoning", note: "logic + path-counting" },
+    { kind: "probability-ev", difficulty: "hard", targetSec: 210, regime: "reasoning", note: "conditional / Bayes, multi-step" },
+    { kind: "probability-ev", difficulty: "stretch", targetSec: 240, regime: "reasoning", note: "combinatorics with a constraint" },
     { kind: "brainteaser", difficulty: "hard", targetSec: 210, regime: "reasoning", note: "constraint/deduction" },
+    { kind: "probability-ev", difficulty: "hard", targetSec: 210, regime: "reasoning", note: "geometric expected waiting-time" },
     { kind: "brainteaser", difficulty: "stretch", targetSec: 240, regime: "reasoning", note: "single-variable optimization" },
     { kind: "probability-ev", difficulty: "stretch", targetSec: 210, regime: "reasoning", note: "bet on your own posterior (Bayesian composition)" },
     { kind: "market-making", difficulty: "hard", targetSec: 150, regime: "reasoning", note: "make a market as a bet-sizing decision" },

@@ -44,40 +44,62 @@ interface Scenario {
   concept: string;
 }
 
-/** Deterministic scenarios whose fair value is exactly computable. */
+/**
+ * INTERVIEW-GRADE market-making scenarios. Every quantity is exactly computable
+ * (so pick-offs stay meaningful) but requires a genuine INSIGHT — a closed-form
+ * summation, a combinatorial count, or an expected value — rather than the
+ * freshman arithmetic ("make a market on 12 × 14", "N% of X", "items in D
+ * dozen") that a real screen would never ask. These are the classics actually
+ * posed on trading floors: Gauss sums, handshake/diagonal counts, sum-of-squares,
+ * and dice/coin expected values. The candidate is still graded on the QUOTE
+ * (centring, spread, adverse selection), not the arithmetic.
+ */
 const SCENARIOS: ((rng: Rng) => Scenario)[] = [
+  // Gauss sum 1..n — the canonical "make a market on the sum 1 to 100" opener.
   (rng) => {
-    const a = rng.int(13, 39);
-    const b = rng.int(12, 29);
-    return {
-      prompt: `Make me a market on the value of ${a} × ${b}.`,
-      trueValue: a * b,
-      concept: "product",
-    };
-  },
-  (rng) => {
-    const n = rng.int(20, 60);
+    const n = rng.int(40, 100);
     return {
       prompt: `Make me a market on the sum of every integer from 1 to ${n}.`,
       trueValue: (n * (n + 1)) / 2,
-      concept: "series",
+      concept: "series-sum",
     };
   },
+  // Handshakes / pairs among n people — C(n,2). A staple combinatorial market.
   (rng) => {
-    const p = rng.pick([15, 20, 25, 40]);
-    const x = rng.int(200, 900);
+    const n = rng.int(15, 40);
     return {
-      prompt: `Make me a market on ${p}% of ${x}.`,
-      trueValue: round2((p / 100) * x),
-      concept: "percentage",
+      prompt:
+        `There are ${n} people in a room and every pair shakes hands exactly ` +
+        `once. Make me a market on the total number of handshakes.`,
+      trueValue: (n * (n - 1)) / 2,
+      concept: "pairs-combinatorics",
     };
   },
+  // Diagonals of a convex n-gon — n(n-3)/2. Insight beats brute force.
   (rng) => {
-    const dozens = rng.int(9, 24);
+    const n = rng.int(8, 20);
     return {
-      prompt: `Make me a market on the number of items in ${dozens} dozen.`,
-      trueValue: dozens * 12,
-      concept: "estimation",
+      prompt: `Make me a market on the number of diagonals in a convex ${n}-gon.`,
+      trueValue: (n * (n - 3)) / 2,
+      concept: "polygon-diagonals",
+    };
+  },
+  // Sum of the first n squares — n(n+1)(2n+1)/6. A closed-form few recall fast.
+  (rng) => {
+    const n = rng.int(8, 20);
+    return {
+      prompt: `Make me a market on the sum of the first ${n} perfect squares (1² + 2² + … + ${n}²).`,
+      trueValue: (n * (n + 1) * (2 * n + 1)) / 6,
+      concept: "series-squares",
+    };
+  },
+  // Expected value of the sum of k fair dice — 3.5k. A genuine EV market.
+  (rng) => {
+    const k = rng.int(3, 8);
+    return {
+      prompt: `I roll ${k} fair six-sided dice. Make me a market on the EXPECTED value of their sum.`,
+      trueValue: round2(3.5 * k),
+      concept: "dice-ev",
     };
   },
 ];

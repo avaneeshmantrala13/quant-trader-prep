@@ -20,6 +20,20 @@
  */
 import type { Polarity } from "./conclusion";
 
+/**
+ * A difficulty band as it may appear on a question OR a follow-up. Superset of
+ * the content `Difficulty` (`easy|medium|hard|expert`) and the pool label
+ * (`easy|medium|hard|stretch`). Ranked by `difficultyRank` in `interviewGate.ts`
+ * so the follow-up difficulty FLOOR can compare a `stretch` follow-up against an
+ * `expert` base. Declared here (not in `questionPools.ts`) to avoid a cycle.
+ */
+export type PoolDifficultyLike =
+  | "easy"
+  | "medium"
+  | "hard"
+  | "stretch"
+  | "expert";
+
 /** Which interview part a step belongs to. */
 export type MockStage = "math" | "brainteaser" | "marketMaking" | "behavioral";
 
@@ -47,6 +61,59 @@ export type PresetId = "optiver" | "janestreet" | "sig";
 
 /** Which of the two sequential graded follow-ups a presentation/record is. */
 export type FollowupRole = "probe" | "adversarial";
+
+/**
+ * The TAXONOMY of LEGITIMATE follow-up types a real quant interviewer uses. A
+ * follow-up MUST be one of these — a genuine escalation, never a DECOMPOSITION
+ * of the base (asking for a sub-step the candidate already computed, e.g. "what
+ * is the numerator alone"). The acceptance gate (`interviewGate.ts`) enforces
+ * that every authored follow-up declares one of these and is NOT a decomposition:
+ *   • `generalize-n`     — extend the setup to n / to a larger regime;
+ *   • `invert`           — solve for an INPUT given the output, or reverse the ask;
+ *   • `add-constraint`   — add a condition/restriction that changes the compute;
+ *   • `change-regime`    — with→without replacement, fair→biased, indep→dependent,
+ *                          add a cost, etc. (the framework must survive the mutation);
+ *   • `adversarial-trap` — challenge a correct answer / spring a trap for shallow
+ *                          reasoning ("are you sure it's 50/50?");
+ *   • `act-on-it`        — now PRICE / BET / DECIDE using your own number.
+ */
+export type FollowupType =
+  | "generalize-n"
+  | "invert"
+  | "add-constraint"
+  | "change-regime"
+  | "adversarial-trap"
+  | "act-on-it";
+
+/**
+ * A coarse topic-FAMILY tag used by the mock assembler to enforce diversity (no
+ * two adjacent scored items from the same family, a per-family cap, and coverage
+ * of N distinct families) and by the acceptance gate. Broad on purpose: every
+ * "sequences" sub-pattern is ONE family so three sequence problems never run
+ * back-to-back, while probability/EV is split into fine-grained families so two
+ * adjacent prob-EV slots draw genuinely different topics.
+ */
+export type TopicFamily =
+  | "mental-math"
+  | "sequences"
+  | "estimation"
+  | "market-making"
+  | "brainteaser"
+  | "independent-events"
+  | "conditional-prob"
+  | "geometric-race"
+  | "optimal-stopping"
+  | "order-statistics"
+  | "bayes"
+  | "random-walk"
+  | "gamblers-ruin"
+  | "waiting-time"
+  | "combinatorics"
+  | "monty"
+  | "coupon-collector"
+  | "birthday"
+  | "derangements"
+  | "bet-sizing";
 
 /**
  * The judgement of REASONING QUALITY (never of correctness — the deterministic
@@ -147,6 +214,10 @@ export interface FollowupPresentation {
    * Absent ⇒ treated as `numeric` (back-compat).
    */
   answerKind?: "numeric" | "reasoning";
+  /** Taxonomy type of this follow-up (carried from the authoring `FollowupSeed`). */
+  type?: FollowupType;
+  /** The follow-up's own difficulty band (carried from the seed; floor-checked). */
+  difficulty?: PoolDifficultyLike;
   /** Authored numeric truth (present for numeric follow-ups). */
   answer?: number;
   decimals?: number;
@@ -251,6 +322,19 @@ export interface ClarifyState {
 export interface FollowupSeed {
   prompt: string;
   answerKind: "numeric" | "reasoning";
+  /**
+   * WHICH taxonomy type of follow-up this is (see `FollowupType`). Required for
+   * every scored (non-mental-math) question's seeds — the acceptance gate rejects
+   * a build if any reachable follow-up omits it or is a DECOMPOSITION of the base.
+   */
+  type?: FollowupType;
+  /**
+   * The follow-up's own difficulty band. The gate enforces a DIFFICULTY FLOOR:
+   * a follow-up must be at least as hard as its base (ideally harder). Defaults
+   * to the base's difficulty when omitted, so an un-annotated follow-up can never
+   * be treated as EASIER than the base.
+   */
+  difficulty?: PoolDifficultyLike;
   /** Numeric seeds: the exact graded target. */
   answer?: number;
   decimals?: number;
@@ -370,6 +454,26 @@ export interface MathStep {
   concept?: string;
   /** Difficulty tier this item was drawn at (easy/medium/hard/stretch). */
   difficulty?: string;
+  /**
+   * The GENERATOR's INTRINSIC difficulty (what the follow-ups were authored
+   * against), independent of the preset SLOT's pacing label in `difficulty`. A
+   * `hard` conditional-probability item scheduled in a `stretch` (longer-clock)
+   * slot still has a `hard` base, so its `hard` follow-ups are correctly judged
+   * "≥ base" instead of being wrongly flagged as easier than the slot label.
+   */
+  baseDifficulty?: string;
+  /**
+   * Coarse topic-FAMILY tag (see `TopicFamily`) used by the assembler's diversity
+   * constraints and the acceptance gate. `mental-math` for the speed gate; the
+   * scored conceptual families for prob-EV / sequences / estimation.
+   */
+  family?: TopicFamily;
+  /**
+   * Values already computed while solving THIS question (numerator, sub-counts,
+   * thresholds). The acceptance gate rejects any follow-up whose answer equals
+   * one of these (a decomposition). Threaded from the drawn `MockNumericQuestion`.
+   */
+  baseIntermediates?: number[];
   /** Worked solution revealed after answering. */
   explanation: string;
   /** Known wrong values → targeted coaching (mirrors `NumericQuestion.commonErrors`). */

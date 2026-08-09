@@ -17,12 +17,15 @@ import {
   playMmRound,
 } from "./marketMaking";
 import {
+  archetypeFamily,
   drawArchetype,
-  drawNumericQuestion,
+  drawNumericQuestionAvoiding,
   type MockNumericQuestion,
   type PoolDifficulty,
 } from "./questionPools";
 import { getPreset, type PresetItem } from "./presets";
+import { familyCap } from "./interviewGate";
+import type { TopicFamily } from "./types";
 import type { Quote } from "@/lib/games/makeMarket/engine";
 import type {
   BrainteaserStep,
@@ -131,6 +134,16 @@ function makeMathStep(args: {
     decimals: q.decimals,
     concept: q.concept,
     difficulty,
+    ...(qtype !== "mental-math" && (q as MockNumericQuestion).difficulty
+      ? { baseDifficulty: (q as MockNumericQuestion).difficulty }
+      : {}),
+    family:
+      qtype === "mental-math"
+        ? "mental-math"
+        : (q as MockNumericQuestion).family,
+    ...(qtype !== "mental-math" && (q as MockNumericQuestion).baseIntermediates
+      ? { baseIntermediates: (q as MockNumericQuestion).baseIntermediates }
+      : {}),
     explanation: q.explanation,
     commonErrors: q.commonErrors,
     followUps,
@@ -225,6 +238,20 @@ function buildPresetInterview(config: MockConfig): MockScript {
   const steps: MockStep[] = [];
   let mmIndex = 0;
 
+  // DIVERSITY state: the family of the immediately-preceding scored item and the
+  // running per-family counts, so a non-archetype draw avoids repeating the
+  // previous family and never exceeds a family's cap (see `interviewGate.ts`).
+  let prevFamily: TopicFamily | null = null;
+  const familyCounts = new Map<TopicFamily, number>();
+  const noteFamily = (family: TopicFamily | undefined | null) => {
+    if (!family) {
+      prevFamily = null;
+      return;
+    }
+    familyCounts.set(family, (familyCounts.get(family) ?? 0) + 1);
+    prevFamily = family;
+  };
+
   preset.items.forEach((item: PresetItem, i: number) => {
     const targetMs = item.targetSec * 1000;
     if (item.kind === "mental-math") {
@@ -240,6 +267,7 @@ function buildPresetInterview(config: MockConfig): MockScript {
           index: i,
         }),
       );
+      noteFamily("mental-math");
     } else if (
       item.kind === "probability-ev" ||
       item.kind === "sequences" ||
@@ -248,10 +276,24 @@ function buildPresetInterview(config: MockConfig): MockScript {
       // A pinned firm-signature archetype overrides the random pool draw so a
       // preset slot always features that flagship problem — for ANY numeric kind
       // (e.g. Optiver's pinned quadratic-sequence demo on a `sequences` slot, or
-      // a probability-ev cascade on a `probability-ev` slot).
-      const q = item.archetype
-        ? drawArchetype(rng, item.archetype)
-        : drawNumericQuestion(rng, item.kind, item.difficulty);
+      // a probability-ev cascade on a `probability-ev` slot). Non-pinned slots
+      // draw a family that AVOIDS the previous scored item's family and any
+      // family already at its cap, so no two adjacent items share a topic.
+      let q: MockNumericQuestion;
+      if (item.archetype) {
+        q = drawArchetype(rng, item.archetype);
+      } else {
+        const avoid = new Set<TopicFamily>();
+        if (prevFamily) avoid.add(prevFamily);
+        for (const [fam, count] of familyCounts) {
+          if (count >= familyCap(fam)) avoid.add(fam);
+        }
+        // Also avoid colliding with the family of an immediately-following
+        // pinned archetype so a pinned slot never sits next to a same-family draw.
+        const nextItem = preset.items[i + 1];
+        if (nextItem?.archetype) avoid.add(archetypeFamily(nextItem.archetype));
+        q = drawNumericQuestionAvoiding(rng, item.kind, item.difficulty, avoid);
+      }
       steps.push(
         makeMathStep({
           rng,
@@ -263,6 +305,7 @@ function buildPresetInterview(config: MockConfig): MockScript {
           index: i,
         }),
       );
+      noteFamily(q.family ?? null);
     } else if (item.kind === "brainteaser") {
       const gen = item.difficulty === "medium" ? btMedium() : btHard();
       const card = gen(rng);
@@ -278,6 +321,7 @@ function buildPresetInterview(config: MockConfig): MockScript {
         timeLimitSec: item.targetSec,
         source: card.source,
       });
+      noteFamily("brainteaser");
     } else {
       // market-making
       steps.push(
@@ -287,6 +331,7 @@ function buildPresetInterview(config: MockConfig): MockScript {
         }),
       );
       mmIndex += 1;
+      noteFamily("market-making");
     }
   });
 

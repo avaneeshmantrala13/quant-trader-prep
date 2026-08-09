@@ -116,12 +116,29 @@ describe("firm presets — arithmetic placement matches each firm's real format"
     const steps = scoredSteps("optiver");
     // No two mental-math steps back-to-back at the front (no sprint gate).
     expect(isMentalMath(steps[0]) && isMentalMath(steps[1])).toBe(false);
-    // The first two scored steps are sequences, then probability/EV appears early.
+    // Leads with the pinned NumberLogic sequence, then INTERLEAVES families so
+    // sequences are never back-to-back (diversity rule): the second scored step
+    // is probability/EV, not another sequence.
     expect(steps[0].kind).toBe("math");
     expect((steps[0] as MathStep).qtype).toBe("sequences");
-    expect((steps[1] as MathStep).qtype).toBe("sequences");
+    expect((steps[1] as MathStep).qtype).toBe("probability-ev");
+    // No two adjacent sequence steps anywhere in the mock.
+    for (let i = 1; i < steps.length; i++) {
+      const prev = steps[i - 1];
+      const cur = steps[i];
+      const bothSeq =
+        prev.kind === "math" &&
+        cur.kind === "math" &&
+        (prev as MathStep).qtype === "sequences" &&
+        (cur as MathStep).qtype === "sequences";
+      expect(bothSeq).toBe(false);
+    }
+    // Both signal families appear early.
     expect(
       steps.slice(0, 6).some((s) => s.kind === "math" && (s as MathStep).qtype === "probability-ev"),
+    ).toBe(true);
+    expect(
+      steps.slice(0, 6).some((s) => s.kind === "math" && (s as MathStep).qtype === "sequences"),
     ).toBe(true);
   });
 

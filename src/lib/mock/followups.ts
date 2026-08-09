@@ -64,6 +64,10 @@ function presentationFromSeed(
     source: "authored" as const,
     role,
     label: PROBE_ROLE_META[role],
+    // Carry the taxonomy type + difficulty so the acceptance gate can audit the
+    // presentation directly (no decomposition; follow-up ≥ base difficulty).
+    ...(seed.type ? { type: seed.type } : {}),
+    ...(seed.difficulty ? { difficulty: seed.difficulty } : {}),
     // Carry the learn-from-it model answer/reasoning so the UI can reveal the
     // canonical answer + demo reasoning whenever this follow-up is not fully
     // correct (the candidate misses it or caves under pressure).
