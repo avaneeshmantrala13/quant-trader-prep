@@ -84,9 +84,16 @@ describe("firm presets — mix, order, and size", () => {
   }
 
   it("Optiver / Jane Street / SIG have the specified sizes", () => {
-    expect(MOCK_PRESETS.optiver.items.length).toBe(12);
+    expect(MOCK_PRESETS.optiver.items.length).toBe(13);
     expect(MOCK_PRESETS.janestreet.items.length).toBe(11);
     expect(MOCK_PRESETS.sig.items.length).toBe(12);
+  });
+
+  it("Optiver includes exactly ONE time-starved estimation item (its signature signal)", () => {
+    const est = MOCK_PRESETS.optiver.items.filter((i) => i.kind === "estimation");
+    expect(est).toHaveLength(1);
+    // On a punishing clock (bucket rather than compute exactly).
+    expect(est[0].targetSec).toBeLessThanOrEqual(60);
   });
 
   it("SIG allows a calculator and opens with exactly ONE numeric warm-up", () => {

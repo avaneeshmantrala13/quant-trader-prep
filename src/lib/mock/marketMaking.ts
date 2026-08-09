@@ -27,6 +27,7 @@ import {
   type Quote,
   type QuoteValidation,
 } from "@/lib/games/makeMarket/engine";
+import { expectedMaxDice } from "./archetypes/verifiers";
 import type {
   MarketMakingStep,
   MathTier,
@@ -51,7 +52,9 @@ interface Scenario {
  * freshman arithmetic ("make a market on 12 × 14", "N% of X", "items in D
  * dozen") that a real screen would never ask. These are the classics actually
  * posed on trading floors: Gauss sums, handshake/diagonal counts, sum-of-squares,
- * and dice/coin expected values. The candidate is still graded on the QUOTE
+ * and an ORDER-STATISTIC expected value (the trivial linear "3.5 × k dice sum"
+ * EV was removed — a market on E[max of k dice] needs the order-statistic CDF,
+ * not a memorized per-die mean). The candidate is still graded on the QUOTE
  * (centring, spread, adverse selection), not the arithmetic.
  */
 const SCENARIOS: ((rng: Rng) => Scenario)[] = [
@@ -93,13 +96,17 @@ const SCENARIOS: ((rng: Rng) => Scenario)[] = [
       concept: "series-squares",
     };
   },
-  // Expected value of the sum of k fair dice — 3.5k. A genuine EV market.
+  // Expected value of the MAXIMUM of k fair dice — an order statistic, NOT the
+  // trivial linear 3.5·k sum. Requires E[max] = Σ_m m·(P(max≤m) − P(max≤m−1))
+  // with P(max ≤ m) = (m/6)^k; a genuine "price the extreme" market.
   (rng) => {
-    const k = rng.int(3, 8);
+    const k = rng.int(3, 6);
     return {
-      prompt: `I roll ${k} fair six-sided dice. Make me a market on the EXPECTED value of their sum.`,
-      trueValue: round2(3.5 * k),
-      concept: "dice-ev",
+      prompt:
+        `I roll ${k} fair six-sided dice and keep only the HIGHEST one. ` +
+        `Make me a market on the EXPECTED value of that maximum.`,
+      trueValue: round2(expectedMaxDice(k, 6)),
+      concept: "dice-max-order-statistic",
     };
   },
 ];

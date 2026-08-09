@@ -604,6 +604,13 @@ export interface BrainteaserStep {
   /** Full reasoning shown on reveal. */
   explanation: string;
   concept?: string;
+  /**
+   * Difficulty tier this brainteaser was drawn at (easy/medium/hard/stretch).
+   * Threaded so the acceptance gate can FLOOR-CHECK brainteaser steps (a firm
+   * brainteaser must clear the hard floor, same as a scored math item) and the
+   * senior-quant rubric can review it — brainteasers are no longer gate-skipped.
+   */
+  difficulty?: string;
   /** Probing follow-ups the interviewer asks (reflect-only). */
   probes: string[];
   /** Soft time budget in seconds (UI hint; does not gate the flow). */

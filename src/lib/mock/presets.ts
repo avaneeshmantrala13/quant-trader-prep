@@ -66,33 +66,45 @@ export interface MockPreset {
  * number-SEQUENCE patterns, ~25 min) → Beat the Odds (~20 FAST probability /
  * expected-value questions) → Zap-N cognitive games. So this preset has NO
  * arithmetic sprint: it LEADS with escalating sequences and rapid prob/EV, then
- * market-making. (The standalone timed arithmetic screen still lives separately
- * in the Speed Arena.)
+ * market-making.
+ *
+ * SPEED DECISION (documented, not accidental): the standalone timed arithmetic
+ * screen (80-in-8) is INTENTIONALLY delegated to the Speed Arena rather than
+ * duplicated here — this mock is the reasoning half of Optiver's assessment. But
+ * Optiver's OTHER characteristic hardness — a TIME-STARVED estimation/bucketing
+ * item where you must estimate rather than compute exactly (see
+ * `datasets/FIRM_INTERVIEW_LIVE_RESEARCH_2026.md:82,88`) — was previously ABSENT,
+ * so this preset now includes ONE hard estimation item on a punishing 60s clock
+ * to test that signature signal.
  */
 const OPTIVER: MockPreset = {
   id: "optiver",
   name: "Optiver Style — Sequences & Odds",
-  tagline: "One signature number-pattern sequence + rapid probability under a relentless clock.",
+  tagline: "One signature number-pattern sequence + a time-starved estimate + rapid probability under a relentless clock.",
   tier: "hard",
   scoringNote:
-    "Optiver's 2026 OA is progressive number-sequence patterns (NumberLogic) and rapid probability / expected-value (Beat the Odds) — not an arithmetic sprint. So this mock OPENS with a signature sequence, then spends the rest on fast prob/EV under time (no back-navigation) before market-making. Sequences are an easy family, so exactly ONE appears; the discriminating signal is the probability/EV run. Speed is graded but a correct answer is always correct.",
+    "Optiver's 2026 OA is progressive number-sequence patterns (NumberLogic) and rapid probability / expected-value (Beat the Odds) — not an arithmetic sprint. So this mock OPENS with a signature sequence, then spends the rest on fast prob/EV under time (no back-navigation), with ONE deliberately time-starved estimation item (estimate/bucket, don't compute exactly — Optiver's other signature) before market-making. Sequences and estimation are easy FAMILIES so exactly one of each appears; the discriminating signal is the probability/EV run. The standalone timed-arithmetic sprint is delegated to the Speed Arena, not duplicated here. Speed is graded but a correct answer is always correct.",
   adversary: "Pickoff bot + relentless clock.",
   intro:
     "Optiver style. Optiver's 2026 assessment is progressive number-sequence " +
-    "patterns and rapid probability/EV — not the old arithmetic sprint — so we open " +
-    "with ONE signature sequence, then spend the rest on fast probability and " +
-    "expected-value questions under time (each right answer earns a concept follow-up " +
-    "that presses whether you actually understand it) before two market-making rounds " +
-    "where I pick off any quote that's off.",
+    "patterns and rapid probability/EV — not the old arithmetic sprint (that timed " +
+    "arithmetic screen lives in the Speed Arena) — so we open with ONE signature " +
+    "sequence, then spend the rest on fast probability and expected-value questions " +
+    "under time, plus ONE time-starved estimate where you must bucket rather than " +
+    "compute exactly (each right answer earns a concept follow-up that presses " +
+    "whether you actually understand it) before two market-making rounds where I " +
+    "pick off any quote that's off.",
   // ORDER interleaves families so no two adjacent scored items share a topic:
   // the pinned quadratic demo opens as the ONE (easy-family) sequence, the rest
   // of the pre-MM run is prob/EV (the discriminating signal) with the lattice
-  // anchor in it, and market-making closes. The family-aware assembler further
-  // guarantees adjacent prob/EV draws pull DISTINCT sub-families. Sequences are
-  // an EASY family (see `interviewGate#FAMILY_DIFFICULTY`) — hard-capped at ONE.
+  // anchor in it and ONE time-starved estimation item, and market-making closes.
+  // The family-aware assembler further guarantees adjacent prob/EV draws pull
+  // DISTINCT sub-families. Sequences AND estimation are EASY families (see
+  // `interviewGate#FAMILY_DIFFICULTY`) — each hard-capped at ONE.
   items: [
     { kind: "sequences", difficulty: "hard", targetSec: 45, regime: "reasoning", note: "NumberLogic-style: next-in-sequence (quadratic; constant 2nd difference)", archetype: "optiver-quadratic-demo" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "Beat-the-Odds: conditional draw without replacement" },
+    { kind: "estimation", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "time-starved Fermi: estimate/bucket under a punishing clock (Optiver signature)" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 60, regime: "reasoning", note: "Beat-the-Odds: independence / two-of-three" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 75, regime: "reasoning", note: "expected flips = 1/p; memorylessness" },
     { kind: "probability-ev", difficulty: "hard", targetSec: 75, regime: "reasoning", note: "combinatorics / counting with a constraint" },
@@ -124,7 +136,7 @@ const JANE_STREET: MockPreset = {
     "test — so this mock is the trader conversation, not a math sprint. After one " +
     "quick numeric warm-up, we spend the time reasoning out loud: EV and optimal-" +
     "stopping games that I mutate as you go (change a rule, add an adversary, " +
-    "generalize to n), probability with a twist, a Fermi estimate, and an escalating " +
+    "generalize to n), probability with a twist, logic brainteasers, and an escalating " +
     "make-a-market finale where I trade against your quotes and reveal information " +
     "between rounds. I'll press every correct answer to see if your framework holds.",
   // ORDER interleaves so the two brainteasers are never adjacent and each is

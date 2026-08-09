@@ -18,7 +18,9 @@
  * `RubricLlm` (which the caller owns).
  */
 import type {
+  BrainteaserStep,
   FollowupType,
+  MarketMakingStep,
   MathStep,
   MockScript,
   MockStep,
@@ -59,6 +61,15 @@ export interface RubricItem {
   followups: RubricFollowup[];
   /** The family of the item IMMEDIATELY BEFORE this one (for duplicate-topic). */
   prevFamily?: TopicFamily | null;
+  /**
+   * Whether this item is EXPECTED to carry ≥ 2 typed curveball follow-ups (true
+   * for conceptual math). Market-making rounds and brainteasers press the
+   * candidate through the escalating quote sequence / reflect probes instead of
+   * two authored numeric follow-ups, so they are reviewed for a non-trivial,
+   * hard-floor BASE only and are not flagged `shallow-followup`. Defaults to
+   * `true` when omitted.
+   */
+  expectFollowups?: boolean;
 }
 
 /** The distinct failure modes the reviewer can raise. */
@@ -84,19 +95,76 @@ export interface RubricVerdict {
 /*  Extracting reviewable items from a built script                          */
 /* -------------------------------------------------------------------------- */
 
-/** Turn a built interview script into the scored items a reviewer rates. */
+/**
+ * Turn a built interview script into the scored items a reviewer rates. Every
+ * SCORED item is now extracted — conceptual math (base + two typed follow-ups),
+ * MARKET-MAKING rounds, and BRAINTEASERS — so the reviewer's trivial-base guard
+ * (e.g. "make a market on 12 × 14") and hard-floor check actually reach MM and
+ * brainteaser steps instead of silently skipping them. A `mental-math` speed
+ * gate carries no conceptual content and is still not rubric-reviewed.
+ */
 export function rubricItemsFromScript(script: MockScript): RubricItem[] {
   const out: RubricItem[] = [];
   let prevFamily: TopicFamily | null = null;
   for (const step of script.steps) {
     const fam = familyOfStep(step as MockStep);
     if (fam === null) continue; // behavioral — unscored
-    if (step.kind === "math" && step.qtype !== "mental-math") {
-      out.push(rubricItemFromMathStep(step, prevFamily));
+    if (step.kind === "math") {
+      if (step.qtype !== "mental-math") {
+        out.push(rubricItemFromMathStep(step, prevFamily));
+      }
+    } else if (step.kind === "marketMaking") {
+      out.push(rubricItemFromMmStep(step, prevFamily));
+    } else if (step.kind === "brainteaser") {
+      out.push(rubricItemFromBrainteaserStep(step, prevFamily));
     }
     prevFamily = fam;
   }
   return out;
+}
+
+/**
+ * A market-making round as the reviewer sees it: a hard-floor, non-trivial base
+ * (the scenario prompt + its computable true value) with NO authored numeric
+ * follow-ups — the escalating quote rounds ARE the pressure, so it is not held
+ * to the two-follow-up expectation.
+ */
+function rubricItemFromMmStep(
+  step: MarketMakingStep,
+  prevFamily: TopicFamily | null,
+): RubricItem {
+  return {
+    id: step.id,
+    family: "market-making",
+    difficulty: step.difficulty,
+    prompt: step.prompt,
+    baseAnswer: step.trueValue,
+    followups: [],
+    prevFamily,
+    expectFollowups: false,
+  };
+}
+
+/**
+ * A brainteaser as the reviewer sees it: reviewed for a non-trivial, hard-floor
+ * base only. Its answer is prose (no numeric decomposition to police) and its
+ * probes are reflect-only, so it carries no typed follow-ups and is not flagged
+ * `shallow-followup`.
+ */
+function rubricItemFromBrainteaserStep(
+  step: BrainteaserStep,
+  prevFamily: TopicFamily | null,
+): RubricItem {
+  return {
+    id: step.id,
+    family: "brainteaser",
+    difficulty: step.difficulty,
+    prompt: step.prompt,
+    baseAnswer: Number.NaN, // prose answer — no numeric intermediate to re-ask
+    followups: [],
+    prevFamily,
+    expectFollowups: false,
+  };
 }
 
 function rubricItemFromMathStep(
@@ -183,7 +251,15 @@ export function reviewItemHeuristic(item: RubricItem): RubricVerdict {
     notes.push(`base difficulty "${item.difficulty}" is below the hard floor`);
   }
 
-  if (item.prevFamily && item.family && item.prevFamily === item.family) {
+  // Duplicate adjacent topic — but market-making rounds are a DESIGNED escalating
+  // finale (the interviewer reveals information between quotes), so their
+  // adjacency is exempt, exactly as the structural gate exempts it.
+  if (
+    item.prevFamily &&
+    item.family &&
+    item.prevFamily === item.family &&
+    item.family !== "market-making"
+  ) {
     flags.add("duplicate-topic");
     notes.push(`same topic-family "${item.family}" as the previous item`);
   }
@@ -215,7 +291,10 @@ export function reviewItemHeuristic(item: RubricItem): RubricVerdict {
     }
   }
 
-  if (item.followups.length < 2) {
+  // Shallow-follow-up applies only to items EXPECTED to carry two typed curveball
+  // follow-ups (conceptual math). MM/brainteaser items press through the quote
+  // sequence / reflect probes instead, so they opt out via `expectFollowups`.
+  if (item.expectFollowups !== false && item.followups.length < 2) {
     flags.add("shallow-followup");
     notes.push(`only ${item.followups.length} follow-up(s); expected ≥ 2`);
   }
@@ -265,9 +344,18 @@ export function buildRubricPrompt(item: RubricItem): string {
     "  - easy-followup: a follow-up is easier than the base.",
     "  - untyped-followup: a follow-up is not one of generalize-n / invert / " +
       "add-constraint / change-regime / adversarial-trap / act-on-it.",
-    "  - shallow-followup: fewer than two genuine curveball follow-ups.",
-    "  - duplicate-topic: this item repeats the previous item's topic-family.",
+    "  - shallow-followup: fewer than two genuine curveball follow-ups " +
+      "(does NOT apply to market-making rounds or brainteasers — see below).",
+    "  - duplicate-topic: this item repeats the previous item's topic-family " +
+      "(market-making rounds are a designed escalating finale — do NOT flag " +
+      "their adjacency).",
     "",
+    item.expectFollowups === false
+      ? "NOTE: this is a market-making round or brainteaser — it presses via the " +
+        "quote sequence / reflect probes, so it carries no typed follow-ups. " +
+        "Review the BASE only (trivial-base / easy-base); do NOT raise " +
+        "shallow-followup."
+      : "",
     `PREVIOUS TOPIC-FAMILY: ${item.prevFamily ?? "(none)"}`,
     `THIS ITEM  id=${item.id}  family=${item.family ?? "?"}  ` +
       `difficulty=${item.difficulty ?? "?"}`,

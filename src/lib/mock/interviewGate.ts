@@ -378,7 +378,12 @@ export function auditScript(script: MockScript): GateReport {
     );
   }
 
-  // 4) Difficulty floor on every SCORED numeric/brainteaser item + 5) follow-ups.
+  // 4) Difficulty floor on every SCORED item — math AND the previously
+  //    gate-skipped MARKET-MAKING + BRAINTEASER steps — plus 5) math follow-ups.
+  //    MM/brainteaser steps only carry a difficulty when built from a preset
+  //    SLOT (the legacy count-based path leaves it undefined); when present it
+  //    MUST clear the same `hard` floor as a scored math item, so a firm mock
+  //    can never ship a soft market-making or brainteaser round.
   for (const step of scoredSteps) {
     if (step.kind === "math") {
       if (difficultyRank(step.difficulty) < MIN_ITEM_DIFFICULTY_RANK) {
@@ -388,6 +393,15 @@ export function auditScript(script: MockScript): GateReport {
       }
       if (step.qtype !== "mental-math") {
         violations.push(...auditMathStepFollowups(step));
+      }
+    } else if (step.kind === "marketMaking" || step.kind === "brainteaser") {
+      if (
+        step.difficulty !== undefined &&
+        difficultyRank(step.difficulty) < MIN_ITEM_DIFFICULTY_RANK
+      ) {
+        violations.push(
+          `${step.id}: ${step.kind} difficulty "${step.difficulty}" is below the hard floor`,
+        );
       }
     }
   }

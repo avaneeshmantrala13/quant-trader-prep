@@ -6,13 +6,19 @@
  * metrics summary:
  *   • STRUCTURAL gate (`auditScript`): deterministic diversity / difficulty /
  *     decomposition / per-family-cap checks.
- *   • SENIOR-QUANT rubric (`reviewScript`): the mockable LLM reviewer. Offline
- *     (default) it uses the deterministic `reviewItemHeuristic`, so the metrics
- *     are reproducible with NO network. If a real `RubricLlm` is wired via
- *     `--llm` (left as a stub here to avoid committing network calls), the same
- *     code path scores with the model.
+ *   • HEURISTIC RE-CHECK (`reviewScript`, offline): the deterministic
+ *     `reviewItemHeuristic` — a SECOND deterministic pass that REUSES the same
+ *     structural predicates plus a trivial-base guard. This is NOT an
+ *     independent second opinion and NOT a senior-quant LLM; it is a reproducible
+ *     re-check. `reviewScript` accepts a mockable `RubricLlm` so a real model
+ *     COULD be wired later, but none is wired here (no network in CI).
  *
- * Determinism: pure seeded RNG + the heuristic reviewer ⇒ byte-identical metrics
+ * COVERAGE / HONESTY: only firms with a RUNNABLE preset (`PRESET_ORDER` =
+ * Optiver, Jane Street, SIG) are assembled and measured. Every reference-only
+ * firm in the research (Citadel, IMC, DRW, …) has no preset, so it is NOT
+ * generated and is explicitly UNMEASURED — the emitted markdown says so.
+ *
+ * Determinism: pure seeded RNG + the heuristic re-check ⇒ byte-identical metrics
  * every run, so `datasets/mock-quality-metrics.md` is a stable, reviewable
  * artifact.
  *
@@ -116,11 +122,23 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
   );
   lines.push("");
   lines.push(
-    "This artifact is produced by assembling every firm preset across " +
-      `${SEED_COUNT} seeds and running the full interview-grade acceptance gate ` +
-      "over each mock: the deterministic STRUCTURAL audit (`auditScript`) and the " +
-      "SENIOR-QUANT rubric reviewer (`reviewScript`, offline heuristic mode). " +
-      "Both halves must be 100% for the mocks to be interview-grade.",
+    "This artifact is produced by assembling every **runnable** firm preset " +
+      `across ${SEED_COUNT} seeds and running the full interview-grade acceptance ` +
+      "gate over each mock: the deterministic STRUCTURAL audit (`auditScript`) and " +
+      "a deterministic HEURISTIC RE-CHECK (`reviewScript` in offline mode, i.e. " +
+      "`reviewItemHeuristic`). Both halves must be 100% for the mocks to be " +
+      "interview-grade.",
+  );
+  lines.push("");
+  lines.push(
+    "> **Coverage (honest scope).** Only firms with a runnable preset are " +
+      `generated and measured here: **${PRESET_ORDER.join(", ")}**. Every other ` +
+      "firm in the research (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT, …) " +
+      "has **no runnable preset**, so it is **NOT generated and is UNMEASURED** — " +
+      "its absence from the tables below is not a pass. " +
+      "Also note the \"heuristic re-check\" column is a **deterministic second " +
+      "pass that reuses the structural predicates** (plus a trivial-base guard); " +
+      "it is **NOT an independent senior-quant LLM opinion**.",
   );
   lines.push("");
   lines.push("## Structural gate (deterministic)");
@@ -143,9 +161,17 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
       "exceeded it (must be 0).",
   );
   lines.push("");
-  lines.push("## Senior-quant rubric reviewer (offline heuristic)");
+  lines.push("## Heuristic re-check (deterministic — NOT an independent LLM)");
   lines.push("");
-  lines.push("| Firm | Items reviewed | Interview-grade | Flags raised |");
+  lines.push(
+    "> This is a deterministic re-check that reuses the structural predicates " +
+      "(decomposition / floor / taxonomy) plus a trivial-base guard, extended to " +
+      "cover market-making and brainteaser bases as well as conceptual math. It " +
+      "is reproducible in CI and is **not** a second, independent senior-quant " +
+      "opinion; a real `RubricLlm` could be wired via `reviewScript` but none is.",
+  );
+  lines.push("");
+  lines.push("| Firm | Items re-checked | Passed re-check | Flags raised |");
   lines.push("|---|---|---|---|");
   for (const m of metrics) {
     const flags = Object.entries(m.flagCounts);
@@ -165,17 +191,21 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
   lines.push("");
   lines.push(
     allClean
-      ? "**PASS** — every sampled mock cleared both the structural gate and the " +
-          "senior-quant rubric: no decomposition follow-ups, no easier-than-base " +
-          "follow-ups, no back-to-back topic families, no easy family (sequences / " +
-          "mental-math / estimation) appearing more than once, and no trivial items."
+      ? "**PASS** — every sampled RUNNABLE mock cleared both the structural gate " +
+          "and the deterministic heuristic re-check: no decomposition follow-ups, " +
+          "no easier-than-base follow-ups, no back-to-back topic families, no easy " +
+          "family (sequences / mental-math / estimation) appearing more than once, " +
+          "and no trivial items. Reference-only firms are unmeasured (see the " +
+          "coverage note above)."
       : "**FAIL** — one or more sampled mocks tripped the gate; see the tables above.",
   );
   lines.push("");
   lines.push(
-    "> The rubric reviewer runs OFFLINE (deterministic heuristic) so this file is " +
-      "reproducible in CI. Wiring a real `RubricLlm` scores the identical items " +
-      "with a senior-quant LLM without changing the sampler.",
+    "> The heuristic re-check runs OFFLINE (deterministic) so this file is " +
+      "reproducible in CI. It re-uses the structural predicates rather than a " +
+      "model, so it is a re-check, not an independent second opinion; wiring a " +
+      "real `RubricLlm` via `reviewScript` would add a genuine model pass without " +
+      "changing the sampler.",
   );
   lines.push("");
   return lines.join("\n");

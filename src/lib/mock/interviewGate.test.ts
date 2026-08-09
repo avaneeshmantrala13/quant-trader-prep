@@ -297,7 +297,7 @@ describe("interview gate — market-making poses no trivial arithmetic", () => {
     "pairs-combinatorics",
     "polygon-diagonals",
     "series-squares",
-    "dice-ev",
+    "dice-max-order-statistic",
   ]);
   /** The exact freshman patterns the user called out. */
   const TRIVIAL_MM = [

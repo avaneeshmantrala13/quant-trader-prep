@@ -194,6 +194,7 @@ function buildBrainteaserSteps(rng: Rng, count: number): BrainteaserStep[] {
       answer: card.answer,
       explanation: card.explanation,
       concept: card.concept,
+      difficulty: card.difficulty,
       probes,
       timeLimitSec: card.difficulty === "hard" ? 180 : 120,
       source: card.source,
@@ -317,6 +318,9 @@ function buildPresetInterview(config: MockConfig): MockScript {
         answer: card.answer,
         explanation: card.explanation,
         concept: card.concept,
+        // The preset SLOT difficulty is the authoritative floor label for this
+        // brainteaser (hard/stretch), so the gate can floor-check it.
+        difficulty: item.difficulty,
         probes,
         timeLimitSec: item.targetSec,
         source: card.source,

@@ -40,6 +40,9 @@ import {
   birthdayNoCollisionProb,
   derangementProb,
   derangementCount,
+  bankOrRollFiniteEV,
+  hiddenCompositionNextBlack,
+  kellyFraction,
 } from "./archetypes/verifiers";
 
 /** A scored numeric question with its two concept-specific follow-ups. */
@@ -885,10 +888,19 @@ function genPatternFlips(rng: Rng): MockNumericQuestion {
  * the candidate's FRAMEWORK survives a mutation, never arithmetic on their answer.
  */
 function genBankOrRoll(): MockNumericQuestion {
-  // One free optional reroll of a fair 6-die; keep 4,5,6 (continuation 3.5).
-  const ev = 4.25; // ½·(4+5+6)/3 + ½·3.5
-  // Probe: rerolling now COSTS 0.5. Continuation = 3.5 − 0.5 = 3.0 ⇒ keep 3,4,5,6.
-  const withCostEv = 4.0; // (4/6)·4.5 + (2/6)·3.0
+  // One free optional reroll of a fair 6-die; keep 4,5,6 (continuation 3.5). The
+  // base EV and its continuation value are VERIFIER-SOURCED (never inline
+  // literals) so the answer is correct by construction — `bankOrRollFiniteEV(6, 2)`
+  // returns ev = 17/4 = 4.25 and continuation[0] = the 1-roll mean = 3.5.
+  const { ev, continuation } = bankOrRollFiniteEV(6, 2);
+  const cont = continuation[0]; // continuation value of a single reroll = 3.5
+  // Probe: rerolling now COSTS 0.5, dropping the continuation to cont − 0.5 = 3.0,
+  // so you now also bank a 3 (keep 3,4,5,6). Derive the new EV from that shifted
+  // continuation rather than hardcoding 4.0.
+  const costCont = cont - 0.5;
+  let costTotal = 0;
+  for (let v = 1; v <= 6; v++) costTotal += v >= costCont ? v : costCont;
+  const withCostEv = round(costTotal / 6, 2); // (4/6)·4.5 + (2/6)·3.0 = 4.0
   return {
     id: `pev-bankroll`,
     prompt: `Bank-or-roll: you roll a fair six-sided die. You may BANK the shown value, or ROLL once more and must then take that second roll. Playing optimally, what is the expected value of the number you bank?`,
@@ -902,7 +914,7 @@ function genBankOrRoll(): MockNumericQuestion {
       { value: 3.5, feedback: "3.5 is the EV with NO option to reroll — the reroll strictly improves it.", misconception: "ignored_option" },
       { value: 5, feedback: "That's the EV of only the banked high rolls; you also reroll half the time (EV 3.5).", misconception: "kept_leg_only" },
     ],
-    baseIntermediates: [ev, 3.5, 5],
+    baseIntermediates: [ev, cont, 5],
     source: "mock probability/EV",
     followups: {
       probe: {
@@ -1000,14 +1012,15 @@ function genMontyHall(): MockNumericQuestion {
  */
 function genCitadelStones(): MockNumericQuestion {
   // 3 stones; #black uniform on {0,1,2,3}. Draw two without replacement, both
-  // black. Posterior: P(k=3)=3/4, P(k=2)=1/4 ⇒ P(third black)=3/4.
-  const posterior = 0.75;
+  // black. Posterior: P(k=3)=3/4, P(k=2)=1/4 ⇒ P(third black)=3/4. The predictive
+  // posterior is VERIFIER-SOURCED via `hiddenCompositionNextBlack(N=3, m=2)` = 3/4
+  // (never an inline literal), closing the drift window.
+  const posterior = round(hiddenCompositionNextBlack(3, 2), 4);
   const bothBlack = round(1 / 3, 4); // P(first two both black), marginal
   const betEv = -0.5; // even-money bet the stone is WHITE, at your P(white)=1/4
-  // INVERT probe: weaker evidence — only ONE black drawn. Posterior on a remaining
-  // stone: weights ∝ k give P(k)=1/6,2/6,3/6 for k=1,2,3, and the expected share
-  // of remaining black works out to 2/3.
-  const oneBlackPosterior = round(2 / 3, 4);
+  // INVERT probe: weaker evidence — only ONE black drawn. Same verifier with
+  // m=1 gives P(a remaining stone is black) = 2/3 (weights ∝ k over k=1,2,3).
+  const oneBlackPosterior = round(hiddenCompositionNextBlack(3, 1), 4);
   return {
     id: `pev-citadel-stones`,
     prompt: `A bag has 3 stones; each was independently colored black or white by a fair coin, so the number of black stones is equally likely to be 0, 1, 2, or 3. You draw two stones WITHOUT replacement and both are black. What is the probability the remaining (third) stone is also black?`,
@@ -1067,7 +1080,12 @@ function genSigConfidenceBet(): MockNumericQuestion {
   // still yields the exact 0.75 the Kelly follow-ups size a bet to.
   const p = 0.75; // 1/2·(5/6) + 1/2·(4/6) = 3/4
   const givenTails = round(4 / 6, 4); // P(win | tails) = 2/3
-  const stake = 50; // Kelly f = 2p − 1 = 0.5 of a $100 bankroll
+  // The Kelly stake is VERIFIER-SOURCED: `kellyFraction(p, b=1)` = 2p − 1 for an
+  // even-money bet, so a $100 bankroll stakes kellyFraction(0.75,1)·100 = $50
+  // (and the 60%-confidence comparison stakes kellyFraction(0.6,1)·100 = $20).
+  const bankroll = 100;
+  const stake = round(kellyFraction(p, 1) * bankroll, 2); // 0.5·$100 = $50
+  const stakeAt60 = round(kellyFraction(0.6, 1) * bankroll, 2); // 0.2·$100 = $20
   // CHANGE-REGIME probe: bias the coin to 2/3 heads and re-weight the branches.
   const biasedWin = round((2 / 3) * (5 / 6) + (1 / 3) * (4 / 6), 4); // = 14/18 ≈ 0.7778
   return {
@@ -1105,12 +1123,12 @@ function genSigConfidenceBet(): MockNumericQuestion {
         // SIG confidence→bet-size: size to edge; more edge ⇒ more stake.
         type: "act-on-it",
         difficulty: "hard",
-        prompt: `Now bet on it. You are 75% to win an EVEN-MONEY bet (win $1 / lose $1). The Kelly rule sizes your stake at fraction f = (2p − 1) of your bankroll. How many dollars of a $100 bankroll should you stake — and should that stake be MORE or LESS than if you were only 60% confident?`,
+        prompt: `Now bet on it. You are 75% to win an EVEN-MONEY bet (win $1 / lose $1). The Kelly rule sizes your stake at fraction f = (2p − 1) of your bankroll. How many dollars of a $${bankroll} bankroll should you stake — and should that stake be MORE or LESS than if you were only 60% confident?`,
         answerKind: "reasoning",
         conclusionTargets: [stake],
         conclusionKeywords: [["more", "larger", "bigger", "greater", "higher", "increase"]],
         modelAnswer: `Stake $${stake}, and that's MORE than at 60% confidence.`,
-        modelReasoning: `Kelly says f = 2p − 1 = 2(0.75) − 1 = 0.5, so stake 0.5·$100 = $${stake}. A bigger edge means a bigger fraction, so at 60% (f = 0.2 → $20) you'd bet less — more confidence, more stake.`,
+        modelReasoning: `Kelly says f = 2p − 1 = 2(0.75) − 1 = 0.5, so stake 0.5·$${bankroll} = $${stake}. A bigger edge means a bigger fraction, so at 60% (f = 0.2 → $${stakeAt60}) you'd bet less — more confidence, more stake.`,
       },
     },
   };
@@ -1706,9 +1724,11 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
  * throughput and spot the NON-OBVIOUS traps — (i) every strike lists BOTH a call
  * and a put (the ×2 most people drop), and (ii) a 6.5-hour session is 23,400
  * SECONDS, not 6.5 (a units trap). Only after that decomposition does the
- * multi-factor chain close. The PROBE isolates the contract-count sub-estimate
- * (the exact place the ×2 bites); the ADVERSARIAL tests that the candidate knows
- * the total is LINEAR in the refresh rate (so a 2× rate ⇒ exactly 2× messages).
+ * multi-factor chain close. The PROBE (add-constraint) LAYERS A NEW bandwidth
+ * estimate on top — bytes-per-message → total gigabytes, a further multi-factor
+ * chain with its own unit conversion (never the contract-count sub-estimate the
+ * base already computed); the ADVERSARIAL (generalize-n) tests that the candidate
+ * knows the total is LINEAR in the refresh rate (so a 2× rate ⇒ exactly 2× messages).
  */
 function genEstOptionsQuotes(rng: Rng): MockNumericQuestion {
   const underlyings = rng.pick([50, 100, 200]);
