@@ -19,6 +19,17 @@ function mockCaller(canned: string) {
   return async (_sys: string, _user: string, _wantJson?: boolean, _opts?: unknown) => canned;
 }
 
+/**
+ * Case-insensitive header getter: the caller may set header names in any casing
+ * (the code uses lowercase keys). Returns the value for `name` regardless of the
+ * casing used by the request, or `undefined` when the header is absent.
+ */
+function headerLookup(headers: Record<string, string> | undefined) {
+  const lower: Record<string, string> = {};
+  for (const [k, v] of Object.entries(headers ?? {})) lower[k.toLowerCase()] = v;
+  return (name: string): string | undefined => lower[name.toLowerCase()];
+}
+
 beforeAll(async () => {
   const spec = pathToFileURL(
     resolve(process.cwd(), "infra/lambda/ai-flavor/core.mjs"),
@@ -88,7 +99,7 @@ describe("shared AI core — provider config + guardrails (no key, no network)",
     );
   });
 
-  it("makeLlmCaller (anthropic) hits ${base}/v1/messages with BOTH auth headers", async () => {
+  it("makeLlmCaller (anthropic gateway) hits ${base}/v1/messages with Bearer-only auth (no x-api-key)", async () => {
     const key = "tfy-secret-key";
     const base = "https://tfy.promptlens.trilogy.com";
     const config = core.buildProviderConfig({
@@ -119,9 +130,55 @@ describe("shared AI core — provider config + guardrails (no key, no network)",
       const out = await callLLM("sys", "user", false, {});
       expect(out).toBe("ok");
       expect(capturedUrl).toBe(`${base}/v1/messages`);
-      expect(capturedHeaders?.authorization).toBe(`Bearer ${key}`);
-      expect(capturedHeaders?.["x-api-key"]).toBe(key);
-      expect(capturedHeaders?.["anthropic-version"]).toBe("2023-06-01");
+      // Gateway (non-native) → Bearer-only auth; NO x-api-key (which the
+      // TrueFoundry gateway validates first and rejects with a 401).
+      const gw = headerLookup(capturedHeaders);
+      expect(gw("authorization")).toBe(`Bearer ${key}`);
+      expect(gw("x-api-key")).toBeUndefined();
+      expect(gw("anthropic-version")).toBe("2023-06-01");
+      expect(gw("content-type")).toBe("application/json");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it("makeLlmCaller (native anthropic) hits api.anthropic.com/v1/messages with x-api-key-only auth (no authorization)", async () => {
+    const key = "sk-ant-native-key";
+    const base = "https://api.anthropic.com";
+    const config = core.buildProviderConfig({
+      AI_PROVIDER: "anthropic",
+      AI_PROVIDER_BASE_URL: base,
+    });
+
+    let capturedUrl: string | undefined;
+    let capturedHeaders: Record<string, string> | undefined;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      capturedUrl = String(url);
+      capturedHeaders = init?.headers as Record<string, string>;
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { content: [{ text: "ok" }] };
+        },
+        async text() {
+          return "";
+        },
+      };
+    }) as unknown as typeof fetch;
+
+    try {
+      const callLLM = core.makeLlmCaller({ key, config });
+      const out = await callLLM("sys", "user", false, {});
+      expect(out).toBe("ok");
+      expect(capturedUrl).toBe("https://api.anthropic.com/v1/messages");
+      // Native Anthropic API → x-api-key-only auth; NO Bearer authorization.
+      const na = headerLookup(capturedHeaders);
+      expect(na("x-api-key")).toBe(key);
+      expect(na("authorization")).toBeUndefined();
+      expect(na("anthropic-version")).toBe("2023-06-01");
+      expect(na("content-type")).toBe("application/json");
     } finally {
       globalThis.fetch = realFetch;
     }

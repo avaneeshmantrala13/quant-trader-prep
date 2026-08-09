@@ -547,14 +547,28 @@ async function callOpenAI(key, sys, user, wantJson, opts, config) {
 }
 async function callAnthropic(key, sys, user, opts, config) {
   // Use the configured base URL so requests can reach either the real Anthropic
-  // API or an Anthropic-compatible gateway (e.g. TrueFoundry). Send BOTH auth
-  // headers: real Anthropic reads `x-api-key`, the gateway reads a Bearer token
-  // in `authorization` — each ignores the header it doesn't use.
-  const res = await fetch(messagesUrl(config.baseUrl), {
+  // API or an Anthropic-compatible gateway (e.g. TrueFoundry). Auth scheme is
+  // host-aware: the real Anthropic API authenticates with `x-api-key`, while a
+  // gateway authenticates with a Bearer token in `authorization`. Sending BOTH
+  // makes some gateways reject the request (they validate `x-api-key` first and
+  // a gateway key is not a valid native Anthropic key -> 401), so pick one.
+  const url = messagesUrl(config.baseUrl);
+  const isNativeAnthropic = /(^|\.)api\.anthropic\.com$/i.test(
+    (() => {
+      try {
+        return new URL(url).hostname;
+      } catch {
+        return "";
+      }
+    })()
+  );
+  const authHeaders = isNativeAnthropic
+    ? { "x-api-key": key }
+    : { authorization: `Bearer ${key}` };
+  const res = await fetch(url, {
     method: "POST",
     headers: {
-      "x-api-key": key,
-      authorization: `Bearer ${key}`,
+      ...authHeaders,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
