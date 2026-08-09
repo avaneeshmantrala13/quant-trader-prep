@@ -14,7 +14,13 @@ import {
 import {
   TRADING_SUBTOPIC_KEYS,
   tradingSubtopicByGame,
+  type TradingGameId,
 } from "@/lib/mastery/tradingSubtopics";
+import {
+  COMPETENCY_BRAINTEASER,
+  scoredContentTopicKeys,
+} from "@/lib/pipeline/gates";
+import { pickNextDrillTarget } from "@/lib/pipeline/drilling";
 
 /**
  * Stage-4 (game-OA) tests. The stage is now the full Optiver BATTERY: it
@@ -203,6 +209,85 @@ describe("BATTERY — station ↔ subtopic wiring", () => {
       expect(stationForGame(b.gameId)).toBe(b);
     }
     expect(stationForSubtopic("competency::not-real")).toBeUndefined();
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Weak game-OA subtopic → re-drills that EXACT game (not generic MCQs)        */
+/* -------------------------------------------------------------------------- */
+
+/** A Beta bucket whose CI_low sits well above the 0.80 bar (mastered). */
+function masteredBucket(): TopicMastery {
+  return { theta: 2, n: 62, alpha: 60, beta: 2, lastSeen: "t", misconceptions: {} };
+}
+/** A weak Beta bucket whose CI_low is far below 0.80 (not mastered). */
+function weakBucket(): TopicMastery {
+  return { theta: -1, n: 6, alpha: 1, beta: 6, lastSeen: "t", misconceptions: {} };
+}
+
+/**
+ * Everything cleared (all content + timed + brainteaser + every trading
+ * subtopic) EXCEPT the one game subtopic under test, which is left weak — so the
+ * ONLY thing the drilling loop can pick is that game's re-drill.
+ */
+function onlyOneGameWeak(weakGame: TradingGameId): UserProgress {
+  const p = emptyProgress();
+  const tm: Record<string, TopicMastery> = {};
+  for (const key of scoredContentTopicKeys()) tm[key] = masteredBucket();
+  tm[COMPETENCY_BRAINTEASER] = masteredBucket();
+  for (const key of TRADING_SUBTOPIC_KEYS) tm[key] = masteredBucket();
+  tm[tradingSubtopicByGame(weakGame).key] = weakBucket();
+  p.topicMastery = tm;
+  p.pipeline = {
+    stage: "drilling",
+    timed: {
+      correct: 28,
+      total: 30,
+      sections: [{ label: "timed-diagnostic", correct: 28, total: 30 }],
+    },
+  };
+  return p;
+}
+
+/**
+ * The games the user asked about by name: market-making, the Zap-N cognitive
+ * games (Stockmaster / Number Box / Shape Shift), NumberLogic, and Beat the
+ * Odds. Each must re-drill its OWN game — not a generic numeric MCQ.
+ */
+const NAMED_GAMES: TradingGameId[] = [
+  "make-market",
+  "stockmaster",
+  "number-box",
+  "shape-shift",
+  "numberlogic",
+  "beat-the-odds",
+];
+
+describe("drilling — a weak game subtopic re-serves THAT game's station", () => {
+  it.each(NAMED_GAMES)(
+    "routes a weak %s subtopic back to its own Game-OA station (real engine, not a generic MCQ)",
+    (game) => {
+      const weakKey = tradingSubtopicByGame(game).key;
+      const target = pickNextDrillTarget(onlyOneGameWeak(game));
+      // The loop picks the trading metric and serves it as a game (not numeric).
+      expect(target?.kind).toBe("trading");
+      expect(target?.serve).toBe("trading");
+      // …for the SPECIFIC weak subtopic node (so drilling knows which game).
+      expect(target?.topicKey).toBe(weakKey);
+      // …and that key resolves to the EXACT battery station for this game — the
+      // same reusable game component the Stage-4 battery mounts.
+      const station = stationForSubtopic(target!.topicKey!);
+      expect(station?.gameId).toBe(game);
+      expect(station?.Component).toBeTruthy();
+    },
+  );
+
+  it("every one of the 11 trading subtopics resolves to a real, mountable game station", () => {
+    for (const key of TRADING_SUBTOPIC_KEYS) {
+      const station = stationForSubtopic(key);
+      expect(station, `no station for ${key}`).toBeTruthy();
+      expect(station!.Component).toBeTruthy();
+    }
   });
 });
 

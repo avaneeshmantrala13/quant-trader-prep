@@ -3,6 +3,10 @@ import { emptyProgress, type UserProgress } from "@/types/progress";
 import type { TopicMastery } from "@/types/mastery";
 import { COMPETENCY_BRAINTEASER, TRADING_SUBTOPIC_KEYS, scoredContentTopicKeys } from "./gates";
 import {
+  tradingSubtopicByGame,
+  type TradingGameId,
+} from "@/lib/mastery/tradingSubtopics";
+import {
   FIRST_STAGE,
   TERMINAL_STAGE,
   currentStage,
@@ -165,5 +169,53 @@ describe("stateMachine — resolveStage (stamps + live gates)", () => {
       { at: "2026-01-07", scorePct: 96, wouldPass: "yes" },
     ];
     expect(resolveStage(p)).toBe("mock");
+  });
+});
+
+describe("stateMachine — greenlight is GATED on game-OA competency", () => {
+  /**
+   * Every Game-OA battery game. A user must NOT be able to reach greenlight while
+   * ANY of these game subtopics is below the 0.80 mastery bar — even with every
+   * downstream stamp (drillingClearedAt / mockClearedAt / greenlitAt) latched.
+   */
+  const GAME_OA: TradingGameId[] = [
+    "make-market",
+    "trading-floor",
+    "cards-mm",
+    "next-card",
+    "arbitrage",
+    "fermi",
+    "numberlogic",
+    "beat-the-odds",
+    "stockmaster",
+    "number-box",
+    "shape-shift",
+  ];
+
+  it.each(GAME_OA)(
+    "cannot greenlight while the %s game subtopic is below the bar; clearing it unblocks",
+    (game) => {
+      const key = tradingSubtopicByGame(game).key;
+      const p = greenlitProgress();
+      // Baseline: every gate passes ⇒ greenlight.
+      expect(resolveStage(p)).toBe("greenlight");
+      // A single weak game-OA subtopic drops the rolled-up trading gate, so the
+      // aggregate drilling gate re-opens and the router pulls the user BACK to
+      // drilling — greenlight is unreachable despite the stamped greenlitAt.
+      p.topicMastery![key] = weak();
+      expect(resolveStage(p)).toBe("drilling");
+      expect(p.pipeline!.greenlitAt).toBe("2026-01-07");
+      // Clearing that exact game (re-mastering it in drilling) unblocks the gate
+      // and the user advances all the way to greenlight again.
+      p.topicMastery![key] = mastered();
+      expect(resolveStage(p)).toBe("greenlight");
+    },
+  );
+
+  it("a weak Zap-N (Stockmaster) go/no-go subtopic ALONE keeps the user in drilling", () => {
+    const p = greenlitProgress();
+    p.topicMastery![tradingSubtopicByGame("stockmaster").key] = weak();
+    // Only the cognitive attention game is weak — still blocks greenlight.
+    expect(resolveStage(p)).toBe("drilling");
   });
 });
