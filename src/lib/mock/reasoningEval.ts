@@ -543,6 +543,53 @@ export const LOCALIZATION_CASES: LocalizationCase[] = [
     rootCause: "(n+1)^2",
     whyPattern: /closed form|gives|doesn\u2019t fit|does not fit|4, 9, 16, 25|pattern/i,
   },
+  {
+    // THE MOTIVATING BUG (real user case). The candidate's FINAL committed formula
+    // was 3n^2 - n + 3 (answer 293), but the EARLIEST load-bearing error is the
+    // residual claim "1 more at n=2": 3n^2 is 12 at n=2, the term is 11, so it's 1
+    // LESS, not 1 more. The primary red must be that per-n claim (earlier and more
+    // load-bearing than the final formula line), with a counterexample that quotes
+    // the candidate's OWN 3n^2 and the verifier's real numbers — never a mis-read
+    // 3n^3 cubic the candidate never wrote.
+    archetype: "seqn-poly-residual",
+    kind: "false-residual-claim",
+    prompt:
+      "A polynomial sequence goes 5, 11, 23, 41, 65, … Find the closed form and the 10th term.",
+    reasoning:
+      "The second difference is constant at 6, so a = 3 and the leading term is 3n^2. The actual value is 2 more than 3n^2 at n=1, 1 more at n=2, 0 more at n=3, so the extra part is 3 - n. That makes the closed form 3n^2 - n + 3, so the 10th term is 293.",
+    verifiedAnswer: 275,
+    rootCause: "1 more at n=2",
+    whyPattern: /3n\^2|is 12|1 less|not 1 more/i,
+  },
+  {
+    // VARIANT — OFF-BY-ONE ON 'a' (a should be 3, candidate used 2). No residual
+    // phrasing, so localization comes from the COMMITTED formula: 2n^2 + 3 matches
+    // the first two terms then diverges at n=3 (gives 21, the sequence is 23). The
+    // counterexample cites the candidate's real formula, never a re-read one.
+    archetype: "seqn-poly-offbya",
+    kind: "committed-formula-mismatch",
+    prompt:
+      "A polynomial sequence goes 5, 11, 23, 41, 65, … Find the closed form and the 10th term.",
+    reasoning:
+      "The second difference here looks like 4, so I take a = 2, giving the closed form 2n^2 + 3, and the 10th term as 203.",
+    verifiedAnswer: 275,
+    rootCause: "2n^2 + 3",
+    whyPattern: /gives|doesn\u2019t fit|does not fit|21|23/i,
+  },
+  {
+    // VARIANT — WRONG SIGN on the linear coefficient (should be -3n, candidate
+    // wrote +3n). The committed formula 3n^2 + 3n - 1 matches n=1 then diverges at
+    // n=2 (gives 17, the sequence is 11).
+    archetype: "seqn-poly-wrongsign",
+    kind: "committed-formula-mismatch",
+    prompt:
+      "A polynomial sequence goes 5, 11, 23, 41, 65, … Find the closed form and the 10th term.",
+    reasoning:
+      "Second difference is 6 so a = 3. Fitting a quadratic I get the closed form 3n^2 + 3n - 1, so the 10th term is 329.",
+    verifiedAnswer: 275,
+    rootCause: "3n^2 + 3n - 1",
+    whyPattern: /gives|doesn\u2019t fit|does not fit|17|11/i,
+  },
 ];
 
 /** Correct derivations that must produce NO false red (localization precision). */
@@ -587,6 +634,27 @@ export const LOCALIZATION_CONTROLS: LocalizationControl[] = [
     reasoning:
       "Second differences are constant at 4, so a = 4/2 = 2; fitting the first terms gives b = -1 and c = 3, i.e. 2n\u00b2 - n + 3.",
     verifiedAnswer: 2,
+  },
+  {
+    // The CORRECT derivation for the 10th-term prompt (residual phrasing used
+    // CORRECTLY): every asserted residual holds and the committed 3n^2 - 3n + 5
+    // reproduces the terms, so NOTHING is reddened.
+    archetype: "seqn-poly-residual",
+    prompt:
+      "A polynomial sequence goes 5, 11, 23, 41, 65, … Find the closed form and the 10th term.",
+    reasoning:
+      "The leading term is 3n^2. The value is 2 more than 3n^2 at n=1, 1 less at n=2, 4 less at n=3, so the extra part is 5 - 3n, giving 3n^2 - 3n + 5; the 10th term is 300 - 30 + 5 = 275.",
+    verifiedAnswer: 275,
+  },
+  {
+    // A CORRECT committed formula must NOT be reddened by the committed-formula
+    // checker (it only fires when the form doesn't reproduce the terms).
+    archetype: "seqn-poly-offbya",
+    prompt:
+      "A polynomial sequence goes 5, 11, 23, 41, 65, … Find the closed form and the 10th term.",
+    reasoning:
+      "Second difference is a constant 6, so a = 3; fitting gives the closed form 3n^2 - 3n + 5, so the 10th term is 275.",
+    verifiedAnswer: 275,
   },
 ];
 

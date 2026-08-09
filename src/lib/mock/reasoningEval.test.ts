@@ -261,6 +261,15 @@ describe("extract-and-verify — verdict is deterministic & non-jailbreakable", 
     expect(g.quality).toBe("sound");
   });
 
+  it("model explanation for the quadratic family exposes the correct closed form + 10th term", () => {
+    // The flawed-case model explanation (item `explanation`, surfaced by the
+    // "See model explanation" reveal) must be intuition-first AND state the
+    // correct closed form 3n² − 3n + 5 and the 10th term 275.
+    expect(optiver.explanation).toMatch(/second difference/i);
+    expect(optiver.explanation).toContain("3n\u00b2 \u2212 3n + 5");
+    expect(optiver.explanation).toContain("275");
+  });
+
   it("generates a coherent labeled derivation set per question", () => {
     const ds: LabeledDerivation[] = derivationsForQuestion(optiver);
     expect(ds.some((d) => d.label === "positive" && d.canonical)).toBe(true);

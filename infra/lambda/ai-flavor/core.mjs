@@ -353,10 +353,38 @@ export function mockReviewReasoningMessages(body) {
     "answer). NEVER mark a number good just because it happens to match part of the " +
     "answer (e.g. a coincidental digit). When the reasoning is wrong, point a 'bad' " +
     "span at the SPECIFIC broken premise or mis-identified pattern and explain WHY " +
-    "against the actual quantities, WITHOUT revealing the final answer. Respond as " +
+    "against the actual quantities, WITHOUT revealing the final answer. " +
+    "VERIFIER-GROUNDED LOCALIZATION (when 'Verifier-computed facts' are provided): " +
+    "critique the candidate's ACTUAL committed formula, NEVER a re-read or mid-word " +
+    "substring, and NEVER invent or evaluate an expression the candidate did not " +
+    "write. If the verifier lists an 'earliest false claim', your primary 'bad' " +
+    "span MUST map to that exact literal text in the candidate's reasoning. Phrase " +
+    "every counterexample using the verifier's real numbers (the candidate " +
+    "formula's own value at that n vs the true term) — do not compute your own. " +
+    "Respond as " +
     'strict JSON with EXACTLY these keys: "spans" (array of {"start":int, "end":int, ' +
     '"label":"good"|"bad", "why":string}) and "assessment" (one or two sentences of ' +
     "overall, advisory feedback). No markdown, no extra keys.";
+  const f = body.verifierFacts && typeof body.verifierFacts === "object" ? body.verifierFacts : null;
+  const factsBlock = f
+    ? "Verifier-computed facts (AUTHORITATIVE — highlight/critique ONLY within these):\n" +
+      (Array.isArray(f.trueTerms) && f.trueTerms.length
+        ? `  • True sequence terms (n=1,2,…): ${f.trueTerms.join(", ")}\n`
+        : "") +
+      (body.closedForm ? `  • True closed form: ${body.closedForm}\n` : "") +
+      (f.candidateFormula
+        ? `  • Candidate's committed formula (parsed from their text): ${f.candidateFormula}\n`
+        : "") +
+      (Array.isArray(f.candidateValues) && f.candidateValues.length
+        ? `  • That formula's values at n=1,2,…: ${f.candidateValues.join(", ")}\n`
+        : "") +
+      (f.counterexample ? `  • First-divergence counterexample: ${f.counterexample}\n` : "") +
+      (f.earliestFalseClaim
+        ? `  • EARLIEST FALSE CLAIM (make this your primary 'bad' span): "${f.earliestFalseClaim}"` +
+          (f.earliestFalseClaimWhy ? ` — ${f.earliestFalseClaimWhy}` : "") +
+          "\n"
+        : "")
+    : "";
   const user =
     `Question:\n${body.prompt || ""}\n\n` +
     (body.concept ? `Concept: ${body.concept}\n` : "") +
@@ -367,6 +395,7 @@ export function mockReviewReasoningMessages(body) {
     (Array.isArray(body.mechanismSignals) && body.mechanismSignals.length
       ? `Accepted mechanism phrasings: ${body.mechanismSignals.join(", ")}\n`
       : "") +
+    (factsBlock ? `\n${factsBlock}` : "") +
     `\nCandidate's reasoning (offsets are into THIS exact string):\n${body.reasoning || "(none)"}\n\n` +
     "Return the JSON now (localize + explain; do NOT state a correctness verdict):";
   return { sys, user };

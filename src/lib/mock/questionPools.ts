@@ -1647,7 +1647,7 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
     difficulty: "hard",
     concept: "Polynomial sequence (constant second difference)",
     explanation:
-      "The first differences are 6, 12, 18, 24 — each larger by a constant 6, so the SECOND difference is constant (a quadratic pattern). The next gap is 30, so the next term is 65 + 30 = 95. In closed form aₙ = 3n² − 3n + 5 (n counted from the first term).",
+      "Look at the GAPS first: the first differences are 6, 12, 18, 24 — each larger by a constant 6, so the SECOND difference is constant. A constant second difference is the signature of a QUADRATIC, and the leading coefficient is HALF that second difference (a = 6/2 = 3). The next gap is 30, so the next term is 65 + 30 = 95. In closed form aₙ = 3n² − 3n + 5 (n counted from the first term) — so, for example, the 10th term is 3·10² − 3·10 + 5 = 275. (A common trap is committing to a formula like 3n² − n + 3, which already fails at n=2: it gives 13, not 11 — always re-check a candidate closed form against the early terms before trusting it.)",
     commonErrors: [
       { value: 89, feedback: "You held the FIRST differences constant (added 24 again — a linear guess). Here the SECOND differences are constant, so the next gap is 30, giving 65 + 30 = 95.", misconception: "constant_first_difference" },
     ],

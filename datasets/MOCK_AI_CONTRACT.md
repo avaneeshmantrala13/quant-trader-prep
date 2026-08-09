@@ -373,7 +373,19 @@ wrong committed answer to correct.
   "keyShortcut": "constant second difference ⇒ a = Δ²/2", // string | null
   "reasoning": "The sequence is just (n+1)^2 … so a,b,c are 1,2,1", // candidate text
   "concept": "seqn-quadratic",              // string | null
-  "mechanismSignals": ["second difference", "Δ²/2"] // string[] — accepted method phrasings
+  "mechanismSignals": ["second difference", "Δ²/2"], // string[] — accepted method phrasings
+  // VERIFIER-COMPUTED FACTS (sequence family; null for non-sequences). The client
+  // computes these DETERMINISTICALLY from the prompt + the candidate's own text
+  // (`aiMock.ts#buildVerifierFacts`, reusing the `reasoning.ts` parsers) and hands
+  // them to the model to GROUND localization — see rules below.
+  "verifierFacts": {
+    "trueTerms": [5, 11, 23, 41, 65],       // number[] — the prompt's actual terms
+    "candidateFormula": "3n^2 - n + 3",     // string | null — the candidate's PARSED committed closed form
+    "candidateValues": [5, 13, 27, 47, 73], // number[] | null — that formula's values at n = 1,2,…
+    "counterexample": "your formula 3n^2 - n + 3 gives 13 at n=2 but the sequence is 11", // string | null
+    "earliestFalseClaim": "1 more at n=2",  // string | null — the earliest FALSE per-n residual/pattern claim
+    "earliestFalseClaimWhy": "3n^2 is 12 at n=2 and the term is 11 — that's 1 less, not 1 more." // string | null
+  }
 }
 ```
 
@@ -411,6 +423,21 @@ wrong committed answer to correct.
 - **Localize the root cause when wrong.** Point the `bad` span at the specific broken
   premise / mis-identified closed form and explain WHY against the actual terms,
   without revealing the final answer.
+- **Verifier-grounded localization (`verifierFacts`, added 2026-08, sequence family).**
+  When `verifierFacts` is present the model is instructed to (1) critique the
+  candidate's **actual committed formula** (`candidateFormula`) — never a mis-read or
+  mid-word substring, and **never** invent/evaluate an expression the candidate did not
+  write (this kills the reported `n 3n^2` → `3n^3` cubic hallucination); (2) make the
+  primary `bad` span map to the exact literal `earliestFalseClaim` text when present
+  (the earliest FALSE per-`n` residual claim — earlier and more load-bearing than the
+  final formula line); and (3) phrase every counterexample with the verifier's real
+  numbers (`counterexample` / `candidateValues` vs `trueTerms`), not its own arithmetic.
+  These facts are **advisory grounding only** — `reconcileReviewSpans` stays
+  AUTHORITATIVE and still drops/flips any span that contradicts the deterministic
+  verifier, so a hostile or empty `verifierFacts` can never upgrade a wrong answer.
+  The client computes them via `aiMock.ts#buildVerifierFacts` (reusing
+  `parseCommittedClosedForm` / `checkCommittedFormula` / `findFalseResidualClaim` in
+  `reasoning.ts`), so the grounding facts match the offline annotator exactly.
 
 ### Graceful-degradation defaults
 

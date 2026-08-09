@@ -56,8 +56,11 @@ about the correct misconception — and never reddens a correct derivation.
 | `pev-monty` | false-5050 | ✓ | ✓ | ✓ |
 | `seqn-quadratic` | oversimplified-pattern | ✓ | ✓ | ✓ |
 | `seqn-quadratic-abc` | mis-identified-closed-form | ✓ | ✓ | ✓ |
+| `seqn-poly-residual` | false-residual-claim | ✓ | ✓ | ✓ |
+| `seqn-poly-offbya` | committed-formula-mismatch | ✓ | ✓ | ✓ |
+| `seqn-poly-wrongsign` | committed-formula-mismatch | ✓ | ✓ | ✓ |
 
-**Localized (span correct): 5/5 (100.0%)** · **Why correct: 5/5 (100.0%)** · **Controls clean (no false red): 5/5 (100.0%)**
+**Localized (span correct): 8/8 (100.0%)** · **Why correct: 8/8 (100.0%)** · **Controls clean (no false red): 7/7 (100.0%)**
 
 No false reds on correct derivations.
 

@@ -20,9 +20,14 @@ import { readAiConfig } from "@/lib/aiConfig";
 import { env, postAi } from "@/lib/aiFlavor";
 import {
   allValuesIn,
+  checkCommittedFormula,
   evalArithmetic,
+  evalInN,
   findFalseArithmetic,
+  findFalseResidualClaim,
   gradeReasoningDeterministic,
+  parseCommittedClosedForm,
+  parseSequenceTerms,
   parseNumericValue,
   type ReasoningInput,
 } from "./reasoning";
@@ -334,6 +339,70 @@ export function normalizeReviewPayload(
 }
 
 /**
+ * Verifier-computed facts handed to the `mock-review-reasoning` model so it is
+ * GROUNDED: it may only critique the candidate's ACTUAL committed formula and
+ * highlight the verifier-flagged earliest false claim, phrasing counterexamples
+ * with these real numbers — never invent or evaluate an expression the candidate
+ * did not write. `null` when the prompt is not a numeric sequence. See
+ * `datasets/MOCK_AI_CONTRACT.md` Mode 1d.
+ */
+export interface VerifierFacts {
+  /** The prompt's actual sequence terms, in order. */
+  trueTerms: number[];
+  /** The candidate's PARSED committed closed form (literal text), if any. */
+  candidateFormula: string | null;
+  /** The candidate formula's per-`n` values over the given terms, if parseable. */
+  candidateValues: number[] | null;
+  /** A concrete first-divergence counterexample for the candidate's OWN formula. */
+  counterexample: string | null;
+  /** The earliest FALSE per-`n` residual/pattern claim, if any. */
+  earliestFalseClaim: string | null;
+  /** Why that earliest false claim is false (verifier numbers). */
+  earliestFalseClaimWhy: string | null;
+}
+
+/**
+ * Compute the {@link VerifierFacts} for a sequence prompt (or `null` otherwise).
+ * Pure: reuses the deterministic `reasoning.ts` parsers/checkers so the grounding
+ * facts are exactly what the offline annotator uses — no duplicate logic.
+ */
+export function buildVerifierFacts(
+  prompt: string,
+  reasoning: string,
+): VerifierFacts | null {
+  const trueTerms = parseSequenceTerms(prompt ?? "");
+  if (trueTerms.length < 3) return null;
+  const cf = parseCommittedClosedForm(reasoning ?? "");
+  const counter = checkCommittedFormula(reasoning ?? "", prompt ?? "");
+  const residual = findFalseResidualClaim(reasoning ?? "", prompt ?? "");
+  // The candidate formula's per-`n` values over the given terms (1-indexed), so
+  // the model can SEE where the candidate's OWN formula diverges — never a
+  // re-read expression. `null` when any point isn't evaluable.
+  let candidateValues: number[] | null = null;
+  if (cf) {
+    const vals: number[] = [];
+    let ok = true;
+    for (let i = 0; i < trueTerms.length; i++) {
+      const v = evalInN(cf.claim, i + 1);
+      if (v === null) {
+        ok = false;
+        break;
+      }
+      vals.push(v);
+    }
+    candidateValues = ok ? vals : null;
+  }
+  return {
+    trueTerms,
+    candidateFormula: cf ? cf.claim : null,
+    candidateValues,
+    counterexample: counter ? counter.counterexample : null,
+    earliestFalseClaim: residual ? residual.claim : null,
+    earliestFalseClaimWhy: residual ? residual.why : null,
+  };
+}
+
+/**
  * Run a REAL LLM reasoning REVIEW (`mock-review-reasoning`) that returns
  * verifier-GROUNDED good/bad spans with specific human feedback plus an overall
  * assessment. The deterministic verifier stays AUTHORITATIVE: every LLM span is
@@ -379,6 +448,11 @@ export async function reviewReasoning(
       reasoning: input.reasoning,
       concept: ctx.concept ?? null,
       mechanismSignals: mechanismSignals ?? [],
+      // VERIFIER-COMPUTED FACTS (sequence family): ground the model so it can
+      // ONLY critique the candidate's ACTUAL committed formula and highlight the
+      // verifier-flagged earliest false claim — never a mis-read substring or an
+      // expression the candidate never wrote. Empty/absent for non-sequences.
+      verifierFacts: buildVerifierFacts(input.prompt, input.reasoning ?? ""),
     },
     ctx.signal,
   );

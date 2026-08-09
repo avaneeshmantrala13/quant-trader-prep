@@ -29,9 +29,11 @@
  */
 import {
   allValuesIn,
+  checkCommittedFormula,
   evalArithmetic,
   findClosedFormMismatch,
   findFalseArithmetic,
+  findFalseResidualClaim,
   findHedgePhrase,
   findPremiseFlaw,
   hasArithmeticContradiction,
@@ -452,25 +454,52 @@ function localizeRootCause(
   const wrong = opts.answerWasWrong === true || contradicts;
   if (!wrong) return;
 
+  // Redden a localized root-cause span, evicting any overlapping decoration so
+  // the root cause always wins its span. Shared by every localizer below.
+  const redden = (start: number, end: number, why: string): void => {
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (!(spans[i].end <= start || spans[i].start >= end)) spans.splice(i, 1);
+    }
+    spans.push({
+      start,
+      end,
+      excerpt: text.slice(start, end),
+      label: "flawed",
+      why,
+    });
+  };
+
+  // EARLIEST FALSE PER-CLAIM RESIDUAL (sequence family), HIGHEST priority: the
+  // candidate asserted "<delta> more/less than <expr> at n=k" and the verifier
+  // found the earliest k where that residual is FALSE. This is earlier and more
+  // load-bearing than the final formula line, so it is the primary red span.
+  const residual = opts.prompt
+    ? findFalseResidualClaim(text, opts.prompt)
+    : null;
+  if (residual) {
+    redden(residual.start, residual.end, residual.why);
+    return;
+  }
+
   const flaw = findPremiseFlaw(text, {
     prompt: opts.prompt,
     verifiedAnswer: verified,
     statedValue: landing,
   });
   if (flaw) {
-    // The root cause wins over any overlapping decoration at that span.
-    for (let i = spans.length - 1; i >= 0; i--) {
-      if (!(spans[i].end <= flaw.start || spans[i].start >= flaw.end)) {
-        spans.splice(i, 1);
-      }
-    }
-    spans.push({
-      start: flaw.start,
-      end: flaw.end,
-      excerpt: text.slice(flaw.start, flaw.end),
-      label: "flawed",
-      why: flaw.why,
-    });
+    redden(flaw.start, flaw.end, flaw.why);
+    return;
+  }
+
+  // The candidate's COMMITTED formula (parsed from their text, NOT a highlighted
+  // substring) evaluated against the ACTUAL terms — the earliest `n` where it
+  // diverges, quoted with the verifier's real numbers ("gives 13 at n=2 but the
+  // sequence is 11"). Critiques the formula they actually wrote.
+  const committed = opts.prompt
+    ? checkCommittedFormula(text, opts.prompt)
+    : null;
+  if (committed) {
+    redden(committed.start, committed.end, committed.why);
     return;
   }
 
@@ -480,18 +509,7 @@ function localizeRootCause(
   // that shows what it gives vs. what the sequence really is.
   const cf = opts.prompt ? findClosedFormMismatch(text, opts.prompt) : null;
   if (cf) {
-    for (let i = spans.length - 1; i >= 0; i--) {
-      if (!(spans[i].end <= cf.start || spans[i].start >= cf.end)) {
-        spans.splice(i, 1);
-      }
-    }
-    spans.push({
-      start: cf.start,
-      end: cf.end,
-      excerpt: text.slice(cf.start, cf.end),
-      label: "flawed",
-      why: cf.why,
-    });
+    redden(cf.start, cf.end, cf.why);
     return;
   }
 

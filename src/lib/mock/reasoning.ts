@@ -1217,6 +1217,273 @@ export function findClosedFormMismatch(
   return null;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Candidate's COMMITTED formula + per-claim truth checks (sequence family)    */
+/* -------------------------------------------------------------------------- */
+
+/** A fresh regex for a maximal closed-form char run that mentions `n`. */
+function closedFormRunRegex(): RegExp {
+  return /[0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*n[0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*/gi;
+}
+
+/** Does a run LOOK like a real closed form (not a stray `n` from a word)? */
+function looksLikeClosedForm(cand: string): boolean {
+  return (
+    /[\^\u00b2\u00b3()]/.test(cand) ||
+    /\d\s*n|n\s*\d/i.test(cand) ||
+    /squared|cubed/i.test(cand)
+  );
+}
+
+/** Leading degree of a closed form (3 for cubic, 2 for quadratic, else 1). */
+function closedFormDegree(cand: string): number {
+  if (/(\^\s*3|\u00b3|cubed)/i.test(cand)) return 3;
+  if (/(\^\s*2|\u00b2|squared)/i.test(cand)) return 2;
+  return 1;
+}
+
+/** The candidate's COMMITTED closed-form polynomial in n, with its text span. */
+export interface CommittedFormula {
+  /** The literal closed-form text exactly as written, e.g. "3n^2 - n + 3". */
+  claim: string;
+  /** Inclusive start / exclusive end char offsets into the original text. */
+  start: number;
+  end: number;
+  /** Detected leading degree (2 for n²/squared, 3 for cubed, else 1). */
+  degree: number;
+}
+
+/**
+ * Parse the candidate's FINAL / COMMITTED closed-form polynomial in `n` — the
+ * formula they actually propose (e.g. from "the final equation is 3n^2 - n + 3"),
+ * NOT any highlighted substring. Robust to `^`, `n^2`, `3n`, spacing, unicode
+ * minus, super/subscripts, and phrasing ("=", "is", "hence") because it simply
+ * scans EVERY closed-form run that {@link evalInN} can evaluate and returns the
+ * LAST run of the HIGHEST degree seen — i.e. the most complete polynomial the
+ * candidate committed to. Pure/total; `null` when no evaluable closed form
+ * appears. This parsed formula is what the verifier evaluates and critiques.
+ */
+export function parseCommittedClosedForm(text: string): CommittedFormula | null {
+  const t = text ?? "";
+  const re = closedFormRunRegex();
+  const cands: CommittedFormula[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    if (m[0].trim() === "") {
+      re.lastIndex++;
+      continue;
+    }
+    const raw = m[0];
+    // Trim surrounding whitespace AND dangling sentence dots (`.` is in the run
+    // class, so "3n^2 + 3." would otherwise fail to evaluate) — then adjust the
+    // offsets so the span still points at the exact formula text.
+    const lead = raw.length - raw.replace(/^[\s.]+/, "").length;
+    const trail = raw.length - raw.replace(/[\s.]+$/, "").length;
+    const start = m.index + lead;
+    const cand = raw.slice(lead, raw.length - trail);
+    if (!looksLikeClosedForm(cand)) continue;
+    if (evalInN(cand, 1) === null) continue;
+    cands.push({
+      claim: cand,
+      start,
+      end: start + cand.length,
+      degree: closedFormDegree(cand),
+    });
+  }
+  if (cands.length === 0) return null;
+  const maxDeg = Math.max(...cands.map((c) => c.degree));
+  const top = cands.filter((c) => c.degree === maxDeg);
+  return top[top.length - 1]; // last, highest-degree form = the committed one
+}
+
+/** A concrete first-divergence counterexample for the candidate's OWN formula. */
+export interface FormulaCounterexample {
+  /** The candidate's committed formula text, e.g. "3n^2 - n + 3". */
+  formula: string;
+  /** Inclusive start / exclusive end char offsets of the formula in the text. */
+  start: number;
+  end: number;
+  /** The index base (1 or 0) that best matches the leading terms. */
+  base: number;
+  /** The first `n` (in the candidate's own indexing) where it diverges. */
+  n: number;
+  /** The value the candidate's formula produces at that `n`. */
+  candidateValue: number;
+  /** The true sequence term at that `n`. */
+  trueValue: number;
+  /** Terse counterexample: "your formula 3n^2 - n + 3 gives 13 at n=2 but the sequence is 11". */
+  counterexample: string;
+  /** Content-referential explanation that QUOTES the committed formula. */
+  why: string;
+}
+
+/**
+ * Evaluate the candidate's COMMITTED formula (see {@link parseCommittedClosedForm})
+ * against the prompt's ACTUAL sequence terms and return a CONCRETE first-divergence
+ * counterexample — the earliest `n` where `candidate_formula(n) ≠ true_term(n)`,
+ * quoted with the real numbers ("gives 13 at n=2 but the sequence is 11"). It
+ * critiques the formula the candidate ACTUALLY wrote, never a mis-read substring
+ * or an expression they never committed to. Returns `null` when the prompt isn't
+ * a sequence, no committed form is parseable, or the committed form actually FITS
+ * (so a correct derivation is never flagged). Pure/total.
+ */
+export function checkCommittedFormula(
+  text: string,
+  prompt: string,
+): FormulaCounterexample | null {
+  const terms = parseSequenceTerms(prompt ?? "");
+  if (terms.length < 3) return null;
+  const cf = parseCommittedClosedForm(text ?? "");
+  if (!cf) return null;
+  const K = terms.length;
+  const evalBase = (base: number): (number | null)[] => {
+    const outs: (number | null)[] = [];
+    for (let k = 0; k < K; k++) outs.push(evalInN(cf.claim, base + k));
+    return outs;
+  };
+  const tolAt = (i: number) => 1e-6 + Math.abs(terms[i]) * 1e-9;
+  const fits = (outs: (number | null)[]): boolean =>
+    outs.every((v, i) => v !== null && Math.abs((v as number) - terms[i]) <= tolAt(i));
+  const leadMatch = (outs: (number | null)[]): number => {
+    let i = 0;
+    while (i < outs.length && outs[i] !== null && Math.abs((outs[i] as number) - terms[i]) <= tolAt(i)) i++;
+    return i;
+  };
+  const firstDivergence = (outs: (number | null)[]): number => {
+    for (let k = 0; k < outs.length; k++) {
+      const v = outs[k];
+      if (v !== null && Math.abs(v - terms[k]) > tolAt(k)) return k;
+    }
+    return -1;
+  };
+  const one = evalBase(1);
+  const zero = evalBase(0);
+  if (fits(one) || fits(zero)) return null; // committed form is actually correct
+  const useOne = leadMatch(one) >= leadMatch(zero);
+  const base = useOne ? 1 : 0;
+  const outs = useOne ? one : zero;
+  const idx = firstDivergence(outs);
+  if (idx < 0) return null; // no clean numeric counterexample (only null gaps)
+  const nIndex = base === 1 ? idx + 1 : idx;
+  const candVal = outs[idx] as number;
+  const trueVal = terms[idx];
+  const counterexample =
+    `your formula ${cf.claim} gives ${fmtNum(candVal)} at n=${nIndex} but the ` +
+    `sequence is ${fmtNum(trueVal)}`;
+  const why =
+    `Your committed formula \u201c${cf.claim}\u201d gives ${fmtNum(candVal)} at n=${nIndex}, ` +
+    `but the sequence is ${fmtNum(trueVal)} \u2014 so it doesn't fit. Re-derive the rule ` +
+    `from the actual gaps between the terms before solving.`;
+  return {
+    formula: cf.claim,
+    start: cf.start,
+    end: cf.end,
+    base,
+    n: nIndex,
+    candidateValue: candVal,
+    trueValue: trueVal,
+    counterexample,
+    why,
+  };
+}
+
+/** A false per-`n` residual/pattern claim, localized to its literal text span. */
+export interface ResidualClaimFlaw {
+  kind: "false-residual-claim";
+  /** The offending segment exactly as the candidate wrote it ("1 more at n=2"). */
+  claim: string;
+  /** Inclusive start / exclusive end char offsets into the original text. */
+  start: number;
+  end: number;
+  /** The base expression the residual is measured against (e.g. "3n^2"). */
+  baseExpr: string;
+  /** The `n` at which the claim is false. */
+  n: number;
+  /** The base expression's value at that `n`. */
+  exprValue: number;
+  /** The true sequence term at that `n`. */
+  trueValue: number;
+  /** Content-referential explanation with the verifier's real numbers. */
+  why: string;
+}
+
+const RESIDUAL_DIR_MORE = /^(more|above|over|greater|higher|bigger|extra)$/i;
+const RESIDUAL_DIR_LESS = /^(less|below|under|lower|smaller|fewer|short)$/i;
+
+/**
+ * PER-CLAIM truth check for residual / pattern assertions of the form
+ * "<delta> more/less than <expr> at n=k" (and elided follow-ons like "1 more at
+ * n=2"). It anchors the base expression from the first "... than <expr>", then
+ * verifies EACH asserted delta against the real term: `expr(k) + ±delta` must
+ * equal `true_term(k)`. Returns the EARLIEST false claim (by text position) with
+ * a concrete counterexample using the candidate's own base expression and the
+ * verifier's real numbers ("3n^2 is 12 at n=2 and the term is 11 — 1 less, not 1
+ * more"). This is earlier and more load-bearing than the final formula line.
+ * Returns `null` when the prompt isn't a sequence, no residual is asserted, or
+ * every asserted residual holds (so a correct derivation is never flagged).
+ * Pure/total.
+ */
+export function findFalseResidualClaim(
+  text: string,
+  prompt: string,
+): ResidualClaimFlaw | null {
+  const terms = parseSequenceTerms(prompt ?? "");
+  if (terms.length < 3) return null;
+  const t = text ?? "";
+  // A residual claim is "<delta> <dir> [than <expr>] [at] n=k" — the delta must be
+  // ADJACENT to the n=k (only the optional dir / "than expr" / "at" between), so a
+  // stray number elsewhere (e.g. the "a = 3" coefficient) can never be misread as
+  // the residual. A direction word is REQUIRED, which also excludes the exponent
+  // in "3n^2 at n=1". The base <expr> is anchored from the first claim that states
+  // "than <expr>"; later elided claims ("1 more at n=2") reuse it.
+  const re =
+    /(-?\d+(?:\.\d+)?)\s*(more|less|above|below|over|under|greater|higher|lower|bigger|smaller|extra|fewer)\s*(?:than\s+([0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*n[0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*?)\s*)?(?:at\s+)?n\s*=\s*(\d+)/gi;
+  let m: RegExpExecArray | null;
+  let baseExpr: string | null = null;
+  const flaws: ResidualClaimFlaw[] = [];
+  while ((m = re.exec(t)) !== null) {
+    const delta = Number(m[1]);
+    const dir = (m[2] ?? "").toLowerCase();
+    const exprRaw = (m[3] ?? "").trim();
+    const k = Number(m[4]);
+    if (exprRaw !== "" && looksLikeClosedForm(exprRaw) && evalInN(exprRaw, 1) !== null) {
+      baseExpr = exprRaw; // anchor / re-anchor the base expression
+    }
+    if (baseExpr === null) continue; // no expression stated yet — can't verify
+    if (!Number.isFinite(delta) || !Number.isInteger(k) || k < 1 || k > terms.length) continue;
+    const sign = RESIDUAL_DIR_MORE.test(dir) ? 1 : RESIDUAL_DIR_LESS.test(dir) ? -1 : 1;
+    const exprVal = evalInN(baseExpr, k);
+    if (exprVal === null) continue;
+    const trueVal = terms[k - 1];
+    const asserted = exprVal + sign * delta;
+    if (Math.abs(asserted - trueVal) <= 1e-6) continue; // this claim holds — not a flaw
+    const start = m.index;
+    const end = m.index + m[0].length;
+    const claim = t.slice(start, end).trim();
+    const realResidual = trueVal - exprVal;
+    const realDir = realResidual >= 0 ? "more" : "less";
+    const why =
+      `You wrote \u201c${claim}\u201d, but ${baseExpr} is ${fmtNum(exprVal)} at n=${k} and ` +
+      `the term is ${fmtNum(trueVal)} \u2014 that's ${fmtNum(Math.abs(realResidual))} ${realDir}, ` +
+      `not ${fmtNum(Math.abs(delta))} ${sign >= 0 ? "more" : "less"}. Re-check this gap ` +
+      `before fixing the formula.`;
+    flaws.push({
+      kind: "false-residual-claim",
+      claim,
+      start,
+      end,
+      baseExpr,
+      n: k,
+      exprValue: exprVal,
+      trueValue: trueVal,
+      why,
+    });
+  }
+  if (flaws.length === 0) return null;
+  flaws.sort((a, b) => a.start - b.start);
+  return flaws[0]; // earliest false claim = the primary, load-bearing root cause
+}
+
 /**
  * Build a commitment-forcing clarify prompt for a MAIN question whose reasoning
  * was ambiguous (mixed / hedged / contradictory). Generic but still forces a
