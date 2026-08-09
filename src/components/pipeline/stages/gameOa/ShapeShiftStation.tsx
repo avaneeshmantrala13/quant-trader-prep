@@ -8,7 +8,7 @@ import {
 import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   TimedRapidMcqStation,
-  freshSeed,
+  useStationSeed,
   type McqRound,
   type StationProps,
 } from "./kit";
@@ -59,9 +59,10 @@ function ShapeGrid({ shape, size = 12 }: { shape: Shape; size?: number }) {
  * scaled to this slice) via {@link TimedRapidMcqStation}: shapes stream forward
  * and any you don't reach before the buzzer count as misses.
  */
-export default function ShapeShiftStation({ onComplete }: StationProps) {
+export default function ShapeShiftStation({ onComplete, seed }: StationProps) {
+  const mountSeed = useStationSeed(seed);
   const rounds = useMemo<McqRound[]>(() => {
-    const items = buildShapeShiftPaper(freshSeed(), SHAPESHIFT_ROUNDS);
+    const items = buildShapeShiftPaper(mountSeed, SHAPESHIFT_ROUNDS);
     return items.map((it) => ({
       id: it.id,
       tag: `Tier ${it.tier} · ${it.transformLabel}`,
@@ -76,7 +77,7 @@ export default function ShapeShiftStation({ onComplete }: StationProps) {
       options: it.options.map((s) => <ShapeGrid shape={s} />),
       correctIndex: it.correctIndex,
     }));
-  }, []);
+  }, [mountSeed]);
 
   return (
     <TimedRapidMcqStation

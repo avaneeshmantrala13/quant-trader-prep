@@ -19,8 +19,8 @@ import {
   StationProgress,
   TimerBar,
   fmtNum,
-  freshSeed,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -46,12 +46,12 @@ function pnlDelta(state: FloorState): number {
  * `competency::inventory-management`; a shot-clock TIMEOUT folds 0 (a stalled
  * maker is never rewarded), so the subtopic Beta reflects timed performance.
  */
-export default function TradingFloorStation({ onComplete }: StationProps) {
+export default function TradingFloorStation({ onComplete, seed: seedProp }: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
+  const mountSeed = useStationSeed(seedProp);
   const [st, setSt] = useState<FloorState>(() => {
-    const seed = freshSeed();
-    const scenario = packById("running-total").build(new Rng(seed));
-    return startFloor(scenario, floorConfigById("warmup"), seed);
+    const scenario = packById("running-total").build(new Rng(mountSeed));
+    return startFloor(scenario, floorConfigById("warmup"), mountSeed);
   });
   const [reveal, setReveal] = useState<{ delta: number; timedOut: boolean } | null>(
     null,

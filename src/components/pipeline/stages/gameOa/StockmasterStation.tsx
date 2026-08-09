@@ -12,9 +12,9 @@ import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   StationProgress,
   TimerBar,
-  useMountSeed,
   useShotClock,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -50,9 +50,9 @@ function outcomeLabel(o: Outcome): string {
  * speed-weighted by the engine's own reaction bonus (instant ⇒ 1.0, buzzer ⇒
  * 0.5); a correct hold is full credit.
  */
-export default function StockmasterStation({ onComplete }: StationProps) {
+export default function StockmasterStation({ onComplete, seed: seedProp }: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
-  const seed = useMountSeed();
+  const seed = useStationSeed(seedProp);
   const trials = useMemo<StockTrial[]>(
     () => buildStockmasterTrials(seed, STOCKMASTER_ROUNDS),
     [seed],

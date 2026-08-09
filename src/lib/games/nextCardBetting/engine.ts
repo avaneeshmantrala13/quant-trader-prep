@@ -186,6 +186,47 @@ export function kellyFraction(p: number): number {
   return Math.max(0, round2(2 * p - 1));
 }
 
+/**
+ * Per-bet SIZING credit ∈ [0,1] for staking `chosenFraction` of bankroll on a
+ * side of true probability `p`, measured as closeness to that side's even-money
+ * Kelly fraction f* = max(0, 2p − 1). Mirrors {@link sizingScore}'s closeness
+ * kernel: `1 − min(1, |chosen − kelly| / kelly)` when a +EV Kelly stake exists,
+ * and (for a ≤50% side where the correct stake is zero) full credit only for NOT
+ * staking. So betting exactly Kelly on a good side ⇒ 1, wildly over/under-sizing
+ * ⇒ →0, and staking anything on a −EV side ⇒ 0.
+ */
+export function kellySizingCredit(p: number, chosenFraction: number): number {
+  const k = kellyFraction(p);
+  if (k <= 0) return chosenFraction <= 0 ? 1 : 0;
+  return round2(Math.max(0, 1 - Math.min(1, Math.abs(chosenFraction - k) / k)));
+}
+
+/**
+ * ONE next-card round's combined COUNTING + KELLY credit ∈ [0,1] — the signal the
+ * battery station folds. It rewards two things at once:
+ *   1. the DECISION (counting): bet the >50% side, or skip when neither clears
+ *      50% (a ≤50% round's correct play is to stand aside), and
+ *   2. the SIZING (Kelly): once on the right side, stake near f* = 2p − 1.
+ *
+ * Grading:
+ *   • No +EV side (best p ≤ 0.5): skipping (fraction ≤ 0) ⇒ 1; staking ⇒ 0.
+ *   • A +EV side exists: staking the WRONG side or skipping ⇒ 0 (missed edge);
+ *     staking the RIGHT side ⇒ `kellySizingCredit(bestP, chosenFraction)`.
+ */
+export function roundKellyCredit(
+  options: BetOption[],
+  chosenSide: string,
+  chosenFraction: number,
+): number {
+  const best = bestOption(options);
+  const shouldBet = best.p > 0.5;
+  if (!shouldBet) {
+    return chosenSide === "skip" || chosenFraction <= 0 ? 1 : 0;
+  }
+  if (chosenSide !== best.side || chosenFraction <= 0) return 0;
+  return kellySizingCredit(best.p, chosenFraction);
+}
+
 /** The +EV side to bet: the option with the highest true probability. */
 export function bestOption(options: BetOption[]): BetOption {
   return options.reduce((best, o) => (o.p > best.p ? o : best));

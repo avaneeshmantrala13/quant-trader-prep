@@ -4,6 +4,7 @@ import { marketMakingCredit } from "@/lib/mastery/competency";
 import {
   counterpartyTight,
   markToTrue,
+  noFillCredit,
   round2,
   validateQuote,
   type CounterpartyAction,
@@ -18,8 +19,8 @@ import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   StationProgress,
   fmtNum,
-  freshSeed,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -34,9 +35,10 @@ export const MAKE_MARKET_ROUNDS = 6;
  * (`marketMakingCredit`: informed pick-off ⇒ 0, non-picked-off positive P&L ⇒ 1),
  * folding each round into `competency::spread-setting`.
  */
-export default function MakeMarketStation({ onComplete }: StationProps) {
+export default function MakeMarketStation({ onComplete, seed }: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
-  const rngRef = useRef<Rng>(new Rng(freshSeed()));
+  const mountSeed = useStationSeed(seed);
+  const rngRef = useRef<Rng>(new Rng(mountSeed));
   const [index, setIndex] = useState(0);
   const [scenario, setScenario] = useState<HardQuantityScenario>(() =>
     dealHardQuantity(rngRef.current),
@@ -45,6 +47,7 @@ export default function MakeMarketStation({ onComplete }: StationProps) {
     action: CounterpartyAction;
     pnl: number;
     earned: boolean;
+    noFill: boolean;
   } | null>(null);
   const earnedRef = useRef(0);
   const pnlRef = useRef(0);
@@ -80,14 +83,20 @@ export default function MakeMarketStation({ onComplete }: StationProps) {
       0.8,
     );
     const fills: Fill[] = action.fill ? [action.fill] : [];
+    const noFill = !action.fill;
     const pnl = round2(markToTrue(fills, scenario.trueValue));
     const pickedOff = action.kind === "informed";
-    const credit = marketMakingCredit({ pnl, pickedOff, at });
+    // A quiet no-fill round is NOT an automatic miss: a well-centred, tight quote
+    // that simply drew no counterparty is scored on whether it bracketed the
+    // truth (would-have-earned), not credited 0 like a pick-off.
+    const credit = noFill
+      ? noFillCredit(q, scenario.trueValue)
+      : marketMakingCredit({ pnl, pickedOff, at });
     const earned = credit >= 1;
     if (earned) earnedRef.current += 1;
     pnlRef.current = round2(pnlRef.current + pnl);
     record(credit, at);
-    setReveal({ action, pnl, earned });
+    setReveal({ action, pnl, earned, noFill });
   };
 
   const advance = () => {
@@ -181,7 +190,13 @@ export default function MakeMarketStation({ onComplete }: StationProps) {
           <div
             className={`verdict ${reveal.earned ? "bg-bull text-bg" : "bg-bear text-bg"}`}
           >
-            {reveal.earned ? "● Captured the edge" : "● Picked off / no edge"}
+            {reveal.noFill
+              ? reveal.earned
+                ? "● Quiet round — well-centred market (no fill)"
+                : "● Quiet round — but your market was offside"
+              : reveal.earned
+                ? "● Captured the edge"
+                : "● Picked off / no edge"}
           </div>
           <p className="reveal text-secondary">
             “{reveal.action.chatter}” · P&amp;L{" "}

@@ -44,6 +44,15 @@ export interface StationSummary {
 export interface StationProps {
   /** Called once when the station's short session ends. */
   onComplete: (summary: StationSummary) => void;
+  /**
+   * Optional deterministic content seed. When provided, the station's freshly
+   * generated content (dealt cards, drawn drill items, sampled estimates, …) is
+   * fully reproducible: the SAME `seed` ⇒ the SAME content, exactly like the
+   * diagnostics' per-attempt `seedRef`. When omitted the station falls back to a
+   * stable per-mount random seed (see {@link useStationSeed}), so an un-seeded
+   * mount is still stable across re-renders but varies mount-to-mount.
+   */
+  seed?: number;
 }
 
 /**
@@ -264,6 +273,20 @@ export function freshSeed(): number {
 /** Small helper to build the "credits ⇒ mastery seeding" note. */
 export function useMountSeed(): number {
   return useMemo(() => freshSeed(), []);
+}
+
+/**
+ * Resolve a station's content seed, honoring the {@link StationProps.seed}
+ * REPRODUCIBILITY CONTRACT: when the driver passes an explicit `seed`, the
+ * station is seeded with EXACTLY that value (same seed ⇒ same content, like the
+ * diagnostics); when it is omitted, a stable per-mount random seed is minted
+ * ONCE (in a ref, not recomputed on re-render) so an un-seeded mount is still
+ * render-stable. Because the fallback is captured in a ref, a later parent
+ * re-render that supplies a seed never yanks content out from under the learner.
+ */
+export function useStationSeed(seed?: number): number {
+  const fallbackRef = useRef<number>(freshSeed());
+  return seed ?? fallbackRef.current;
 }
 
 /* ========================================================================== */

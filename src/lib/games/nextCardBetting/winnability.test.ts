@@ -4,6 +4,7 @@ import {
   freshDeck,
   evaluateHigherLower,
   resolveBet,
+  kellyFraction,
   rankValue,
   type Card,
   type GameConfig,
@@ -75,6 +76,56 @@ describe("Next Card Betting — winnability", () => {
 
   it("skilled counting strictly beats anti-counting", () => {
     expect(skilled).toBeGreaterThan(badSide);
+  });
+});
+
+/**
+ * WINNABILITY (Monte-Carlo) — KELLY SIZING. Sizing the bet to the EDGE is the
+ * second half of the game. For an even-money side of probability p the Kelly
+ * fraction f* = max(0, 2p − 1) maximizes expected log-growth of bankroll. These
+ * runs confirm that sizing by Kelly (a) grows the bankroll (positive mean
+ * log-growth) and (b) strictly BEATS an edge-ignorant flat stake that bets the
+ * favoured side a fixed 50% every time — because the flat stake grossly overbets
+ * marginal edges. This is the sizing-vs-edge skill the station now scores.
+ */
+describe("Next Card Betting — Kelly sizing growth", () => {
+  function meanLogGrowth(sizeFor: (bestP: number) => number): number {
+    let totalLog = 0;
+    let n = 0;
+    for (let i = 0; i < N; i++) {
+      const rng = new Rng(20_000 + i);
+      const shuffled = rng.shuffle(freshDeck(CONFIG));
+      const seen = rng.int(0, shuffled.length - 3);
+      const reference: Card = shuffled[seen];
+      const remaining = shuffled.slice(seen + 1);
+      const outcome = rng.pick(remaining);
+      const [higher, lower] = evaluateHigherLower(reference, remaining, CONFIG.aceMode);
+      const bestP = Math.max(higher.p, lower.p);
+      const side = higher.p >= lower.p ? "higher" : "lower";
+      const f = Math.max(0, Math.min(0.98, sizeFor(bestP)));
+      if (f <= 0) continue; // stood aside → growth ×1 → log 0, excluded from the mean
+      const net = resolveBet("higher-lower", side, 1, outcome, {
+        aceMode: CONFIG.aceMode,
+        reference,
+      });
+      const mult = net > 0 ? 1 + f : 1 - f;
+      totalLog += Math.log(mult);
+      n += 1;
+    }
+    return n > 0 ? totalLog / n : 0;
+  }
+
+  // Kelly: size to the edge, only when the favoured side is a genuine edge.
+  const kelly = meanLogGrowth((bestP) => (bestP > 0.5 ? kellyFraction(bestP) : 0));
+  // Flat: bet the favoured side a fixed 50% regardless of how thin the edge is.
+  const flat = meanLogGrowth((bestP) => (bestP > 0.5 ? 0.5 : 0));
+
+  it("Kelly sizing grows the bankroll (positive expected log-growth)", () => {
+    expect(kelly).toBeGreaterThan(0);
+  });
+
+  it("Kelly sizing strictly beats an edge-ignorant flat stake", () => {
+    expect(kelly).toBeGreaterThan(flat);
   });
 });
 

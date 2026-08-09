@@ -50,8 +50,13 @@ export default function GameOaStage({ onComplete }: StageComponentProps) {
   const [stationIdx, setStationIdx] = useState(0);
   const [results, setResults] = useState<StationResult[]>([]);
   const doneRef = useRef(false);
+  // One stable base seed per battery mount, so every station's content is
+  // seed-reproducible (same base ⇒ same battery) — derived per station with a
+  // large odd stride so no two stations share a stream.
+  const seedBaseRef = useRef<number>(Math.floor(Math.random() * 1e9));
 
   const station = BATTERY[stationIdx];
+  const stationSeed = (seedBaseRef.current + stationIdx * 1_000_003) >>> 0;
 
   const handleStationComplete = (summary: StationSummary) => {
     setResults((prev) => [...prev, { station, summary }]);
@@ -98,9 +103,11 @@ export default function GameOaStage({ onComplete }: StageComponentProps) {
             </span>
           </div>
           <Suspense fallback={<StationFallback />}>
-            {/* Remount per station so its internal session state resets cleanly. */}
+            {/* Remount per station so its internal session state resets cleanly.
+                A deterministic per-station seed keeps the battery reproducible. */}
             <station.Component
               key={station.subtopicKey}
+              seed={stationSeed}
               onComplete={handleStationComplete}
             />
           </Suspense>

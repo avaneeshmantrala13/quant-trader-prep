@@ -496,6 +496,29 @@ export function finalBalance(fills: Fill[], trueValue: number): number {
   return round2(START_BALANCE + markToTrue(fills, trueValue));
 }
 
+/**
+ * Does a quote's market BRACKET the true value (bid ≤ truth ≤ ask)? This is the
+ * counterfactual "was this a good market?" test for a NO-FILL round: a valid,
+ * tight quote that straddles the truth is exactly the market a maker wants to
+ * show (it would collect the spread from uninformed flow and never be picked
+ * off) — so a quiet round with no counterparty is NOT a miss when the quote was
+ * well-centred, and IS an offside quote that merely got lucky when it was not.
+ */
+export function quoteBracketsTruth(quote: Quote, trueValue: number): boolean {
+  return trueValue >= quote.bid && trueValue <= quote.ask;
+}
+
+/**
+ * Credit ∈ {0,1} for a legitimately-quoted round that drew NO counterparty fill.
+ * A well-centred market (truth inside the spread) earns full credit — it avoided
+ * adverse selection and would have collected the spread had flow come — while an
+ * offside quote that simply wasn't traded earns none. This is the fix for the
+ * bug where a quiet no-fill round was always scored as a miss (credit 0).
+ */
+export function noFillCredit(quote: Quote, trueValue: number): number {
+  return quoteBracketsTruth(quote, trueValue) ? 1 : 0;
+}
+
 /* ========================================================================== */
 /*  Coaching (the real lesson: SKEW + don't chase price, add size)             */
 /* ========================================================================== */

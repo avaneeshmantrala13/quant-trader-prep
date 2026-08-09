@@ -12,6 +12,8 @@ import {
   finalBalance,
   buildRounds,
   coachAfterRound,
+  quoteBracketsTruth,
+  noFillCredit,
   START_BALANCE,
   type Fill,
   type Quote,
@@ -320,6 +322,25 @@ describe("coaching", () => {
     });
     expect(c?.headline).toMatch(/pressed size/i);
     expect(c?.detail).toMatch(/only add size once/i);
+  });
+});
+
+describe("no-fill scoring — a quiet, well-centred round is not a miss", () => {
+  const q: Quote = { bid: 98, ask: 102, bidSize: 1, askSize: 1 };
+
+  it("quoteBracketsTruth is true only when the truth sits inside the market", () => {
+    expect(quoteBracketsTruth(q, 100)).toBe(true);
+    expect(quoteBracketsTruth(q, 98)).toBe(true); // on the bid
+    expect(quoteBracketsTruth(q, 102)).toBe(true); // on the ask
+    expect(quoteBracketsTruth(q, 103)).toBe(false);
+    expect(quoteBracketsTruth(q, 90)).toBe(false);
+  });
+
+  it("noFillCredit rewards a truth-bracketing quote and zeroes an offside one", () => {
+    // Well-centred no-fill round → full credit (would have earned; no pick-off).
+    expect(noFillCredit(q, 100)).toBe(1);
+    // Offside quote that merely wasn't traded → no credit (lucky, not skilled).
+    expect(noFillCredit(q, 130)).toBe(0);
   });
 });
 

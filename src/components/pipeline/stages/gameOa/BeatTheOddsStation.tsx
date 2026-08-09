@@ -12,9 +12,9 @@ import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   StationProgress,
   TimerBar,
-  useMountSeed,
   useShotClock,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -39,9 +39,9 @@ function fmtOption(v: number, format: BtoFormat): string {
  * own `scoreItem` bonus (instant ⇒ 1.0, at-the-buzzer ⇒ 0.5), folded into
  * `competency::rapid-ev`.
  */
-export default function BeatTheOddsStation({ onComplete }: StationProps) {
+export default function BeatTheOddsStation({ onComplete, seed: seedProp }: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
-  const seed = useMountSeed();
+  const seed = useStationSeed(seedProp);
   const [session, setSession] = useState(() =>
     createBtoSession({
       seed,

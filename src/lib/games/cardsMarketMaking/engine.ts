@@ -276,6 +276,86 @@ export function dealRound(rng: Rng, config: RoundConfig): CardsRound {
 }
 
 /* ========================================================================== */
+/*  Conditional updating — value of information (posterior after a reveal)      */
+/* ========================================================================== */
+
+/**
+ * The POSTERIOR expected sum once `revealed` of the N cards are face-up: the
+ * realized sum of the shown cards plus the unconditional EV of the ones still
+ * hidden (mean × count remaining). This is the exact conditional expectation
+ * E[Σ | revealed] under draw-without-replacement-of-the-shown-cards — it is what
+ * a taker must re-price on before trading, NOT the static unconditional EV.
+ */
+export function conditionalEvSum(
+  revealed: Card[],
+  numCards: number,
+  aceValue: number,
+): number {
+  const remaining = Math.max(0, numCards - revealed.length);
+  return sumHand(revealed) + remaining * meanCard(aceValue);
+}
+
+/**
+ * A conditional-updating round: a quote is centered on the PRIOR (unconditional)
+ * EV, then `numRevealed` cards are turned face-up. The edge to trade therefore
+ * exists ONLY once you fold the revealed cards into a POSTERIOR expected sum —
+ * a taker who prices off the static prior sees no edge and (correctly, for the
+ * prior) passes, so the round rewards conditional updating specifically.
+ */
+export interface ConditionalCardsRound extends CardsRound {
+  /** How many of the N cards are shown before the trade decision. */
+  numRevealed: number;
+  /** The cards shown (the first `numRevealed` of `cards`). */
+  revealed: Card[];
+  /** Posterior expected sum given the revealed cards (see {@link conditionalEvSum}). */
+  posteriorEv: number;
+}
+
+/**
+ * Build a quote CENTERED on `ev` (only a small integer spread, no deliberate
+ * off-EV skew), so on a conditional round the *only* edge comes from the reveal.
+ */
+export function makeCenteredQuote(rng: Rng, ev: number): Quote {
+  const spread = rng.int(2, 4);
+  const mid = Math.round(ev);
+  const bid = mid - Math.floor(spread / 2);
+  const ask = bid + spread;
+  return { bid, ask };
+}
+
+/**
+ * Deal a conditional-updating round: shuffle, take N cards, quote CENTERED on
+ * the prior EV, and reveal the first `numRevealed`. The correct action is the
+ * one that is +EV against the POSTERIOR (`analyzeEdge(quote, posteriorEv)`), so
+ * the round tests value-of-information / conditional pricing rather than static
+ * edge detection. Deterministic given the Rng.
+ */
+export function dealConditionalRound(
+  rng: Rng,
+  config: RoundConfig,
+  numRevealed: number,
+): ConditionalCardsRound {
+  const deck = rng.shuffle(freshDeck(config.aceValue));
+  const cards = deck.slice(0, config.numCards);
+  const sum = sumHand(cards);
+  const ev = evSum(config.numCards, config.aceValue);
+  const quote = makeCenteredQuote(rng, ev);
+  const clamped = Math.max(0, Math.min(config.numCards - 1, numRevealed));
+  const revealed = cards.slice(0, clamped);
+  const posteriorEv = conditionalEvSum(revealed, config.numCards, config.aceValue);
+  return {
+    cards,
+    sum,
+    quote,
+    evSum: ev,
+    config,
+    numRevealed: clamped,
+    revealed,
+    posteriorEv,
+  };
+}
+
+/* ========================================================================== */
 /*  Per-round grading (for the review screen)                                  */
 /* ========================================================================== */
 

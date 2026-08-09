@@ -7,7 +7,7 @@ import {
 import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   TimedRapidMcqStation,
-  freshSeed,
+  useStationSeed,
   type McqRound,
   type StationProps,
 } from "./kit";
@@ -30,9 +30,10 @@ const BUDGET_MS = Math.round(
  * scaled to this slice) via {@link TimedRapidMcqStation}: sequences stream
  * forward and any you don't reach before the buzzer count as misses.
  */
-export default function NumberLogicStation({ onComplete }: StationProps) {
+export default function NumberLogicStation({ onComplete, seed }: StationProps) {
+  const mountSeed = useStationSeed(seed);
   const rounds = useMemo<McqRound[]>(() => {
-    const items = buildNumberLogicPaper(freshSeed(), NUMBERLOGIC_ROUNDS);
+    const items = buildNumberLogicPaper(mountSeed, NUMBERLOGIC_ROUNDS);
     return items.map((it) => ({
       id: it.id,
       tag: `Tier ${it.tier} · what comes next?`,
@@ -43,7 +44,7 @@ export default function NumberLogicStation({ onComplete }: StationProps) {
       correctIndex: it.correctIndex,
       explanation: it.rule,
     }));
-  }, []);
+  }, [mountSeed]);
 
   return (
     <TimedRapidMcqStation

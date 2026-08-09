@@ -11,6 +11,8 @@ import {
   pOutside,
   pNewSuit,
   kellyFraction,
+  kellySizingCredit,
+  roundKellyCredit,
   bestOption,
   evaluateHigherLower,
   evaluateInsideOutside,
@@ -23,6 +25,7 @@ import {
   leaderboardScore,
   dealCycle,
   START_CHIPS,
+  type BetOption,
   type Card,
   type Suit,
   type GameConfig,
@@ -125,6 +128,52 @@ describe("kellyFraction (even money)", () => {
     expect(kellyFraction(1)).toBeCloseTo(1, 10);
     expect(kellyFraction(0.5)).toBe(0);
     expect(kellyFraction(0.4)).toBe(0);
+  });
+});
+
+describe("kellySizingCredit", () => {
+  it("full credit at exact Kelly, decaying as the stake drifts", () => {
+    // p=0.7 → kelly 0.4.
+    expect(kellySizingCredit(0.7, 0.4)).toBeCloseTo(1, 10);
+    expect(kellySizingCredit(0.7, 0.2)).toBeCloseTo(0.5, 10); // half a Kelly off
+    expect(kellySizingCredit(0.7, 0)).toBe(0); // not staking a good side
+    expect(kellySizingCredit(0.7, 0.8)).toBe(0); // a full Kelly over → clamped 0
+  });
+
+  it("a ≤50% side rewards ONLY standing aside", () => {
+    expect(kellySizingCredit(0.5, 0)).toBe(1);
+    expect(kellySizingCredit(0.4, 0)).toBe(1);
+    expect(kellySizingCredit(0.4, 0.1)).toBe(0);
+  });
+});
+
+describe("roundKellyCredit — counting + sizing folded into one round", () => {
+  const opts = (hp: number, lp: number): BetOption[] => [
+    { label: "Higher", side: "higher", p: hp, kelly: kellyFraction(hp) },
+    { label: "Lower", side: "lower", p: lp, kelly: kellyFraction(lp) },
+  ];
+
+  it("skipping is correct (credit 1) when neither side clears 50%", () => {
+    expect(roundKellyCredit(opts(0.5, 0.5), "skip", 0)).toBe(1);
+    // …and staking anyway earns nothing.
+    expect(roundKellyCredit(opts(0.5, 0.5), "higher", 0.2)).toBe(0);
+  });
+
+  it("on a +EV round, near-Kelly on the RIGHT side scores high", () => {
+    // higher p=0.7 → kelly 0.4.
+    expect(roundKellyCredit(opts(0.7, 0.3), "higher", 0.4)).toBeCloseTo(1, 10);
+    // the wrong side earns nothing…
+    expect(roundKellyCredit(opts(0.7, 0.3), "lower", 0.4)).toBe(0);
+    // …and skipping a good bet earns nothing.
+    expect(roundKellyCredit(opts(0.7, 0.3), "skip", 0)).toBe(0);
+  });
+
+  it("under-sizing the right side scores between 0 and 1 (monotone in closeness)", () => {
+    const near = roundKellyCredit(opts(0.7, 0.3), "higher", 0.35);
+    const far = roundKellyCredit(opts(0.7, 0.3), "higher", 0.1);
+    expect(near).toBeGreaterThan(far);
+    expect(near).toBeGreaterThan(0);
+    expect(near).toBeLessThan(1);
   });
 });
 

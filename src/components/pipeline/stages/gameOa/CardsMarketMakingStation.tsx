@@ -2,18 +2,18 @@ import { useRef, useState } from "react";
 import { Rng } from "@/lib/rng";
 import {
   analyzeEdge,
-  dealRound,
+  dealConditionalRound,
   rankLabel,
   type Action,
-  type CardsRound,
+  type ConditionalCardsRound,
   type RoundConfig,
 } from "@/lib/games/cardsMarketMaking/engine";
 import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   StationProgress,
   fmtNum,
-  freshSeed,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -22,20 +22,29 @@ const SUBTOPIC = tradingSubtopicByGame("cards-mm").key;
 export const CARDS_MM_ROUNDS = 6;
 
 const CONFIG: RoundConfig = { numCards: 3, aceValue: 14, replace: true };
+/** One card is turned face-up before the trade → the taker prices the posterior. */
+const NUM_REVEALED = 1;
 
 /**
- * Cards market-making battery station — reuses `dealRound` + `analyzeEdge` to
- * train conditional pricing / value-of-information: a maker quotes B–A on the
- * SUM of three hidden cards; you trade only when the quote sits on the wrong
- * side of the unconditional EV (buy when ask < EV, sell when bid > EV, else
- * pass). Each EV-correct decision folds into `competency::conditional-pricing`.
+ * Cards market-making battery station — trains VALUE OF INFORMATION / conditional
+ * updating (not static edge detection). A maker quotes B–A CENTERED on the prior
+ * EV of the SUM of three cards; then one card is turned FACE-UP. Because the
+ * quote sits on the prior, the only edge lives in the POSTERIOR expected sum
+ * (`revealed + hidden·mean`): you Buy when the ask is below the *updated* EV,
+ * Sell when the bid is above it, else Pass. Each posterior-EV-correct decision
+ * folds into `competency::conditional-pricing` — a taker who ignores the reveal
+ * and prices off the static prior would pass every round and score poorly.
  */
-export default function CardsMarketMakingStation({ onComplete }: StationProps) {
+export default function CardsMarketMakingStation({
+  onComplete,
+  seed,
+}: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
-  const rngRef = useRef<Rng>(new Rng(freshSeed()));
+  const mountSeed = useStationSeed(seed);
+  const rngRef = useRef<Rng>(new Rng(mountSeed));
   const [index, setIndex] = useState(0);
-  const [round, setRound] = useState<CardsRound>(() =>
-    dealRound(rngRef.current, CONFIG),
+  const [round, setRound] = useState<ConditionalCardsRound>(() =>
+    dealConditionalRound(rngRef.current, CONFIG, NUM_REVEALED),
   );
   const [reveal, setReveal] = useState<{
     action: Action;
@@ -49,7 +58,8 @@ export default function CardsMarketMakingStation({ onComplete }: StationProps) {
 
   const decide = (action: Action) => {
     if (reveal) return;
-    const edge = analyzeEdge(round.quote, round.evSum);
+    // Grade against the POSTERIOR EV — the whole point is conditional updating.
+    const edge = analyzeEdge(round.quote, round.posteriorEv);
     const correct = action === edge.correctAction;
     if (correct) correctRef.current += 1;
     record(correct ? 1 : 0);
@@ -64,12 +74,14 @@ export default function CardsMarketMakingStation({ onComplete }: StationProps) {
       return;
     }
     setReveal(null);
-    setRound(dealRound(rngRef.current, CONFIG));
+    setRound(dealConditionalRound(rngRef.current, CONFIG, NUM_REVEALED));
     setIndex((n) => n + 1);
   };
 
   const actionWord = (a: Action) =>
     a === "buy" ? "Buy (lift ask)" : a === "sell" ? "Sell (hit bid)" : "Pass";
+
+  const hiddenCount = CONFIG.numCards - round.numRevealed;
 
   return (
     <div className="space-y-4" data-testid="cards-mm-station">
@@ -81,7 +93,7 @@ export default function CardsMarketMakingStation({ onComplete }: StationProps) {
 
       <div className="panel-ruled p-5 text-center">
         <span className="label text-accent">
-          Market on the SUM of {CONFIG.numCards} hidden cards
+          Market on the SUM of {CONFIG.numCards} cards
         </span>
         <div className="mt-3 flex items-center justify-center gap-6">
           <span className="chip num border-bull text-bull text-base">
@@ -91,10 +103,33 @@ export default function CardsMarketMakingStation({ onComplete }: StationProps) {
             Ask {round.quote.ask}
           </span>
         </div>
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {round.revealed.map((c, i) => (
+            <span
+              key={`up-${i}`}
+              className="num inline-flex h-12 w-9 items-center justify-center rounded border border-subtle bg-surface text-lg font-bold text-primary"
+              aria-label={`revealed card ${rankLabel(c.rank)}${c.suit}`}
+            >
+              {rankLabel(c.rank)}
+              {c.suit}
+            </span>
+          ))}
+          {Array.from({ length: hiddenCount }).map((_, i) => (
+            <span
+              key={`down-${i}`}
+              className="inline-flex h-12 w-9 items-center justify-center rounded border border-subtle bg-muted/20 text-lg text-muted"
+              aria-label="face-down card"
+            >
+              ?
+            </span>
+          ))}
+        </div>
         <p className="mt-3 text-xs text-muted">
-          A random card averages 8, so three cards average{" "}
-          <span className="num text-secondary">{fmtNum(round.evSum)}</span>. Trade
-          only when the quote is on the wrong side of that.
+          The quote is centered on the prior EV (
+          <span className="num text-secondary">{fmtNum(round.evSum)}</span>).
+          Update on the shown card: posterior EV ={" "}
+          <span className="num text-secondary">{fmtNum(round.posteriorEv)}</span>.
+          Trade only if the quote is on the wrong side of THAT.
         </p>
       </div>
 
@@ -131,16 +166,18 @@ export default function CardsMarketMakingStation({ onComplete }: StationProps) {
             className={`verdict ${reveal.correct ? "bg-bull text-bg" : "bg-bear text-bg"}`}
           >
             {reveal.correct
-              ? "● EV-correct decision"
+              ? "● Priced the posterior correctly"
               : `● Better: ${actionWord(reveal.correctAction)}`}
           </div>
           <p className="reveal text-secondary">
-            Cards:{" "}
+            All cards:{" "}
             <span className="num text-primary">
               {round.cards.map((c) => `${rankLabel(c.rank)}${c.suit}`).join("  ")}
             </span>{" "}
-            → sum <span className="num text-primary">{round.sum}</span> (EV{" "}
-            {fmtNum(round.evSum)}).
+            → sum <span className="num text-primary">{round.sum}</span>. Posterior
+            EV after the reveal was{" "}
+            <span className="num text-primary">{fmtNum(round.posteriorEv)}</span>{" "}
+            (prior {fmtNum(round.evSum)}).
           </p>
           <button
             type="button"

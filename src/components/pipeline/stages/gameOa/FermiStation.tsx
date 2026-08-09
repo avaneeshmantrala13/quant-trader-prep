@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from "react";
-import { Rng } from "@/lib/rng";
-import { FERMI_ITEMS, type FermiItem } from "@/content/fermi/items";
+import {
+  buildFermiDrill,
+  type GeneratedFermiItem,
+} from "@/content/games/fermiGenerators";
 import {
   gradeFermi,
   formatFermiNumber,
@@ -10,8 +12,10 @@ import {
 import { tradingSubtopicByGame } from "@/lib/mastery/tradingSubtopics";
 import {
   StationProgress,
-  freshSeed,
+  TimerBar,
+  useShotClock,
   useStationFold,
+  useStationSeed,
   type StationProps,
 } from "./kit";
 
@@ -20,50 +24,67 @@ const SUBTOPIC = tradingSubtopicByGame("fermi").key;
 export const FERMI_ROUNDS = 6;
 
 /**
- * Fermi estimation battery station — reuses the pure `gradeFermi` log-distance
- * grader over the numerically-verified `FERMI_ITEMS` bank and folds each item's
- * band credit (1 correct / 0.5 close / 0 off) into `competency::estimation`. The
- * partial-credit `grade.score` flows straight through {@link useStationFold}.
+ * Per-estimate shot clock, consistent with the stand-alone Fermi timed mode
+ * ("90% CI in 60s") and the other timed battery stations: a live countdown per
+ * item, and letting it lapse auto-commits a MISS.
  */
-export default function FermiStation({ onComplete }: StationProps) {
+export const FERMI_ITEM_BUDGET_MS = 60_000;
+
+/**
+ * Fermi estimation battery station — now draws FRESH parametric estimates from
+ * `buildFermiDrill` (sampled factors whose coded product is the graded
+ * reference) instead of a static pool, and runs LIVE against a per-estimate shot
+ * clock. The pure `gradeFermi` log-distance grader folds each item's band credit
+ * (1 correct / 0.5 close / 0 off) into `competency::estimation`; a per-item
+ * TIMEOUT auto-commits a miss (credit 0), so slow estimation is penalised like
+ * the other timed stations.
+ */
+export default function FermiStation({ onComplete, seed }: StationProps) {
   const { record, summary } = useStationFold(SUBTOPIC);
-  const items = useMemo<FermiItem[]>(() => {
-    const rng = new Rng(freshSeed());
-    const pool = FERMI_ITEMS.filter(
-      (it) => it.factors.length >= 3 && it.factors.length <= 6,
-    );
-    return rng.shuffle(pool).slice(0, FERMI_ROUNDS);
-  }, []);
+  const mountSeed = useStationSeed(seed);
+  const items = useMemo<GeneratedFermiItem[]>(
+    () => buildFermiDrill(mountSeed, FERMI_ROUNDS),
+    [mountSeed],
+  );
 
   const [index, setIndex] = useState(0);
   const [raw, setRaw] = useState("");
   const [grade, setGrade] = useState<FermiGrade | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
   const creditRef = useRef(0);
   const doneRef = useRef(false);
 
   const item = items[index];
   const isLast = index >= items.length - 1;
 
-  const submit = () => {
-    if (grade) return;
-    const g = gradeFermi(item.reference, raw);
+  const commit = (expired: boolean) => {
+    if (grade || !item) return;
+    // A timeout grades an empty entry (score 0); an answer grades the entry.
+    const g = gradeFermi(item.reference, expired ? "" : raw);
     creditRef.current += g.score;
     record(g.score);
+    setTimedOut(expired);
     setGrade(g);
   };
+
+  const clock = useShotClock({
+    durationMs: FERMI_ITEM_BUDGET_MS,
+    running: grade === null && !doneRef.current && !!item,
+    resetKey: index,
+    onExpire: () => commit(true),
+  });
 
   const advance = () => {
     if (isLast) {
       if (doneRef.current) return;
       doneRef.current = true;
       onComplete(
-        summary(
-          `${creditRef.current.toFixed(1)} / ${items.length} est. credit`,
-        ),
+        summary(`${creditRef.current.toFixed(1)} / ${items.length} est. credit`),
       );
       return;
     }
     setGrade(null);
+    setTimedOut(false);
     setRaw("");
     setIndex((n) => n + 1);
   };
@@ -72,6 +93,9 @@ export default function FermiStation({ onComplete }: StationProps) {
 
   return (
     <div className="space-y-4" data-testid="fermi-station">
+      {grade === null && (
+        <TimerBar remainingMs={clock.remainingMs} durationMs={FERMI_ITEM_BUDGET_MS} />
+      )}
       <StationProgress index={index} total={items.length} label="Estimate" />
 
       <div className="panel-ruled p-5">
@@ -93,31 +117,36 @@ export default function FermiStation({ onComplete }: StationProps) {
             placeholder="e.g. 300k, 1.5m, 9e6"
             value={raw}
             onChange={(e) => setRaw(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && submit()}
+            onKeyDown={(e) => e.key === "Enter" && commit(false)}
             aria-label="estimate"
           />
           <button
             type="button"
             className="btn-primary w-full"
-            onClick={submit}
+            onClick={() => commit(false)}
             disabled={raw.trim() === ""}
           >
             Lock in estimate
           </button>
+          <p className="text-center text-xs text-muted">
+            Beat the clock — an estimate you don't lock in counts as a miss.
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
           <div
             className={`verdict ${
-              grade.band === "correct"
-                ? "bg-bull text-bg"
-                : grade.band === "close"
-                  ? "bg-accent text-bg"
-                  : "bg-bear text-bg"
+              timedOut
+                ? "bg-bear text-bg"
+                : grade.band === "correct"
+                  ? "bg-bull text-bg"
+                  : grade.band === "close"
+                    ? "bg-accent text-bg"
+                    : "bg-bear text-bg"
             }`}
           >
-            ● {FERMI_BAND_COPY[grade.band].label}
-            {grade.factor != null && grade.band !== "correct"
+            {timedOut ? "● Out of time" : `● ${FERMI_BAND_COPY[grade.band].label}`}
+            {!timedOut && grade.factor != null && grade.band !== "correct"
               ? ` — ${grade.factor.toFixed(1)}× off`
               : ""}
           </div>

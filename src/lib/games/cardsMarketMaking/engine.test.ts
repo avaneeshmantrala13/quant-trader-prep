@@ -14,6 +14,9 @@ import {
   payForFirstCard,
   dealRound,
   gradeOutcome,
+  conditionalEvSum,
+  makeCenteredQuote,
+  dealConditionalRound,
   type Card,
   type Quote,
 } from "./engine";
@@ -139,6 +142,46 @@ describe("dealRound is well-formed and randomized", () => {
     const a = dealRound(new Rng(1), { numCards: 3, aceValue: 14, replace: false });
     const b = dealRound(new Rng(2), { numCards: 3, aceValue: 14, replace: false });
     expect(a.sum === b.sum && a.quote.bid === b.quote.bid).toBe(false);
+  });
+});
+
+describe("conditional updating (value of information)", () => {
+  it("conditionalEvSum = revealed sum + hidden count × mean", () => {
+    // Reveal an Ace (14) with 2 hidden ace-high → 14 + 2×8 = 30 (prior was 24).
+    expect(conditionalEvSum([card(14, 14)], 3, 14)).toBeCloseTo(30, 10);
+    // Reveal a 2 → 2 + 16 = 18.
+    expect(conditionalEvSum([card(2, 2)], 3, 14)).toBeCloseTo(18, 10);
+    // Nothing revealed collapses to the unconditional EV.
+    expect(conditionalEvSum([], 3, 14)).toBeCloseTo(evSum(3, 14), 10);
+  });
+
+  it("makeCenteredQuote straddles the EV with a small integer spread", () => {
+    const q = makeCenteredQuote(new Rng(7), 24);
+    expect(q.ask).toBeGreaterThan(q.bid);
+    const spread = q.ask - q.bid;
+    expect(spread).toBeGreaterThanOrEqual(2);
+    expect(spread).toBeLessThanOrEqual(4);
+    // Centered: the EV sits inside (or on the edge of) the quoted market.
+    expect(q.bid).toBeLessThanOrEqual(24);
+    expect(q.ask).toBeGreaterThanOrEqual(24);
+  });
+
+  it("dealConditionalRound reveals cards and prices a coherent posterior", () => {
+    const r = dealConditionalRound(new Rng(9), { numCards: 3, aceValue: 14, replace: true }, 1);
+    expect(r.revealed).toHaveLength(1);
+    expect(r.numRevealed).toBe(1);
+    expect(r.cards.slice(0, 1)).toEqual(r.revealed);
+    expect(r.posteriorEv).toBeCloseTo(
+      conditionalEvSum(r.revealed, 3, 14),
+      10,
+    );
+    expect(r.evSum).toBeCloseTo(24, 10);
+  });
+
+  it("clamps numRevealed to [0, numCards − 1] so at least one card stays hidden", () => {
+    const r = dealConditionalRound(new Rng(3), { numCards: 3, aceValue: 14, replace: true }, 9);
+    expect(r.numRevealed).toBe(2);
+    expect(r.revealed).toHaveLength(2);
   });
 });
 
