@@ -30,7 +30,7 @@ import {
   drawBrainteaserDrill,
   drawContentDrill,
   drillingProgress,
-  drillPlanTargets,
+  pickNextDrillTarget,
   DRILL_ROUND_SIZE,
   type ContentDrillResult,
   type DrillTarget,
@@ -91,49 +91,38 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
     [recordItemAttempt],
   );
 
-  // Freeze the next round from LIVE progress. Walk the weakest-first target list
-  // and serve the FIRST target that yields a non-empty round: a numeric topic
-  // that draws dry (should never happen now every scored family is parametric)
-  // ROUND-ROBINS to the next weak topic instead of dead-ending, and the residual
-  // timed-info target is always last so the loop can always progress (V1).
+  // Freeze the next round from LIVE progress (target + materialized items).
   const startNextRound = useCallback(() => {
-    const targets = drillPlanTargets(progress);
-    if (targets.length === 0) {
+    const target = pickNextDrillTarget(progress);
+    if (!target) {
       setRound(null);
       return;
     }
     const seed = rngRef.current.int(0, 2_000_000_000);
-    for (const target of targets) {
-      if (target.serve === "numeric" && target.topicKey) {
-        const items = drawContentDrill(
-          target.topicKey,
-          seed,
-          DRILL_ROUND_SIZE,
-          seenSigRef.current,
-        );
-        if (items.length === 0) continue; // dry topic ⇒ round-robin to next weak target
-        for (const it of items) seenSigRef.current.add(contentSignature(it));
-        setRound({ serve: "numeric", target, items });
+    if (target.serve === "numeric" && target.topicKey) {
+      const items = drawContentDrill(
+        target.topicKey,
+        seed,
+        DRILL_ROUND_SIZE,
+        seenSigRef.current,
+      );
+      // A topic with no bank entry would loop forever — fall back to a timed
+      // info panel (never happens for scored nodes, which all carry items).
+      if (items.length === 0) {
+        setRound({ serve: "timed-info", target });
         return;
       }
-      if (target.serve === "brainteaser") {
-        const items = drawBrainteaserDrill(seed, DRILL_ROUND_SIZE, seenSigRef.current);
-        if (items.length === 0) continue;
-        for (const it of items) seenSigRef.current.add(brainteaserSignature(it));
-        setRound({ serve: "brainteaser", target, items });
-        return;
-      }
-      if (target.serve === "trading") {
-        setRound({ serve: "trading", target });
-        return;
-      }
-      // timed-info fallback (always last in the list) — a Continue affordance in
-      // the panel re-picks so the learner is never stuck on a button-less panel.
+      for (const it of items) seenSigRef.current.add(contentSignature(it));
+      setRound({ serve: "numeric", target, items });
+    } else if (target.serve === "brainteaser") {
+      const items = drawBrainteaserDrill(seed, DRILL_ROUND_SIZE, seenSigRef.current);
+      for (const it of items) seenSigRef.current.add(brainteaserSignature(it));
+      setRound({ serve: "brainteaser", target, items });
+    } else if (target.serve === "trading") {
+      setRound({ serve: "trading", target });
+    } else {
       setRound({ serve: "timed-info", target });
-      return;
     }
-    // Unreachable (timed-info is always appended); clear so the effect re-picks.
-    setRound(null);
   }, [progress]);
 
   // Drive the loop: finish once the gate holds, else keep a round in flight.
@@ -203,7 +192,7 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
           onDone={onRoundDone}
         />
       ) : (
-        <TimedInfoPanel target={round.target} onContinue={onRoundDone} />
+        <TimedInfoPanel target={round.target} />
       )}
     </section>
   );
@@ -298,7 +287,6 @@ function NumericDrillRound({
       <NumericDrillItem
         key={item.question.id + index}
         item={item}
-        section={target.label}
         isLast={isLast}
         onResolve={(r) => record(buildContentDrillAttempt(item, r))}
         onNext={next}
@@ -309,16 +297,11 @@ function NumericDrillRound({
 
 function NumericDrillItem({
   item,
-  section,
   isLast,
   onResolve,
   onNext,
 }: {
   item: MaterializedNumericItem;
-  /** Skill-graph section label of the drilled node — threaded to the hint
-   * ladder so `isDeterministicContext`/`planOfAttack`/`simLinkFor` fire on
-   * drills exactly as they do on lessons (V2). */
-  section: string;
   isLast: boolean;
   onResolve: (r: ContentDrillResult) => void;
   onNext: () => void;
@@ -341,10 +324,9 @@ function NumericDrillItem({
             question,
             chosenValue: lastWrong,
             misconceptionTag: resolveNumericTag(question, lastWrong),
-            section,
           })
         : null,
-    [question, lastWrong, section],
+    [question, lastWrong],
   );
 
   // Rung-3 worked sibling for the drill item. Adapter (hard-ceiling) items can
@@ -687,25 +669,11 @@ function TradingStationRound({
 /*  Timed-overlay residual info                                                */
 /* ========================================================================== */
 
-function TimedInfoPanel({
-  target,
-  onContinue,
-}: {
-  target: DrillTarget;
-  onContinue: () => void;
-}) {
+function TimedInfoPanel({ target }: { target: DrillTarget }) {
   return (
     <div className="note" data-testid="drilling-timed-info">
       <p className="font-semibold text-primary">{target.label}</p>
       <p className="mt-1 leading-relaxed">{target.reason}</p>
-      <button
-        type="button"
-        className="btn-primary mt-3 w-full"
-        data-testid="drilling-timed-info-continue"
-        onClick={onContinue}
-      >
-        Continue ▸
-      </button>
     </div>
   );
 }
