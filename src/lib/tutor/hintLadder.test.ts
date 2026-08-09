@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { NumericQuestion, Question } from "@/types/content";
 import {
   buildHintLadder,
+  directionalNudge,
   nameOnlyCoaching,
   nameTrapWithoutAnswer,
   type HintRung,
@@ -810,5 +811,227 @@ describe("rung-1 property sweep over EVERY authored quiz/numeric rationale", () 
 
     // Sanity: the sweep actually exercised a large, representative corpus.
     expect(checked).toBeGreaterThan(1000);
+  });
+});
+
+/* ========================================================================== */
+/*  Rung-1 DIRECTIONAL NUDGE: the first hint must both NAME the error AND point */
+/*  at the concept to reconsider — without revealing the fix, method, or        */
+/*  answer, and without leaking a later rung's content.                         */
+/* ========================================================================== */
+
+describe("directionalNudge (misconception → conceptual nudge)", () => {
+  // Every nudge is a directional "reconsider …" cue: non-empty, digit-free (so
+  // it can never carry a numeric answer), and a complete terminated clause.
+  const cases: { tag: string; fingerprint: RegExp }[] = [
+    { tag: MISCONCEPTION.orMeansAddNoOverlap, fingerprint: /double-count|account for/i },
+    { tag: MISCONCEPTION.andMeansAdd, fingerprint: /both events|larger or smaller/i },
+    { tag: MISCONCEPTION.complementConfusion, fingerprint: /does NOT|chance this happens/i },
+    { tag: MISCONCEPTION.reversedConditional, fingerprint: /already happened|smaller world/i },
+    { tag: MISCONCEPTION.baseRateNeglect, fingerprint: /before any evidence/i },
+    { tag: MISCONCEPTION.orderedVsUnordered, fingerprint: /different order|new outcome/i },
+    { tag: MISCONCEPTION.atLeastOneNaive, fingerprint: /pile up|break down/i },
+    { tag: MISCONCEPTION.gamblersFallacy, fingerprint: /earlier independent|next trial/i },
+    { tag: MISCONCEPTION.conjunctionFallacy, fingerprint: /extra requirement|more likely/i },
+    { tag: MISCONCEPTION.nVsNMinusOne, fingerprint: /population|limited sample/i },
+    { tag: MISCONCEPTION.equalWeightMixture, fingerprint: /equal weight|occur more often/i },
+    { tag: MISCONCEPTION.forgotDivideByTwo, fingerprint: /each pairing|each order/i },
+    { tag: MISCONCEPTION.memorylessUniform, fingerprint: /time already spent/i },
+    // Free-form content tags are classified by family, not exact string.
+    { tag: "with_replacement_ignored", fingerprint: /next pick|left available/i },
+    { tag: "off_by_one_continuation", fingerprint: /how many steps|endpoints/i },
+    { tag: "ignored_host_information", fingerprint: /already happened|smaller world/i },
+  ];
+
+  it("maps each representative misconception to a specific, digit-free nudge", () => {
+    for (const { tag, fingerprint } of cases) {
+      const nudge = directionalNudge(tag, "");
+      expect(nudge, `tag=${tag}`).not.toBe("");
+      expect(nudge, `tag=${tag}`).toMatch(fingerprint);
+      // Never carries a digit (so it can never leak a numeric answer)...
+      expect(nudge, `tag=${tag}`).not.toMatch(/\d/);
+      // ...never reveals an operational method...
+      expect(nudge, `tag=${tag}`).not.toMatch(/multiply|divide|subtract/i);
+      // ...and is a complete, terminated thought.
+      expect(nudge.trim(), `tag=${tag}`).toMatch(/[.?!]$/);
+    }
+  });
+
+  it("falls back to a whole-word cue in the naming text when the tag carries no signal", () => {
+    // Placeholder tags (idx:/err:/empty) → classify off the naming clause.
+    expect(directionalNudge("idx:1", "You averaged the two rates equally.")).toMatch(
+      /equal weight|occur more often/i,
+    );
+    expect(directionalNudge("err:5", "You reported the complement here.")).toMatch(
+      /does NOT|chance this happens/i,
+    );
+    // Nothing classifiable → empty (caller keeps the plain name-only clause).
+    expect(directionalNudge("", "That value is not right.")).toBe("");
+  });
+});
+
+describe("buildHintLadder rung-1 directional nudge (names error + nudges concept)", () => {
+  const numItem = (over: Partial<NumericQuestion>): NumericQuestion => ({
+    id: "nudge-x",
+    prompt: "What is the probability?",
+    answer: 0.5,
+    decimals: 4,
+    difficulty: "easy",
+    explanation: "It is 0.5.",
+    unit: "",
+    ...over,
+  });
+
+  it("the OR-probability case: names the addition AND nudges toward double-counting (no fix/answer)", () => {
+    const q = numItem({
+      answer: 0.7,
+      commonErrors: [
+        {
+          value: 0.9,
+          feedback: "You added the two probabilities here.",
+          misconception: MISCONCEPTION.orMeansAddNoOverlap,
+        },
+      ],
+    });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 0.9,
+      misconceptionTag: MISCONCEPTION.orMeansAddNoOverlap,
+      section: "Core Probability",
+    });
+    const rung1 = ladder[0].text;
+    // (a) still NAMES what they did...
+    expect(rung1).toMatch(/added/i);
+    // (b) ...and now ALSO gives a directional nudge at the concept...
+    expect(rung1).toMatch(/double-count|account for/i);
+    // ...without revealing the corrective operation or the answer.
+    expect(rung1).not.toMatch(/multiply|divide|subtract|you should|instead/i);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+    // A single, complete, non-truncating thought.
+    expect(rung1.trim()).toMatch(/[.?!]$/);
+  });
+
+  it("the AND-independence case: names the error AND nudges at the size of a joint event", () => {
+    const q = numItem({
+      answer: 0.0833,
+      commonErrors: [
+        {
+          value: 0.6667,
+          feedback: "You added the probabilities instead of combining them.",
+          misconception: MISCONCEPTION.andMeansAdd,
+        },
+      ],
+    });
+    const rung1 = buildHintLadder({
+      question: q,
+      chosenValue: 0.6667,
+      misconceptionTag: MISCONCEPTION.andMeansAdd,
+      section: "Core Probability",
+    })[0].text;
+    expect(rung1).toMatch(/added/i);
+    expect(rung1).toMatch(/both events|larger or smaller/i);
+    expect(rung1).not.toMatch(/multiply|divide|instead/i);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("the complement case: names the mistake AND nudges at happens-vs-does-not", () => {
+    const q = numItem({
+      answer: 0.3,
+      commonErrors: [
+        {
+          value: 0.7,
+          feedback: "You reported the complement of the asked event.",
+          misconception: MISCONCEPTION.complementConfusion,
+        },
+      ],
+    });
+    const rung1 = buildHintLadder({
+      question: q,
+      chosenValue: 0.7,
+      misconceptionTag: MISCONCEPTION.complementConfusion,
+      section: "Core Probability",
+    })[0].text;
+    expect(rung1).toMatch(/complement/i);
+    expect(rung1).toMatch(/does NOT|chance this happens/i);
+    expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  });
+
+  it("the unordered-vs-ordered committee case: names the trap AND nudges at re-arrangement", () => {
+    const committeeQ: Question = {
+      id: "ca-committee-nudge",
+      prompt: "How many committees of 2 from 7 (order does NOT matter)?",
+      choices: ["21", "42", "14", "49"],
+      correctIndex: 0,
+      explanation: "C(7,2) = 21.",
+      difficulty: "easy",
+      distractorRationale: [
+        "Correct.",
+        "Close, that's the number of ORDERED arrangements P(7,2). A committee doesn't care about order.",
+        "That undercounts.",
+        "That allows repeats.",
+      ],
+      misconceptions: ["", MISCONCEPTION.orderedVsUnordered, "", ""],
+      family: "genChooseKTrap",
+    };
+    const rung1 = buildHintLadder({
+      question: committeeQ,
+      chosenIndex: 1,
+      misconceptionTag: MISCONCEPTION.orderedVsUnordered,
+      section: "Combinatorial Analysis",
+    })[0].text;
+    expect(rung1).toMatch(/ORDERED arrangements/i);
+    expect(rung1).toMatch(/different order|new outcome/i);
+    // Never reveals the correcting operation or the answer.
+    expect(rung1).not.toMatch(/divide/i);
+    expect(rung1).not.toContain("2!");
+    expect(containsFinalAnswer(rung1, committeeQ.choices[0])).toBe(false);
+  });
+
+  it("does NOT double-nudge an authored Socratic question (already directional)", () => {
+    const q = numItem({
+      answer: 0.25,
+      commonErrors: [
+        {
+          value: 0.5,
+          feedback:
+            "That's the joint P(A∩B). Conditioning restricts you to the world where B happened, what must you compare the joint against?",
+          misconception: MISCONCEPTION.reversedConditional,
+        },
+      ],
+    });
+    const rung1 = buildHintLadder({
+      question: q,
+      chosenValue: 0.5,
+      misconceptionTag: MISCONCEPTION.reversedConditional,
+      section: "Core Probability",
+    })[0].text;
+    // The authored question is preserved verbatim (ends on '?', no spliced dash).
+    expect(rung1.trim()).toMatch(/\?$/);
+    expect(rung1).not.toMatch(/ — but think about/);
+  });
+
+  it("the appended nudge never leaks a LATER rung's content (worked-sibling / reveal)", () => {
+    const q = numItem({
+      answer: 0.7,
+      explanation: "Use inclusion–exclusion: the answer is 0.7.",
+      commonErrors: [
+        {
+          value: 0.9,
+          feedback: "You added the two probabilities here.",
+          misconception: MISCONCEPTION.orMeansAddNoOverlap,
+        },
+      ],
+    });
+    const ladder = buildHintLadder({
+      question: q,
+      chosenValue: 0.9,
+      misconceptionTag: MISCONCEPTION.orMeansAddNoOverlap,
+      section: "Core Probability",
+    });
+    const rung1 = ladder[0].text;
+    // Not the worked-sibling header, not the reveal explanation.
+    expect(rung1).not.toContain("SAME kind of problem");
+    expect(rung1).not.toContain(q.explanation);
+    expect(rung1).not.toBe(ladder[4].text);
   });
 });

@@ -476,6 +476,238 @@ export function nameTrapWithoutAnswer(
   return "";
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Rung-1 DIRECTIONAL NUDGE (name the error + point at the concept to          */
+/*  reconsider — never the fix, the method, or the answer).                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The conceptual buckets a rung-1 nudge can point at. Each is a MISCONCEPTION
+ * FAMILY (not a single tag), so the same nudge serves the many free-form
+ * `commonErrors[].misconception` / `Question.misconceptions[i]` strings that
+ * share the same underlying confusion.
+ */
+type NudgeKey =
+  | "orDoubleCount"
+  | "andIndependence"
+  | "complement"
+  | "conditionalVsJoint"
+  | "baseRate"
+  | "orderedVsUnordered"
+  | "replacement"
+  | "sampleVsPopulation"
+  | "pairOrderDoubleCount"
+  | "atLeastOne"
+  | "independentTrials"
+  | "conjunction"
+  | "memoryless"
+  | "averaging"
+  | "symmetryAssumed"
+  | "offByOne"
+  | "sequenceRuleLevel"
+  | "caseworkCompleteness"
+  | "units"
+  | "reusedSubcase"
+  | "ignoredConstraint"
+  | "relatedQuantity"
+  | "combineAdd";
+
+/**
+ * The nudge text for each bucket. INVARIANT (mirrors the rung-1 contract): each
+ *  - names ONLY the conceptual thing to RECONSIDER (never the fix/method/rule),
+ *  - contains NO digits (so it can never leak the numeric answer),
+ *  - reads lowercase as a "but …" continuation and ends in terminal punctuation
+ *    (so `withDirectionalNudge` can splice it onto a flat naming clause as a
+ *    single, complete, non-truncating thought).
+ * They deliberately avoid the operational verbs (multiply/divide/add/subtract)
+ * that rungs 1–2 are asserted never to reveal.
+ */
+const NUDGE: Record<NudgeKey, string> = {
+  orDoubleCount:
+    "but think about what portion combining them this way might double-count, or what case it might fail to account for.",
+  andIndependence:
+    "but think about whether requiring BOTH events to happen at once should leave the combined chance larger or smaller than either event on its own.",
+  complement:
+    "but think about whether the question wants the chance this happens, or the chance it does NOT.",
+  conditionalVsJoint:
+    "but think about which event you are told has ALREADY happened versus the one you are solving for, and whether you have narrowed to the right smaller world.",
+  baseRate:
+    "but think about how common the underlying case is BEFORE any evidence, not just how strong the evidence itself looks.",
+  orderedVsUnordered:
+    "but think about whether re-arranging the same items into a different order should really count as a genuinely new outcome here.",
+  replacement:
+    "but think about whether taking one item changes what is left available for the next pick.",
+  sampleVsPopulation:
+    "but think about whether you are describing a whole population or estimating it from a limited sample.",
+  pairOrderDoubleCount:
+    "but think about whether each pairing is being counted once, or once in each order.",
+  atLeastOne:
+    "but think about whether these separate chances can simply pile up as the number of tries grows, and where that reasoning would have to break down.",
+  independentTrials:
+    "but think about whether earlier independent results can really change the odds of the very next trial.",
+  conjunction:
+    "but think about whether piling on an extra requirement can ever make an outcome MORE likely than the simpler one.",
+  memoryless:
+    "but think about whether the time already spent should change what happens next for a process like this.",
+  averaging:
+    "but think about whether every part deserves EQUAL weight, or whether some parts are larger or occur more often than others.",
+  symmetryAssumed:
+    "but think about whether the situation is genuinely balanced between the options, or whether one side holds a structural edge.",
+  offByOne:
+    "but re-check exactly how many steps the rule should move — count the endpoints, not just the gaps between them.",
+  sequenceRuleLevel:
+    "but think about whether the pattern's rule truly stays constant at the level you assumed, or whether it shifts a level deeper.",
+  caseworkCompleteness:
+    "but think about whether you have included every case the wording allows, and only those cases.",
+  units:
+    "but check that every quantity is expressed in the same units before you bring them together.",
+  reusedSubcase:
+    "but think about how THIS version differs from the simpler related case you might be carrying over.",
+  ignoredConstraint:
+    "but think about which part of the setup you might be leaving out completely.",
+  relatedQuantity:
+    "but think about whether the quantity you found is exactly the one asked for, or only one piece of the whole.",
+  combineAdd:
+    "but think about whether simply stacking the pieces could over- or under-count what the question actually asks for.",
+};
+
+/**
+ * ORDERED tag → bucket rules (first match wins). Matched case-insensitively
+ * against the resolved misconception TAG only (authored tags carry the reliable
+ * signal; free-text collides less). Specific families lead; broad catch-alls
+ * (reused / ignored / related-quantity) trail so they never pre-empt a precise
+ * match.
+ */
+const TAG_NUDGE_RULES: { re: RegExp; key: NudgeKey }[] = [
+  { re: /and_means|independen(t|ce)/, key: "andIndependence" },
+  {
+    re: /or_means|no_overlap|inclusion|overlap|pair_approx|single_letter|removed_one|ignored_rest_derangement|double.?count/,
+    key: "orDoubleCount",
+  },
+  { re: /complement|1[_\s-]?minus|one_?minus/, key: "complement" },
+  {
+    re: /base_?rate|prevalence|\bprior\b|posterior_and_prior|bayesian_update|confused_posterior/,
+    key: "baseRate",
+  },
+  { re: /at_least_one/, key: "atLeastOne" },
+  {
+    re: /reversed|conditional|conditioning|_condition|joint|posterior|bayes|host_information/,
+    key: "conditionalVsJoint",
+  },
+  { re: /permut|arrangement|unordered|_order|ordered/, key: "orderedVsUnordered" },
+  { re: /replace/, key: "replacement" },
+  { re: /n_vs_n_minus_one|n_minus_one/, key: "sampleVsPopulation" },
+  { re: /divide_by_two|forgot_divide/, key: "pairOrderDoubleCount" },
+  { re: /gambler/, key: "independentTrials" },
+  { re: /conjunction/, key: "conjunction" },
+  { re: /memoryless|uniform/, key: "memoryless" },
+  {
+    re: /equal_weight|averag|mixture|single_branch|ignored_conditionals|reused_fair/,
+    key: "averaging",
+  },
+  { re: /symmetric|guessed_half|used_fair|used_single_flip/, key: "symmetryAssumed" },
+  {
+    re: /off_by|_step|continuation|previous_term|repeated_answer|gave_blank|skipped/,
+    key: "offByOne",
+  },
+  {
+    re: /treated_as_arithmetic|constant_first_difference|assumed_quadratic|doubled_last|used_two_to_the_length|constant.*difference/,
+    key: "sequenceRuleLevel",
+  },
+  {
+    re: /all_three|exactly_two|forgot_complement_and_count|only_all_three|forgot_all/,
+    key: "caseworkCompleteness",
+  },
+  { re: /conversion|seconds|units/, key: "units" },
+  { re: /reused|reuse/, key: "reusedSubcase" },
+  { re: /ignored|constraint|option/, key: "ignoredConstraint" },
+  {
+    re: /gave_|not_gap|not_tail|not_prevalence|not_prob|kept_leg|dropped_last|used_single|used_last|used_two_dice|used_two_player|point_not/,
+    key: "relatedQuantity",
+  },
+];
+
+/**
+ * HIGH-PRECISION text → bucket rules, used ONLY as a fallback when the tag is a
+ * deterministic placeholder (`idx:<i>` / `err:<v>` / empty) that carries no
+ * signal. Keyed on whole words in the NAMING clause to avoid the noise a broad
+ * substring scan of prose would introduce.
+ */
+const TEXT_NUDGE_RULES: { re: RegExp; key: NudgeKey }[] = [
+  { re: /\baverag(e|ed|ing)\b/, key: "averaging" },
+  { re: /\bcomplement\b/, key: "complement" },
+  { re: /\bconditional\b|\bconditioning\b|\bposterior\b|\bjoint\b/, key: "conditionalVsJoint" },
+  { re: /\bbase[-\s]?rate\b|\bprior\b|\bprevalence\b/, key: "baseRate" },
+  { re: /\bunordered\b|\bordered\b|\bpermutation|\barrangements?\b/, key: "orderedVsUnordered" },
+  { re: /\breplacement\b/, key: "replacement" },
+  { re: /\bsymmetric\b|50\/50|50-50/, key: "symmetryAssumed" },
+  { re: /\bstreak\b|\bgambler/, key: "independentTrials" },
+  { re: /\badded\b|\bsummed\b|\badd(ing)?\b/, key: "combineAdd" },
+];
+
+/** True iff `tag` is a deterministic placeholder with no misconception signal. */
+function isPlaceholderTag(tag: string): boolean {
+  return tag === "" || tag.startsWith("idx:") || tag.startsWith("err:");
+}
+
+function classifyNudge(
+  tag: string | undefined,
+  namingText: string,
+): NudgeKey | null {
+  const t = (tag ?? "").toLowerCase();
+  if (!isPlaceholderTag(t)) {
+    for (const { re, key } of TAG_NUDGE_RULES) if (re.test(t)) return key;
+  }
+  const text = namingText.toLowerCase();
+  for (const { re, key } of TEXT_NUDGE_RULES) if (re.test(text)) return key;
+  return null;
+}
+
+/**
+ * Resolve the small DIRECTIONAL nudge for a tripped misconception: names the
+ * conceptual thing to RECONSIDER without stating the fix, the method, or the
+ * answer. Prefers the authored TAG; falls back to whole-word cues in the naming
+ * clause when the tag is a placeholder. Returns `""` when nothing classifies
+ * (the caller then keeps the plain name-only clause).
+ */
+export function directionalNudge(
+  tag: string | undefined,
+  namingText: string,
+): string {
+  const key = classifyNudge(tag, namingText);
+  return key ? NUDGE[key] : "";
+}
+
+/**
+ * Splice a directional nudge onto a FLAT name-only clause so rung 1 both NAMES
+ * the mistake and points at the concept to reconsider. Only extends a clause
+ * that ends in a period (a flat "you added …" statement — the very case the
+ * old rung 1 was uselessly terse for); a clause already ending in `?`/`!` is an
+ * authored Socratic question that ALREADY nudges, so it is left untouched. The
+ * result is re-guarded to never leak the answer (falls back to `base` if it
+ * somehow would), and — because every nudge is a complete, digit-free clause —
+ * it never truncates mid-fragment and never ends on a dangling connective.
+ */
+function withDirectionalNudge(
+  base: string,
+  tag: string | undefined,
+  answer: number | string,
+): string {
+  const trimmed = base.trimEnd();
+  // Only extend a flat, period-terminated statement (the terse "you added …"
+  // case). A clause ending in `?`/`!` is an authored Socratic question that
+  // already nudges — leave it untouched.
+  if (/[?!]["')\]]?$/.test(trimmed)) return base;
+  if (!/\.["')\]]?$/.test(trimmed)) return base;
+
+  const nudge = directionalNudge(tag, base);
+  if (!nudge) return base;
+
+  const stem = trimmed.replace(/\.(["')\]]?)\s*$/, "$1");
+  const combined = `${stem} — ${nudge}`;
+  return containsFinalAnswer(combined, answer, ANSWER_LEAK_TOL) ? base : combined;
+}
+
 /**
  * Build the ordered 5-rung ladder for a wrong attempt, keyed on the tripped
  * misconception `misconceptionTag` (resolved by the caller via the Phase-2
@@ -501,11 +733,17 @@ export function buildHintLadder(args: {
   // nudge; (4) otherwise the method-free generic nudge. Quiz items keep the
   // distractor rationale, also passed through `nameOnlyCoaching`.
   let rung1Text = "";
+  // Tracks whether rung 1 is a NAMED misconception (vs a domain/slip/generic
+  // fallback) plus the tag that named it, so we can splice on a specific
+  // directional nudge below without misfiring on the fallbacks.
+  let namedTrap = false;
+  let rung1Tag: string | undefined = misconceptionTag;
   if (isQuiz(question) && chosenIndex != null) {
     rung1Text = nameTrapWithoutAnswer(
       question.distractorRationale?.[chosenIndex] ?? "",
       answer,
     );
+    if (rung1Text) namedTrap = true;
   } else if (!isQuiz(question) && chosenValue != null) {
     const matched = question.commonErrors?.find((e) =>
       question.decimals == null
@@ -527,6 +765,10 @@ export function buildHintLadder(args: {
         // Sanitise (redact any leaked answer) rather than DROP to generic when
         // the matched feedback quotes the correct value to contrast against.
         rung1Text = nameTrapWithoutAnswer(matched.feedback, answer);
+        if (rung1Text) {
+          namedTrap = true;
+          rung1Tag = matched.misconception ?? misconceptionTag;
+        }
       } else if (
         isArithmeticSlip(chosenValue, answer) &&
         // Gate the "your logic is spot on — just re-check the arithmetic" nudge
@@ -547,10 +789,21 @@ export function buildHintLadder(args: {
       }
     } else if (matched) {
       rung1Text = nameTrapWithoutAnswer(matched.feedback, answer);
+      if (rung1Text) {
+        namedTrap = true;
+        rung1Tag = matched.misconception ?? misconceptionTag;
+      }
     }
   }
   if (!rung1Text || containsFinalAnswer(rung1Text, answer)) {
     rung1Text = genericFallbackCoaching({ section, family });
+    namedTrap = false;
+  }
+  // PHASE_2 rung-1 upgrade: a flat name-only clause ("you added …") is useless
+  // on its own — so for a NAMED misconception we splice on a small directional
+  // nudge that points at the concept to reconsider (never the fix/method/answer).
+  if (namedTrap) {
+    rung1Text = withDirectionalNudge(rung1Text, rung1Tag, answer);
   }
 
   /* -- Rung 2: GUIDED PLAN OF ATTACK (leading questions, never the method) --- */
