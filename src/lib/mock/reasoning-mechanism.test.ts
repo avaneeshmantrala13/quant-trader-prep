@@ -121,6 +121,99 @@ describe("Optiver demo repro: conclusion/arithmetic-only reasoning is NOT sound"
 });
 
 /* -------------------------------------------------------------------------- */
+/*  1b) FALSE-NEGATIVE regression — a demoed CORRECT derivation graded SOUND   */
+/*      via the VERIFIED SOLUTION SPACE (any equivalent mechanism accepted).   */
+/* -------------------------------------------------------------------------- */
+
+describe("Optiver demo: equivalent-but-correct derivations all grade SOUND", () => {
+  const demo = drawArchetype(new Rng(1), "optiver-quadratic-demo");
+  const signals = demo.requiredReasoning?.mechanismSignals;
+  const grade = (reasoning: string) =>
+    mainQuality({
+      prompt: demo.prompt,
+      correctAnswer: String(demo.answer), // "95"
+      reasoning,
+      mechanismSignals: signals,
+    });
+
+  it("the EXACT user text from the demo (first-differences framing) is SOUND", () => {
+    // Regression for the reported false negative: the final answer 95 is stated
+    // in PROSE ("which is 95") AFTER the last "=" (24 + 6 = 30). The old grader
+    // read 30 as the conclusion and wrongly said "the derivation doesn't hold."
+    const q = grade(
+      "I know that the next term is 95 because the difference between terms " +
+        "increases by 6 each time, and the last difference was 65 - 41 = 24, so " +
+        "the next difference is 24 + 6 = 30. This means we have to add 30 to 65 " +
+        "which is 95.",
+    );
+    expect(q).toBe("sound");
+  });
+
+  it("SECOND-difference framing is SOUND", () => {
+    expect(
+      grade(
+        "The second difference is constant at 6. The last first-difference was " +
+          "65 - 41 = 24, so the next first-difference is 24 + 6 = 30, and " +
+          "65 + 30 = 95.",
+      ),
+    ).toBe("sound");
+  });
+
+  it("explicit quadratic a,b,c / closed-form framing is SOUND", () => {
+    expect(
+      grade(
+        "This is a quadratic sequence with closed form 3n^2 - 3n + 5. For the " +
+          "6th term, 3*36 - 3*6 + 5 = 108 - 18 + 5 = 95.",
+      ),
+    ).toBe("sound");
+  });
+
+  it("a chained closed-form computation is NOT misread as false arithmetic", () => {
+    // "108 - 18 + 5 = 95" is a TRUE chain; the trailing binary "18 + 5 = 95" must
+    // NOT trip the arithmetic-contradiction guard.
+    expect(
+      grade(
+        "Quadratic pattern: a is half the constant second difference. Plugging " +
+          "n = 6 into 3n^2 - 3n + 5 gives 108 - 18 + 5 = 95.",
+      ),
+    ).toBe("sound");
+  });
+
+  it("NEGATIVE: right answer 95 with NO real reasoning is NOT sound", () => {
+    for (const r of ["95", "The answer is 95.", "It's 95, done."]) {
+      expect(grade(r), `"${r}"`).not.toBe("sound");
+    }
+  });
+
+  it("NEGATIVE: right answer via FALSE arithmetic (65 - 41 = 20) is FLAWED", () => {
+    const q = grade(
+      "The differences grow by 6. The last difference was 65 - 41 = 20, so the " +
+        "next is 20 + 6 = 26 — wait, the answer is 95.",
+    );
+    expect(q).toBe("flawed");
+  });
+
+  it("NEGATIVE: a non-engaging generic justification is NOT sound", () => {
+    for (const r of [
+      "This is a standard pattern-recognition problem, so the answer is 95.",
+      "It follows the obvious rule, giving 95.",
+    ]) {
+      expect(grade(r), `"${r}"`).not.toBe("sound");
+    }
+  });
+
+  it("NEGATIVE: correct answer but the shown work CONCLUDES a different number", () => {
+    // Right answer (95) typed, but the written derivation lands on 130 and never
+    // reaches 95 — the broken-derivation guard must still catch this.
+    const q = grade(
+      "The terms roughly double each step, so the next first-difference is like " +
+        "65 * 2 = 130.",
+    );
+    expect(q).not.toBe("sound");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
 /*  2) A broad battery across concepts — conclusion-only NOT sound, good OK    */
 /* -------------------------------------------------------------------------- */
 

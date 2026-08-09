@@ -88,43 +88,195 @@ export function lastComputedValue(text: string): number | null {
   return marker >= 0 ? firstValueIn(text) : null;
 }
 
+/** Every numeric value token in `s`, left-to-right. Pure and total. */
+export function allValuesIn(s: string): number[] {
+  const re = new RegExp(VALUE_TOKEN_RE.source, "g");
+  const out: number[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s)) !== null) {
+    const v = parseNumericValue(m[0].replace(/\s+/g, ""));
+    if (v !== null) out.push(v);
+    if (m.index === re.lastIndex) re.lastIndex++; // guard: never loop on empty
+  }
+  return out;
+}
+
 /**
- * Detect an internally-inconsistent binary computation of the form
- * `"a <op> b = c"` (e.g. `"3 × 1/2 = 3/8"`, where 3·0.5 = 1.5 ≠ 0.375). Returns
- * `true` iff a clean, fully-numeric such statement is found whose left side does
- * NOT equal its stated result — a deterministic signal that the *written
- * derivation* is broken regardless of the final answer. Conservative: it only
- * fires on a fully-parseable `num op num = num`, so real prose never trips it.
+ * The set of values the written work presents as a RESULT: the value stated
+ * right after each `=`/`→` (the output of a computation step) PLUS the final
+ * numeric token of the whole text (a prose conclusion like "… which is 95").
+ * This is the collection of numbers a derivation ARRIVES AT — used to check the
+ * work is consistent with the VERIFIER (does it reach the answer by ANY
+ * equivalent route?) rather than matching one canonical script. Pure and total.
  */
-export function hasArithmeticContradiction(text: string): boolean {
-  const re =
-    /([+-]?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)\s*([+\-*/×÷])\s*([+-]?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)\s*=\s*([+-]?\d+(?:\.\d+)?(?:\s*\/\s*\d+(?:\.\d+)?)?)/g;
+export function statedResultValues(text: string): number[] {
+  const out: number[] = [];
+  const re = /[=→]([^=→]*)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text)) !== null) {
-    const a = parseNumericValue(m[1].replace(/\s+/g, ""));
-    const b = parseNumericValue(m[3].replace(/\s+/g, ""));
-    const c = parseNumericValue(m[4].replace(/\s+/g, ""));
-    if (a === null || b === null || c === null) continue;
-    let computed: number | null = null;
-    switch (m[2]) {
-      case "+":
-        computed = a + b;
-        break;
-      case "-":
-        computed = a - b;
-        break;
-      case "*":
-      case "×":
-        computed = a * b;
-        break;
-      case "/":
-      case "÷":
-        computed = b !== 0 ? a / b : null;
-        break;
+    const v = firstValueIn(m[1]);
+    if (v !== null) out.push(v);
+  }
+  const all = allValuesIn(text);
+  if (all.length > 0) out.push(all[all.length - 1]);
+  return out;
+}
+
+/**
+ * Safely evaluate a PURELY-NUMERIC arithmetic expression — digits, decimal
+ * points, thousands separators, parentheses and the operators `+ - * /` (the
+ * unicode spellings `× ÷ · ⋅ −` are accepted too), with standard precedence.
+ * Returns the value, or `null` when the string contains anything non-arithmetic
+ * (a variable like `n`, a word, an `=`, an empty/dangling operand). This lets us
+ * validate a candidate's stated computation — including CHAINED expressions like
+ * `"108 − 18 + 5 = 95"` — for internal consistency, instead of misreading a
+ * trailing binary fragment (`"18 + 5 = 95"`). Pure and total: it never throws
+ * and never executes the input as code.
+ */
+export function evalArithmetic(raw: string): number | null {
+  const s = (raw ?? "")
+    .replace(/\u2212/g, "-") // unicode minus → ASCII "-"
+    .replace(/[×✕⋅·]/g, "*")
+    .replace(/\u00f7/g, "/")
+    .replace(/,/g, "") // thousands separators
+    .trim();
+  if (s === "" || !/^[0-9.\s()+\-*/]+$/.test(s) || !/[0-9]/.test(s)) return null;
+
+  type Tok =
+    | { t: "num"; v: number }
+    | { t: "op"; v: "+" | "-" | "*" | "/" }
+    | { t: "(" }
+    | { t: ")" };
+  const toks: Tok[] = [];
+  const prevIsValue = (): boolean => {
+    const p = toks[toks.length - 1];
+    return p != null && (p.t === "num" || p.t === ")");
+  };
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === " ") {
+      i++;
+      continue;
     }
-    if (computed === null) continue;
-    const tol = 1e-6 + Math.abs(c) * 1e-6;
-    if (Math.abs(computed - c) > tol) return true;
+    if (c === "(") {
+      toks.push({ t: "(" });
+      i++;
+      continue;
+    }
+    if (c === ")") {
+      toks.push({ t: ")" });
+      i++;
+      continue;
+    }
+    if (c === "+" || c === "-" || c === "*" || c === "/") {
+      // A leading +/- with no value before it is a UNARY sign on the number.
+      if ((c === "+" || c === "-") && !prevIsValue()) {
+        const m = s.slice(i).match(/^[+-]?\d*\.?\d+/);
+        if (m && /\d/.test(m[0])) {
+          toks.push({ t: "num", v: Number(m[0]) });
+          i += m[0].length;
+          continue;
+        }
+      }
+      toks.push({ t: "op", v: c });
+      i++;
+      continue;
+    }
+    const m = s.slice(i).match(/^\d*\.?\d+/);
+    if (!m) return null;
+    toks.push({ t: "num", v: Number(m[0]) });
+    i += m[0].length;
+  }
+  if (toks.length === 0) return null;
+
+  // Shunting-yard → RPN.
+  const prec = (op: string): number => (op === "+" || op === "-" ? 1 : 2);
+  const out: Tok[] = [];
+  const ops: Tok[] = [];
+  for (const tk of toks) {
+    if (tk.t === "num") out.push(tk);
+    else if (tk.t === "op") {
+      let top = ops[ops.length - 1];
+      while (top && top.t === "op" && prec(top.v) >= prec(tk.v)) {
+        out.push(ops.pop()!);
+        top = ops[ops.length - 1];
+      }
+      ops.push(tk);
+    } else if (tk.t === "(") ops.push(tk);
+    else {
+      while (ops.length && ops[ops.length - 1].t !== "(") out.push(ops.pop()!);
+      if (!ops.length) return null; // mismatched ")"
+      ops.pop();
+    }
+  }
+  while (ops.length) {
+    const o = ops.pop()!;
+    if (o.t === "(") return null; // mismatched "("
+    out.push(o);
+  }
+
+  const st: number[] = [];
+  for (const tk of out) {
+    if (tk.t === "num") st.push(tk.v);
+    else if (tk.t === "op") {
+      const b = st.pop();
+      const a = st.pop();
+      if (a === undefined || b === undefined) return null;
+      let r: number;
+      switch (tk.v) {
+        case "+":
+          r = a + b;
+          break;
+        case "-":
+          r = a - b;
+          break;
+        case "*":
+          r = a * b;
+          break;
+        case "/":
+          if (b === 0) return null;
+          r = a / b;
+          break;
+      }
+      st.push(r);
+    }
+  }
+  return st.length === 1 && Number.isFinite(st[0]) ? st[0] : null;
+}
+
+/** Character class of a numeric-arithmetic run (no `=`; digits/ops/parens). */
+const ARITH_RUN_CHARS = "0-9.,\\s()+\\-*/×✕÷·⋅\\u2212";
+/** The maximal arithmetic run at the END of `s` (the operand feeding an `=`). */
+function trailingArithExpr(s: string): string {
+  const m = s.match(new RegExp(`[${ARITH_RUN_CHARS}]*$`));
+  return m ? m[0] : "";
+}
+/** The maximal arithmetic run at the START of `s` (a stated result). */
+function leadingArithExpr(s: string): string {
+  const m = s.match(new RegExp(`^[${ARITH_RUN_CHARS}]*`));
+  return m ? m[0] : "";
+}
+
+/**
+ * Detect an internally-inconsistent stated computation `"<expr> = <value>"`
+ * where the left arithmetic expression does NOT equal the stated result (e.g.
+ * `"3 × 1/2 = 3/8"`, 1.5 ≠ 0.375). It evaluates the FULL arithmetic expression
+ * on each side of every `=` (so a correct CHAIN like `"108 − 18 + 5 = 95"` is
+ * NOT flagged, and a genuinely-false step still is). Conservative: only fires
+ * when BOTH sides are fully-numeric and parseable, so real prose and formulas
+ * with variables (`aₙ = 3n² − 3n + 5`) never trip it. Note `→`/`->` are treated
+ * as "leads to" (a conclusion arrow), NOT arithmetic equality.
+ */
+export function hasArithmeticContradiction(text: string): boolean {
+  if (!text || text.indexOf("=") < 0) return false;
+  const segs = text.split("=");
+  for (let k = 0; k + 1 < segs.length; k++) {
+    const a = evalArithmetic(trailingArithExpr(segs[k]));
+    const b = evalArithmetic(leadingArithExpr(segs[k + 1]));
+    if (a === null || b === null) continue;
+    const tol = 1e-6 + Math.abs(b) * 1e-6;
+    if (Math.abs(a - b) > tol) return true;
   }
   return false;
 }
@@ -473,18 +625,34 @@ export function gradeReasoningDeterministic(
       : // No numeric setup (conceptual): demand a substantive, connected
         // explanation rather than a terse assertion.
         words >= 8 && REASONING_MARKERS.some((m) => lower.includes(m));
-  // The written derivation contradicts itself, or concludes a value that
-  // disagrees with the verifier's ground-truth answer. We only trust a
-  // "concluded" value when the text actually states a result (after `=`/`→`);
-  // otherwise the first number in prose is NOT a conclusion.
+  // Does the written derivation actually land on a value that CONTRADICTS the
+  // verifier's ground-truth answer? We grade against the VERIFIED SOLUTION
+  // SPACE, not a single canonical script: a derivation is consistent if it
+  // ARRIVES AT the verified answer by ANY route — the value after any `=`/`→`,
+  // OR the final numeric token (a prose conclusion like "… which is 95"). This
+  // is what fixes the false negative where "…24 + 6 = 30 … which is 95" was
+  // wrongly read as concluding 30 (the value after the LAST `=`) and rejected.
+  //
+  // The non-jailbreak guard is PRESERVED: we still flag a broken derivation when
+  // the work never reaches the verified answer AND lands on a contradicting
+  // number (right answer typed, but the shown steps conclude something else).
   const verifiedAnswer = parseNumericValue(input.correctAnswer);
+  const answerTol =
+    verifiedAnswer !== null ? 1e-3 + Math.abs(verifiedAnswer) * 1e-6 : 0;
   const hasResultMarker = text.includes("=") || text.includes("→");
-  const concluded = hasResultMarker ? lastComputedValue(text) : null;
+  const results = statedResultValues(text);
+  const reachesVerified =
+    verifiedAnswer !== null &&
+    results.some((v) => Math.abs(v - verifiedAnswer) <= answerTol);
+  const allValues = allValuesIn(text);
+  const landingValue =
+    allValues.length > 0 ? allValues[allValues.length - 1] : null;
   const contradictsVerified =
     verifiedAnswer !== null &&
-    concluded !== null &&
-    Math.abs(concluded - verifiedAnswer) >
-      1e-3 + Math.abs(verifiedAnswer) * 1e-6;
+    hasResultMarker &&
+    !reachesVerified &&
+    landingValue !== null &&
+    Math.abs(landingValue - verifiedAnswer) > answerTol;
   const brokenDerivation = contradictsVerified;
   // A demonstrably FALSE stated computation (in words or symbols). This is the
   // strongest negative signal and OVERRIDES everything below — a wrong stated
