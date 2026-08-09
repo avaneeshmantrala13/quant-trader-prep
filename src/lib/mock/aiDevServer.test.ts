@@ -38,8 +38,93 @@ describe("shared AI core — provider config + guardrails (no key, no network)",
     ).toEqual({
       provider: "anthropic",
       model: "claude-x",
-      baseUrl: "https://api.openai.com/v1",
+      baseUrl: "https://api.anthropic.com",
     });
+  });
+
+  it("buildProviderConfig defaults baseUrl per-provider", () => {
+    // anthropic with no explicit base URL → real Anthropic host (no /v1).
+    expect(core.buildProviderConfig({ AI_PROVIDER: "anthropic" }).baseUrl).toBe(
+      "https://api.anthropic.com",
+    );
+    // openai default is unchanged.
+    expect(core.buildProviderConfig({ AI_PROVIDER: "openai" }).baseUrl).toBe(
+      "https://api.openai.com/v1",
+    );
+    expect(core.buildProviderConfig({}).baseUrl).toBe("https://api.openai.com/v1");
+  });
+
+  it("buildProviderConfig uses an explicit AI_PROVIDER_BASE_URL verbatim (gateway)", () => {
+    expect(
+      core.buildProviderConfig({
+        AI_PROVIDER: "anthropic",
+        AI_PROVIDER_BASE_URL: "https://tfy.promptlens.trilogy.com",
+      }).baseUrl,
+    ).toBe("https://tfy.promptlens.trilogy.com");
+    // AI_BASE_URL alias also wins over the provider default.
+    expect(
+      core.buildProviderConfig({
+        AI_PROVIDER: "anthropic",
+        AI_BASE_URL: "https://tfy.promptlens.trilogy.com",
+      }).baseUrl,
+    ).toBe("https://tfy.promptlens.trilogy.com");
+  });
+
+  it("messagesUrl appends /v1/messages and never double-appends", () => {
+    expect(core.messagesUrl("https://tfy.promptlens.trilogy.com")).toBe(
+      "https://tfy.promptlens.trilogy.com/v1/messages",
+    );
+    // Trailing slash trimmed before appending.
+    expect(core.messagesUrl("https://tfy.promptlens.trilogy.com/")).toBe(
+      "https://tfy.promptlens.trilogy.com/v1/messages",
+    );
+    // Already ends in /v1/messages → returned as-is.
+    expect(core.messagesUrl("https://tfy.promptlens.trilogy.com/v1/messages")).toBe(
+      "https://tfy.promptlens.trilogy.com/v1/messages",
+    );
+    // Already ends in /messages → returned as-is.
+    expect(core.messagesUrl("https://gw.example.com/messages")).toBe(
+      "https://gw.example.com/messages",
+    );
+  });
+
+  it("makeLlmCaller (anthropic) hits ${base}/v1/messages with BOTH auth headers", async () => {
+    const key = "tfy-secret-key";
+    const base = "https://tfy.promptlens.trilogy.com";
+    const config = core.buildProviderConfig({
+      AI_PROVIDER: "anthropic",
+      AI_PROVIDER_BASE_URL: base,
+    });
+
+    let capturedUrl: string | undefined;
+    let capturedHeaders: Record<string, string> | undefined;
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init: RequestInit) => {
+      capturedUrl = String(url);
+      capturedHeaders = init?.headers as Record<string, string>;
+      return {
+        ok: true,
+        status: 200,
+        async json() {
+          return { content: [{ text: "ok" }] };
+        },
+        async text() {
+          return "";
+        },
+      };
+    }) as unknown as typeof fetch;
+
+    try {
+      const callLLM = core.makeLlmCaller({ key, config });
+      const out = await callLLM("sys", "user", false, {});
+      expect(out).toBe("ok");
+      expect(capturedUrl).toBe(`${base}/v1/messages`);
+      expect(capturedHeaders?.authorization).toBe(`Bearer ${key}`);
+      expect(capturedHeaders?.["x-api-key"]).toBe(key);
+      expect(capturedHeaders?.["anthropic-version"]).toBe("2023-06-01");
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   it("the flavor guardrail rejects an introduced number server-side", async () => {

@@ -504,7 +504,11 @@ export function buildProviderConfig(env = {}) {
     env.AI_PROVIDER_MODEL ||
     (provider === "anthropic" ? "claude-3-5-haiku-latest" : "gpt-4o-mini");
   const baseUrl =
-    env.AI_BASE_URL || env.AI_PROVIDER_BASE_URL || "https://api.openai.com/v1";
+    env.AI_BASE_URL ||
+    env.AI_PROVIDER_BASE_URL ||
+    (provider === "anthropic"
+      ? "https://api.anthropic.com"
+      : "https://api.openai.com/v1");
   return { provider, model, baseUrl };
 }
 
@@ -512,6 +516,14 @@ export function buildProviderConfig(env = {}) {
 export function chatCompletionsUrl(base) {
   const b = String(base || "").trim().replace(/\/+$/, "");
   return /\/chat\/completions$/.test(b) ? b : `${b}/chat/completions`;
+}
+
+// Join an Anthropic-compatible base URL (real API or a gateway like TrueFoundry)
+// with the Messages path, robustly. If the base already ends in `/v1/messages`
+// or `/messages`, don't double-append.
+export function messagesUrl(base) {
+  const b = String(base || "").trim().replace(/\/+$/, "");
+  return /\/(?:v1\/)?messages$/.test(b) ? b : `${b}/v1/messages`;
 }
 
 async function callOpenAI(key, sys, user, wantJson, opts, config) {
@@ -534,10 +546,15 @@ async function callOpenAI(key, sys, user, wantJson, opts, config) {
   return j.choices?.[0]?.message?.content?.trim() || "";
 }
 async function callAnthropic(key, sys, user, opts, config) {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  // Use the configured base URL so requests can reach either the real Anthropic
+  // API or an Anthropic-compatible gateway (e.g. TrueFoundry). Send BOTH auth
+  // headers: real Anthropic reads `x-api-key`, the gateway reads a Bearer token
+  // in `authorization` — each ignores the header it doesn't use.
+  const res = await fetch(messagesUrl(config.baseUrl), {
     method: "POST",
     headers: {
       "x-api-key": key,
+      authorization: `Bearer ${key}`,
       "anthropic-version": "2023-06-01",
       "content-type": "application/json",
     },
