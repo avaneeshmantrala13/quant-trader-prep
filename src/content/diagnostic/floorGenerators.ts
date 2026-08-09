@@ -100,10 +100,14 @@ export function genCombinedRatesTogether(rng: Rng): NumericQuestion {
       {
         value: averaged,
         feedback: `You averaged the times ((${ta} + ${tb})/2 = ${averaged}); you must add the RATES, not the times.`,
+        // V3/V4: canonical tag so the rung-1 nudge + mastery fold aggregate this
+        // "operated on the times, not the rates" trap across instances.
+        misconception: "averaged_times_not_rates",
       },
       {
         value: summed,
         feedback: `You added the times (${ta} + ${tb} = ${summed}); working together is FASTER than either alone, not slower.`,
+        misconception: "summed_times_not_combined",
       },
     ],
     source: "Untimed diagnostic · Combined rates",

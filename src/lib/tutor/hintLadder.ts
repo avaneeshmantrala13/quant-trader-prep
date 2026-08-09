@@ -510,7 +510,8 @@ type NudgeKey =
   | "reusedSubcase"
   | "ignoredConstraint"
   | "relatedQuantity"
-  | "combineAdd";
+  | "combineAdd"
+  | "scalingPower";
 
 /**
  * The nudge text for each bucket. INVARIANT (mirrors the rung-1 contract): each
@@ -569,6 +570,8 @@ const NUDGE: Record<NudgeKey, string> = {
     "but think about whether the quantity you found is exactly the one asked for, or only one piece of the whole.",
   combineAdd:
     "but think about whether simply stacking the pieces could over- or under-count what the question actually asks for.",
+  scalingPower:
+    "but think about how a multiplying constant carries through THIS kind of quantity — whether it passes straight through, or whether its effect is amplified because the quantity depends on it more than once.",
 };
 
 /**
@@ -605,6 +608,13 @@ const TAG_NUDGE_RULES: { re: RegExp; key: NudgeKey }[] = [
     re: /equal_weight|averag|mixture|single_branch|ignored_conditionals|reused_fair/,
     key: "averaging",
   },
+  // Combined the wrong quantities by simple addition (e.g. added TIMES instead of
+  // combining RATES). Placed AFTER the averaging rule so an "averaged_…" tag still
+  // routes to averaging, not here.
+  { re: /summed|_not_combined|combine_add/, key: "combineAdd" },
+  // A multiplying constant mis-applied to a power-law quantity (e.g. variance
+  // scales by a², not a; scaled the sd instead of the variance).
+  { re: /scaled|_squared|coefficient/, key: "scalingPower" },
   { re: /symmetric|guessed_half|used_fair|used_single_flip/, key: "symmetryAssumed" },
   {
     re: /off_by|_step|continuation|previous_term|repeated_answer|gave_blank|skipped/,

@@ -125,13 +125,42 @@ export function pickNextDrillTarget(progress: UserProgress): DrillTarget | null 
   }
   // Gate not met + empty plan ⇒ only the timed section overlay remains and there
   // is no per-topic weakness to route it to. Surface it explicitly.
-  return {
-    kind: "timed",
-    serve: "timed-info",
-    topicKey: null,
-    label: "Strict timed section",
-    reason: "A timed multi-topic section (≥ 90%) is still required",
-  };
+  return TIMED_INFO_TARGET;
+}
+
+/** The residual "a strict timed section is owed" target (no per-topic route). */
+const TIMED_INFO_TARGET: DrillTarget = {
+  kind: "timed",
+  serve: "timed-info",
+  topicKey: null,
+  label: "Strict timed section",
+  reason: "A timed multi-topic section (≥ 90%) is still required",
+};
+
+/**
+ * The FULL ordered list of drill targets (weakest-first) the loop may serve this
+ * pass — every drill-plan entry mapped to a {@link DrillTarget}, ALWAYS followed
+ * by the residual {@link TIMED_INFO_TARGET} fallback. Returns `[]` IFF the whole
+ * Stage-6 gate holds (mirrors {@link pickNextDrillTarget} returning `null`).
+ *
+ * The drilling stage walks this list and serves the FIRST target that yields a
+ * non-empty round, so a numeric topic that (hypothetically) draws dry ROUND-
+ * ROBINS to the next weak topic instead of dead-ending on a button-less panel —
+ * the loop can always progress until the 0.80/0.90 gate clears (V1 backstop).
+ * With every scored family now parametric this dry case should never arise, but
+ * the fallback ordering makes the freeze structurally impossible.
+ */
+export function drillPlanTargets(progress: UserProgress): DrillTarget[] {
+  if (passesDrillingGate(progress)) return [];
+  const targets: DrillTarget[] = buildDrillPlan(progress).map((entry) => ({
+    kind: entry.metric,
+    serve: serveFor(entry.metric),
+    topicKey: entry.key,
+    label: entry.label,
+    reason: entry.reason,
+  }));
+  targets.push(TIMED_INFO_TARGET);
+  return targets;
 }
 
 /* -------------------------------------------------------------------------- */

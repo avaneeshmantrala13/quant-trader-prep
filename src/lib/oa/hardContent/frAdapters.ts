@@ -99,11 +99,18 @@ export function adaptHardOaToFreeResponse(
     if (sameAtPrecision(value, answer, decimals)) return;
     if (seen.has(value)) return;
     seen.add(value);
+    // V3/V4: carry the MCQ's machine-readable misconception TAG for choice `i`
+    // (when authored) onto the projected numeric commonError, so a typed wrong
+    // value trips the SAME rung-1 directional nudge + rung-4 confront + mastery
+    // fold as the MCQ distractor would. Falls back to the deterministic
+    // `err:<value>` tag (no `misconception`) when the generator left it untagged.
+    const tag = q.misconceptions?.[i];
     commonErrors.push({
       value,
       feedback:
         q.distractorRationale?.[i] ??
         "A plausible but incorrect approach to this problem.",
+      ...(tag && tag.trim().length > 0 ? { misconception: tag } : {}),
     });
   });
 

@@ -29,9 +29,9 @@ import { Rng } from "@/lib/rng";
 import { meetsMasteryGate, roundScore } from "@/lib/score";
 import { TIMED_GATE } from "@/lib/pipeline/gates";
 import { skillByKey, skillKeySet } from "@/lib/roadmap/skillGraph";
-import { topicKeyOf } from "@/lib/mastery/topicKey";
 import type { PipelineState, TimedSectionResult } from "@/types/progress";
 import { HARD_OA_BUILDERS } from "./hardContent/generators";
+import { topicForHardFamily } from "./hardContent/attribution";
 import { toOaQuestion } from "./questionPool";
 import { isCorrect } from "./scoring";
 import type { OaQuestion, OaSessionState } from "./types";
@@ -39,14 +39,6 @@ import type { OaQuestion, OaSessionState } from "./types";
 /* -------------------------------------------------------------------------- */
 /*  Topic-tagged hard-archetype plan (attribution, decision #10)              */
 /* -------------------------------------------------------------------------- */
-
-/** Real scored KST topic nodes each hard family attributes to (all in SKILL_GRAPH). */
-const T_MARKOV = topicKeyOf("probability", "Markov Chains");
-const T_EXPECTED_VALUE = topicKeyOf("probability", "Expected Value");
-const T_INTERVIEW_GAMES = topicKeyOf("interview-games");
-const T_CONDITIONAL = topicKeyOf("probability", "Conditional Probability");
-const T_ORDER_STATS = topicKeyOf("probability", "Order Statistics");
-const T_BETTING = topicKeyOf("probability", "Betting & Sizing");
 
 /** One entry in the timed-diagnostic plan: a hard generator family + its topic. */
 export interface TimedPlanEntry {
@@ -57,40 +49,45 @@ export interface TimedPlanEntry {
 }
 
 /**
- * THE topic-tagged plan: every hard archetype in `HARD_OA_BUILDERS` mapped to
- * the scored KST node it genuinely tests. Spans SIX distinct topics (random
- * walks/Markov, expectation, EV-decision/market-making games, Bayes, order
- * statistics, and bet sizing) so the diagnostic is genuinely multi-topic. Each
- * `topicKey` MUST be a real `SKILL_GRAPH` node — asserted in the tests so a
- * mistyped tag can never orphan a mastery update.
+ * The ORDERED hard-archetype families the timed diagnostic draws from. Spans
+ * random walks/Markov, expectation, EV-decision/optimal-stopping, market-making
+ * / pricing games, Bayes, order statistics, and bet sizing so the diagnostic is
+ * genuinely multi-topic.
  */
-export const TIMED_DIAGNOSTIC_PLAN: readonly TimedPlanEntry[] = [
-  // Random walks / Markov chains / hitting & waiting times.
-  { family: "hardPathIntersect", topicKey: T_MARKOV },
-  { family: "hardRuinDuration", topicKey: T_MARKOV },
-  { family: "hardPatternWait", topicKey: T_MARKOV },
-  { family: "hardGraphHitting", topicKey: T_MARKOV },
-  { family: "hardStepLanding", topicKey: T_MARKOV },
-  { family: "hardCycleMeeting", topicKey: T_MARKOV },
-  // Expectation (coupon collector).
-  { family: "hardResetCollector", topicKey: T_EXPECTED_VALUE },
-  // EV-decision / optimal-stopping / market-making games.
-  { family: "hardOneReroll", topicKey: T_INTERVIEW_GAMES },
-  { family: "hardSecretary", topicKey: T_INTERVIEW_GAMES },
-  { family: "hardInformedLift", topicKey: T_INTERVIEW_GAMES },
-  // Conditional probability / Bayesian updating.
-  { family: "hardHiddenComposition", topicKey: T_CONDITIONAL },
-  { family: "hardCoinBias", topicKey: T_CONDITIONAL },
-  // Order statistics.
-  { family: "hardDiceOrderStat", topicKey: T_ORDER_STATS },
-  // Betting & sizing (Kelly + de-vig / overround removal).
-  { family: "hardKelly", topicKey: T_BETTING },
-  { family: "hardDeVig", topicKey: T_BETTING },
-  // Net-new interview-games: next-card pricing, basket/NAV arb, make-a-market.
-  { family: "hardNextCard", topicKey: T_CONDITIONAL },
-  { family: "hardBasketNav", topicKey: T_INTERVIEW_GAMES },
-  { family: "hardMakeMarket", topicKey: T_INTERVIEW_GAMES },
+const TIMED_DIAGNOSTIC_FAMILIES: readonly string[] = [
+  "hardPathIntersect",
+  "hardRuinDuration",
+  "hardPatternWait",
+  "hardGraphHitting",
+  "hardStepLanding",
+  "hardCycleMeeting",
+  "hardResetCollector",
+  "hardOneReroll",
+  "hardSecretary",
+  "hardInformedLift",
+  "hardHiddenComposition",
+  "hardCoinBias",
+  "hardDiceOrderStat",
+  "hardKelly",
+  "hardDeVig",
+  "hardNextCard",
+  "hardBasketNav",
+  "hardMakeMarket",
 ] as const;
+
+/**
+ * THE topic-tagged plan: each hard family mapped to the scored KST node it tests
+ * via the CANONICAL {@link topicForHardFamily} map — the SAME source of truth the
+ * untimed blueprint's hard-ceiling adapters consume (M5 unification), so a
+ * family attributes to ONE node regardless of which diagnostic serves it. Each
+ * `topicKey` is a real `SKILL_GRAPH` node — asserted in the tests so a mistyped
+ * tag can never orphan a mastery update.
+ */
+export const TIMED_DIAGNOSTIC_PLAN: readonly TimedPlanEntry[] =
+  TIMED_DIAGNOSTIC_FAMILIES.map((family) => ({
+    family,
+    topicKey: topicForHardFamily(family),
+  }));
 
 /** The distinct topic nodes the diagnostic can draw from (audit / tests). */
 export function timedDiagnosticTopics(): string[] {
@@ -153,14 +150,40 @@ export interface TimedDiagnosticDraw {
  * Ids encode the seed (`timed-diag-<seed>-<i>`) so a reloaded session can
  * recover its tags via {@link topicKeysForSession}.
  */
+/** Bounded redraw attempts before accepting a family cannot render a novel prompt. */
+const TIMED_DEDUP_ATTEMPTS = 12;
+
+/** Normalize a rendered prompt for exact-duplicate comparison (whitespace-insensitive). */
+function normalizePrompt(p: string): string {
+  return p.trim().replace(/\s+/g, " ");
+}
+
 export function drawTimedDiagnostic(
   seed: number,
   count: number,
 ): TimedDiagnosticDraw {
   const plan = selectTimedDiagnosticPlan(seed, count);
   const rng = new Rng(seed);
+  // M7 exact-duplicate guard: within one draw, no two items may render the SAME
+  // prompt (the parameter-free / small-space families used to repeat verbatim
+  // when the plan cycled). On a collision, redraw the SAME family from a
+  // deterministic perturbed sub-seed until the rendered prompt is novel (bounded
+  // attempts). The item id stays index-encoded (`timed-diag-<seed>-<i>`), so the
+  // reload-recoverable topic tags are unaffected, and the draw stays fully
+  // deterministic in (seed, count).
+  const seenPrompts = new Set<string>();
   const questions = plan.map((entry, i) => {
-    const built = HARD_OA_BUILDERS[entry.family](rng);
+    let built = HARD_OA_BUILDERS[entry.family](rng);
+    let attempt = 0;
+    while (
+      seenPrompts.has(normalizePrompt(built.question.prompt)) &&
+      attempt < TIMED_DEDUP_ATTEMPTS
+    ) {
+      attempt += 1;
+      const sub = new Rng((seed * 2654435761 + (i + 1) * 40503 + attempt * 97) >>> 0);
+      built = HARD_OA_BUILDERS[entry.family](sub);
+    }
+    seenPrompts.add(normalizePrompt(built.question.prompt));
     return toOaQuestion(built.question, idFor(seed, i));
   });
   return { questions, topicKeys: plan.map((e) => e.topicKey) };

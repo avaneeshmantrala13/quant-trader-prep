@@ -25,6 +25,7 @@
 import type Fraction from "fraction.js";
 import type { Question, QuestionGenerator } from "@/types/content";
 import { Rng } from "@/lib/rng";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import {
   F,
   basketArbProfit,
@@ -34,7 +35,6 @@ import {
   coinBiasPosterior,
   completeGraph,
   couponCollectorEV,
-  cubeGraph,
   cycleGraph,
   cycleMeetingTime,
   deVigFairProb,
@@ -84,12 +84,20 @@ function asFrac(v: Value): Fraction {
 interface Choice {
   text: string;
   rationale: string;
+  /**
+   * Optional machine-readable misconception TAG for this distractor (V3/V4). When
+   * ANY choice carries one, {@link assembleFour} emits a `misconceptions[]` array
+   * aligned with the shuffled `choices`, so BOTH the timed MCQ diagnostic and the
+   * free-response `frAdapters` projection trip the same rung-1 nudge / rung-4
+   * confront / mastery fold. Untagged choices stay `""` (a placeholder).
+   */
+  misconception?: string;
 }
 
 /** The MCQ fields an assembled question carries. */
 type Assembled = Pick<
   Question,
-  "choices" | "correctIndex" | "distractorRationale"
+  "choices" | "correctIndex" | "distractorRationale" | "misconceptions"
 >;
 
 /**
@@ -131,10 +139,15 @@ function assembleFour(
   }
   const order = rng.shuffle(chosen.map((_, i) => i));
   const shuffled = order.map((i) => chosen[i]);
+  // Only emit `misconceptions` when at least one choice was tagged, so untagged
+  // families keep their exact prior question shape (no empty array added).
+  const misconceptions = shuffled.map((c) => c.misconception ?? "");
+  const anyTagged = misconceptions.some((t) => t.length > 0);
   return {
     choices: shuffled.map((c) => c.text),
     correctIndex: order.indexOf(0),
     distractorRationale: shuffled.map((c) => c.rationale),
+    ...(anyTagged ? { misconceptions } : {}),
   };
 }
 
@@ -412,25 +425,52 @@ export function buildSecretary(rng: Rng): Built {
  * computed by an exact rational linear solve. Distractors are the graph distance
  * (minimum steps), the vertex count, and a nearby off-by-one/step guess.
  */
+/**
+ * Adjacency list of the `d`-dimensional hypercube `Q_d` (2^d vertices; vertex 0
+ * and 2^d − 1 are antipodal). Generalises the 3-cube so the hitting-time cube
+ * branch can VARY its dimension (M7 anti-duplication). Each vertex connects to
+ * the `d` vertices reachable by flipping one bit.
+ */
+function hypercubeGraph(d: number): number[][] {
+  const n = 1 << d;
+  const adj: number[][] = Array.from({ length: n }, () => []);
+  for (let v = 0; v < n; v++) {
+    for (let bit = 0; bit < d; bit++) adj[v].push(v ^ (1 << bit));
+  }
+  return adj;
+}
+
 export function buildGraphHitting(rng: Rng): Built {
   const kind = rng.pick(["cube", "complete", "cycle"] as const);
 
   if (kind === "cube") {
-    const answer = expectedHittingTime(cubeGraph(), 0, [7]);
+    // Parametrized over the hypercube dimension d (M7: the cube branch used to be
+    // parameter-free, so a repeated draw rendered the identical prompt). d = 3 is
+    // the classic 8-corner cube (answer 10); d = 4 is the 16-corner tesseract.
+    // Every value is an EXACT rational linear solve on Q_d — nothing hardcoded.
+    const d = rng.pick([3, 4] as const);
+    const g = hypercubeGraph(d);
+    const nVerts = 1 << d;
+    const antipode = nVerts - 1;
+    const answer = expectedHittingTime(g, 0, [antipode]);
+    // Vertex 1 (one bit set) is a neighbour of the start 0; its hitting time is
+    // the "from an adjacent corner" distractor (9 for the classic cube).
+    const adjacent = expectedHittingTime(g, 1, [antipode]);
+    const cubeWord = d === 3 ? "cube" : `${d}-dimensional hypercube`;
     const distractors: Choice[] = [
-      { text: fmt(3), rationale: `3 is the graph distance (min edges) between opposite corners, not the expected random-walk time.` },
-      { text: fmt(8), rationale: `8 is the number of vertices, not a hitting time.` },
-      { text: fmt(9), rationale: `9 is the expected time from an ADJACENT vertex (distance 1); from the start it is one more.` },
+      { text: fmt(d), rationale: `${d} is the graph distance (min edges) between opposite corners, not the expected random-walk time.` },
+      { text: fmt(nVerts), rationale: `${nVerts} is the number of corners, not a hitting time.` },
+      { text: fmt(adjacent), rationale: `${fmt(adjacent)} is the expected time from an ADJACENT corner (distance 1); from the start it is more.` },
     ];
     const question: Question = {
-      id: `hard-graphHitting-cube`,
+      id: `hard-graphHitting-cube-${d}`,
       prompt:
-        `A bug does a random walk on the 8 corners of a cube, each second stepping to a uniformly random adjacent corner. ` +
+        `A bug does a random walk on the ${nVerts} corners of a ${cubeWord}, each second stepping to a uniformly random adjacent corner. ` +
         `Starting at one corner, what is the expected number of steps to first reach the diagonally opposite corner?`,
       explanation:
-        `By distance-symmetry the hitting times satisfy E1 = 1 + E2, E2 = 1 + ⅓E1 + ⅔E3, E3 = 1 + ⅔E2 (E at the antipode = 0), solving to E = ${fmt(answer)}.`,
+        `An exact linear solve of the distance-class hitting-time equations on the ${cubeWord} (${nVerts} corners, antipode absorbing) gives E = ${fmt(answer)} steps (the adjacent-corner time is ${fmt(adjacent)}).`,
       difficulty: "hard",
-      concept: "Expected hitting time on a graph (cube antipode)",
+      concept: "Expected hitting time on a graph (hypercube antipode)",
       source: "Hard OA · Random walks on graphs",
       family: "hardGraphHitting",
       ...assembleFour(rng, answer, `The exact linear solve gives ${fmt(answer)} steps.`, distractors),
@@ -550,9 +590,9 @@ export function buildHiddenComposition(rng: Rng): Built {
   const answer = hiddenCompositionNextSame(N, m);
 
   const distractors: Choice[] = [
-    { text: fmt(F(1, 2)), rationale: `½ is the iid-fair answer (each stone independently black w.p. ½). Here the composition is UNKNOWN, so black draws are evidence the bag is black-heavy.` },
-    { text: fmt(F(m, N)), rationale: `${fmt(F(m, N))} = m/N is the fraction of the bag you have drawn black, not the posterior predictive for the next draw.` },
-    { text: fmt(F(m + 1, N + 1)), rationale: `${fmt(F(m + 1, N + 1))} is Laplace's rule of succession, which is the answer for a different (Beta-Bernoulli) prior, not the uniform-count model here.` },
+    { text: fmt(F(1, 2)), rationale: `½ is the iid-fair answer (each stone independently black w.p. ½). Here the composition is UNKNOWN, so black draws are evidence the bag is black-heavy.`, misconception: MISCONCEPTION.baseRateNeglect },
+    { text: fmt(F(m, N)), rationale: `${fmt(F(m, N))} = m/N is the fraction of the bag you have drawn black, not the posterior predictive for the next draw.`, misconception: "posterior_predictive_confusion" },
+    { text: fmt(F(m + 1, N + 1)), rationale: `${fmt(F(m + 1, N + 1))} is Laplace's rule of succession, which is the answer for a different (Beta-Bernoulli) prior, not the uniform-count model here.`, misconception: "confused_posterior_prior_model" },
   ];
 
   const question: Question = {
@@ -596,9 +636,9 @@ export function buildCoinBias(rng: Rng): Built {
   const answer = predictiveHead;
 
   const distractors: Choice[] = [
-    { text: fmt(pB), rationale: `${fmt(pB)} assumes the coin is CERTAINLY the biased one. After only ${k} heads there is still meaningful posterior weight on the fair coin.` },
-    { text: fmt(F(1, 2)), rationale: `½ ignores the update; ${k} heads in a row shifts weight toward the biased coin, raising the predictive above ½.` },
-    { text: fmt(posteriorBiased), rationale: `${fmt(posteriorBiased)} is the posterior P(biased | ${k} heads), not the predictive P(next head).` },
+    { text: fmt(pB), rationale: `${fmt(pB)} assumes the coin is CERTAINLY the biased one. After only ${k} heads there is still meaningful posterior weight on the fair coin.`, misconception: MISCONCEPTION.likelihoodAsPosterior },
+    { text: fmt(F(1, 2)), rationale: `½ ignores the update; ${k} heads in a row shifts weight toward the biased coin, raising the predictive above ½.`, misconception: MISCONCEPTION.baseRateNeglect },
+    { text: fmt(posteriorBiased), rationale: `${fmt(posteriorBiased)} is the posterior P(biased | ${k} heads), not the predictive P(next head).`, misconception: "posterior_not_predictive" },
   ];
 
   const question: Question = {

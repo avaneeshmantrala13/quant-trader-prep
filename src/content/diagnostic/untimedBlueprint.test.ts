@@ -4,9 +4,11 @@ import { skillByKey, COMPETENCY_BRAINTEASER } from "@/lib/roadmap/skillGraph";
 import { MENTAL_MATH_SUBTOPICS, MENTAL_MATH_TOPIC_KEY } from "@/content/mentalMath/subtopics";
 import { gradeFreeResponse } from "@/lib/numeric";
 import { FR_ADAPTER_FAMILIES } from "@/lib/oa/hardContent/frAdapters";
+import { topicKeyOf } from "@/lib/mastery/topicKey";
 import {
   UNTIMED_BLUEPRINT,
   UNTIMED_ITEM_COUNT,
+  adapterCeilingCountsByTopic,
   untimedBrainteaserItems,
   untimedContentItems,
 } from "@/content/diagnostic/untimedBlueprint";
@@ -64,6 +66,24 @@ describe("untimedBlueprint: composition & attribution", () => {
         expect(FR_ADAPTER_FAMILIES).toContain(it.family);
       }
     }
+  });
+
+  it("M8: caps Markov ceiling adapters and lifts order-stats/betting/EV representation", () => {
+    const counts = adapterCeilingCountsByTopic();
+    const markov = topicKeyOf("probability", "Markov Chains");
+    const orderStats = topicKeyOf("probability", "Order Statistics");
+    const betting = topicKeyOf("probability", "Betting & Sizing");
+    const ev = topicKeyOf("probability", "Expected Value");
+
+    // No single topic dominates the hard ceiling tier (was ~12 Markov).
+    for (const [topicKey, n] of Object.entries(counts)) {
+      expect(n, `${topicKey} exceeds the ceiling-adapter cap`).toBeLessThanOrEqual(5);
+    }
+    // Markov is capped, and the previously-thin desks are lifted to a fair floor.
+    expect(counts[markov]).toBeLessThanOrEqual(5);
+    expect(counts[orderStats], "order stats lifted").toBeGreaterThanOrEqual(3);
+    expect(counts[betting], "betting lifted").toBeGreaterThanOrEqual(3);
+    expect(counts[ev], "EV lifted").toBeGreaterThanOrEqual(3);
   });
 
   it("includes brainteaser flashcards folded into the competency node", () => {

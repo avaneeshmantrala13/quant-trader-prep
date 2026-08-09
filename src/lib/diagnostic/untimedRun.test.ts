@@ -16,6 +16,29 @@ import {
 
 const AT = "2026-01-01T00:00:00.000Z";
 
+describe("M7 — materializeUntimedRun serves no exact-duplicate prompt", () => {
+  const promptOf = (m: ReturnType<typeof materializeUntimedRun>[number]) =>
+    (m.kind === "numeric" ? m.question.prompt : m.flashcard.prompt)
+      .trim()
+      .replace(/\s+/g, " ");
+
+  it("every served item has a distinct rendered prompt (multiple seeds)", () => {
+    for (const seed of [1, 7, 20260807, 424242, 99999]) {
+      const items = materializeUntimedRun(seed);
+      const prompts = items.map(promptOf);
+      expect(new Set(prompts).size, `seed ${seed} duplicate prompt`).toBe(
+        prompts.length,
+      );
+    }
+  });
+
+  it("stays deterministic under the dedup guard (same seed ⇒ same prompts)", () => {
+    const a = materializeUntimedRun(20260807).map(promptOf);
+    const b = materializeUntimedRun(20260807).map(promptOf);
+    expect(a).toEqual(b);
+  });
+});
+
 describe("untimedRun: hybrid brainteaser grading (decision §10.3)", () => {
   const items = materializeUntimedRun(20260807);
   const numericBts = items.filter(

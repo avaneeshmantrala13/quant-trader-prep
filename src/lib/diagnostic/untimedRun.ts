@@ -112,12 +112,43 @@ export function materializeUntimedItem(
   };
 }
 
-/** Materialize the WHOLE blueprint (serve order preserved) from one seed. */
+/** The rendered prompt of a materialized item (numeric question or flashcard). */
+function renderedPromptOf(m: MaterializedUntimedItem): string {
+  const raw = m.kind === "numeric" ? m.question.prompt : m.flashcard.prompt;
+  return raw.trim().replace(/\s+/g, " ");
+}
+
+/** Bounded re-materialization attempts before accepting a slot cannot vary. */
+const RUN_DEDUP_ATTEMPTS = 12;
+
+/**
+ * Materialize the WHOLE blueprint (serve order preserved) from one seed, with an
+ * item-level EXACT-DUPLICATE guard (M7): no two served items may render the same
+ * prompt. When a parametric slot (a generator or a hard adapter) collides with an
+ * already-served prompt it is RE-materialized from a deterministic perturbed seed
+ * until novel (bounded); a plain authored singleton cannot vary, so it is served
+ * as-is (the blueprint authors guarantee those are distinct). Deterministic in
+ * `seed`.
+ */
 export function materializeUntimedRun(
   seed: number,
   blueprint: UntimedItem[] = UNTIMED_BLUEPRINT,
 ): MaterializedUntimedItem[] {
-  return blueprint.map((item, i) => materializeUntimedItem(item, seed, i));
+  const seen = new Set<string>();
+  const out: MaterializedUntimedItem[] = [];
+  for (let i = 0; i < blueprint.length; i++) {
+    const item = blueprint[i];
+    const canVary = item.kind !== "numeric-authored" || !!item.generator;
+    let m = materializeUntimedItem(item, seed, i);
+    let attempt = 0;
+    while (canVary && seen.has(renderedPromptOf(m)) && attempt < RUN_DEDUP_ATTEMPTS) {
+      attempt += 1;
+      m = materializeUntimedItem(item, (seed + attempt * 104729) >>> 0, i);
+    }
+    seen.add(renderedPromptOf(m));
+    out.push(m);
+  }
+  return out;
 }
 
 /* -------------------------------------------------------------------------- */

@@ -19,6 +19,7 @@ import {
   drawBrainteaserDrill,
   drawContentDrill,
   drillingProgress,
+  drillPlanTargets,
   pickNextDrillTarget,
   DRILL_ROUND_SIZE,
 } from "./drilling";
@@ -209,6 +210,100 @@ describe("drilling — the combined-rates floor generator varies (real entropy, 
       const errorValues = (q.commonErrors ?? []).map((e) => e.value);
       expect(errorValues.length).toBe(2);
       for (const v of errorValues) expect(v).not.toBe(q.answer);
+    }
+  });
+});
+
+/**
+ * The ~12 content families that previously carried ONLY two static authored
+ * items and no generator — the exact set that dead-ended `drawContentDrill` and
+ * froze the loop (V1). Each now has a parametric floor generator, so the bank is
+ * effectively infinite.
+ */
+const PREVIOUSLY_STATIC_STALL_TOPICS = [
+  topicKeyOf("probability", "Core Probability"),
+  topicKeyOf("probability", "Combinatorial Analysis"),
+  topicKeyOf("math-questions", "Number Theory & Counting"),
+  topicKeyOf("probability", "Continuous Distributions"),
+  topicKeyOf("probability", "Poisson Distribution & Process"),
+  topicKeyOf("probability", "Geometric Probability"),
+  topicKeyOf("math-questions", "Geometry & Derivations"),
+  topicKeyOf("probability", "Variance, Covariance & the CLT"),
+  topicKeyOf("probability", "Brownian Motion"),
+  topicKeyOf("probability", "Game Theory & Puzzles"),
+  topicKeyOf("probability", "Branching Processes"),
+  topicKeyOf("probability", "Markov Chain Structure"),
+];
+
+describe("drilling — the loop can NEVER hard-stall (V1 fix)", () => {
+  it("every previously-static stall topic now fills full early rounds with NOVEL items (was 2-static)", () => {
+    // The old bank was TWO static items: round 0 could not even fill, and round
+    // 1 returned []. Every family now has a parametric generator, so the first
+    // rounds fill completely with distinct signatures and no exact-duplicate is
+    // ever re-served — a real bank, not a 2-item dead end.
+    for (const topic of PREVIOUSLY_STATIC_STALL_TOPICS) {
+      const seen = new Set<string>();
+      let distinct = 0;
+      for (let round = 0; round < 8; round++) {
+        const items = drawContentDrill(topic, 5000 + round, DRILL_ROUND_SIZE, seen);
+        // Round 0 ALWAYS fills a full round — the old 2-static bank could not.
+        if (round === 0) {
+          expect(items.length, `${topic} short round 0`).toBe(DRILL_ROUND_SIZE);
+        }
+        for (const it of items) {
+          const sig = contentSignature(it);
+          expect(seen.has(sig), `${topic} repeated: ${it.question.prompt}`).toBe(false);
+          seen.add(sig);
+          distinct++;
+        }
+      }
+      // A genuinely varied bank (≥ 10 distinct) for every previously-2-static
+      // family — an order of magnitude past the old 2 items. True exhaustion of a
+      // finite family is handled by the stage's round-robin backstop (below),
+      // never by a dead-end panel.
+      expect(distinct, `${topic} bank too small`).toBeGreaterThanOrEqual(10);
+    }
+  });
+
+  it("drillPlanTargets is non-empty whenever the gate is open, and empty exactly when it holds", () => {
+    expect(drillPlanTargets(emptyProgress()).length).toBeGreaterThan(0);
+    expect(drillPlanTargets(allMastered())).toEqual([]);
+  });
+
+  it("drillPlanTargets always ends with a servable residual, so start-next-round never dead-ends", () => {
+    // Simulate the stage's walk: the FIRST servable target is chosen. Even in the
+    // degenerate all-content-mastered-but-timed-owed state, the list ends in a
+    // timed-info target the panel can Continue past.
+    const p = allMastered();
+    p.pipeline!.timed = { correct: 0, total: 0, sections: [] };
+    const targets = drillPlanTargets(p);
+    expect(targets.length).toBeGreaterThan(0);
+    const last = targets[targets.length - 1];
+    expect(last.serve).toBe("timed-info");
+    // Walk exactly as DrillingStage.startNextRound does: numeric targets that
+    // draw a non-empty round win; otherwise fall through to the residual.
+    let servable: (typeof targets)[number] | null = null;
+    for (const t of targets) {
+      if (t.serve === "numeric" && t.topicKey) {
+        if (drawContentDrill(t.topicKey, 1, DRILL_ROUND_SIZE).length > 0) {
+          servable = t;
+          break;
+        }
+        continue;
+      }
+      servable = t; // brainteaser / trading / timed-info are always servable
+      break;
+    }
+    expect(servable).not.toBeNull();
+  });
+
+  it("weakest-first content targets each draw a full non-empty round (round-robin never needed but always safe)", () => {
+    const targets = drillPlanTargets(emptyProgress());
+    const numeric = targets.filter((t) => t.serve === "numeric" && t.topicKey);
+    expect(numeric.length).toBeGreaterThan(0);
+    for (const t of numeric) {
+      const items = drawContentDrill(t.topicKey!, 314, DRILL_ROUND_SIZE);
+      expect(items.length, `${t.topicKey} empty draw`).toBeGreaterThan(0);
     }
   });
 });

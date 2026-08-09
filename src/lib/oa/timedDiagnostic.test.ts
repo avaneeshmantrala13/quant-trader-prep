@@ -160,6 +160,33 @@ describe("question selection — hard, multi-topic, valid topic tags", () => {
   });
 });
 
+/* --------------------- M7 exact-duplicate guard (single draw) ------------- */
+
+describe("M7 — a single timed draw never repeats a rendered prompt", () => {
+  it("has NO duplicate prompts across many seeds, even when the plan CYCLES", () => {
+    // 30 > plan length, so families are drawn multiple times — the parameter-free
+    // / small-space families would otherwise render verbatim repeats.
+    for (const seed of [1, 2, 7, 42, 2024, 31337, 99999]) {
+      const { questions } = drawTimedDiagnostic(seed, 30);
+      const prompts = questions.map((q) => q.prompt.trim().replace(/\s+/g, " "));
+      expect(new Set(prompts).size, `seed ${seed} had a duplicate prompt`).toBe(
+        prompts.length,
+      );
+    }
+  });
+
+  it("stays fully deterministic under the dedup guard (same seed ⇒ same prompts)", () => {
+    const a = drawTimedDiagnostic(2024, 30).questions.map((q) => q.prompt);
+    const b = drawTimedDiagnostic(2024, 30).questions.map((q) => q.prompt);
+    expect(a).toEqual(b);
+  });
+
+  it("keeps the seed-encoding ids index-based so reload tag recovery is unaffected", () => {
+    const { questions } = drawTimedDiagnostic(2024, 30);
+    questions.forEach((q, i) => expect(q.id).toBe(`timed-diag-2024-${i}`));
+  });
+});
+
 /* ------------------------- reload-proof timing (§1) ----------------------- */
 
 describe("reload-proof timing — the 45:00 section deadline persists", () => {

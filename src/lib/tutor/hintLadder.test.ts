@@ -14,6 +14,12 @@ import { SIM_BY_ID } from "@/lib/simulations/catalog";
 import { PLAYABLE_TRACKS } from "@/content";
 import { materializeLevel, materializeNumericLevel } from "@/content/materialize";
 import { isFlashcardLevel, isNumericLevel } from "@/types/content";
+import { materializeUntimedRun } from "@/lib/diagnostic/untimedRun";
+import {
+  FR_ADAPTER_FAMILIES,
+  adaptHardOaToFreeResponse,
+} from "@/lib/oa/hardContent/frAdapters";
+import { Rng } from "@/lib/rng";
 
 const bayesQ: Question = {
   id: "cp-bayestest-1-80-9",
@@ -811,6 +817,85 @@ describe("rung-1 property sweep over EVERY authored quiz/numeric rationale", () 
 
     // Sanity: the sweep actually exercised a large, representative corpus.
     expect(checked).toBeGreaterThan(1000);
+  });
+});
+
+/* ========================================================================== */
+/*  V5: the SAME rung-1 well-formedness sweep, now over the DIAGNOSTIC corpus  */
+/*  — the UNTIMED_BLUEPRINT (authored + parametric + hard-adapter items) and   */
+/*  every frAdapters projection — so a blueprint/adapter rationale can never   */
+/*  ship a truncated, dangling, or answer-leaking rung 1 either.               */
+/* ========================================================================== */
+
+/** Assert the shipped rung-1..4 invariants for one wrong numeric attempt. */
+function assertRungInvariants(
+  q: NumericQuestion,
+  ce: NonNullable<NumericQuestion["commonErrors"]>[number],
+  section: string | undefined,
+): void {
+  const ladder = buildHintLadder({
+    question: q,
+    chosenValue: ce.value,
+    misconceptionTag: ce.misconception,
+    section,
+  });
+  const rung1 = ladder[0].text;
+  expect(endsTerminal(rung1)).toBe(true);
+  expect(DANGLING_CONJUNCTION.test(finalWord(rung1))).toBe(false);
+  expect(rung1.trim().length).toBeGreaterThanOrEqual(15);
+  expect(endsTerminal(ladder[1].text)).toBe(true);
+  // Rung 1: STRICT — never any form of the answer.
+  expect(containsFinalAnswer(rung1, q.answer, 1e-9)).toBe(false);
+  if (!collidesWithStructuralInteger(q.answer)) {
+    for (const rung of ladder.slice(1, 4)) {
+      expect(containsFinalAnswer(rung.text, q.answer, 1e-9)).toBe(false);
+    }
+  }
+}
+
+describe("V5 — rung-1 property sweep over UNTIMED_BLUEPRINT + frAdapters outputs", () => {
+  const SEEDS = Array.from({ length: 16 }, (_, i) => i * 37 + 3);
+
+  it("every UNTIMED_BLUEPRINT numeric item's commonErrors ship a well-formed, answer-free rung 1", () => {
+    const seen = new Set<string>();
+    let checked = 0;
+    for (const seed of SEEDS) {
+      for (const m of materializeUntimedRun(seed)) {
+        if (m.kind !== "numeric") continue;
+        const q = m.question;
+        // The blueprint's own subtopic tag stands in for the drill `section`
+        // (mirrors how DrillingStage threads the topic label into the ladder).
+        const section = m.subtopic;
+        for (const ce of q.commonErrors ?? []) {
+          const key = `${q.id}::${ce.feedback}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          checked++;
+          assertRungInvariants(q, ce, section);
+        }
+      }
+    }
+    // The blueprint is ~100 items; across seeds we exercise a broad corpus.
+    expect(checked).toBeGreaterThan(60);
+  });
+
+  it("every frAdapters family projection ships a well-formed, answer-free rung 1 (all seeds)", () => {
+    const seen = new Set<string>();
+    let checked = 0;
+    for (const family of FR_ADAPTER_FAMILIES) {
+      for (const seed of SEEDS) {
+        const { question } = adaptHardOaToFreeResponse(family, new Rng(seed));
+        for (const ce of question.commonErrors ?? []) {
+          const key = `${family}::${ce.feedback}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          checked++;
+          assertRungInvariants(question, ce, `hard::${family}`);
+        }
+      }
+    }
+    // Every hard family projects distractors; the sweep must have real coverage.
+    expect(checked).toBeGreaterThan(FR_ADAPTER_FAMILIES.length);
   });
 });
 

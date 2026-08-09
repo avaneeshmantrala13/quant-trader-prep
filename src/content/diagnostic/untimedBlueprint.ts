@@ -9,7 +9,23 @@ import { COMPETENCY_BRAINTEASER } from "@/lib/roadmap/skillGraph";
 import type { MentalMathSubtopic } from "@/content/mentalMath/subtopics";
 import { ALL_BRAINTEASER_FAMILIES } from "@/content/brainteasers/generators";
 import { ALL_TECHNIQUE_FAMILIES } from "@/content/brainteasers/techniqueGenerators";
+import { topicForHardFamily } from "@/lib/oa/hardContent/attribution";
+import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import { combinedRatesFloorGenerator } from "./floorGenerators";
+import {
+  genAtLeastOne,
+  genBmIncrement,
+  genBranchingMean,
+  genCombChoose,
+  genCondUniform,
+  genDivisibleOr,
+  genGeoTriangle,
+  genMarkovTwoStep,
+  genPoissonPmf,
+  genSpaceDiagonal,
+  genSymmetricGame,
+  genVarScale,
+} from "./contentGenerators";
 
 /**
  * THE ~100-ITEM UNTIMED FREE-RESPONSE DIAGNOSTIC BLUEPRINT (Stage 2, spec §2 /
@@ -302,8 +318,8 @@ const CONTENT_ITEMS: UntimedItem[] = [
         unit: "h",
         explanation: "Rates add: 1/3 + 1/6 = 1/2 tank per hour, so the tank fills in 2 hours.",
         commonErrors: [
-          { value: 4.5, feedback: "You averaged the times (3 + 6)/2; you must add the RATES, not the times." },
-          { value: 9, feedback: "You added the times; opening both pipes makes it faster, not slower." },
+          { value: 4.5, feedback: "You averaged the times (3 + 6)/2; you must add the RATES, not the times.", misconception: "averaged_times_not_rates" },
+          { value: 9, feedback: "You added the times; opening both pipes makes it faster, not slower.", misconception: "summed_times_not_combined" },
         ],
       },
     ),
@@ -334,7 +350,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
   ),
 
   /* --------------------------- Probability foundations ----------------------- */
-  num(
+  numGen(
     COMBINATORICS,
     "floor",
     q("u-comb-floor", "How many ways can you choose a committee of 3 people from 8 (order doesn't matter)?", 56, {
@@ -342,10 +358,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "Combinations",
       explanation: "C(8,3) = 8·7·6 / (3·2·1) = 336/6 = 56.",
       commonErrors: [
-        { value: 336, feedback: "That is the ORDERED count P(8,3); a committee is unordered, so divide by 3!." },
-        { value: 24, feedback: "That is 8·3; you must use the binomial coefficient." },
+        { value: 336, feedback: "That is the ORDERED count P(8,3); a committee is unordered, so divide by 3!.", misconception: MISCONCEPTION.orderedVsUnordered },
+        { value: 24, feedback: "That is 8·3; you must use the binomial coefficient.", misconception: "forgot_factorial_denominator" },
       ],
     }),
+    genCombChoose,
   ),
   num(
     COMBINATORICS,
@@ -365,7 +382,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       },
     ),
   ),
-  num(
+  numGen(
     NUMBER_THEORY,
     "floor",
     q("u-nt-floor", "How many integers from 1 to 100 inclusive are divisible by 4 OR by 6?", 33, {
@@ -374,10 +391,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       explanation:
         "⌊100/4⌋ + ⌊100/6⌋ − ⌊100/12⌋ = 25 + 16 − 8 = 33 (subtract multiples of lcm(4,6)=12, counted twice).",
       commonErrors: [
-        { value: 41, feedback: "25 + 16 without subtracting the multiples of 12 (double-counted in both sets)." },
-        { value: 25, feedback: "Only multiples of 4 — add the multiples of 6 and subtract the multiples of 12." },
+        { value: 41, feedback: "25 + 16 without subtracting the multiples of 12 (double-counted in both sets).", misconception: MISCONCEPTION.orMeansAddNoOverlap },
+        { value: 25, feedback: "Only multiples of 4 — add the multiples of 6 and subtract the multiples of 12.", misconception: "ignored_second_set" },
       ],
     }),
+    genDivisibleOr,
   ),
   num(
     NUMBER_THEORY,
@@ -393,7 +411,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       ],
     }),
   ),
-  num(
+  numGen(
     CORE_PROB,
     "floor",
     q("u-core-floor", "Two fair six-sided dice are rolled. What is the probability that at least one of them shows a 6?", 11 / 36, {
@@ -401,10 +419,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "Complement rule",
       explanation: "P(at least one 6) = 1 − P(no 6) = 1 − (5/6)² = 1 − 25/36 = 11/36.",
       commonErrors: [
-        { value: 1 / 3, feedback: "You added 1/6 + 1/6; that double-counts the double-six and ignores the complement." },
-        { value: 1 / 36, feedback: "That is P(BOTH dice show 6); you want AT LEAST one." },
+        { value: 1 / 3, feedback: "You added 1/6 + 1/6; that double-counts the double-six and ignores the complement.", misconception: MISCONCEPTION.atLeastOneNaive },
+        { value: 1 / 36, feedback: "That is P(BOTH dice show 6); you want AT LEAST one.", misconception: "all_not_at_least_one" },
       ],
     }),
+    genAtLeastOne,
   ),
   num(
     CORE_PROB,
@@ -501,7 +520,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       },
     ),
   ),
-  num(
+  numGen(
     CONTINUOUS,
     "floor",
     q("u-cont-floor", "X is uniform on [0, 12]. Given that X > 3, what is P(X > 9)?", 1 / 3, {
@@ -510,10 +529,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       explanation:
         "Conditioned on X > 3, X is uniform on (3, 12] (length 9). P(X > 9 | X > 3) = (12 − 9)/(12 − 3) = 3/9 = 1/3.",
       commonErrors: [
-        { value: 0.25, feedback: "That is the UNconditional P(X > 9) = 3/12; you must reduce to the (3,12] range." },
-        { value: 0.75, feedback: "That is P(X ≤ 9 | X > 3); you want the upper tail." },
+        { value: 0.25, feedback: "That is the UNconditional P(X > 9) = 3/12; you must reduce to the (3,12] range.", misconception: "unconditional_not_conditional" },
+        { value: 0.75, feedback: "That is P(X ≤ 9 | X > 3); you want the upper tail.", misconception: MISCONCEPTION.complementConfusion },
       ],
     }),
+    genCondUniform,
   ),
   num(
     CONTINUOUS,
@@ -535,7 +555,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       },
     ),
   ),
-  num(
+  numGen(
     POISSON,
     "floor",
     q("u-poisson-floor", "Calls arrive as a Poisson process with mean λ = 3 per hour. What is P(exactly 2 calls in one hour)? (3 decimals.)", 4.5 * Math.exp(-3), {
@@ -544,10 +564,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       decimals: 3,
       explanation: "P(N = 2) = e^(−λ) λ²/2! = e^(−3)·9/2 = 4.5·e^(−3) ≈ 0.224.",
       commonErrors: [
-        { value: 0.149, feedback: "That is P(N = 1) = λe^(−λ); you want exactly two events." },
-        { value: 9 * Math.exp(-3), feedback: "You forgot the 2! in the denominator of the pmf (e^(−3)·9 vs e^(−3)·9/2)." },
+        { value: 0.149, feedback: "That is P(N = 1) = λe^(−λ); you want exactly two events.", misconception: "off_by_one_count" },
+        { value: 9 * Math.exp(-3), feedback: "You forgot the 2! in the denominator of the pmf (e^(−3)·9 vs e^(−3)·9/2).", misconception: "forgot_factorial_denominator" },
       ],
     }),
+    genPoissonPmf,
   ),
   num(
     POISSON,
@@ -563,7 +584,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       ],
     }),
   ),
-  num(
+  numGen(
     GEOMETRIC,
     "floor",
     q("u-geo-floor", "A point (x, y) is chosen uniformly in the unit square [0,1]×[0,1]. What is P(x + y ≤ 1/2)?", 0.125, {
@@ -572,10 +593,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       explanation:
         "The region x + y ≤ 1/2 (inside the square) is a right triangle with legs 1/2, so its area is ½·(1/2)·(1/2) = 1/8 = 0.125.",
       commonErrors: [
-        { value: 0.5, feedback: "That is P(x + y ≤ 1); the 1/2 threshold cuts a much smaller corner triangle." },
-        { value: 0.25, feedback: "That is the area of the square [0,½]²; the favourable region is the TRIANGLE x + y ≤ ½." },
+        { value: 0.5, feedback: "That is P(x + y ≤ 1); the 1/2 threshold cuts a much smaller corner triangle.", misconception: "wrong_threshold_region" },
+        { value: 0.25, feedback: "That is the area of the square [0,½]²; the favourable region is the TRIANGLE x + y ≤ ½.", misconception: MISCONCEPTION.forgotDivideByTwo },
       ],
     }),
+    genGeoTriangle,
   ),
   num(
     GEOMETRIC,
@@ -597,7 +619,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       },
     ),
   ),
-  num(
+  numGen(
     GEOMETRY,
     "floor",
     q("u-geom-floor", "A rectangular box has dimensions 3 × 4 × 12. What is the length of its space diagonal (corner to opposite corner)?", 13, {
@@ -605,10 +627,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "3-D Pythagoras",
       explanation: "Space diagonal = √(3² + 4² + 12²) = √(9 + 16 + 144) = √169 = 13.",
       commonErrors: [
-        { value: 5, feedback: "That is only the 3–4 face diagonal; include the third dimension (12)." },
-        { value: 19, feedback: "You added the edges (3 + 4 + 12); use √(a² + b² + c²)." },
+        { value: 5, feedback: "That is only the 3–4 face diagonal; include the third dimension (12).", misconception: "ignored_third_dimension" },
+        { value: 19, feedback: "You added the edges (3 + 4 + 12); use √(a² + b² + c²).", misconception: "added_edges_not_squares" },
       ],
     }),
+    genSpaceDiagonal,
   ),
   num(
     GEOMETRY,
@@ -640,7 +663,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
   ),
   // Ceiling: E[max/min of m dice] via the FR adapter.
   adapt(ORDER_STATS, "hardDiceOrderStat"),
-  num(
+  numGen(
     VARIANCE_CLT,
     "floor",
     q("u-var-floor", "A random variable X has Var(X) = 4. What is Var(3X)?", 36, {
@@ -648,10 +671,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "Variance scaling",
       explanation: "Var(aX) = a²·Var(X) = 3²·4 = 9·4 = 36.",
       commonErrors: [
-        { value: 12, feedback: "You used a·Var(X); variance scales by a², not a." },
-        { value: 6, feedback: "You scaled the standard deviation; the question asks about variance." },
+        { value: 12, feedback: "You used a·Var(X); variance scales by a², not a.", misconception: "scaled_by_a_not_a_squared" },
+        { value: 6, feedback: "You scaled the standard deviation; the question asks about variance.", misconception: "scaled_sd_not_variance" },
       ],
     }),
+    genVarScale,
   ),
   num(
     VARIANCE_CLT,
@@ -695,15 +719,15 @@ const CONTENT_ITEMS: UntimedItem[] = [
         concept: "Fair gambler's ruin (duration)",
         explanation: "For a fair walk on {0..N} from a, the expected duration is a(N − a) = 2·(4 − 2) = 4.",
         commonErrors: [
-          { value: 2, feedback: "That is the distance to a boundary, not the expected duration a(N−a)." },
-          { value: 8, feedback: "You doubled; the fair-ruin duration is a(N−a) = 4." },
+          { value: 2, feedback: "That is the distance to a boundary; the expected duration is the product a(N−a) instead." },
+          { value: 8, feedback: "You doubled the result; the fair-ruin duration should be counted once as a(N−a)." },
         ],
       },
     ),
   ),
   // Ceiling: BIASED gambler's ruin duration via the FR adapter.
   adapt(MARKOV, "hardRuinDuration"),
-  num(
+  numGen(
     BROWNIAN,
     "floor",
     q("u-bm-floor", "For standard Brownian motion Bₜ, what is Var(B₉ − B₄)?", 5, {
@@ -712,10 +736,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       explanation:
         "BM has independent increments with Var(Bₜ − Bₛ) = t − s, so Var(B₉ − B₄) = 9 − 4 = 5 (NOT 9 + 4).",
       commonErrors: [
-        { value: 13, feedback: "You added the variances 9 + 4; the increment's variance is the time DIFFERENCE t − s." },
-        { value: 9, feedback: "That is Var(B₉); the increment subtracts the earlier time (variance 9 − 4)." },
+        { value: 13, feedback: "You added the variances 9 + 4; the increment's variance is the time DIFFERENCE t − s.", misconception: "added_times_not_difference" },
+        { value: 9, feedback: "That is Var(B₉); the increment subtracts the earlier time (variance 9 − 4).", misconception: "used_endpoint_not_increment" },
       ],
     }),
+    genBmIncrement,
   ),
   num(
     BROWNIAN,
@@ -753,7 +778,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
   ),
   // Ceiling: secretary optimal-stopping win probability via the FR adapter.
   adapt(INTERVIEW_GAMES, "hardSecretary"),
-  num(
+  numGen(
     GAME_THEORY,
     "floor",
     q("u-gt-floor", "In rock–paper–scissors against a rational opponent, what probability should you play 'rock' in the optimal mixed strategy?", 1 / 3, {
@@ -761,10 +786,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "Mixed-strategy equilibrium",
       explanation: "By symmetry the unique equilibrium mixes each move with probability 1/3.",
       commonErrors: [
-        { value: 0.5, feedback: "There are three moves, not two; uniform over 3 is 1/3 each." },
-        { value: 1, feedback: "A pure strategy is exploitable; the equilibrium is mixed." },
+        { value: 0.5, feedback: "There are three moves, not two; uniform over 3 is 1/3 each.", misconception: "guessed_half_symmetry" },
+        { value: 1, feedback: "A pure strategy is exploitable; the equilibrium is mixed.", misconception: "pure_not_mixed" },
       ],
     }),
+    genSymmetricGame,
   ),
   num(
     GAME_THEORY,
@@ -794,7 +820,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
    * processes (PGF/extinction) and Markov-chain structure (Chapman–Kolmogorov /
    * stationary distributions) STAY: both are genuine top-firm interview families
    * and remain in `scoredContentTopicKeys()`. */
-  num(
+  numGen(
     BRANCHING,
     "floor",
     q("u-branch-floor", "In a branching process each individual has on average 2 offspring. Starting from 1, what is the expected population in generation 3?", 8, {
@@ -802,10 +828,11 @@ const CONTENT_ITEMS: UntimedItem[] = [
       concept: "Branching-process mean growth",
       explanation: "Expected size in generation n is μⁿ; with μ = 2, generation 3 is 2³ = 8.",
       commonErrors: [
-        { value: 6, feedback: "You used 2·3; the mean grows as μⁿ, not μ·n." },
-        { value: 2, feedback: "That is one generation of growth; you need three." },
+        { value: 6, feedback: "You used 2·3; the mean grows as μⁿ, not μ·n.", misconception: "linear_not_exponential_growth" },
+        { value: 2, feedback: "That is one generation of growth; you need three.", misconception: "off_by_one_generation" },
       ],
     }),
+    genBranchingMean,
   ),
   num(
     BRANCHING,
@@ -827,7 +854,7 @@ const CONTENT_ITEMS: UntimedItem[] = [
       },
     ),
   ),
-  num(
+  numGen(
     MARKOV_STRUCTURE,
     "floor",
     q(
@@ -839,11 +866,12 @@ const CONTENT_ITEMS: UntimedItem[] = [
         concept: "Chapman–Kolmogorov (P²)",
         explanation: "P²[1→1] = 0.8·0.8 + 0.2·0.4 = 0.64 + 0.08 = 0.72.",
         commonErrors: [
-          { value: 0.64, feedback: "You kept only the stay-stay path; add the go-and-return path 0.2·0.4." },
-          { value: 0.8, feedback: "That is the 1-step probability; square the matrix for two steps." },
+          { value: 0.64, feedback: "You kept only the stay-stay path; add the go-and-return path 0.2·0.4.", misconception: "ignored_return_path" },
+          { value: 0.8, feedback: "That is the 1-step probability; square the matrix for two steps.", misconception: "used_one_step_not_two" },
         ],
       },
     ),
+    genMarkovTwoStep,
   ),
   num(
     MARKOV_STRUCTURE,
@@ -945,12 +973,69 @@ const ADAPTER_FAMILY_TOPIC_NETNEW: [string, string][] = [
   ["hardMakeMarket", INTERVIEW_GAMES],
 ];
 
-const EXTRA_ADAPTER_ITEMS: UntimedAdapterItem[] = [
-  ...ADAPTER_FAMILY_TOPIC,
-  ...ADAPTER_FAMILY_TOPIC_2,
-  ...ADAPTER_FAMILY_TOPIC_3,
-  ...ADAPTER_FAMILY_TOPIC_NETNEW,
-].map(([family, topicKey]) => adapt(topicKey, family, topicKey, "ceiling"));
+/**
+ * M8 REBALANCE — LIFT under-represented hard ceilings. The raw adapter passes
+ * lean heavily on random-walk / Markov families (the diagnostic audit's M8:
+ * ~12 Markov ceilings vs ~2 each for order-statistics, betting/sizing, and EV).
+ * These extra projections raise the order-stats / betting / EV representation to
+ * a fair floor. All are exact-verified `frAdapters` projections (no new math).
+ */
+const ADAPTER_FAMILY_TOPIC_LIFT: [string, string][] = [
+  ["hardDiceOrderStat", ORDER_STATS],
+  ["hardKelly", BETTING],
+  ["hardDeVig", BETTING],
+  ["hardResetCollector", EXPECTED_VALUE],
+  ["hardOneReroll", EXPECTED_VALUE],
+];
+
+/**
+ * M8 REBALANCE — CAP per-topic ceiling adapters. No single scored topic may
+ * contribute more than {@link ADAPTER_TOPIC_CAP} ceiling adapters to one untimed
+ * run, so the hard tier can never be dominated by one desk (previously Markov
+ * random-walks). Applied in serve order, so the earliest (highest-signal) family
+ * of each topic survives and the tail overflow is trimmed.
+ */
+const ADAPTER_TOPIC_CAP = 5;
+
+function capAdaptersByTopic(
+  pairs: readonly [string, string][],
+  cap: number,
+): [string, string][] {
+  const perTopic = new Map<string, number>();
+  const out: [string, string][] = [];
+  for (const [family, topicKey] of pairs) {
+    const n = perTopic.get(topicKey) ?? 0;
+    if (n >= cap) continue;
+    perTopic.set(topicKey, n + 1);
+    out.push([family, topicKey]);
+  }
+  return out;
+}
+
+// M5 UNIFICATION: every hard-ceiling adapter attributes via the SINGLE canonical
+// `topicForHardFamily` map (the SAME one the timed diagnostic consumes), so the
+// inline topicKeys in the lists above are only family SOURCES — the canonical map
+// governs attribution. This makes hardOneReroll (→ Expected Value) and
+// hardPatternWait (→ Conditional Expectation) consistent across both diagnostics.
+const EXTRA_ADAPTER_ITEMS: UntimedAdapterItem[] = capAdaptersByTopic(
+  [
+    ...ADAPTER_FAMILY_TOPIC,
+    ...ADAPTER_FAMILY_TOPIC_2,
+    ...ADAPTER_FAMILY_TOPIC_3,
+    ...ADAPTER_FAMILY_TOPIC_NETNEW,
+    ...ADAPTER_FAMILY_TOPIC_LIFT,
+  ].map(([family]) => [family, topicForHardFamily(family)] as [string, string]),
+  ADAPTER_TOPIC_CAP,
+).map(([family, topicKey]) => adapt(topicKey, family, topicKey, "ceiling"));
+
+/** Per-topic ceiling-adapter counts (M8 audit / tests). */
+export function adapterCeilingCountsByTopic(): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const it of EXTRA_ADAPTER_ITEMS) {
+    counts[it.topicKey] = (counts[it.topicKey] ?? 0) + 1;
+  }
+  return counts;
+}
 
 /* ========================================================================== */
 /*  BRAINTEASER FLASHCARDS (hybrid grading — decision §10.3)                    */

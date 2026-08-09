@@ -161,6 +161,33 @@ describe("flagship — lattice path intersection", () => {
   });
 });
 
+describe("M7 — hardGraphHitting cube branch is parametrized (no longer parameter-free)", () => {
+  it("renders more than one distinct cube/hypercube prompt across seeds", () => {
+    const cubePrompts = new Set<string>();
+    for (let s = 0; s < 300; s++) {
+      const { question } = HARD_OA_BUILDERS.hardGraphHitting(new Rng(s));
+      if (question.id.startsWith("hard-graphHitting-cube")) {
+        cubePrompts.add(question.prompt);
+      }
+    }
+    // d ∈ {3, 4} → at least two distinct cube prompts (was one fixed prompt).
+    expect(cubePrompts.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it("still serves the classic 8-corner cube (answer 10) as the d=3 instance", () => {
+    let hit = false;
+    for (let s = 0; s < 300 && !hit; s++) {
+      const { answer, question } = HARD_OA_BUILDERS.hardGraphHitting(new Rng(s));
+      if (question.id === "hard-graphHitting-cube-3") {
+        hit = true;
+        expect(fmt(answer)).toBe("10");
+        expect(question.prompt).toContain("8 corners");
+      }
+    }
+    expect(hit).toBe(true);
+  });
+});
+
 describe("probabilistic sanity — biased-ruin duration Monte-Carlo", () => {
   it("simulated absorption time matches the served exact duration", () => {
     const { answer, question } = HARD_OA_BUILDERS.hardRuinDuration(new Rng(3));
