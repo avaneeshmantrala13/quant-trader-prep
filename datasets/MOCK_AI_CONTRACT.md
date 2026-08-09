@@ -1,4 +1,4 @@
-# AI Lambda Mode Contract (`mock-reason-grade`, `mock-clarify-grade`, `mock-extract-claims`, `mock-followup`, `mock-diagnosis`, `parse-drill-intent`)
+# AI Lambda Mode Contract (`mock-reason-grade`, `mock-clarify-grade`, `mock-extract-claims`, `mock-review-reasoning`, `mock-followup`, `mock-diagnosis`, `parse-drill-intent`)
 
 Client-facing request/response contract for the additional LLM modes on the AI
 Lambda (`infra/lambda/ai-flavor/index.mjs`): the four **mock-interview** modes
@@ -331,6 +331,86 @@ claim still fails on the client). This is what makes grading both **general**
   `gradeReasoningDeterministic` when the AI layer is off — no behavior regression.
 - Because the verdict is deterministic, a hostile or broken extraction can only make
   grading **stricter** (drop claims) — it can never manufacture a passing verdict.
+
+---
+
+## Mode 1d — `mock-review-reasoning` (verifier-GROUNDED span review)
+
+The backbone of the **real LLM reasoning REVIEW** (`src/lib/mock/aiMock.ts#reviewReasoning`).
+Distinct from the translation-only `mock-extract-claims`: here the model reads the
+candidate's reasoning **against the verified answer + a canonical derivation** and
+returns **disjoint character spans** over the candidate text tagged `good`/`bad`,
+each with **specific, human feedback**, plus an overall assessment.
+
+**Non-jailbreakable by construction.** The deterministic verifier stays
+AUTHORITATIVE for correctness. The client decides pass/fail on the candidate's
+COMMITTED answer deterministically; this mode NEVER carries a correctness verdict.
+Every returned span is **reconciled** against deterministic checks on the client
+(`reconcileReviewSpans`): a `good` span that is actually a FALSE stated computation
+is **flipped** to `bad` with the corrected arithmetic; a `good` span that isn't
+grounded (a coincidental number, or any "correct value" claim on an answer the
+verifier marked wrong) is **dropped**. So a hallucinated green (e.g. the `2` inside
+`(n+1)²` on a wrong answer) can never survive, and the review can never upgrade a
+wrong committed answer to correct.
+
+### Request
+
+```jsonc
+{
+  "mode": "mock-review-reasoning",
+  "prompt": "…the question text…",
+  "correctAnswer": "a = 2, b = -1, c = 3", // string — context
+  "verifiedAnswer": 2,                       // number | null — the numeric truth, grounds "good" value spans
+  "canonicalDerivation": "Second differences are constant at 4 ⇒ a = Δ²/2 = 2 …", // string | null
+  "closedForm": "2n² − n + 3",              // string | null
+  "keyShortcut": "constant second difference ⇒ a = Δ²/2", // string | null
+  "reasoning": "The sequence is just (n+1)^2 … so a,b,c are 1,2,1", // candidate text
+  "concept": "seqn-quadratic",              // string | null
+  "mechanismSignals": ["second difference", "Δ²/2"] // string[] — accepted method phrasings
+}
+```
+
+### Response (HTTP 200)
+
+```jsonc
+{
+  "ok": true,
+  "spans": [
+    // start/end are character offsets into the EXACT `reasoning` string above.
+    { "start": 0,  "end": 30, "label": "bad",  "why": "You assumed the sequence is (n+1)², but that gives 4, 9, 16, 25 — not the actual terms — so the whole a,b,c falls out wrong." },
+    { "start": 45, "end": 50, "label": "good", "why": "You correctly set up three equations in a, b, c." }
+  ],
+  "assessment": "The setup method is right, but the pattern was mis-identified at the very first step."
+}
+```
+
+### Field semantics
+
+| Field | Meaning |
+|---|---|
+| `spans[].start` / `spans[].end` | Character offsets into the candidate `reasoning`. Clamped to bounds and de-overlapped client-side (flawed wins). |
+| `spans[].label` | `"good"` (correct/load-bearing) or `"bad"`/`"flawed"` (a specific wrong claim). Reconciled: an ungrounded `good` is dropped; a false-arithmetic `good` is flipped to flawed. |
+| `spans[].why` | Specific, human feedback that QUOTES the candidate's own words; never a generic template. Kept verbatim for flawed spans; corrected for flipped ones. |
+| `assessment` | Advisory overall note; never changes correctness. |
+
+### Rules honored by the server prompt
+
+- **Localize + explain, never grade correctness.** No pass/fail, no score, no
+  "correct" verdict in the payload — correctness is the client's deterministic call.
+- **Ground every "good" span.** Only mark a step `good` if it is a genuinely correct
+  load-bearing step (a holding computation, a valid named mechanism, or the committed
+  answer equal to `verifiedAnswer`). NEVER mark a number `good` just because it
+  happens to match part of the answer.
+- **Localize the root cause when wrong.** Point the `bad` span at the specific broken
+  premise / mis-identified closed form and explain WHY against the actual terms,
+  without revealing the final answer.
+
+### Graceful-degradation defaults
+
+- Malformed/partial JSON, a non-200, a stubbed/absent AI config, or **no usable span
+  surviving reconciliation** → the client falls back to the DETERMINISTIC annotator
+  (`annotateReasoning` + `findPremiseFlaw` + `findClosedFormMismatch`), the offline
+  floor. The highlight path is therefore identical whether or not the LLM ran.
 
 ---
 

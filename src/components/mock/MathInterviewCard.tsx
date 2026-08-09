@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import {
   gradeReasoning,
   generateFollowup,
+  reviewReasoning,
   buildReasoningClarifyPrompt,
   type FollowupRecord,
   type MathStep,
   type MockAction,
   type MockResponse,
+  type ReasoningSpan,
 } from "@/lib/mock";
 import { formatNumericAnswer } from "@/lib/numeric";
 import { AnswerField } from "./AnswerField";
@@ -54,6 +56,9 @@ export function MathInterviewCard({
   const [reasoning, setReasoning] = useState("");
   const [probeAnswer, setProbeAnswer] = useState("");
   const [advAnswer, setAdvAnswer] = useState("");
+  const [reviewSpans, setReviewSpans] = useState<ReasoningSpan[] | undefined>(
+    undefined,
+  );
   const [mainClarify, setMainClarify] = useState("");
   const [probeClarify, setProbeClarify] = useState("");
   const [advClarify, setAdvClarify] = useState("");
@@ -118,6 +123,49 @@ export function MathInterviewCard({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [answered, score?.correct, grade]);
+
+  // --- Effect: run the REAL LLM reasoning REVIEW (grounded by the verifier) --
+  // The LLM only supplies span localization + human feedback; every span is
+  // reconciled against deterministic checks in `reviewReasoning`, so it can never
+  // upgrade a wrong answer to correct. With the AI layer off it returns the
+  // DETERMINISTIC annotator spans (the offline floor), so the highlight is
+  // identical either way — the panel below never depends on the network.
+  const reviewRef = useRef(false);
+  useEffect(() => {
+    if (isSprintGate) return;
+    if (!answered || !score || reviewRef.current) return;
+    const raw = response?.reasoningRaw ?? "";
+    if (raw.trim() === "") return;
+    reviewRef.current = true;
+    let cancelled = false;
+    reviewReasoning(
+      {
+        prompt: step.prompt,
+        correctAnswer,
+        correct: score.correct,
+        reasoning: raw,
+        isMentalMath,
+        mechanismSignals: step.requiredReasoning?.mechanismSignals,
+      },
+      {
+        concept: step.concept,
+        verifiedAnswer: step.answer,
+        answerWasWrong: !score.correct,
+        mechanismSignals: step.requiredReasoning?.mechanismSignals,
+        canonicalDerivation: step.explanation,
+      },
+    )
+      .then((r) => {
+        if (!cancelled) setReviewSpans(r.spans);
+      })
+      .catch(() => {
+        /* reviewReasoning never rejects; belt-and-suspenders */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answered, score?.correct]);
 
   // --- Effect: ask the MAIN clarify when the reasoning is ambiguous ---------
   // A MIXED / contradictory / hedged reasoning must be committed to ONE answer
@@ -380,6 +428,7 @@ export function MathInterviewCard({
               mechanismSignals={step.requiredReasoning?.mechanismSignals}
               prompt={step.prompt}
               answerWasWrong={!score.correct}
+              spans={reviewSpans}
             />
           )}
 
@@ -653,7 +702,7 @@ function FollowupBlock({
                         ? "Nailed the probe — you understand the quantity, not just the arithmetic."
                         : "Held up under pressure — you defended the idea, not just the number."
                     : isReasoning
-                      ? "Your reasoning didn't commit to the right conclusion — revisit the key relationship."
+                      ? "Not the right conclusion — the specific step that breaks it is highlighted in red above, with why."
                       : isProbe
                         ? "Missed the probe — revisit what the quantity actually means."
                         : "You folded on the press — this is exactly where interviewers dig in."

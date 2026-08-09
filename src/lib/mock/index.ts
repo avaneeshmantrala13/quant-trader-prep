@@ -34,12 +34,16 @@ export {
   isUninterpretable,
   buildReasoningClarifyPrompt,
   findPremiseFlaw,
+  findClosedFormMismatch,
+  parseSequenceTerms,
+  evalInN,
   toClauses,
 } from "./reasoning";
 export type {
   ReasoningInput,
   PremiseFlaw,
   PremiseFlawOptions,
+  ClosedFormMismatch,
   TextClause,
 } from "./reasoning";
 export {
@@ -173,7 +177,11 @@ export {
   extractReasoningClaims,
   generateFollowup,
   getDiagnosis,
+  reviewReasoning,
+  reconcileReviewSpans,
+  normalizeReviewPayload,
 } from "./aiMock";
+export type { ReasoningReview, ReviewContext } from "./aiMock";
 export {
   extractClaimsDeterministic,
   normalizeClaimsPayload,

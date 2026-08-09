@@ -21,9 +21,11 @@ import {
   renderLocalizationMarkdown,
   runGranularityEval,
   runGateEval,
+  runReviewGroundingEval,
   renderQualityMarkdown,
   GATE_CASES,
   LOCALIZATION_CASES,
+  REVIEW_GROUNDING_CASES,
   derivationsForQuestion,
   type LabeledDerivation,
 } from "./reasoningEval";
@@ -73,11 +75,13 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
     // ---- Granularity + feedback specificity, and the strict clarify gate ----
     const gran = runGranularityEval();
     const gate = runGateEval();
+    const review = runReviewGroundingEval();
     // eslint-disable-next-line no-console
     console.log(
       `[gran] maxGreenOnCorrect=${(gran.maxGreenCoverageCorrect * 100).toFixed(1)}% ` +
         `maxRedOnFlawed=${(gran.maxRedCoverageFlawed * 100).toFixed(1)}% ` +
-        `banned=${gran.bannedPhraseHits.length} [gate] ${gate.correct}/${gate.total}`,
+        `banned=${gran.bannedPhraseHits.length} falseGreens=${gran.coincidentalGreenHits.length} ` +
+        `[gate] ${gate.correct}/${gate.total} [review] ${review.grounded}/${review.total}`,
     );
 
     // Emit the reproducible, checked-in metrics summary (grader QA + localization
@@ -90,7 +94,7 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
           `firm archetypes.`,
       ) +
       renderLocalizationMarkdown(loc) +
-      renderQualityMarkdown(gran, gate);
+      renderQualityMarkdown(gran, gate, review);
     try {
       writeFileSync(
         resolve(process.cwd(), "datasets/reasoning-eval-metrics.md"),
@@ -132,6 +136,21 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
       gran.bannedPhraseHits,
       `banned generic phrases leaked into feedback:\n${gran.bannedPhraseHits.join("\n")}`,
     ).toEqual([]);
+    // NO false-green on a coincidental number (e.g. the "2" in "(n+1)²").
+    expect(
+      gran.coincidentalGreenHits,
+      `false-greens on coincidental numbers:\n${gran.coincidentalGreenHits.join("\n")}`,
+    ).toEqual([]);
+
+    // ---- LLM review grounding: the verifier OVERRIDES a hallucinated green ----
+    expect(review.total).toBe(REVIEW_GROUNDING_CASES.length);
+    expect(
+      review.grounded,
+      `review grounding failures:\n${review.perCase
+        .filter((c) => !c.ok)
+        .map((c) => `${c.label}: greenDropped=${c.greenDropped} flawKept=${c.flawKept}`)
+        .join("\n")}`,
+    ).toBe(review.total);
 
     // ---- Strict confirm/clarify gate acceptance ----
     expect(gate.total).toBe(GATE_CASES.length);

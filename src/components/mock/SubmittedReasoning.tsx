@@ -24,6 +24,22 @@ interface Part {
   span?: ReasoningSpan;
 }
 
+/**
+ * Drop spans whose `why` we've already shown, so the same feedback line never
+ * renders twice (the reported duplicate-feedback bug). Order-preserving.
+ */
+function dedupeReasons(spans: ReasoningSpan[]): ReasoningSpan[] {
+  const seen = new Set<string>();
+  const out: ReasoningSpan[] = [];
+  for (const s of spans) {
+    const key = s.why.trim();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+  }
+  return out;
+}
+
 /** Interleave plain text and highlighted spans (spans are disjoint + ordered). */
 function toParts(text: string, spans: ReasoningSpan[]): Part[] {
   const ordered = [...spans].sort((a, b) => a.start - b.start);
@@ -45,6 +61,7 @@ export function SubmittedReasoning({
   mechanismSignals,
   prompt,
   answerWasWrong,
+  spans: injectedSpans,
   testId = "submitted-reasoning",
 }: {
   text: string | undefined;
@@ -54,17 +71,27 @@ export function SubmittedReasoning({
   prompt?: string;
   /** Whether the verifier marked this answer wrong (drives the red root span). */
   answerWasWrong?: boolean;
+  /**
+   * VERIFIER-GROUNDED spans from the real LLM review (`mock-review-reasoning`),
+   * when available. Every one has already been reconciled against the
+   * deterministic checks (`aiMock.reviewReasoning`), so they are safe to render
+   * verbatim. When omitted, we fall back to the deterministic annotator — the
+   * offline floor — so the highlight path is identical whether or not the LLM ran.
+   */
+  spans?: ReasoningSpan[];
   /** Test hook so the base and the follow-up highlight panels are addressable. */
   testId?: string;
 }) {
   const trimmed = (text ?? "").trim();
   if (trimmed === "") return null;
-  const spans = annotateReasoning(text ?? "", {
-    verifiedAnswer,
-    mechanismSignals,
-    prompt,
-    answerWasWrong,
-  });
+  const spans =
+    injectedSpans ??
+    annotateReasoning(text ?? "", {
+      verifiedAnswer,
+      mechanismSignals,
+      prompt,
+      answerWasWrong,
+    });
   const parts = toParts(text ?? "", spans);
   const goodCount = spans.filter((s) => s.label === "good").length;
   const flawedCount = spans.filter((s) => s.label === "flawed").length;
@@ -125,7 +152,7 @@ export function SubmittedReasoning({
 
       {spans.length > 0 ? (
         <ul className="mt-3 space-y-1.5 text-xs">
-          {spans.map((s, i) => (
+          {dedupeReasons(spans).map((s, i) => (
             <li key={i} className="flex items-start gap-2">
               <span
                 aria-hidden

@@ -32,6 +32,7 @@ import {
 } from "./questionPools";
 import { matchesMechanismSignal, type ReasoningInput } from "./reasoning";
 import { annotateReasoning, type ReasoningSpan } from "./annotate";
+import { reconcileReviewSpans } from "./aiMock";
 import {
   gradeConclusion,
   type ConclusionSpec,
@@ -527,6 +528,21 @@ export const LOCALIZATION_CASES: LocalizationCase[] = [
     rootCause: "The sequence is just n\u00b2",
     whyPattern: /pattern|terms|gaps|re-derive|n\u00b2/i,
   },
+  {
+    // NOVEL, non-hand-tuned case: the reported "(n+1)²" quadratic. The oversimplified
+    // -pattern REGEX does NOT match "(n+1)^2"; localization comes GENERICALLY from
+    // `findClosedFormMismatch` (evaluate the implied closed form vs the actual
+    // terms). The verified answer 2 is `a`; the coincidental "2" must NOT be green.
+    archetype: "seqn-quadratic-abc",
+    kind: "mis-identified-closed-form",
+    prompt:
+      "The sequence 4, 9, 18, 31, 48 fits a quadratic a\u00b7n\u00b2 + b\u00b7n + c; find a, b, c.",
+    reasoning:
+      "The sequence is just (n+1)^2, so a, b, c are 1, 2, 1.",
+    verifiedAnswer: 2,
+    rootCause: "(n+1)^2",
+    whyPattern: /closed form|gives|doesn\u2019t fit|does not fit|4, 9, 16, 25|pattern/i,
+  },
 ];
 
 /** Correct derivations that must produce NO false red (localization precision). */
@@ -561,6 +577,16 @@ export const LOCALIZATION_CONTROLS: LocalizationControl[] = [
     reasoning:
       "The first differences are 6, 12, 18, 24 — a constant second difference of 6 — so the next gap is 30 and 65 + 30 = 95.",
     verifiedAnswer: 95,
+  },
+  {
+    // A CORRECT closed form for the (n+1)²-family prompt must NOT be reddened:
+    // the detector only fires when the stated form doesn't reproduce the terms.
+    archetype: "seqn-quadratic-abc",
+    prompt:
+      "The sequence 4, 9, 18, 31, 48 fits a quadratic a\u00b7n\u00b2 + b\u00b7n + c; find a, b, c.",
+    reasoning:
+      "Second differences are constant at 4, so a = 4/2 = 2; fitting the first terms gives b = -1 and c = 3, i.e. 2n\u00b2 - n + 3.",
+    verifiedAnswer: 2,
   },
 ];
 
@@ -722,6 +748,9 @@ export const BANNED_FEEDBACK_PHRASES = [
   "load-bearing",
   "load bearing",
   "locate the broken step",
+  "didn't commit to the right conclusion",
+  "did not commit to the right conclusion",
+  "revisit the key relationship",
 ];
 
 /** Fraction of the text covered by the UNION of spans of a given label [0..1]. */
@@ -756,6 +785,12 @@ export interface GranularityMetrics {
   allFeedbackReferencesContent: boolean;
   /** Any user-facing feedback string contained a banned generic phrase. */
   bannedPhraseHits: string[];
+  /**
+   * FALSE-GREEN on a coincidental number: a GOOD span on a WRONG derivation whose
+   * value equals the verified answer (e.g. the "2" in "(n+1)²" when a = 2). MUST
+   * be empty — a number is green ONLY when it's the committed correct conclusion.
+   */
+  coincidentalGreenHits: string[];
   perControl: { archetype: string; greenCoverage: number; redCount: number }[];
   perCase: { archetype: string; redCoverage: number; referencesContent: boolean }[];
 }
@@ -799,6 +834,7 @@ export function runGranularityEval(
   }
 
   const perCase: GranularityMetrics["perCase"] = [];
+  const coincidentalGreenHits: string[] = [];
   let maxRedCoverageFlawed = 0;
   let allFeedbackReferencesContent = true;
   for (const c of cases) {
@@ -808,6 +844,16 @@ export function runGranularityEval(
       answerWasWrong: true,
     });
     spans.forEach((s) => checkBanned(s.why));
+    // FALSE-GREEN guard: on a WRONG derivation no GOOD span may carry a value
+    // equal to the verified answer (that's the coincidental-token bug).
+    const tol = 1e-3 + Math.abs(c.verifiedAnswer) * 1e-6;
+    for (const s of spans) {
+      if (s.label !== "good") continue;
+      const nums = s.excerpt.match(/-?\d+(?:\.\d+)?/g) ?? [];
+      if (nums.some((x) => Math.abs(Number(x) - c.verifiedAnswer) <= tol)) {
+        coincidentalGreenHits.push(`[${c.archetype}] green "${s.excerpt}"`);
+      }
+    }
     const red = labelCoverage(spans, "flawed", c.reasoning.length);
     if (red > maxRedCoverageFlawed) maxRedCoverageFlawed = red;
     // The covering red span must QUOTE the candidate's own words: its `why`
@@ -827,6 +873,7 @@ export function runGranularityEval(
     maxRedCoverageFlawed,
     allFeedbackReferencesContent,
     bannedPhraseHits,
+    coincidentalGreenHits,
     perControl,
     perCase,
   };
@@ -917,10 +964,115 @@ export function runGateEval(cases: GateCase[] = GATE_CASES): GateMetrics {
   return { total: cases.length, correct, perCase };
 }
 
+/* -------------------------------------------------------------------------- */
+/*  LLM review GROUNDING — verifier overrides a hallucinated green (anti-jailbreak) */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A mocked-LLM review case: the RAW spans a hallucinating reviewer might return
+ * for a WRONG derivation, and what the verifier-grounded reconciliation MUST do.
+ */
+export interface ReviewGroundingCase {
+  label: string;
+  reasoning: string;
+  verifiedAnswer: number;
+  answerWasWrong: boolean;
+  /** A substring the LLM wrongly greened; grounding MUST NOT leave it green. */
+  hallucinatedGreen: string;
+  /** A substring the LLM flagged bad; grounding MUST keep it flawed. */
+  flawedClaim: string;
+}
+
+/**
+ * The grounding corpus. Case 1 is the exact (n+1)² repro: the LLM greens the
+ * coincidental "2" and flags "(n+1)^2" — the verifier drops the green and keeps
+ * the flaw. Case 2 proves a FALSE-arithmetic green is FLIPPED to flawed.
+ */
+export const REVIEW_GROUNDING_CASES: ReviewGroundingCase[] = [
+  {
+    label: "(n+1)² — coincidental green '2' dropped, closed-form stays flawed",
+    reasoning: "The sequence is just (n+1)^2, so a, b, c are 1, 2, 1.",
+    verifiedAnswer: 2,
+    answerWasWrong: true,
+    hallucinatedGreen: "1, 2, 1",
+    flawedClaim: "(n+1)^2",
+  },
+  {
+    label: "false-arithmetic green is FLIPPED to flawed by the verifier",
+    reasoning: "Adding them, 1 plus 1 = 3, so the total is 3.",
+    verifiedAnswer: 2,
+    answerWasWrong: true,
+    hallucinatedGreen: "1 plus 1 = 3",
+    flawedClaim: "1 plus 1 = 3",
+  },
+];
+
+export interface ReviewGroundingMetrics {
+  total: number;
+  grounded: number;
+  perCase: {
+    label: string;
+    greenDropped: boolean;
+    flawKept: boolean;
+    ok: boolean;
+  }[];
+}
+
+/**
+ * Feed hallucinated LLM spans through `reconcileReviewSpans` (the deterministic
+ * grounding gate) and verify: (a) the coincidental / false green is dropped or
+ * flipped (never left green), and (b) the genuine flaw stays flawed. This proves
+ * the verifier OVERRIDES a hallucinated green on a wrong answer — the LLM can
+ * never upgrade a wrong committed answer to correct.
+ */
+export function runReviewGroundingEval(
+  cases: ReviewGroundingCase[] = REVIEW_GROUNDING_CASES,
+): ReviewGroundingMetrics {
+  let grounded = 0;
+  const perCase = cases.map((c) => {
+    const gi = c.reasoning.indexOf(c.hallucinatedGreen);
+    const fi = c.reasoning.indexOf(c.flawedClaim);
+    const llmSpans: ReasoningSpan[] = [];
+    if (gi >= 0)
+      llmSpans.push({
+        start: gi,
+        end: gi + c.hallucinatedGreen.length,
+        excerpt: c.hallucinatedGreen,
+        label: "good",
+        why: "You correctly landed the answer here.", // hallucinated praise
+      });
+    if (fi >= 0)
+      llmSpans.push({
+        start: fi,
+        end: fi + c.flawedClaim.length,
+        excerpt: c.flawedClaim,
+        label: "flawed",
+        why: "This pattern doesn't match the terms.",
+      });
+    const reconciled = reconcileReviewSpans(c.reasoning, llmSpans, {
+      verifiedAnswer: c.verifiedAnswer,
+      answerWasWrong: c.answerWasWrong,
+    });
+    const covers = (s: ReasoningSpan, idx: number, len: number) =>
+      s.start <= idx && idx + len <= s.end;
+    const greenDropped = !reconciled.some(
+      (s) => s.label === "good" && covers(s, gi, c.hallucinatedGreen.length),
+    );
+    const flawKept = reconciled.some(
+      (s) => s.label === "flawed" && covers(s, fi, c.flawedClaim.length),
+    );
+    const ok = greenDropped && flawKept;
+    if (ok) grounded++;
+    return { label: c.label, greenDropped, flawKept, ok };
+  });
+  return { total: cases.length, grounded, perCase };
+}
+
 /** Render the granularity + gate metrics as a Markdown section. */
 export function renderQualityMarkdown(
   gran: GranularityMetrics,
   gate: GateMetrics,
+  review?: ReviewGroundingMetrics,
 ): string {
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
   const gateRows = gate.perCase
@@ -940,7 +1092,29 @@ export function renderQualityMarkdown(
       "(only the specific flawed claim is red, not the whole blob).",
     `- **Feedback references the candidate's own words:** ${gran.allFeedbackReferencesContent ? "always" : "NOT always (bug!)"}.`,
     `- **Banned generic phrases in feedback:** ${gran.bannedPhraseHits.length === 0 ? "none" : gran.bannedPhraseHits.length}.`,
+    `- **False-greens on coincidental numbers (wrong answers):** ${gran.coincidentalGreenHits.length === 0 ? "none" : gran.coincidentalGreenHits.join("; ")}.`,
     "",
+    ...(review
+      ? [
+          "## LLM review grounding — the verifier overrides a hallucinated green",
+          "",
+          "The real LLM review (`mock-review-reasoning`) only LOCALIZES + explains;",
+          "every span is reconciled against deterministic checks. A hallucinated",
+          "green on a WRONG answer (e.g. the coincidental \u201c2\u201d in \u201c(n+1)\u00b2\u201d) is",
+          "dropped, and a false-arithmetic green is flipped to flawed \u2014 the review",
+          "can never upgrade a wrong committed answer to correct.",
+          "",
+          "| Case | Green dropped/flipped | Flaw kept | OK |",
+          "|---|---|---|---|",
+          ...review.perCase.map(
+            (c) =>
+              `| ${c.label} | ${c.greenDropped ? "\u2713" : "\u2717"} | ${c.flawKept ? "\u2713" : "\u2717"} | ${c.ok ? "\u2713" : "\u2717"} |`,
+          ),
+          "",
+          `**Review grounding: ${review.grounded}/${review.total} (${pct(review.total > 0 ? review.grounded / review.total : 1)})**`,
+          "",
+        ]
+      : []),
     "## Strict confirm/clarify gate — second chance only when mostly-right",
     "",
     "Clarify (the second chance) fires ONLY when there is genuine correct,",

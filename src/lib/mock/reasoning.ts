@@ -950,6 +950,273 @@ function commaSegment(text: string, idx: number): { start: number; end: number }
   return { start, end };
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Mis-identified closed form / wrong pattern (sequence family) — GENERAL      */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Extract the leading numeric SEQUENCE from a prompt: the first run of ≥3
+ * comma-separated numbers (e.g. "4, 9, 18, 31, 48"). Returns the terms in order,
+ * or `[]` when the prompt has no such run (i.e. it isn't a sequence prompt).
+ * Pure/total — used to compare a candidate's IMPLIED closed form to reality.
+ */
+export function parseSequenceTerms(prompt: string): number[] {
+  const m = (prompt ?? "").match(
+    /-?\d+(?:\.\d+)?(?:\s*,\s*-?\d+(?:\.\d+)?){2,}/,
+  );
+  if (!m) return [];
+  return m[0]
+    .split(",")
+    .map((x) => Number(x.trim()))
+    .filter((x) => Number.isFinite(x));
+}
+
+/**
+ * Evaluate a CLOSED-FORM expression in the single variable `n` at value `n`.
+ * Supports `+ - * / ^` (power, right-associative), parentheses, the unicode
+ * spellings (`× ÷ · − ² ³`), the words "squared"/"cubed", and IMPLICIT
+ * multiplication (`2n`, `2(n+1)`, `n(n+1)`, `(n+1)(n+2)`). Returns the value, or
+ * `null` when the string isn't a clean single-variable expression in `n` (a
+ * word, another variable, a dangling operator, …). Pure/total; never evals code.
+ */
+export function evalInN(raw: string, n: number): number | null {
+  const s = (raw ?? "")
+    .toLowerCase()
+    .replace(/\u2212/g, "-")
+    .replace(/[×✕⋅·]/g, "*")
+    .replace(/\u00f7/g, "/")
+    .replace(/\bsquared\b/g, "^2")
+    .replace(/\bcubed\b/g, "^3")
+    .replace(/\u00b2/g, "^2")
+    .replace(/\u00b3/g, "^3")
+    .replace(/,/g, "")
+    .trim();
+  if (s === "" || !/n/.test(s) || !/^[0-9n.\s()+\-*/^]+$/.test(s)) return null;
+
+  type Tok =
+    | { t: "num"; v: number }
+    | { t: "var" }
+    | { t: "op"; v: "+" | "-" | "*" | "/" | "^" }
+    | { t: "(" }
+    | { t: ")" };
+  const toks: Tok[] = [];
+  const prevIsValue = (): boolean => {
+    const p = toks[toks.length - 1];
+    return p != null && (p.t === "num" || p.t === "var" || p.t === ")");
+  };
+  let i = 0;
+  while (i < s.length) {
+    const c = s[i];
+    if (c === " ") {
+      i++;
+      continue;
+    }
+    if (c === "(") {
+      if (prevIsValue()) toks.push({ t: "op", v: "*" }); // implicit ×
+      toks.push({ t: "(" });
+      i++;
+      continue;
+    }
+    if (c === ")") {
+      toks.push({ t: ")" });
+      i++;
+      continue;
+    }
+    if (c === "n") {
+      if (prevIsValue()) toks.push({ t: "op", v: "*" }); // implicit ×
+      toks.push({ t: "var" });
+      i++;
+      continue;
+    }
+    if (c === "+" || c === "-" || c === "*" || c === "/" || c === "^") {
+      // A leading +/- with no value before it is a UNARY sign (−n, −(…), −3).
+      if ((c === "+" || c === "-") && !prevIsValue()) {
+        toks.push({ t: "num", v: c === "-" ? -1 : 1 });
+        toks.push({ t: "op", v: "*" });
+        i++;
+        continue;
+      }
+      toks.push({ t: "op", v: c });
+      i++;
+      continue;
+    }
+    const m = s.slice(i).match(/^\d*\.?\d+/);
+    if (!m) return null;
+    if (prevIsValue()) toks.push({ t: "op", v: "*" });
+    toks.push({ t: "num", v: Number(m[0]) });
+    i += m[0].length;
+  }
+  if (toks.length === 0) return null;
+
+  const prec = (op: string): number =>
+    op === "^" ? 3 : op === "*" || op === "/" ? 2 : 1;
+  const rightAssoc = (op: string): boolean => op === "^";
+  const out: Tok[] = [];
+  const ops: Tok[] = [];
+  for (const tk of toks) {
+    if (tk.t === "num" || tk.t === "var") out.push(tk);
+    else if (tk.t === "op") {
+      let top = ops[ops.length - 1];
+      while (
+        top &&
+        top.t === "op" &&
+        (prec(top.v) > prec(tk.v) ||
+          (prec(top.v) === prec(tk.v) && !rightAssoc(tk.v)))
+      ) {
+        out.push(ops.pop()!);
+        top = ops[ops.length - 1];
+      }
+      ops.push(tk);
+    } else if (tk.t === "(") ops.push(tk);
+    else {
+      while (ops.length && ops[ops.length - 1].t !== "(") out.push(ops.pop()!);
+      if (!ops.length) return null; // mismatched ")"
+      ops.pop();
+    }
+  }
+  while (ops.length) {
+    const o = ops.pop()!;
+    if (o.t === "(") return null; // mismatched "("
+    out.push(o);
+  }
+
+  const st: number[] = [];
+  for (const tk of out) {
+    if (tk.t === "num") st.push(tk.v);
+    else if (tk.t === "var") st.push(n);
+    else if (tk.t === "op") {
+      const b = st.pop();
+      const a = st.pop();
+      if (a === undefined || b === undefined) return null;
+      let r: number;
+      switch (tk.v) {
+        case "+":
+          r = a + b;
+          break;
+        case "-":
+          r = a - b;
+          break;
+        case "*":
+          r = a * b;
+          break;
+        case "/":
+          if (b === 0) return null;
+          r = a / b;
+          break;
+        case "^":
+          r = Math.pow(a, b);
+          break;
+        default:
+          return null;
+      }
+      st.push(r);
+    } else return null;
+  }
+  return st.length === 1 && Number.isFinite(st[0]) ? st[0] : null;
+}
+
+/** A mis-identified closed form located in the candidate's own text. */
+export interface ClosedFormMismatch {
+  /** The candidate's implied closed form, e.g. "(n+1)^2". */
+  claim: string;
+  /** Inclusive start / exclusive end char offsets into the original text. */
+  start: number;
+  end: number;
+  /** What that closed form actually produces for the first terms. */
+  cfOutputs: number[];
+  /** The real sequence terms it should have produced. */
+  terms: number[];
+  /** Content-referential explanation of the mismatch (quotes the claim). */
+  why: string;
+}
+
+/**
+ * GENERAL "wrong pattern" detector for the SEQUENCE family (NO per-misconception
+ * rule): parse the prompt's actual terms, find a closed-form expression in `n`
+ * the candidate committed to, and EVALUATE it against those terms. When the
+ * candidate's implied closed form does NOT reproduce the sequence (for either a
+ * 1- or 0-based index), it's the mis-identified root cause — returned with a
+ * content-referential `why` that quotes the closed form and shows what it gives
+ * vs. what the sequence actually is (e.g. "(n+1)^2 gives 4, 9, 16, 25 — but the
+ * sequence is 4, 9, 18, 31"). Returns `null` when the prompt isn't a sequence,
+ * no closed form is stated, or the stated form actually FITS (never a false red).
+ * Pure/total.
+ */
+export function findClosedFormMismatch(
+  text: string,
+  prompt: string,
+): ClosedFormMismatch | null {
+  const terms = parseSequenceTerms(prompt ?? "");
+  if (terms.length < 3) return null;
+  const t = text ?? "";
+  const K = Math.min(terms.length, 6);
+  // Candidate closed forms: a MAXIMAL run of closed-form characters that mentions
+  // `n` (so the WHOLE polynomial is captured, e.g. "2n² - n + 3", not just "2n²").
+  // Prose/commas/`=` stop the run, so it can't swallow surrounding text.
+  const re = /[0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*n[0-9n.^\u00b2\u00b3()+\-*/×·\u2212\s]*/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(t)) !== null) {
+    if (m[0].trim() === "") {
+      re.lastIndex++;
+      continue;
+    }
+    const raw = m[0];
+    const lead = raw.length - raw.replace(/^\s+/, "").length;
+    const trail = raw.length - raw.replace(/\s+$/, "").length;
+    const start = m.index + lead;
+    const cand = raw.slice(lead, raw.length - trail);
+    // Must LOOK like a closed form, not a stray "n" from a word ("then", "n-th").
+    const looksClosedForm =
+      /[\^\u00b2\u00b3()]/.test(cand) ||
+      /\d\s*n|n\s*\d/i.test(cand) ||
+      /squared|cubed/i.test(cand);
+    if (!looksClosedForm) continue;
+
+    const evalBase = (base: number): number[] | null => {
+      const outs: number[] = [];
+      for (let k = 0; k < K; k++) {
+        const v = evalInN(cand, base + k);
+        if (v === null) return null;
+        outs.push(v);
+      }
+      return outs;
+    };
+    const one = evalBase(1);
+    const zero = evalBase(0);
+    if (one === null && zero === null) continue; // not a real expression in n
+
+    const fits = (outs: number[] | null): boolean =>
+      outs !== null &&
+      outs.every(
+        (v, i) => Math.abs(v - terms[i]) <= 1e-6 + Math.abs(terms[i]) * 1e-9,
+      );
+    if (fits(one) || fits(zero)) return null; // stated form is actually correct
+
+    const leadMatch = (outs: number[] | null): number => {
+      if (!outs) return -1;
+      let i = 0;
+      while (i < outs.length && Math.abs(outs[i] - terms[i]) <= 1e-6) i++;
+      return i;
+    };
+    const outs =
+      (leadMatch(one) >= leadMatch(zero) ? one : zero) ?? one ?? zero!;
+    const shown = outs.map(fmtNum).join(", ");
+    const termsShown = terms.slice(0, outs.length).map(fmtNum).join(", ");
+    return {
+      claim: cand,
+      start,
+      end: start + cand.length,
+      cfOutputs: outs,
+      terms,
+      why:
+        `You used \u201c${cand}\u201d as the pattern, but that gives ${shown} while the ` +
+        `sequence is ${termsShown} \u2014 so that closed form doesn\u2019t fit. ` +
+        `Re-derive the rule from the actual gaps between the terms before solving.`,
+    };
+  }
+  return null;
+}
+
 /**
  * Build a commitment-forcing clarify prompt for a MAIN question whose reasoning
  * was ambiguous (mixed / hedged / contradictory). Generic but still forces a
@@ -1102,6 +1369,17 @@ export function gradeReasoningDeterministic(
         })
       : null;
 
+  // A MIS-IDENTIFIED CLOSED FORM (sequence family), detected GENERICALLY by
+  // comparing the candidate's implied closed form's outputs to the actual terms
+  // — no per-misconception rule. This catches novel wrong patterns like the
+  // reported "(n+1)²" opener (which gives 4, 9, 16, 25, not the real sequence).
+  // Only consulted on a wrong / contradicting derivation, and it never fires
+  // when the stated form actually fits, so a correct chain is never mislabeled.
+  const closedFormFlaw =
+    !input.correct || brokenDerivation
+      ? findClosedFormMismatch(text, input.prompt)
+      : null;
+
   let quality: ReasoningQuality;
   const issues: string[] = [];
 
@@ -1155,12 +1433,14 @@ export function gradeReasoningDeterministic(
     issues.push(
       "Your explanation points both ways instead of committing — pick ONE answer and give the single reason it's correct.",
     );
-  } else if (premiseFlaw) {
+  } else if (premiseFlaw || closedFormFlaw) {
     // ROOT PREMISE broken (wrong decomposition / imposed ordering / abused
-    // independence / bogus 50/50). This is a genuinely-flawed derivation, not a
-    // near-miss: the localized root cause invalidates everything downstream.
+    // independence / bogus 50/50) OR a MIS-IDENTIFIED CLOSED FORM whose outputs
+    // don't reproduce the sequence. Either is a genuinely-flawed derivation, not
+    // a near-miss: the localized root cause invalidates everything downstream, so
+    // a wrong committed answer reads `flawed`, never a lenient "mostly there".
     quality = "flawed";
-    issues.push(premiseFlaw.why);
+    issues.push(closedFormFlaw ? closedFormFlaw.why : premiseFlaw!.why);
   } else if (words < 4 || (!engagesQuantities && !hasMechanism)) {
     // Hand-wavy / buzzword-only — vague even if the final answer is correct.
     // A genuine MECHANISM statement counts as engaging the problem even when it

@@ -367,6 +367,51 @@ function mockReasonGradeMessages(body) {
 }
 
 /**
+ * MOCK-REVIEW-REASONING mode (mock-interview): a verifier-GROUNDED span review.
+ * The model reads the candidate's reasoning against the VERIFIED answer + a
+ * canonical derivation and returns DISJOINT character spans over the candidate
+ * text tagged good/bad, each with specific human feedback, plus an overall
+ * assessment. It NEVER decides correctness (the client's deterministic verifier
+ * is authoritative and reconciles every span): the response carries no
+ * correctness field, and a "good" span the client can't ground (a coincidental
+ * number, a false step) is dropped/flipped client-side. So the model can never
+ * upgrade a wrong committed answer to correct.
+ */
+function mockReviewReasoningMessages(body) {
+  const sys =
+    "You are a sharp, warm quant-interview coach REVIEWING a candidate's written " +
+    "reasoning. A deterministic verifier ALREADY knows the correct answer (given " +
+    "to you as context) and will RE-CHECK everything you return — you must NEVER " +
+    "state a pass/fail verdict, a score, or the word 'correct' as a judgement. " +
+    "Your job is to LOCALIZE and EXPLAIN. Return DISJOINT character spans over the " +
+    "EXACT candidate reasoning string (0-based [start,end) offsets into it), each " +
+    "tagged good or bad with SPECIFIC, human feedback that QUOTES the candidate's " +
+    "own words. GROUND every 'good' span: only mark a step good if it is a " +
+    "genuinely correct load-bearing step (a computation that actually holds, a " +
+    "valid named mechanism/shortcut, or the committed answer equal to the verified " +
+    "answer). NEVER mark a number good just because it happens to match part of the " +
+    "answer (e.g. a coincidental digit). When the reasoning is wrong, point a 'bad' " +
+    "span at the SPECIFIC broken premise or mis-identified pattern and explain WHY " +
+    "against the actual quantities, WITHOUT revealing the final answer. Respond as " +
+    'strict JSON with EXACTLY these keys: "spans" (array of {"start":int, "end":int, ' +
+    '"label":"good"|"bad", "why":string}) and "assessment" (one or two sentences of ' +
+    "overall, advisory feedback). No markdown, no extra keys.";
+  const user =
+    `Question:\n${body.prompt || ""}\n\n` +
+    (body.concept ? `Concept: ${body.concept}\n` : "") +
+    `Verified answer (FINAL, authoritative context): ${body.correctAnswer ?? body.verifiedAnswer ?? ""}\n` +
+    (body.canonicalDerivation ? `Canonical derivation: ${body.canonicalDerivation}\n` : "") +
+    (body.closedForm ? `Closed form: ${body.closedForm}\n` : "") +
+    (body.keyShortcut ? `Key shortcut: ${body.keyShortcut}\n` : "") +
+    (Array.isArray(body.mechanismSignals) && body.mechanismSignals.length
+      ? `Accepted mechanism phrasings: ${body.mechanismSignals.join(", ")}\n`
+      : "") +
+    `\nCandidate's reasoning (offsets are into THIS exact string):\n${body.reasoning || "(none)"}\n\n` +
+    "Return the JSON now (localize + explain; do NOT state a correctness verdict):";
+  return { sys, user };
+}
+
+/**
  * MOCK-CLARIFY-GRADE mode (mock-interview): grade the candidate's ONE clarifying
  * response STRICTLY. A clarify round only fires after an ambiguous / mixed /
  * contradictory answer; here the candidate must now COMMIT to the correct side
@@ -767,6 +812,43 @@ export const handler = async (event) => {
         issues: asStringArray(parsed.issues),
         probe: asString(parsed.probe, ""),
         clarifyPrompt,
+      });
+    }
+
+    if (body.mode === "mock-review-reasoning") {
+      // Verifier-GROUNDED span review. The response carries NO correctness field;
+      // the client reconciles every span against deterministic checks (drops a
+      // coincidental green, flips a false-arithmetic green) so the model can never
+      // manufacture correctness. Malformed JSON degrades to an empty span list,
+      // which the client reads as "fall back to the deterministic annotator".
+      const { sys, user } = mockReviewReasoningMessages(body);
+      const text = await callLLM(key, sys, user, true, {
+        maxTokens: 900,
+        temperature: 0.3,
+      });
+      const parsed = safeParseJson(text) || {};
+      const rawSpans = Array.isArray(parsed.spans) ? parsed.spans : [];
+      const spans = [];
+      for (const s of rawSpans) {
+        if (!s || typeof s !== "object") continue;
+        const start = Number(s.start);
+        const end = Number(s.end);
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        // Normalize the model's "bad" onto the client's "flawed" vocabulary.
+        const label =
+          s.label === "good" ? "good" : s.label === "bad" || s.label === "flawed" ? "flawed" : null;
+        if (!label) continue;
+        spans.push({
+          start,
+          end,
+          label,
+          why: asString(s.why, ""),
+        });
+      }
+      return reply(200, {
+        ok: true,
+        spans,
+        assessment: asString(parsed.assessment, ""),
       });
     }
 

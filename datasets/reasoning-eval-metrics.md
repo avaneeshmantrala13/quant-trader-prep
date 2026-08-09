@@ -55,8 +55,9 @@ about the correct misconception — and never reddens a correct derivation.
 | `pev-urn` | independence-abuse | ✓ | ✓ | ✓ |
 | `pev-monty` | false-5050 | ✓ | ✓ | ✓ |
 | `seqn-quadratic` | oversimplified-pattern | ✓ | ✓ | ✓ |
+| `seqn-quadratic-abc` | mis-identified-closed-form | ✓ | ✓ | ✓ |
 
-**Localized (span correct): 4/4 (100.0%)** · **Why correct: 4/4 (100.0%)** · **Controls clean (no false red): 4/4 (100.0%)**
+**Localized (span correct): 5/5 (100.0%)** · **Why correct: 5/5 (100.0%)** · **Controls clean (no false red): 5/5 (100.0%)**
 
 No false reds on correct derivations.
 
@@ -70,6 +71,22 @@ every `why` QUOTES the candidate's own words — never a generic template.
 - **Max red coverage on a FLAWED answer:** 43.4% (only the specific flawed claim is red, not the whole blob).
 - **Feedback references the candidate's own words:** always.
 - **Banned generic phrases in feedback:** none.
+- **False-greens on coincidental numbers (wrong answers):** none.
+
+## LLM review grounding — the verifier overrides a hallucinated green
+
+The real LLM review (`mock-review-reasoning`) only LOCALIZES + explains;
+every span is reconciled against deterministic checks. A hallucinated
+green on a WRONG answer (e.g. the coincidental “2” in “(n+1)²”) is
+dropped, and a false-arithmetic green is flipped to flawed — the review
+can never upgrade a wrong committed answer to correct.
+
+| Case | Green dropped/flipped | Flaw kept | OK |
+|---|---|---|---|
+| (n+1)² — coincidental green '2' dropped, closed-form stays flawed | ✓ | ✓ | ✓ |
+| false-arithmetic green is FLIPPED to flawed by the verifier | ✓ | ✓ | ✓ |
+
+**Review grounding: 2/2 (100.0%)**
 
 ## Strict confirm/clarify gate — second chance only when mostly-right
 

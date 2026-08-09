@@ -30,6 +30,7 @@
 import {
   allValuesIn,
   evalArithmetic,
+  findClosedFormMismatch,
   findFalseArithmetic,
   findHedgePhrase,
   findPremiseFlaw,
@@ -221,18 +222,10 @@ function collectClauseSpans(
   }
 
   // --- GOOD (green), tight ------------------------------------------------
-  const verified = opts.verifiedAnswer ?? null;
-  if (verified !== null) {
-    const tol = 1e-3 + Math.abs(verified) * 1e-6;
-    const v = findValueRange(text, verified, tol);
-    if (v && !overlapsAny(v, taken)) {
-      push(
-        v,
-        "good",
-        `You reach the correct value here (${fmt(verified)}) — this is where the work lands right.`,
-      );
-    }
-  }
+  // NOTE: the COMMITTED-CONCLUSION value is greened GLOBALLY (see
+  // `addCommittedValueSpan`) — NOT here — so a number is green ONLY when it's the
+  // candidate's committed answer that equals the verified answer, never because a
+  // token coincidentally matches an answer component (e.g. the "2" in "(n+1)²").
   const eq = findCorrectArithRange(text);
   if (eq && !overlapsAny(eq, taken)) {
     push(
@@ -289,8 +282,44 @@ export function annotateReasoning(
   for (const clause of toClauses(text)) {
     collectClauseSpans(clause, opts, spans);
   }
+  addCommittedValueSpan(text, spans, opts);
   localizeRootCause(text, spans, opts);
   return dedupeSpans(spans);
+}
+
+/**
+ * Green ONLY the candidate's COMMITTED CONCLUSION when it equals the verified
+ * answer — never a coincidental token. The committed conclusion is the LAST value
+ * the derivation states as a result; we green it only when (a) it matches the
+ * verifier within tolerance AND (b) the verifier did NOT mark the answer wrong.
+ * This is the fix for the false-green bug where the "2" inside "(n+1)²" (or the
+ * "2" in "1,2,1") was greened because it happened to equal an answer component.
+ * Mutates `spans`; a flawed span at the same place still wins in `dedupeSpans`.
+ */
+function addCommittedValueSpan(
+  text: string,
+  spans: ReasoningSpan[],
+  opts: AnnotateOptions,
+): void {
+  const verified = opts.verifiedAnswer ?? null;
+  if (verified === null || opts.answerWasWrong === true) return;
+  const tol = 1e-3 + Math.abs(verified) * 1e-6;
+  // The committed conclusion must actually be the LAST stated result value AND
+  // equal the verified answer — otherwise there is no correct committed value.
+  const results = statedResultValues(text);
+  const committed = results.length > 0 ? results[results.length - 1] : null;
+  if (committed === null || Math.abs(committed - verified) > tol) return;
+  // Highlight the LAST verified-matching token (the conclusion), tightly.
+  const r = findValueRange(text, verified, tol);
+  if (!r) return;
+  if (spans.some((s) => !(r.end <= s.start || r.start >= s.end))) return;
+  spans.push({
+    start: r.start,
+    end: r.end,
+    excerpt: text.slice(r.start, r.end),
+    label: "good",
+    why: `You commit to the correct answer here (${fmt(verified)}) — this is where the work lands right.`,
+  });
 }
 
 /**
@@ -373,6 +402,27 @@ function localizeRootCause(
       excerpt: text.slice(flaw.start, flaw.end),
       label: "flawed",
       why: flaw.why,
+    });
+    return;
+  }
+
+  // A MIS-IDENTIFIED CLOSED FORM (sequence family), detected GENERICALLY: the
+  // candidate's implied closed form (e.g. "(n+1)²") doesn't reproduce the actual
+  // terms. Redden the closed-form phrase with a content-referential explanation
+  // that shows what it gives vs. what the sequence really is.
+  const cf = opts.prompt ? findClosedFormMismatch(text, opts.prompt) : null;
+  if (cf) {
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (!(spans[i].end <= cf.start || spans[i].start >= cf.end)) {
+        spans.splice(i, 1);
+      }
+    }
+    spans.push({
+      start: cf.start,
+      end: cf.end,
+      excerpt: text.slice(cf.start, cf.end),
+      label: "flawed",
+      why: cf.why,
     });
     return;
   }

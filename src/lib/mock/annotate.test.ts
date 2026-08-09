@@ -18,15 +18,36 @@ describe("annotateReasoning — GOOD (green) spans", () => {
     });
     const good = spans.filter((s) => s.label === "good");
     expect(good.length).toBeGreaterThanOrEqual(2);
-    // The mechanism clause and the reaches-95 clause are both green.
+    // The mechanism clause and a correct step/committed value are both green.
     expect(good.some((s) => /mechanism/i.test(s.why))).toBe(true);
-    expect(good.some((s) => /correct value|arithmetic/i.test(s.why))).toBe(true);
+    expect(
+      good.some((s) => /checks out|correct answer|correct value|arithmetic/i.test(s.why)),
+    ).toBe(true);
   });
 
   it("marks a clause that reaches the verified answer as good", () => {
     const spans = annotateReasoning("Therefore it is 0.5.", { verifiedAnswer: 0.5 });
     expect(spans).toHaveLength(1);
     expect(spans[0].label).toBe("good");
+  });
+
+  it("does NOT green a coincidental number on a WRONG answer (no false-green)", () => {
+    // The reported (n+1)² repro: a = 2 (verified), but the "2" is coincidental —
+    // it must NEVER be greened, because the committed answer is wrong.
+    const text = "The sequence is just (n+1)^2, so a, b, c are 1, 2, 1.";
+    const spans = annotateReasoning(text, {
+      prompt:
+        "The sequence 4, 9, 18, 31, 48 fits a quadratic a·n² + b·n + c; find a, b, c.",
+      verifiedAnswer: 2,
+      answerWasWrong: true,
+    });
+    expect(spans.some((s) => s.label === "good")).toBe(false);
+    // The mis-identified closed form "(n+1)^2" is reddened with a real reason.
+    const red = spans.find((s) => s.label === "flawed");
+    expect(red, "a red closed-form span is present").toBeTruthy();
+    expect(red!.excerpt).toContain("(n+1)^2");
+    expect(red!.why).toMatch(/gives|closed form|doesn.t fit/i);
+    expect(red!.why.toLowerCase()).not.toContain("load-bearing");
   });
 });
 
