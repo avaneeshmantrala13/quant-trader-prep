@@ -57,6 +57,72 @@ export interface ReasoningSpan {
   why: string;
 }
 
+/**
+ * SNAP a span to WORD BOUNDARIES so a highlight never begins or ends in the
+ * MIDDLE of an alphanumeric token. This fixes the "span bleeds into the previous
+ * word" bug where an LLM-returned start offset landed on the trailing "n" of
+ * "than", painting `n 3n^2` instead of just `3n^2`. Pure + total; applied to
+ * EVERY accepted span on BOTH the real-LLM review path (`reconcileReviewSpans`)
+ * and the deterministic annotator, so all rendered highlights are clean:
+ *   • a MID-WORD START (the char before `start` AND the char at `start` are both
+ *     alphanumeric) advances past the partial-word prefix and any following
+ *     whitespace to the next word boundary;
+ *   • a MID-WORD END (the char at `end` AND the char before `end` are both
+ *     alphanumeric) retracts past the partial-word suffix and any preceding
+ *     whitespace to the previous word boundary;
+ *   • leading/trailing whitespace and dangling sentence punctuation / quotes are
+ *     trimmed so only the meaningful token(s) remain (e.g. only `3n^2`).
+ * A span that is already clean is returned UNCHANGED. If snapping would collapse
+ * the span to empty (e.g. the whole span is a strict prefix of a longer word),
+ * the original clamped-and-trimmed range is kept so a legitimate highlight is
+ * never destroyed. `excerpt` is recomputed to match the normalized offsets.
+ */
+export function snapSpanToWordBoundaries(
+  text: string,
+  span: ReasoningSpan,
+): ReasoningSpan {
+  const n = text.length;
+  const isAlnum = (i: number) => i >= 0 && i < n && /[A-Za-z0-9]/.test(text[i]);
+  const isSpace = (i: number) => i >= 0 && i < n && /\s/.test(text[i]);
+  // Dangling punctuation to trim off the EDGES only — sentence punctuation and
+  // quotes. Deliberately EXCLUDES brackets/operators (e.g. the "(" in "(n+1)^2"
+  // and the "^" in "3n^2" are meaningful and must be preserved).
+  const isDangling = (i: number) =>
+    i >= 0 && i < n && /[.,;:!?\u2013\u2014"'\u201c\u201d\u2018\u2019]/.test(text[i]);
+
+  const clamp = (v: number) => Math.max(0, Math.min(n, Math.floor(v)));
+  const s0 = clamp(span.start);
+  const e0 = clamp(span.end);
+
+  const trim = (a: number, b: number): [number, number] => {
+    while (a < b && (isSpace(a) || isDangling(a))) a++;
+    while (b > a && (isSpace(b - 1) || isDangling(b - 1))) b--;
+    return [a, b];
+  };
+
+  let start = s0;
+  let end = e0;
+
+  // MID-WORD start → advance past the partial-word prefix + following whitespace.
+  if (start > 0 && isAlnum(start - 1) && isAlnum(start)) {
+    while (start < end && isAlnum(start)) start++;
+    while (start < end && isSpace(start)) start++;
+  }
+  // MID-WORD end → retract past the partial-word suffix + preceding whitespace.
+  if (end < n && isAlnum(end) && isAlnum(end - 1)) {
+    while (end > start && isAlnum(end - 1)) end--;
+    while (end > start && isSpace(end - 1)) end--;
+  }
+
+  [start, end] = trim(start, end);
+  if (end <= start) {
+    // Snapping erased everything meaningful — keep the original, just trimmed.
+    [start, end] = trim(s0, e0);
+  }
+
+  return { ...span, start, end, excerpt: text.slice(start, end) };
+}
+
 /** Options for {@link annotateReasoning}. */
 export interface AnnotateOptions {
   /** The verifier's ground-truth answer, if numeric (drives the "reaches" span). */
@@ -284,7 +350,9 @@ export function annotateReasoning(
   }
   addCommittedValueSpan(text, spans, opts);
   localizeRootCause(text, spans, opts);
-  return dedupeSpans(spans);
+  // Normalize EVERY span to word boundaries (same pass the LLM review runs) so
+  // no highlight bleeds into an adjacent word. A no-op for already-clean spans.
+  return dedupeSpans(spans).map((s) => snapSpanToWordBoundaries(text, s));
 }
 
 /**

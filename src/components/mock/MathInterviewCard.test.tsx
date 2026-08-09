@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { MathInterviewCard } from "./MathInterviewCard";
 import type { MathStep, MockResponse } from "@/lib/mock";
 import type { UseMockSpeech } from "./useMockSpeech";
@@ -208,6 +208,59 @@ describe("MathInterviewCard — reasoning review UX", () => {
     // A red root-cause span is present on the wrong follow-up reasoning.
     const flawed = within(fu).getAllByTestId("reasoning-span-flawed");
     expect(flawed.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("reveals the model explanation only on click when reasoning is not sound", () => {
+    // A wrong-reasoning base question: the red mistake is shown, and a collapsed
+    // "See model explanation" toggle reveals the canonical answer + reasoning.
+    const reasoning = "1 divided by 2 is 5, so the next term is 95.";
+    render(
+      <MathInterviewCard
+        step={seqStep()}
+        response={answeredResponse(reasoning)}
+        speech={noopSpeech}
+        isLast
+        dispatch={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    const toggle = screen.getByTestId("model-explanation-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    // Default collapsed — the model-answer content is not on screen yet.
+    expect(screen.queryByText("Model answer")).toBeNull();
+
+    // Clicking expands it to show the canonical answer + model reasoning.
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByText("Model answer")).toBeTruthy();
+
+    // Clicking again collapses it (accessible toggle).
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByText("Model answer")).toBeNull();
+  });
+
+  it("does NOT show the model-explanation toggle when reasoning is sound", () => {
+    const resp = answeredResponse("The second difference is constant at 6, so 95.");
+    resp.reasoningGrade = {
+      quality: "sound",
+      issues: [],
+      probe: "",
+      source: "deterministic",
+    };
+    render(
+      <MathInterviewCard
+        step={seqStep()}
+        response={resp}
+        speech={noopSpeech}
+        isLast
+        dispatch={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+    expect(screen.queryByTestId("model-explanation-toggle")).toBeNull();
   });
 
   it("does not crash when there is no submitted reasoning", () => {

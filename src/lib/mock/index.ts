@@ -61,6 +61,7 @@ export type {
 export {
   annotateReasoning,
   annotateReasoningForAnswer,
+  snapSpanToWordBoundaries,
 } from "./annotate";
 export type {
   ReasoningSpan,

@@ -456,7 +456,7 @@ export function MathInterviewCard({
             grade &&
             mainResolved &&
             grade.quality !== "sound" && (
-              <ModelAnswerBlock
+              <ModelExplanationReveal
                 answer={correctAnswer}
                 reasoning={step.explanation}
                 note={
@@ -709,15 +709,14 @@ function FollowupBlock({
                   : "Noted."}
             </div>
           </div>
-          {/* Learn-from-it: reveal the CORRECT answer + model reasoning so the
-              candidate knows how to answer this next time. */}
+          {/* Learn-from-it: after the red mistake above, offer a collapsible
+              "See model explanation" reveal with the CORRECT answer + model
+              reasoning so the candidate learns how to answer this next time. */}
           {showModel && (
-            <div className="mt-3">
-              <ModelAnswerBlock
-                answer={modelAnswerText}
-                reasoning={p.modelReasoning}
-              />
-            </div>
+            <ModelExplanationReveal
+              answer={modelAnswerText}
+              reasoning={p.modelReasoning}
+            />
           )}
         </>
       )}
@@ -761,6 +760,48 @@ function ModelAnswerBlock({
         <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted">
           {note}
         </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A COLLAPSIBLE "See model explanation" reveal shown after a FLAWED / wrong
+ * reasoning: the red mistake is already highlighted above, so the canonical
+ * correct answer + model reasoning stay hidden behind a button until the learner
+ * asks for it (default collapsed). Wraps the shared {@link ModelAnswerBlock} so
+ * the content/copy is never duplicated. Accessible: a real <button> with
+ * `aria-expanded`, keyboard-focusable, toggles open/closed. Renders nothing when
+ * no canonical answer/reasoning is available.
+ */
+function ModelExplanationReveal({
+  answer,
+  reasoning,
+  note,
+  testId = "model-explanation-toggle",
+}: {
+  answer?: string;
+  reasoning?: string;
+  note?: string;
+  testId?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!answer && !reasoning) return null;
+  return (
+    <div className="mt-3">
+      <button
+        type="button"
+        data-testid={testId}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="btn-ghost border border-subtle text-xs font-mono uppercase tracking-label hover:border-accent"
+      >
+        {open ? "Hide model explanation ▴" : "See model explanation ▾"}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <ModelAnswerBlock answer={answer} reasoning={reasoning} note={note} />
+        </div>
       )}
     </div>
   );

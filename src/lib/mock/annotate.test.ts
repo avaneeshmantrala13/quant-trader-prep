@@ -7,7 +7,80 @@
  * highlight, and that the deterministic checks can never be gamed.
  */
 import { describe, expect, it } from "vitest";
-import { annotateReasoning, annotateReasoningForAnswer } from "./annotate";
+import {
+  annotateReasoning,
+  annotateReasoningForAnswer,
+  snapSpanToWordBoundaries,
+  type ReasoningSpan,
+} from "./annotate";
+
+describe("snapSpanToWordBoundaries — clean highlights on word boundaries", () => {
+  const span = (text: string, start: number, end: number): ReasoningSpan => ({
+    start,
+    end,
+    excerpt: text.slice(start, end),
+    label: "flawed",
+    why: "test",
+  });
+
+  it("advances a MID-WORD start so it snaps to the next token (the reported bleed)", () => {
+    // The exact reported case: the span START grabbed the trailing "n" of "than"
+    // and painted "n 3n^2" — it must normalize to cover exactly "3n^2".
+    const text = "the actual answer is more than 3n^2, so it grows fast";
+    const start = text.indexOf("than") + 3; // the trailing "n" of "than"
+    const end = text.indexOf("3n^2") + "3n^2".length; // through the "2"
+    expect(text.slice(start, end)).toBe("n 3n^2"); // sanity: the buggy span
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.excerpt).toBe("3n^2");
+    expect(text.slice(out.start, out.end)).toBe("3n^2");
+  });
+
+  it("retracts a MID-WORD end to the previous token", () => {
+    const text = "the total is 42 apples in all";
+    const start = text.indexOf("42");
+    const end = text.indexOf("apples") + 4; // ends inside "appl|es"
+    expect(text.slice(start, end)).toBe("42 appl"); // sanity: the buggy span
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.excerpt).toBe("42");
+  });
+
+  it("leaves an ALREADY-CLEAN span unchanged", () => {
+    const text = "the actual answer is more than 3n^2, so it grows";
+    const start = text.indexOf("3n^2");
+    const end = start + "3n^2".length;
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.start).toBe(start);
+    expect(out.end).toBe(end);
+    expect(out.excerpt).toBe("3n^2");
+  });
+
+  it("trims leading/trailing whitespace and dangling punctuation", () => {
+    const text = "so the answer is  3n^2,  and we move on";
+    const start = text.indexOf("  3n^2"); // leading spaces
+    const end = text.indexOf(",  and") + 1; // include the trailing comma
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.excerpt).toBe("3n^2");
+  });
+
+  it("preserves meaningful leading brackets (does not strip '(' from '(n+1)^2')", () => {
+    const text = "the closed form is (n+1)^2, which is wrong";
+    const start = text.indexOf("(n+1)^2");
+    const end = start + "(n+1)^2".length;
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.excerpt).toBe("(n+1)^2");
+  });
+
+  it("keeps the (trimmed) original when snapping would erase everything", () => {
+    // A span that is a strict prefix of a longer word ("differ" in "difference")
+    // must not collapse to empty — the trimmed original range is kept.
+    const text = "note the difference here";
+    const start = text.indexOf("differ");
+    const end = start + "differ".length;
+    const out = snapSpanToWordBoundaries(text, span(text, start, end));
+    expect(out.end).toBeGreaterThan(out.start);
+    expect(out.excerpt).toBe("differ");
+  });
+});
 
 describe("annotateReasoning — GOOD (green) spans", () => {
   it("marks a correct stated computation as good", () => {

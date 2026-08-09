@@ -26,7 +26,11 @@ import {
   parseNumericValue,
   type ReasoningInput,
 } from "./reasoning";
-import { annotateReasoning, type ReasoningSpan } from "./annotate";
+import {
+  annotateReasoning,
+  snapSpanToWordBoundaries,
+  type ReasoningSpan,
+} from "./annotate";
 import {
   extractClaimsDeterministic,
   gradeReasoningFromClaims,
@@ -230,8 +234,18 @@ export function reconcileReviewSpans(
   const n = text.length;
   const out: ReasoningSpan[] = [];
   for (const s of rawSpans) {
-    const start = Math.max(0, Math.min(n, Math.floor(s.start)));
-    const end = Math.max(0, Math.min(n, Math.floor(s.end)));
+    const rawStart = Math.max(0, Math.min(n, Math.floor(s.start)));
+    const rawEnd = Math.max(0, Math.min(n, Math.floor(s.end)));
+    if (rawEnd <= rawStart) continue;
+    // Snap to WORD BOUNDARIES first so an LLM offset that landed mid-word (the
+    // reported `n 3n^2` bleed) is corrected before we ground/label the excerpt.
+    const snapped = snapSpanToWordBoundaries(text, {
+      ...s,
+      start: rawStart,
+      end: rawEnd,
+    });
+    const start = snapped.start;
+    const end = snapped.end;
     if (end <= start) continue;
     const excerpt = text.slice(start, end);
     let label = s.label;
