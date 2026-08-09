@@ -124,6 +124,7 @@ describe("thorough all-topics mock assembly (not weakness-weighted)", () => {
     expect(mockGateBatteryTopicAreas()).toEqual(ALL_MOCK_TOPIC_AREAS);
     expect(ALL_MOCK_TOPIC_AREAS).toEqual([
       "brainteaser",
+      "estimation",
       "market-making",
       "mental-math",
       "probability-ev",
@@ -140,6 +141,7 @@ describe("thorough all-topics mock assembly (not weakness-weighted)", () => {
 
   it("draws a broad range of areas per preset (not a single-topic drill)", () => {
     expect(topicAreasForPreset("optiver")).toEqual([
+      "estimation",
       "market-making",
       "probability-ev",
       "sequences",
