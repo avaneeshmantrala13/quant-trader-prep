@@ -82,6 +82,42 @@ beforeEach(() => {
   }
 });
 
+describe("MockPage — intro offers 3 runnable mocks + 7 reference profiles", () => {
+  it("the firm picker offers EXACTLY the three runnable presets as startable", () => {
+    renderPage();
+    // Fresh intro (no running session seeded).
+    expect(screen.getByText(/Start Interview/i)).toBeTruthy();
+    // The picker rows are the only aria-pressed (selectable) firm options, and
+    // there are exactly three — one per runnable preset.
+    const selectable = screen
+      .getAllByRole("button")
+      .filter((b) => b.getAttribute("aria-pressed") !== null);
+    expect(selectable).toHaveLength(3);
+  });
+
+  it("surfaces the seven reference profiles as READ-ONLY (never startable)", () => {
+    renderPage();
+    const section = screen.getByRole("region", { name: /reference profiles/i });
+    // Each of the seven reference firms is shown…
+    for (const firm of [
+      "Citadel Securities",
+      "IMC",
+      "DRW",
+      "Five Rings",
+      "HRT",
+      "Jump Trading",
+      "Akuna Capital",
+    ]) {
+      expect(within(section).getByText(firm)).toBeTruthy();
+    }
+    // …tagged "Reference" (seven of them)…
+    expect(within(section).getAllByText("Reference")).toHaveLength(7);
+    // …and NONE of them is a button, so a user can never start a mock that has
+    // no runnable preset.
+    expect(within(section).queryAllByRole("button")).toHaveLength(0);
+  });
+});
+
 describe("MockPage — running view exposes an end/reset affordance", () => {
   it("shows an 'End interview' control while running", () => {
     seedRunningSession();

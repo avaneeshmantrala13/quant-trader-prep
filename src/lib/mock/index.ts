@@ -141,6 +141,8 @@ export {
   FOLLOWUP_TAXONOMY,
   blueprintForPreset,
   requiredArchetypes,
+  runnableFirms,
+  referenceFirms,
 } from "./blueprint";
 export type {
   FirmBlueprint,

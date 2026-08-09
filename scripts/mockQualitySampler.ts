@@ -13,10 +13,11 @@
  *     re-check. `reviewScript` accepts a mockable `RubricLlm` so a real model
  *     COULD be wired later, but none is wired here (no network in CI).
  *
- * COVERAGE / HONESTY: only firms with a RUNNABLE preset (`PRESET_ORDER` =
- * Optiver, Jane Street, SIG) are assembled and measured. Every reference-only
- * firm in the research (Citadel, IMC, DRW, …) has no preset, so it is NOT
- * generated and is explicitly UNMEASURED — the emitted markdown says so.
+ * COVERAGE / HONESTY: only the THREE firms with a RUNNABLE preset (`PRESET_ORDER`
+ * = Optiver, Jane Street, SIG) are assembled and measured. The other seven
+ * (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT) are reference profiles with
+ * no preset, so they are NOT generated and are explicitly UNMEASURED — the
+ * emitted markdown says so.
  *
  * Determinism: pure seeded RNG + the heuristic re-check ⇒ byte-identical metrics
  * every run, so `datasets/mock-quality-metrics.md` is a stable, reviewable
@@ -131,11 +132,13 @@ function renderMarkdown(metrics: FirmMetrics[]): string {
   );
   lines.push("");
   lines.push(
-    "> **Coverage (honest scope).** Only firms with a runnable preset are " +
-      `generated and measured here: **${PRESET_ORDER.join(", ")}**. Every other ` +
-      "firm in the research (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT, …) " +
-      "has **no runnable preset**, so it is **NOT generated and is UNMEASURED** — " +
-      "its absence from the tables below is not a pass. " +
+    "> **Coverage (honest scope).** Exactly **three** firms have a runnable " +
+      `preset and are generated + measured here: **${PRESET_ORDER.join(", ")}**. ` +
+      "The other **seven** firms (Citadel, IMC, DRW, Five Rings, Akuna, Jump, " +
+      "HRT) are **reference profiles only** — no runnable preset, so they are " +
+      "**NOT generated and are UNMEASURED** (surfaced in-app as read-only " +
+      "reference profiles, never as a startable mock). " +
+      "Their absence from the tables below is not a pass. " +
       "Also note the \"heuristic re-check\" column is a **deterministic second " +
       "pass that reuses the structural predicates** (plus a trivial-base guard); " +
       "it is **NOT an independent senior-quant LLM opinion**.",

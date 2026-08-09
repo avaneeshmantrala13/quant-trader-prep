@@ -17,6 +17,7 @@ import {
   clearActiveSession,
   MOCK_PRESETS,
   PRESET_ORDER,
+  referenceFirms,
   type MockAction,
   type PresetId,
   type BrainteaserStep,
@@ -54,6 +55,26 @@ const FIRM_BLURB: Record<PresetId, string> = {
   optiver: "Spot number patterns and quick odds, racing the clock.",
   janestreet: "Think out loud through puzzles, then set fair buy and sell prices.",
   sig: "Weigh the odds and decide how much you'd bet — calculator allowed.",
+};
+
+/**
+ * Plain-English one-liners for the REFERENCE-ONLY firms — the seven with a
+ * documented interview profile but no runnable mock. Shown read-only so a user
+ * can see how those interviews work without ever being offered a mock that
+ * can't actually assemble. Keyed by the blueprint's display name so the list
+ * stays driven by `referenceFirms()` (the single source of truth for what is /
+ * isn't wired). A firm without a blurb simply falls back to its blueprint gate.
+ */
+const REFERENCE_BLURB: Record<string, string> = {
+  "Citadel Securities":
+    "Probability and game-theory puzzles, then a market-making round where you bet on your own read.",
+  IMC: "Mental math and pattern puzzles, then a trading game where they trade against you.",
+  DRW: "A few very hard problems — then defend your answer by making a market on it.",
+  "Five Rings": "Fast, typed probability and estimation — speed is the whole test.",
+  HRT: "A coding stage plus green-book probability and expected-value math.",
+  "Jump Trading": "Rapid mental math and probability, then market-intuition questions.",
+  "Akuna Capital":
+    "Arithmetic and sequence sprints, then a group betting game ranked by profit.",
 };
 
 function randomSeed(): number {
@@ -468,6 +489,10 @@ function MockIntro({
         Start Interview ▸
       </button>
 
+      {/* Reference profiles: the other firms we DON'T run a full mock for yet.
+          Read-only + non-startable so the runnable choice above stays honest. */}
+      <ReferenceProfiles />
+
       {/* Secondary, tucked-away details */}
       <div className="space-y-2 text-center text-xs leading-relaxed text-muted">
         {speechAvailable && canSpeak && (
@@ -490,6 +515,63 @@ function MockIntro({
         </p>
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Reference profiles — the firms we DON'T run a full mock for (read-only)     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * The seven reference-only firms (Citadel, IMC, DRW, Five Rings, HRT, Jump,
+ * Akuna): documented interview styles with NO runnable preset. Rendered as
+ * NON-INTERACTIVE, non-startable rows — deliberately not buttons — so the picker
+ * above only ever offers the three mocks that can actually assemble, while the
+ * rest are still surfaced honestly as "reference" material. Driven entirely by
+ * `referenceFirms()`, so if a firm is ever wired to a preset it drops off this
+ * list automatically.
+ */
+function ReferenceProfiles() {
+  const firms = referenceFirms();
+  if (firms.length === 0) return null;
+  return (
+    <section
+      aria-label="Reference profiles"
+      className="space-y-3 border-t border-subtle pt-6"
+      data-testid="reference-profiles"
+    >
+      <div className="space-y-1 text-center">
+        <p className="text-sm font-medium text-muted">
+          Other firms · reference profiles
+        </p>
+        <p className="mx-auto max-w-md text-xs leading-relaxed text-muted">
+          We don't run a full mock for these yet. Here's how their interviews
+          are known to work — for reference, not a drill you can start.
+        </p>
+      </div>
+      <ul className="grid gap-2">
+        {firms.map((f) => (
+          <li
+            key={f.firm}
+            className="flex items-start gap-3 rounded-sm border border-subtle px-4 py-3"
+          >
+            <span className="flex-1">
+              <span className="flex items-baseline justify-between gap-3">
+                <span className="font-display text-sm font-semibold text-secondary">
+                  {f.firm}
+                </span>
+                <span className="chip shrink-0 border-subtle text-muted">
+                  Reference
+                </span>
+              </span>
+              <span className="mt-1 block text-xs leading-relaxed text-muted">
+                {REFERENCE_BLURB[f.firm] ?? f.gate}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

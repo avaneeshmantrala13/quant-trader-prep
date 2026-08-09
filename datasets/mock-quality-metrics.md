@@ -4,7 +4,7 @@
 
 This artifact is produced by assembling every **runnable** firm preset across 300 seeds and running the full interview-grade acceptance gate over each mock: the deterministic STRUCTURAL audit (`auditScript`) and a deterministic HEURISTIC RE-CHECK (`reviewScript` in offline mode, i.e. `reviewItemHeuristic`). Both halves must be 100% for the mocks to be interview-grade.
 
-> **Coverage (honest scope).** Only firms with a runnable preset are generated and measured here: **optiver, janestreet, sig**. Every other firm in the research (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT, …) has **no runnable preset**, so it is **NOT generated and is UNMEASURED** — its absence from the tables below is not a pass. Also note the "heuristic re-check" column is a **deterministic second pass that reuses the structural predicates** (plus a trivial-base guard); it is **NOT an independent senior-quant LLM opinion**.
+> **Coverage (honest scope).** Exactly **three** firms have a runnable preset and are generated + measured here: **optiver, janestreet, sig**. The other **seven** firms (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT) are **reference profiles only** — no runnable preset, so they are **NOT generated and are UNMEASURED** (surfaced in-app as read-only reference profiles, never as a startable mock). Their absence from the tables below is not a pass. Also note the "heuristic re-check" column is a **deterministic second pass that reuses the structural predicates** (plus a trivial-base guard); it is **NOT an independent senior-quant LLM opinion**.
 
 ## Structural gate (deterministic)
 

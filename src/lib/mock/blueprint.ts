@@ -200,9 +200,14 @@ export interface FirmBlueprint {
 }
 
 /**
- * The 2026 blueprint. The first three entries are WIRED to runtime presets; the
- * rest are reference data for future generators (kept so the docs→runtime gap
- * cannot silently reopen — a new preset has its spec ready).
+ * The 2026 blueprint. EXACTLY THREE firms are WIRED to runnable runtime presets
+ * (Optiver / Jane Street / SIG — the entries carrying a `presetId`); the other
+ * SEVEN (Citadel, IMC, DRW, Five Rings, HRT, Jump, Akuna) are REFERENCE-ONLY
+ * PROFILES — informational blueprint data with NO runnable mock. The product
+ * surfaces them in-app as read-only "reference profiles" (see `MockPage`), and
+ * they are never offered as a startable mock because there is no preset to
+ * assemble. Keeping them here also means the docs→runtime gap cannot silently
+ * reopen — a future preset already has its spec ready.
  */
 export const INTERVIEW_BLUEPRINT_2026: Record<string, FirmBlueprint> = {
   optiver: {
@@ -560,6 +565,27 @@ export const INTERVIEW_BLUEPRINT_2026: Record<string, FirmBlueprint> = {
 export function blueprintForPreset(presetId: PresetId): FirmBlueprint | undefined {
   return Object.values(INTERVIEW_BLUEPRINT_2026).find(
     (b) => b.presetId === presetId,
+  );
+}
+
+/**
+ * The firms WIRED to a runnable preset (carry a `presetId`) — exactly the three
+ * that assemble into a real mock: Optiver, Jane Street, SIG.
+ */
+export function runnableFirms(): FirmBlueprint[] {
+  return Object.values(INTERVIEW_BLUEPRINT_2026).filter(
+    (b) => b.presetId !== undefined,
+  );
+}
+
+/**
+ * The REFERENCE-ONLY firms — documented interview profiles with NO runnable
+ * preset. Surfaced in-app as read-only reference profiles, never as a startable
+ * mock (there is nothing to assemble).
+ */
+export function referenceFirms(): FirmBlueprint[] {
+  return Object.values(INTERVIEW_BLUEPRINT_2026).filter(
+    (b) => b.presetId === undefined,
   );
 }
 

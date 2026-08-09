@@ -4,12 +4,18 @@
 kept in sync with the code, not the other way around). Companion to
 `FIRM_INTERVIEW_LIVE_RESEARCH_2026.md`.
 
-> **Scope / what actually ships.** Exactly **three** presets are wired and
-> runnable: **Optiver**, **Jane Street**, and **SIG**. Every other firm in the
-> research (Citadel, IMC, DRW, Five Rings, Akuna, Jump, HRT, …) is **reference /
-> blueprint only** — there is no runnable preset for them, so they are **not
-> generated, not sampled, and not measured** by `scripts/mockQualitySampler.ts`.
-> Do not read their appearance in the research docs as a shipped product.
+> **Scope / what actually ships — 3 runnable mocks + 7 reference profiles.**
+> Exactly **three** presets are wired and runnable: **Optiver**, **Jane
+> Street**, and **SIG**. The other **seven** firms (**Citadel, IMC, DRW, Five
+> Rings, Akuna, Jump, HRT**) are **reference profiles only** — there is no
+> runnable preset for them, so they are **not generated, not sampled, and not
+> measured** by `scripts/mockQualitySampler.ts`. In-app they are surfaced as
+> **read-only reference profiles** on the `/mock` intro (see `MockPage`) and are
+> **never offered as a startable mock**, because there is no preset to assemble.
+> The runtime source of truth is `src/lib/mock/blueprint.ts`: an entry with a
+> `presetId` is runnable; one without is reference-only (`runnableFirms()` /
+> `referenceFirms()`). Do not read a firm's appearance in the research docs as a
+> shipped, runnable mock.
 
 **Design rules (apply to all shipped presets):**
 - **No finance/options domain knowledge required.** Every item tests reasoning,

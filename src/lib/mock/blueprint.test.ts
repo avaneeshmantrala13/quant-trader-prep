@@ -13,7 +13,9 @@ import {
   FOLLOWUP_TAXONOMY,
   GOLD_ANCHORS,
   INTERVIEW_BLUEPRINT_2026,
+  referenceFirms,
   requiredArchetypes,
+  runnableFirms,
 } from "./blueprint";
 import { MOCK_PRESETS, PRESET_ORDER } from "./presets";
 import { FOLLOWUP_TYPES, difficultyRank, MIN_ITEM_DIFFICULTY_RANK } from "./interviewGate";
@@ -83,5 +85,44 @@ describe("blueprint — taxonomy + anchors are complete", () => {
         expect(FOLLOWUP_TYPES.has(t), `${key} bad follow-up type ${t}`).toBe(true);
       }
     }
+  });
+});
+
+describe("blueprint — exactly 3 runnable mocks + 7 reference profiles", () => {
+  it("runnableFirms() are EXACTLY the wired presets, one per PRESET_ORDER id", () => {
+    const runnable = runnableFirms();
+    // Every runnable firm carries a presetId; the set of ids equals PRESET_ORDER.
+    for (const bp of runnable) expect(bp.presetId).toBeTruthy();
+    const ids = runnable.map((b) => b.presetId).sort();
+    expect(ids).toEqual([...PRESET_ORDER].sort());
+    // …and there are exactly three of them.
+    expect(runnable).toHaveLength(3);
+    expect(runnable).toHaveLength(PRESET_ORDER.length);
+  });
+
+  it("referenceFirms() are the OTHER seven, all preset-less and non-runnable", () => {
+    const reference = referenceFirms();
+    expect(reference).toHaveLength(7);
+    for (const bp of reference) {
+      expect(bp.presetId, `${bp.firm} must not be wired to a preset`).toBeUndefined();
+    }
+    // The seven are exactly the firms the product calls reference-only.
+    expect(reference.map((b) => b.firm).sort()).toEqual(
+      [
+        "Akuna Capital",
+        "Citadel Securities",
+        "DRW",
+        "Five Rings",
+        "HRT",
+        "IMC",
+        "Jump Trading",
+      ].sort(),
+    );
+  });
+
+  it("runnable + reference partition the whole blueprint with no overlap", () => {
+    const total = Object.keys(INTERVIEW_BLUEPRINT_2026).length;
+    expect(runnableFirms().length + referenceFirms().length).toBe(total);
+    expect(total).toBe(10);
   });
 });
