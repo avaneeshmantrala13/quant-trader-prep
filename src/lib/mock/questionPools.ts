@@ -1731,7 +1731,9 @@ function mechanismSignalsForId(id: string): string[] | undefined {
  * (if the generator did not already author one). Pure: returns the same object
  * with `requiredReasoning` populated when signals exist for its id.
  */
-function attachRequiredReasoning(q: MockNumericQuestion): MockNumericQuestion {
+export function attachRequiredReasoning(
+  q: MockNumericQuestion,
+): MockNumericQuestion {
   if (q.requiredReasoning) return q;
   const signals = mechanismSignalsForId(q.id);
   return signals ? { ...q, requiredReasoning: { mechanismSignals: signals } } : q;

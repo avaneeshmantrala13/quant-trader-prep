@@ -6,6 +6,7 @@ import {
   computePerformance,
   deterministicDiagnosis,
   type MockConfig,
+  type MockPerformance,
   type MockSession,
   type PresetId,
   type PresetItemKind,
@@ -204,6 +205,11 @@ export function mockGateBatteryTopicAreas(seed = 0): MockTopicArea[] {
  * `computePerformance(session).scorePct` for the accuracy and
  * `deterministicDiagnosis(perf).wouldPass` for the verdict the authoritative
  * gate cross-checks. Pure + deterministic.
+ *
+ * Also records `reasoningOk` — the REASONING-QUALITY greenlight gate. It is
+ * `true` ONLY when the mock has NO correct-but-vague/flawed item, NO `flawed`
+ * reasoning, and NO unresolved `ambiguous` reasoning. This is what stops a
+ * candidate who got the right ANSWERS with poor REASONING from greenlighting.
  */
 export function buildMockResult(
   session: MockSession,
@@ -211,5 +217,27 @@ export function buildMockResult(
 ): PipelineMockResult {
   const perf = computePerformance(session);
   const diag = deterministicDiagnosis(perf);
-  return { at, scorePct: perf.scorePct, wouldPass: diag.wouldPass };
+  return {
+    at,
+    scorePct: perf.scorePct,
+    wouldPass: diag.wouldPass,
+    reasoningOk: mockReasoningIsSound(perf),
+  };
+}
+
+/**
+ * REASONING-QUALITY predicate for the greenlight gate: the mock's reasoning is
+ * sound enough to greenlight ⇔ it has ZERO correct-but-vague/flawed items, ZERO
+ * `flawed` reasoning tags, and ZERO unresolved `ambiguous` reasoning tags. A
+ * high score with poor reasoning therefore does NOT clear the gate. Exported so
+ * the UI summary and gate can share ONE definition.
+ */
+export function mockReasoningIsSound(
+  perf: Pick<MockPerformance, "correctButVagueCount" | "reasoningTags">,
+): boolean {
+  return (
+    perf.correctButVagueCount === 0 &&
+    perf.reasoningTags.flawed === 0 &&
+    (perf.reasoningTags.ambiguous ?? 0) === 0
+  );
 }

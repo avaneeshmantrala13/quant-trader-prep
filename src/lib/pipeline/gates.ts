@@ -179,16 +179,26 @@ export function passesDrillingGate(progress: UserProgress): boolean {
 
 /**
  * Stage-7 mock gate (spec §3.6 / RESOLVED DECISION §10.4): ≥ 90% on 3
- * CONSECUTIVE mocks, each also `wouldPass !== "no"`. Reads the MOST RECENT
- * `MOCK_CONSECUTIVE` entries of the append-only `pipeline.mocks` log — a single
- * sub-90% mock breaks the streak, so this too re-evaluates from live results.
+ * CONSECUTIVE mocks, each also `wouldPass !== "no"` AND with SOUND REASONING
+ * (`reasoningOk !== false`). Reads the MOST RECENT `MOCK_CONSECUTIVE` entries of
+ * the append-only `pipeline.mocks` log — a single sub-90%, `"no"`, or
+ * poor-reasoning mock breaks the streak, so this re-evaluates from live results.
+ *
+ * REASONING-QUALITY gate: a mock that clears the SCORE bar with poor reasoning
+ * (right answers, vague/flawed/ambiguous justification → `reasoningOk === false`)
+ * does NOT count — greenlight requires reasoning quality, not just correct
+ * numbers. `reasoningOk` is optional for back-compat; an ABSENT value (historical
+ * logs) is treated as OK so only an explicit `false` blocks.
  */
 export function passesMockGate(progress: UserProgress): boolean {
   const mocks = progress.pipeline?.mocks ?? [];
   if (mocks.length < MOCK_CONSECUTIVE) return false;
   const recent = mocks.slice(-MOCK_CONSECUTIVE);
   return recent.every(
-    (m) => m.scorePct >= MOCK_GATE_PCT && m.wouldPass !== "no",
+    (m) =>
+      m.scorePct >= MOCK_GATE_PCT &&
+      m.wouldPass !== "no" &&
+      m.reasoningOk !== false,
   );
 }
 

@@ -90,7 +90,29 @@ export {
   normalizeDiagnosisPayload,
   tierLabel,
 } from "./diagnosis";
-export { gradeReasoning, generateFollowup, getDiagnosis } from "./aiMock";
+export {
+  gradeReasoning,
+  extractReasoningClaims,
+  generateFollowup,
+  getDiagnosis,
+} from "./aiMock";
+export {
+  extractClaimsDeterministic,
+  normalizeClaimsPayload,
+  gradeReasoningFromClaims,
+  gradeReasoningExtractVerify,
+  firstFalseArithmeticClaim,
+  claimsReachAnswer,
+  claimEstablishesMechanism,
+  claimEngagesQuantities,
+} from "./claims";
+export type { ReasoningClaim, ClaimSet, ClaimKind } from "./claims";
+export {
+  RUBRICS,
+  rubricForId,
+  rubricSignals,
+} from "./rubrics";
+export type { ArchetypeRubric, MechanismClass } from "./rubrics";
 export {
   createSpeechController,
   detectSpeechSupport,

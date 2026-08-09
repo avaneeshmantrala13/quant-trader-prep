@@ -113,6 +113,16 @@ export interface PipelineMockResult {
   scorePct: number;
   /** Mock-diagnosis pass verdict ("yes" | "borderline" | "no"). */
   wouldPass: string;
+  /**
+   * REASONING-QUALITY gate for greenlight: `false` when this mock had CORRECT
+   * answers but POOR reasoning (any correct-but-vague/flawed item, any `flawed`
+   * or unresolved `ambiguous` reasoning). A mock that clears the score bar with
+   * poor reasoning does NOT satisfy the greenlight gate. OPTIONAL for back-compat
+   * with previously-recorded mocks: an ABSENT value is treated as "ok" (only an
+   * explicit `false` blocks), so historical logs and hand-built fixtures are
+   * unaffected. Freshly-built results always set it explicitly.
+   */
+  reasoningOk?: boolean;
 }
 
 /**

@@ -192,11 +192,16 @@ function MockSummary({
   streak,
   onFinish,
 }: {
-  result: { scorePct: number; wouldPass: string };
+  result: { scorePct: number; wouldPass: string; reasoningOk?: boolean };
   streak: number;
   onFinish: () => void;
 }) {
-  const passed = result.scorePct >= MOCK_GATE_PCT && result.wouldPass !== "no";
+  // Mirrors `passesMockGate`: score bar + a non-"no" verdict + SOUND REASONING
+  // (right answers with poor reasoning → `reasoningOk === false` → not a pass).
+  const passed =
+    result.scorePct >= MOCK_GATE_PCT &&
+    result.wouldPass !== "no" &&
+    result.reasoningOk !== false;
   // A pass advances the streak by one; a fail resets it to 0 (§10.4).
   const nextStreak = passed ? Math.min(streak + 1, MOCK_CONSECUTIVE) : 0;
   const cleared = passed && nextStreak >= MOCK_CONSECUTIVE;

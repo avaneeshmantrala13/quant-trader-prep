@@ -8,18 +8,26 @@
  * off / stubbed / unreachable or returns something unusable. Nothing here can
  * ever decide correctness — that always comes from the verifier, passed in.
  *
- * The three modes:
- *   • `gradeReasoning`   → `mock-reason-grade`  (reasoning quality only)
- *   • `generateFollowup` → `mock-followup`      (adaptive adversarial follow-up)
- *   • `getDiagnosis`     → `mock-diagnosis`      (final brutal prose)
+ * The modes:
+ *   • `gradeReasoning`   → `mock-extract-claims` (EXTRACT-AND-VERIFY: the LLM only
+ *                           TRANSLATES the reasoning into structured claims; the
+ *                           QUALITY VERDICT is computed DETERMINISTICALLY from
+ *                           those claims by `./claims`. The LLM never judges.)
+ *   • `generateFollowup` → `mock-followup`       (adaptive adversarial follow-up)
+ *   • `getDiagnosis`     → `mock-diagnosis`       (final brutal prose)
  */
 import { readAiConfig } from "@/lib/aiConfig";
 import { env, postAi } from "@/lib/aiFlavor";
 import {
   gradeReasoningDeterministic,
-  normalizeReasoningPayload,
   type ReasoningInput,
 } from "./reasoning";
+import {
+  extractClaimsDeterministic,
+  gradeReasoningFromClaims,
+  normalizeClaimsPayload,
+  type ClaimSet,
+} from "./claims";
 import { buildAiFollowup } from "./followups";
 import {
   deterministicDiagnosis,
@@ -34,16 +42,20 @@ import type {
 } from "./types";
 
 /**
- * Grade reasoning QUALITY. The verifier's `correct` verdict is passed straight
- * through and is authoritative; the LLM only judges quality/issues/probe and can
- * never contradict it (the response schema has no correctness field, and we never
- * read one). Falls back to the deterministic structural grader on any failure.
+ * EXTRACT the candidate's free-text reasoning into a STRUCTURED list of claims.
+ * The LLM's ONLY job is translation (text → claims): intermediate arithmetic,
+ * the asserted final answer, and the method/mechanism invoked. It is explicitly
+ * NOT asked to judge correctness. Falls back to the deterministic extractor when
+ * the AI layer is off / stubbed / unreachable or returns nothing usable, so a
+ * `ClaimSet` is ALWAYS returned.
  */
-export async function gradeReasoning(
+export async function extractReasoningClaims(
   input: ReasoningInput,
   opts: { concept?: string; signal?: AbortSignal } = {},
-): Promise<ReasoningGrade> {
-  const fallback = gradeReasoningDeterministic(input);
+): Promise<ClaimSet> {
+  const fallback = extractClaimsDeterministic(input.reasoning, {
+    mechanismSignals: input.mechanismSignals,
+  });
 
   const e = env();
   const cfg = readAiConfig(e);
@@ -53,18 +65,42 @@ export async function gradeReasoning(
     cfg,
     e,
     {
-      mode: "mock-reason-grade",
+      mode: "mock-extract-claims",
       prompt: input.prompt,
       correctAnswer: input.correctAnswer,
-      correct: input.correct, // AUTHORITATIVE context; model may not contradict
       reasoning: input.reasoning,
       concept: opts.concept ?? null,
-      isMentalMath: input.isMentalMath === true,
     },
     opts.signal,
   );
   if (!payload) return fallback;
-  return normalizeReasoningPayload(payload);
+  const ai = normalizeClaimsPayload(payload);
+  // If the model returned nothing usable, keep the deterministic claims so the
+  // verifier still has structured facts to check.
+  return ai.claims.length > 0 ? ai : fallback;
+}
+
+/**
+ * Grade reasoning QUALITY via EXTRACT-AND-VERIFY. The LLM (when available) only
+ * TRANSLATES the reasoning into claims (`extractReasoningClaims`); the VERDICT is
+ * then computed 100% DETERMINISTICALLY from those claims against the problem's
+ * computable truth (`gradeReasoningFromClaims`). The verifier's `correct` verdict
+ * is authoritative and is never re-decided by the model. With the AI layer off,
+ * the claims are extracted deterministically and the result is byte-identical to
+ * `gradeReasoningDeterministic` (the tested fallback) — no regression.
+ */
+export async function gradeReasoning(
+  input: ReasoningInput,
+  opts: { concept?: string; signal?: AbortSignal } = {},
+): Promise<ReasoningGrade> {
+  const e = env();
+  const cfg = readAiConfig(e);
+  // Fast path: AI off/stubbed → skip extraction entirely and use the tested
+  // deterministic verdict directly.
+  if (!cfg || cfg.stub) return gradeReasoningDeterministic(input);
+
+  const claimSet = await extractReasoningClaims(input, opts);
+  return gradeReasoningFromClaims(input, claimSet);
 }
 
 /**

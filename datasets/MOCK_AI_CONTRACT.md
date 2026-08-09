@@ -1,4 +1,4 @@
-# AI Lambda Mode Contract (`mock-reason-grade`, `mock-clarify-grade`, `mock-followup`, `mock-diagnosis`, `parse-drill-intent`)
+# AI Lambda Mode Contract (`mock-reason-grade`, `mock-clarify-grade`, `mock-extract-claims`, `mock-followup`, `mock-diagnosis`, `parse-drill-intent`)
 
 Client-facing request/response contract for the additional LLM modes on the AI
 Lambda (`infra/lambda/ai-flavor/index.mjs`): the four **mock-interview** modes
@@ -263,6 +263,74 @@ client already resolved into "correct" — it only returns `resolved` + `issues`
   (conservative: an unparseable clarification is treated as unresolved → missed).
 - Mirrors the deterministic client helpers `gradeClarification` /
   `gradeMainClarification`, which grade the clarification in **strict** mode.
+
+---
+
+## Mode 1c — `mock-extract-claims` (EXTRACT-AND-VERIFY translator)
+
+The backbone of the **claims-based** reasoning grader (`src/lib/mock/claims.ts`).
+The model's ONLY job is **TRANSLATION**: turn the candidate's free-text reasoning
+into a STRUCTURED list of discrete, checkable **claims**. It **does not judge
+correctness** — the client re-derives the verdict 100% deterministically from the
+returned claims (`gradeReasoningFromClaims`), so this mode is **non-jailbreakable**
+by construction (a correct final answer paired with a false/missing load-bearing
+claim still fails on the client). This is what makes grading both **general**
+(accepts any wording/method the model can normalize) and **safe**.
+
+### Request
+
+```jsonc
+{
+  "mode": "mock-extract-claims",
+  "prompt": "…the question text…",
+  "correctAnswer": "129",     // string — context ONLY; the model must NOT copy it into claims
+  "reasoning": "…candidate's free-text reasoning…",
+  "concept": "seqn-poly-demo" // string | null — archetype hint (optional)
+}
+```
+
+### Response (HTTP 200)
+
+```jsonc
+{
+  "ok": true,
+  "claims": [
+    { "kind": "arithmetic",   "text": "24 + 6 = 30", "expr": "24 + 6", "value": 30 },
+    { "kind": "mechanism",    "text": "the gaps grow by a constant 6", "mechanism": "first differences grow by a constant" },
+    { "kind": "final-answer", "text": "so the next term is 129", "value": 129 }
+  ]
+}
+```
+
+### Field semantics
+
+| Field | Meaning |
+|---|---|
+| `claims[].kind` | One of `"arithmetic"` \| `"final-answer"` \| `"mechanism"` \| `"quantity"`. Anything else is dropped by `normalizeClaimsPayload`. |
+| `claims[].text` | The clause the claim came from (verbatim-ish); used for feedback. |
+| `claims[].expr` | `arithmetic` only: the left-hand expression, e.g. `"24 + 6"`. The client **re-evaluates** it and rejects the claim if it does not equal `value` (false-arithmetic guard). |
+| `claims[].value` | `arithmetic`/`final-answer`/`quantity`: the stated numeric value. Strings are parsed with `parseNumericValue`. |
+| `claims[].mechanism` | `mechanism` only: a short **canonicalized** description of the method invoked (the model normalizes arbitrary wording onto a method phrase). |
+
+### Rules honored by the server prompt
+
+- **Translate, do not judge.** Never emit a verdict, score, or the word "correct".
+  Never invent claims not present in the reasoning; never copy `correctAnswer` into
+  a `final-answer` claim unless the candidate actually stated it.
+- **Faithful arithmetic.** Report the stated `expr` and stated `value` **as written**
+  (even if wrong) — the client catches false steps. Do NOT silently "fix" the math.
+- **Canonicalize mechanisms.** Map paraphrases ("the jumps get bigger by the same
+  amount") onto a concise method phrase ("first differences grow by a constant").
+
+### Graceful-degradation defaults
+
+- Malformed/partial JSON, a non-200, a stubbed/absent AI config, or an **empty**
+  `claims` array → the client falls back to `extractClaimsDeterministic` (regex over
+  `=`-chains + stated-result values + signal/rubric mechanism matches). A `ClaimSet`
+  is therefore **always** produced and the verdict is **byte-identical** to
+  `gradeReasoningDeterministic` when the AI layer is off — no behavior regression.
+- Because the verdict is deterministic, a hostile or broken extraction can only make
+  grading **stricter** (drop claims) — it can never manufacture a passing verdict.
 
 ---
 

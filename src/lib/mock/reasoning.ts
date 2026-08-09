@@ -482,6 +482,38 @@ export function matchesMechanismSignal(
 }
 
 /**
+ * Is `signal` a PURE NUMERIC token whose value equals the verified answer (e.g.
+ * the signal `"0.75"` or `"3/4"` for an answer of `0.75`)? Such a signal is the
+ * FINAL ANSWER dressed as a mechanism — restating it must NOT satisfy the
+ * mechanism gate (per the contract: "restating the final numeric answer never
+ * earns sound"). A signal with ANY letters (e.g. `"3n^2"`, `"2m-1"`) is a
+ * genuine formulaic mechanism and is kept.
+ */
+function isBareAnswerValueSignal(
+  signal: string,
+  verifiedAnswer: number | null,
+): boolean {
+  if (verifiedAnswer === null) return false;
+  if (/[a-z]/i.test(signal)) return false; // has words/letters → real mechanism
+  const v = parseNumericValue(signal);
+  if (v === null) return false;
+  const tol = 1e-3 + Math.abs(verifiedAnswer) * 1e-6;
+  return Math.abs(v - verifiedAnswer) <= tol;
+}
+
+/**
+ * The mechanism signals with any BARE-ANSWER-VALUE tokens removed (see
+ * `isBareAnswerValueSignal`). Used by the MAIN reasoning grader so that merely
+ * restating the numeric answer can never, by itself, satisfy the mechanism gate.
+ */
+export function mechanismSignalsSansAnswerValue(
+  signals: string[],
+  verifiedAnswer: number | null,
+): string[] {
+  return signals.filter((s) => !isBareAnswerValueSignal(s, verifiedAnswer));
+}
+
+/**
  * Is the reasoning DOMINATED by hand-wave / bare assertions — i.e. it asserts
  * correctness (or per-question banned phrases) but, once those and any restated
  * numbers/operators are stripped, carries NO substantive mechanism content? Used
@@ -678,7 +710,11 @@ export function gradeReasoningDeterministic(
   // (below) applies even when a question authors no signals.
   const signals = input.mechanismSignals ?? [];
   const requiresMechanism = signals.length > 0;
-  const hasMechanism = requiresMechanism && matchesMechanismSignal(text, signals);
+  // Drop any BARE-ANSWER-VALUE "signal" (e.g. "0.75"/"3/4" for a 0.75 answer):
+  // restating the numeric answer must never, by itself, satisfy the mechanism
+  // gate. Formulaic signals with letters (e.g. "3n^2", "2m-1") are kept.
+  const mechSignals = mechanismSignalsSansAnswerValue(signals, verifiedAnswer);
+  const hasMechanism = requiresMechanism && matchesMechanismSignal(text, mechSignals);
   const handWaveOnly = isHandWaveOnly(text, input.bannedAsSoleJustification ?? []);
 
   let quality: ReasoningQuality;

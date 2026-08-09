@@ -256,4 +256,66 @@ describe("gates — mock stage (≥90% on 3 consecutive, §10.4)", () => {
     };
     expect(passesMockGate(p)).toBe(true);
   });
+
+  it("back-compat: an ABSENT reasoningOk (historical logs) is treated as OK", () => {
+    const p = emptyProgress();
+    p.pipeline = {
+      stage: "mock",
+      mocks: [
+        { at: "2026-01-01", scorePct: 95, wouldPass: "yes" },
+        { at: "2026-01-02", scorePct: 95, wouldPass: "borderline" },
+        { at: "2026-01-03", scorePct: 95, wouldPass: "yes" },
+      ],
+    };
+    expect(passesMockGate(p)).toBe(true);
+  });
+});
+
+describe("gates — mock stage requires REASONING QUALITY (greenlight gate)", () => {
+  it("right ANSWERS but POOR reasoning (reasoningOk:false) does NOT satisfy the gate", () => {
+    const p = emptyProgress();
+    // Every mock clears the 90% score bar with a non-"no" verdict, but one has
+    // correct answers backed by poor reasoning → must NOT greenlight.
+    p.pipeline = {
+      stage: "mock",
+      mocks: [
+        { at: "2026-01-01", scorePct: 100, wouldPass: "yes", reasoningOk: true },
+        { at: "2026-01-02", scorePct: 100, wouldPass: "yes", reasoningOk: true },
+        {
+          at: "2026-01-03",
+          scorePct: 100,
+          wouldPass: "borderline",
+          reasoningOk: false,
+        },
+      ],
+    };
+    expect(passesMockGate(p)).toBe(false);
+  });
+
+  it("SOUND reasoning (reasoningOk:true) on 3 clean mocks DOES satisfy the gate", () => {
+    const p = emptyProgress();
+    p.pipeline = {
+      stage: "mock",
+      mocks: [
+        { at: "2026-01-01", scorePct: 92, wouldPass: "yes", reasoningOk: true },
+        { at: "2026-01-02", scorePct: 95, wouldPass: "yes", reasoningOk: true },
+        { at: "2026-01-03", scorePct: 99, wouldPass: "yes", reasoningOk: true },
+      ],
+    };
+    expect(passesMockGate(p)).toBe(true);
+  });
+
+  it("a poor-reasoning mock breaks an otherwise-clean streak (must re-earn it)", () => {
+    const p = emptyProgress();
+    p.pipeline = {
+      stage: "mock",
+      mocks: [
+        { at: "2026-01-01", scorePct: 95, wouldPass: "yes", reasoningOk: true },
+        // poor reasoning in the MIDDLE of the recent 3 → gate fails
+        { at: "2026-01-02", scorePct: 95, wouldPass: "yes", reasoningOk: false },
+        { at: "2026-01-03", scorePct: 95, wouldPass: "yes", reasoningOk: true },
+      ],
+    };
+    expect(passesMockGate(p)).toBe(false);
+  });
 });

@@ -219,3 +219,76 @@ describe("buildMockResult — correctly-shaped PipelineMockResult from a session
     expect(typeof r.at).toBe("string");
   });
 });
+
+/* -------------------------------------------------------------------------- */
+/*  Greenlight requires REASONING QUALITY, not just correct numbers            */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Drive a session to `summary` answering every math step correctly AND attaching
+ * a reasoning grade of the given `quality` to each math step (mirrors the UI's
+ * `applyReasoningGrade`). Lets us build a mock that is ALL CORRECT but with a
+ * chosen reasoning quality.
+ */
+function driveSessionWithReasoning(
+  preset: PresetId,
+  quality: "sound" | "flawed" | "vague",
+): MockSession {
+  let s = mockReducer(
+    createSession(buildInterview({ seed: 99, preset }), {
+      speechSupported: false,
+    }),
+    { type: "start" },
+  );
+  let guard = 0;
+  while (s.status === "running" && guard++ < 200) {
+    const step = currentStep(s)!;
+    if (step.kind === "math") {
+      s = mockReducer(s, {
+        type: "recordMath",
+        raw: String(step.answer),
+        viaSpeech: false,
+        elapsedMs: 1000,
+      });
+      s = mockReducer(s, {
+        type: "applyReasoningGrade",
+        stepId: step.id,
+        grade: { quality, issues: [], probe: "", source: "deterministic" },
+      });
+    } else if (step.kind === "brainteaser") {
+      s = mockReducer(s, {
+        type: "recordReflect",
+        raw: "",
+        viaSpeech: false,
+        selfAssessed: "got",
+      });
+    }
+    s = mockReducer(s, { type: "next" });
+  }
+  return s;
+}
+
+describe("greenlight requires reasoning QUALITY (buildMockResult.reasoningOk)", () => {
+  it("all answers correct but FLAWED reasoning ⇒ reasoningOk=false ⇒ NOT greenlit", () => {
+    const s = driveSessionWithReasoning("optiver", "flawed");
+    const r = buildMockResult(s, "2026-01-03T00:00:00.000Z");
+    // Score clears the bar (all correct) but reasoning is flawed.
+    expect(r.scorePct).toBeGreaterThanOrEqual(MOCK_GATE_PCT);
+    expect(r.reasoningOk).toBe(false);
+
+    const p = emptyProgress();
+    p.pipeline = { stage: "mock", mocks: [r, r, r] };
+    expect(passesMockGate(p)).toBe(false);
+  });
+
+  it("all answers correct WITH sound reasoning ⇒ reasoningOk=true ⇒ greenlit", () => {
+    const s = driveSessionWithReasoning("optiver", "sound");
+    const r = buildMockResult(s, "2026-01-03T00:00:00.000Z");
+    expect(r.scorePct).toBeGreaterThanOrEqual(MOCK_GATE_PCT);
+    expect(r.reasoningOk).toBe(true);
+
+    const p = emptyProgress();
+    p.pipeline = { stage: "mock", mocks: [r, r, r] };
+    expect(passesMockGate(p)).toBe(true);
+  });
+});
