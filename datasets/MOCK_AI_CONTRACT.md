@@ -514,6 +514,27 @@ An unknown/absent `difficulty` is treated as `"harder"`.
 > conclusion in plain words. This keeps AI follow-ups gradable by the same client-side verifier
 > that owns correctness. The authored follow-up backbone (`questionPools.ts`) is unaffected.
 
+> **Reasoning-type follow-ups route through the SAME verifier-grounded pipeline as the base
+> question (no Lambda change).** A `mock-followup` classified `answerKind:"reasoning"`
+> (`buildAiFollowup`) is graded by the committed-conclusion grader (`gradeConclusion`) and its
+> submitted reasoning is localized by `reviewReasoning` → `reconcileReviewSpans` (verifier
+> authoritative, word-boundary-snapped) — identical to the base question. Two client-side rules
+> make this robust and eliminate the reported coin/memoryless false-negative:
+> 1. **Comparison ("equal or different?") follow-ups are two-sided.** The client reads the
+>    committed side from `idealAnswerNote` (does it say *equal/same* vs *different*?) and sets
+>    `conclusionKeywords`/`wrongKeywords` accordingly. So *"equal, each 2/9, by memorylessness"*
+>    grades **correct**; *"equal because memoryless"* (right side, value omitted) routes to a
+>    value-asking **clarify** — never a false **missed** with the correct memoryless claim
+>    reddened; a committed **wrong** side (*"different, 8/81 vs 12/81"*) grades **missed** and is
+>    red-localized.
+> 2. **Model-explanation content.** The client carries `idealAnswerNote` as the follow-up's
+>    `modelReasoning` (plus a crisp `modelAnswer` stance for comparisons), so the "See model
+>    explanation" reveal has real content on a reasoning follow-up, matching the base question.
+>
+> The strict confirm gate is unchanged otherwise: a fully-wrong answer, a footingless hedge,
+> "I don't know", or garbled input still grade wrong directly (no second chance). The LLM never
+> decides correctness — the deterministic verifier does.
+
 ### Graceful-degradation defaults
 
 | Field | Default |

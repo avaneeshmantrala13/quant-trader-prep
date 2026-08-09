@@ -175,6 +175,12 @@ export function buildAiFollowup(
       targetMs: authored.targetMs,
     };
   }
+  // An "equal or different?" comparison is two-sided: read the committed side
+  // from the note so the grader can accept the right side, ask for a missing
+  // value (clarify), and reject a committed wrong side — instead of a blanket
+  // single-number match that false-MISSES a correct written argument.
+  const cmp = comparisonSpecFromNote(question, note);
+  const noteTrimmed = (note ?? "").trim();
   return {
     prompt: question,
     source: "ai",
@@ -184,9 +190,61 @@ export function buildAiFollowup(
     // Use the note's concluded value as the required conclusion when present;
     // otherwise the reasoning grader credits any substantive correct argument.
     ...(target !== null ? { conclusionTargets: [target] } : {}),
+    ...(cmp ? { conclusionKeywords: cmp.correctKeywords, wrongKeywords: cmp.wrongKeywords } : {}),
     referenceNote: note,
+    // Carry the interviewer note as the MODEL reasoning so the "See model
+    // explanation" reveal has real content on a reasoning follow-up (matching
+    // the base-question behavior); a comparison also gets a crisp stance.
+    ...(noteTrimmed !== "" ? { modelReasoning: noteTrimmed } : {}),
+    ...(cmp ? { modelAnswer: cmp.modelAnswer } : {}),
     targetMs: authored.targetMs,
   };
+}
+
+/** Correct-side / wrong-side keyword banks for an "equal or different?" ask. */
+const EQUAL_SIDE_WORDS = ["equal", "same", "identical", "the same", "no different"];
+const DIFFERENT_SIDE_WORDS = ["different", "not the same", "not equal", "differ"];
+
+/**
+ * A reasoning follow-up that asks "EQUAL or DIFFERENT?" (compare two quantities)
+ * is genuinely TWO-SIDED: the correct committed side is read from the interviewer
+ * note (the client owns this decision; the model only authored the note). Setting
+ * `conclusionKeywords`/`wrongKeywords` lets the committed-conclusion grader (a)
+ * accept "equal, and each is 2/9", (b) route "equal by memorylessness" (right
+ * side, value omitted) to a value-asking CLARIFY instead of a false MISSED, and
+ * (c) grade a committed WRONG side ("different, 8/81 vs 12/81") as missed. Returns
+ * `null` when the follow-up isn't a comparison or the note doesn't commit a side.
+ */
+function comparisonSpecFromNote(
+  question: string,
+  note: string,
+): { correctKeywords: string[][]; wrongKeywords: string[][]; modelAnswer: string } | null {
+  const q = question.toLowerCase();
+  const isComparison =
+    /\b(equal or different|different or (the )?same|same or different|equal or not)\b/.test(
+      q,
+    ) || (/\bequal\b/.test(q) && /\bdifferent\b/.test(q));
+  if (!isComparison) return null;
+  const n = (note ?? "").toLowerCase();
+  const notDifferent = /\bno(?:t)? different\b/.test(n);
+  const saysEqual = /\bequal\b|\bthe same\b|\bidentical\b/.test(n) || notDifferent;
+  const saysDifferent =
+    (/\bdifferent\b|\bnot the same\b|\bnot equal\b|\bdiffer\b/.test(n)) && !notDifferent;
+  if (saysEqual && !saysDifferent) {
+    return {
+      correctKeywords: [EQUAL_SIDE_WORDS],
+      wrongKeywords: [DIFFERENT_SIDE_WORDS],
+      modelAnswer: "Equal — the two conditional probabilities are the same.",
+    };
+  }
+  if (saysDifferent && !saysEqual) {
+    return {
+      correctKeywords: [DIFFERENT_SIDE_WORDS],
+      wrongKeywords: [EQUAL_SIDE_WORDS],
+      modelAnswer: "Different — the two conditional probabilities are not the same.",
+    };
+  }
+  return null;
 }
 
 /** A single value expression (fraction / percentage / decimal) within a note. */

@@ -387,6 +387,34 @@ export function gradeConclusion(
     };
   }
 
+  // --- 4.5) correct SIDE committed, required VALUE simply ABSENT → clarify --
+  // STRICT-GATE nuance for a genuinely TWO-SIDED question (a wrong side is
+  // defined via `wrongKeywords`/`expectedPolarity`): the candidate committed to
+  // the RIGHT side but omitted a required numeric value AND stated NO number at
+  // all (not a wrong one, and no wrong-side signal). That is a mostly-right
+  // answer missing ONE piece — ask for the value (confirm/clarify); never grade
+  // the correct load-bearing side as WRONG. A WRONG stated value (or a wrong
+  // side) still routes to `missed` via the checks above. In the strict clarify
+  // round this collapses to `missed` (there is no second confirm).
+  const isTwoSided =
+    wrongKeywords.length > 0 || spec.expectedPolarity !== undefined;
+  const sideCommittedRight = keywordsOk === true || polarityRight;
+  if (
+    isTwoSided &&
+    sideCommittedRight &&
+    correctSignal !== true &&
+    correctValues.length > 0 &&
+    numericOk === false &&
+    vals.length === 0 &&
+    !wrongSignal
+  ) {
+    return clarifyOr(
+      "Committed to the right side but did not state the required value.",
+      "unconfirmed",
+      { concluded: "side only", suggests: correctSide },
+    );
+  }
+
   // --- 5) correct-signal satisfied → correct (mechanism-gated) ------------
   if (correctSignal === true) {
     // A per-question MECHANISM requirement: committing to the right side/value
@@ -446,6 +474,12 @@ export function buildClarifyPrompt(result: ConclusionResult): string {
       `I couldn't understand your response — it didn't read as a claim about the ` +
       `problem. State your ONE final answer in plain words and the single reason ` +
       `it's correct.`
+    );
+  }
+  if (t && t.concluded === "side only") {
+    return (
+      `You've got the right side ("${t.suggests}") — now give the actual VALUE ` +
+      `to lock it in (state the number, e.g. each probability).`
     );
   }
   if (t && t.concluded === "both/either") {

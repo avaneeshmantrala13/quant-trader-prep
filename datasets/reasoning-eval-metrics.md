@@ -109,3 +109,22 @@ WRONG directly.
 | garbled → missed (not-understood) | `missed` | `missed` | ✓ |
 
 **Gate correctness: 7/7 (100.0%)**
+
+## Adversarial reasoning-type follow-ups — same verifier-grounded pipeline
+
+Reasoning follow-ups (e.g. the biased-coin memoryless comparison) route through
+the SAME committed-conclusion grader + verifier-grounded annotator as the base
+question. A correct load-bearing claim (“memoryless”) is never reddened; a
+right-side-but-value-omitted answer routes to CLARIFY (ask for the value), not a
+false MISSED; only a committed WRONG side is red-localized. Every case carries
+model-explanation content so the “See model explanation” reveal can show.
+
+| Case | Verdict | Verdict OK | Red OK | No false-red | Model avail |
+|---|---|---|---|---|---|
+| coin: equal + value 2/9 (memoryless) → sound, no red | `correct` | ✓ | ✓ | ✓ | ✓ |
+| coin: equal by memorylessness, value omitted → clarify (not flawed), no red | `clarify` | ✓ | ✓ | ✓ | ✓ |
+| coin: committed WRONG side with wrong values → missed, red-localized | `missed` | ✓ | ✓ | ✓ | ✓ |
+
+**Verdicts: 3/3 (100.0%)** · **Red localization: 3/3 (100.0%)** · **False-reds on correct claims: 0** · **Missing model content: 0**
+
+No false reds on correct load-bearing claims.

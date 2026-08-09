@@ -23,9 +23,12 @@ import {
   runGateEval,
   runReviewGroundingEval,
   renderQualityMarkdown,
+  runFollowupReasoningEval,
+  renderFollowupReasoningMarkdown,
   GATE_CASES,
   LOCALIZATION_CASES,
   REVIEW_GROUNDING_CASES,
+  FOLLOWUP_REASONING_CASES,
   derivationsForQuestion,
   type LabeledDerivation,
 } from "./reasoningEval";
@@ -76,12 +79,15 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
     const gran = runGranularityEval();
     const gate = runGateEval();
     const review = runReviewGroundingEval();
+    const fuReason = runFollowupReasoningEval();
     // eslint-disable-next-line no-console
     console.log(
       `[gran] maxGreenOnCorrect=${(gran.maxGreenCoverageCorrect * 100).toFixed(1)}% ` +
         `maxRedOnFlawed=${(gran.maxRedCoverageFlawed * 100).toFixed(1)}% ` +
         `banned=${gran.bannedPhraseHits.length} falseGreens=${gran.coincidentalGreenHits.length} ` +
-        `[gate] ${gate.correct}/${gate.total} [review] ${review.grounded}/${review.total}`,
+        `[gate] ${gate.correct}/${gate.total} [review] ${review.grounded}/${review.total} ` +
+        `[fu-reason] verdicts=${fuReason.verdictCorrect}/${fuReason.total} ` +
+        `falseReds=${fuReason.falseReds.length} missingModel=${fuReason.missingModel.length}`,
     );
 
     // Emit the reproducible, checked-in metrics summary (grader QA + localization
@@ -94,7 +100,8 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
           `firm archetypes.`,
       ) +
       renderLocalizationMarkdown(loc) +
-      renderQualityMarkdown(gran, gate, review);
+      renderQualityMarkdown(gran, gate, review) +
+      renderFollowupReasoningMarkdown(fuReason);
     try {
       writeFileSync(
         resolve(process.cwd(), "datasets/reasoning-eval-metrics.md"),
@@ -161,6 +168,35 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
         .map((c) => `${c.label}: expected ${c.expect}, got ${c.got}`)
         .join("\n")}`,
     ).toBe(gate.total);
+
+    // ---- Adversarial reasoning-type follow-ups (coin/memoryless) ----
+    // The correct memoryless conclusion is NEVER graded flawed / reddened; a
+    // right-side-value-omitted answer clarifies (asks for the value) instead of a
+    // false miss; a committed wrong side is red-localized; every case carries
+    // model-explanation content so the reveal can show.
+    expect(fuReason.total).toBe(FOLLOWUP_REASONING_CASES.length);
+    expect(
+      fuReason.verdictCorrect,
+      `follow-up reasoning verdict mismatches:\n${fuReason.perCase
+        .filter((c) => !c.verdictOk)
+        .map((c) => `${c.label}: got ${c.verdict}`)
+        .join("\n")}`,
+    ).toBe(fuReason.total);
+    expect(
+      fuReason.redCorrect,
+      `follow-up reasoning red-localization mismatches:\n${fuReason.perCase
+        .filter((c) => !c.redOk)
+        .map((c) => `${c.label}: red=${c.red}`)
+        .join("\n")}`,
+    ).toBe(fuReason.total);
+    expect(
+      fuReason.falseReds,
+      `false reds on correct load-bearing follow-up claims:\n${fuReason.falseReds.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      fuReason.missingModel,
+      `follow-ups missing model-explanation content:\n${fuReason.missingModel.join("\n")}`,
+    ).toEqual([]);
 
     // ---- Hard acceptance gates (per-archetype and total) ----
     for (const m of report.perArchetype) {

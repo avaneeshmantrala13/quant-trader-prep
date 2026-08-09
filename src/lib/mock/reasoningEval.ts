@@ -38,6 +38,8 @@ import {
   type ConclusionSpec,
   type ConclusionVerdict,
 } from "./conclusion";
+import { buildAiFollowup, gradeReasoningConclusion } from "./followups";
+import type { FollowupPresentation } from "./types";
 import {
   extractClaimsDeterministic,
   gradeReasoningFromClaims,
@@ -1195,6 +1197,215 @@ export function renderQualityMarkdown(
     gateRows,
     "",
     `**Gate correctness: ${gate.correct}/${gate.total} (${pct(gate.total > 0 ? gate.correct / gate.total : 1)})**`,
+    "",
+  ].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/*  ADVERSARIAL REASONING-TYPE FOLLOW-UPS — routed through the SAME pipeline    */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A reasoning-type ADVERSARIAL follow-up case built through the REAL AI-follow-up
+ * classifier (`buildAiFollowup`): the interviewer question + note become a graded
+ * presentation, then the candidate answer is graded on its committed conclusion.
+ * The motivating repro is the biased-coin memoryless comparison
+ * ("Given >2 flips, P(4)? vs given >1 flip, P(3)? equal or different + value?"):
+ *   • "equal, each 2/9, memoryless"       → CORRECT (no red on the memoryless claim);
+ *   • "equal because memoryless" (no value)→ CLARIFY (ask for the value; NOT flawed);
+ *   • "different, 8/81 vs 12/81"           → MISSED  (a committed wrong side, red-localized).
+ */
+export interface FollowupReasoningCase {
+  label: string;
+  /** The (AI-authored) follow-up QUESTION text. */
+  question: string;
+  /** The interviewer `idealAnswerNote` (client owns the correctness decision). */
+  note: string;
+  /** The candidate's follow-up answer. */
+  raw: string;
+  /** The committed-conclusion verdict the grader must return. */
+  expect: ConclusionVerdict;
+  /** Whether a RED (flawed) span is expected (only on a genuinely wrong answer). */
+  expectRed: boolean;
+  /** A correct, load-bearing phrase that must NEVER be reddened (false-red guard). */
+  protectedPhrase?: string;
+}
+
+/** The coin/memoryless follow-up corpus (the reported false-negative + variants). */
+const COIN_COMPARE_Q =
+  "You flip a biased coin (heads w.p. 1/3) until the first heads. Given you needed MORE than two flips, what is P(exactly 4 flips)? Compare to: given MORE than one flip, P(exactly 3 flips)? Equal or different, and each value?";
+const COIN_COMPARE_NOTE =
+  "By memorylessness, conditioning on \u201cmore than k flips\u201d resets the geometric count, so both equal the fresh-start P(fail then success) = (2/3)(1/3) = 2/9 = 0.2222. They are EQUAL, each 2/9.";
+
+export const FOLLOWUP_REASONING_CASES: FollowupReasoningCase[] = [
+  {
+    label: "coin: equal + value 2/9 (memoryless) → sound, no red",
+    question: COIN_COMPARE_Q,
+    note: COIN_COMPARE_NOTE,
+    raw: "They're equal — each is 2/9 — because the coin is memoryless, so conditioning just restarts the count.",
+    expect: "correct",
+    expectRed: false,
+    protectedPhrase: "memoryless",
+  },
+  {
+    label: "coin: equal by memorylessness, value omitted → clarify (not flawed), no red",
+    question: COIN_COMPARE_Q,
+    note: COIN_COMPARE_NOTE,
+    raw: "The two are the same because the coin is memoryless.",
+    expect: "clarify",
+    expectRed: false,
+    protectedPhrase: "memoryless",
+  },
+  {
+    label: "coin: committed WRONG side with wrong values → missed, red-localized",
+    question: COIN_COMPARE_Q,
+    note: COIN_COMPARE_NOTE,
+    raw: "They're different: the first is 8/81 and the second is 12/81.",
+    expect: "missed",
+    expectRed: true,
+  },
+];
+
+/** A minimal authored stub for the AI-follow-up classifier (role/label/clock). */
+function followupStub(): FollowupPresentation {
+  return {
+    prompt: "(authored fallback)",
+    source: "authored",
+    role: "adversarial",
+    label: "Follow-up 2 of 2 · Adversarial",
+    answerKind: "reasoning",
+    targetMs: 20000,
+  };
+}
+
+export interface FollowupReasoningCaseResult {
+  label: string;
+  verdict: ConclusionVerdict;
+  verdictOk: boolean;
+  /** A red span was produced. */
+  red: boolean;
+  redOk: boolean;
+  /** The protected correct phrase was NOT reddened. */
+  protectedClean: boolean;
+  /** The follow-up carries model-explanation content (answer or reasoning). */
+  modelAvailable: boolean;
+}
+
+export interface FollowupReasoningMetrics {
+  total: number;
+  verdictCorrect: number;
+  redCorrect: number;
+  /** Correct load-bearing claims falsely reddened (must be 0). */
+  falseReds: string[];
+  /** Cases missing model-explanation content (must be 0). */
+  missingModel: string[];
+  perCase: FollowupReasoningCaseResult[];
+}
+
+/**
+ * Measure the reasoning-follow-up pipeline end to end: the AI-follow-up classifier
+ * (`buildAiFollowup`) builds the graded presentation, the committed-conclusion
+ * grader returns the verdict, and the SAME deterministic annotator (the offline
+ * floor of `reviewReasoning`) localizes — with `answerWasWrong` driven by a
+ * genuinely-wrong (`missed`) verdict, exactly as the UI wires it. Asserts: right
+ * verdict, red ONLY on a wrong answer, a correct load-bearing claim never reddened,
+ * and model-explanation content available so the reveal can show.
+ */
+export function runFollowupReasoningEval(
+  cases: FollowupReasoningCase[] = FOLLOWUP_REASONING_CASES,
+  annotate: Annotator = annotateReasoning,
+): FollowupReasoningMetrics {
+  const perCase: FollowupReasoningCaseResult[] = [];
+  let verdictCorrect = 0;
+  let redCorrect = 0;
+  const falseReds: string[] = [];
+  const missingModel: string[] = [];
+  for (const c of cases) {
+    const pres = buildAiFollowup(followupStub(), {
+      question: c.question,
+      idealAnswerNote: c.note,
+    });
+    const score = gradeReasoningConclusion(pres, c.raw, 5000);
+    const verdict = (score.verdict ?? (score.correct ? "correct" : "missed")) as ConclusionVerdict;
+    const verdictOk = verdict === c.expect;
+
+    // Mirror the UI: red-highlight ONLY on a genuinely wrong (`missed`) verdict.
+    const answerWasWrong = verdict === "missed";
+    const spans = annotate(c.raw, {
+      prompt: pres.prompt,
+      verifiedAnswer: pres.conclusionTargets?.[0] ?? null,
+      answerWasWrong,
+    });
+    const red = spans.some((s) => s.label === "flawed");
+    const redOk = red === c.expectRed;
+
+    let protectedClean = true;
+    if (c.protectedPhrase) {
+      const idx = c.raw.indexOf(c.protectedPhrase);
+      if (idx >= 0) {
+        const end = idx + c.protectedPhrase.length;
+        protectedClean = !spans.some(
+          (s) => s.label === "flawed" && !(s.end <= idx || s.start >= end),
+        );
+      }
+    }
+    if (!protectedClean) falseReds.push(`[${c.label}] ${c.protectedPhrase}`);
+
+    const modelAvailable = !!(pres.modelReasoning || pres.modelAnswer || pres.referenceNote);
+    if (!modelAvailable) missingModel.push(c.label);
+
+    if (verdictOk) verdictCorrect++;
+    if (redOk) redCorrect++;
+    perCase.push({
+      label: c.label,
+      verdict,
+      verdictOk,
+      red,
+      redOk,
+      protectedClean,
+      modelAvailable,
+    });
+  }
+  return {
+    total: cases.length,
+    verdictCorrect,
+    redCorrect,
+    falseReds,
+    missingModel,
+    perCase,
+  };
+}
+
+/** Render the follow-up reasoning metrics as a Markdown section. */
+export function renderFollowupReasoningMarkdown(m: FollowupReasoningMetrics): string {
+  const pct = (n: number, d: number) => `${d > 0 ? ((n / d) * 100).toFixed(1) : "100.0"}%`;
+  const rows = m.perCase
+    .map(
+      (c) =>
+        `| ${c.label} | \`${c.verdict}\` | ${c.verdictOk ? "\u2713" : "\u2717"} | ${c.redOk ? "\u2713" : "\u2717"} | ${c.protectedClean ? "\u2713" : "\u2717"} | ${c.modelAvailable ? "\u2713" : "\u2717"} |`,
+    )
+    .join("\n");
+  return [
+    "",
+    "## Adversarial reasoning-type follow-ups \u2014 same verifier-grounded pipeline",
+    "",
+    "Reasoning follow-ups (e.g. the biased-coin memoryless comparison) route through",
+    "the SAME committed-conclusion grader + verifier-grounded annotator as the base",
+    "question. A correct load-bearing claim (\u201cmemoryless\u201d) is never reddened; a",
+    "right-side-but-value-omitted answer routes to CLARIFY (ask for the value), not a",
+    "false MISSED; only a committed WRONG side is red-localized. Every case carries",
+    "model-explanation content so the \u201cSee model explanation\u201d reveal can show.",
+    "",
+    "| Case | Verdict | Verdict OK | Red OK | No false-red | Model avail |",
+    "|---|---|---|---|---|---|",
+    rows,
+    "",
+    `**Verdicts: ${m.verdictCorrect}/${m.total} (${pct(m.verdictCorrect, m.total)})** \u00b7 ` +
+      `**Red localization: ${m.redCorrect}/${m.total} (${pct(m.redCorrect, m.total)})** \u00b7 ` +
+      `**False-reds on correct claims: ${m.falseReds.length}** \u00b7 ` +
+      `**Missing model content: ${m.missingModel.length}**`,
+    "",
+    m.falseReds.length > 0 ? `False reds: ${m.falseReds.join("; ")}` : "No false reds on correct load-bearing claims.",
     "",
   ].join("\n");
 }

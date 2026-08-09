@@ -565,6 +565,56 @@ function FollowupBlock({
   onSubmit: () => void;
   speech: UseMockSpeech;
 }) {
+  // VERIFIER-GROUNDED spans for a reasoning follow-up: routed through the SAME
+  // `reviewReasoning` pipeline as the base question (LLM localization reconciled
+  // against the deterministic verifier, word-boundary-snapped). With the AI
+  // layer off it returns the deterministic annotator floor, so the highlight is
+  // identical either way and never depends on the network.
+  const [fuSpans, setFuSpans] = useState<ReasoningSpan[] | undefined>(undefined);
+  const fuReviewRef = useRef(false);
+  const pres = followup?.presentation ?? null;
+  const rawFollowup = followup?.raw ?? "";
+  const isReasoningPre = pres?.answerKind === "reasoning";
+  // A follow-up reasoning answer is RED-highlighted ONLY when it committed to a
+  // genuinely WRONG conclusion (`missed`) — never on a `clarify` (right side,
+  // value still pending) or a correct answer — so a correct load-bearing claim
+  // (e.g. "memoryless") is never reddened.
+  const followupWrong = followup?.score?.verdict === "missed";
+  const followupGraded = followup?.graded ?? false;
+  useEffect(() => {
+    if (!pres || !followupGraded || !isReasoningPre || rawFollowup.trim() === "") return;
+    if (fuReviewRef.current) return;
+    fuReviewRef.current = true;
+    let cancelled = false;
+    reviewReasoning(
+      {
+        prompt: pres.prompt,
+        correctAnswer:
+          pres.conclusionTargets != null ? String(pres.conclusionTargets[0]) : "",
+        correct: followup?.score?.correct ?? false,
+        reasoning: rawFollowup,
+        isMentalMath: false,
+        mechanismSignals: pres.mechanismSignals,
+      },
+      {
+        verifiedAnswer: pres.conclusionTargets?.[0] ?? null,
+        answerWasWrong: followupWrong,
+        mechanismSignals: pres.mechanismSignals,
+        canonicalDerivation: pres.modelReasoning ?? pres.referenceNote,
+      },
+    )
+      .then((r) => {
+        if (!cancelled) setFuSpans(r.spans);
+      })
+      .catch(() => {
+        /* reviewReasoning never rejects; belt-and-suspenders */
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [followupGraded, isReasoningPre, rawFollowup]);
+
   if (!followup) {
     return (
       <div className="aside">
@@ -656,7 +706,8 @@ function FollowupBlock({
                 verifiedAnswer={p.conclusionTargets?.[0] ?? null}
                 mechanismSignals={p.mechanismSignals}
                 prompt={p.prompt}
-                answerWasWrong={!!fuScore && !fuScore.correct}
+                answerWasWrong={followupWrong}
+                spans={fuSpans}
                 testId="followup-submitted-reasoning"
               />
             </div>
@@ -715,7 +766,7 @@ function FollowupBlock({
           {showModel && (
             <ModelExplanationReveal
               answer={modelAnswerText}
-              reasoning={p.modelReasoning}
+              reasoning={p.modelReasoning ?? p.referenceNote}
             />
           )}
         </>
