@@ -39,9 +39,17 @@ describe("annotateReasoning — FLAWED (red) spans", () => {
     expect(flawed[0].why).toMatch(/incorrect step/i);
   });
 
-  it("marks a hedge as flawed (points both ways)", () => {
+  it("marks a hedge as flawed (points both ways), quoting the hedge phrase", () => {
     const spans = annotateReasoning("It could be either the same or different.", {});
-    expect(spans.some((s) => s.label === "flawed" && /hedging/i.test(s.why))).toBe(true);
+    const hedge = spans.find((s) => s.label === "flawed");
+    expect(hedge, "a red hedge span is present").toBeTruthy();
+    // Granular: the red span is the hedge PHRASE, not the whole sentence.
+    expect(hedge!.excerpt.length).toBeLessThan(
+      "It could be either the same or different.".length,
+    );
+    // Content-referential + human, not a template.
+    expect(hedge!.why).toMatch(/hedge|both ways/i);
+    expect(hedge!.why).toContain(hedge!.excerpt.trim());
   });
 
   it("marks an internally-inconsistent equality as flawed", () => {
@@ -119,6 +127,28 @@ describe("annotateReasoning — ROOT-CAUSE localization (premise flaws)", () => 
     expect(spans.some((s) => s.label === "good")).toBe(true);
   });
 
+  it("localizes the 'sequence is just n²' oversimplified pattern to that premise", () => {
+    const spans = annotateReasoning(
+      "The sequence is just n\u00b2, so the next term is 6\u00b2 = 36.",
+      {
+        prompt: "The sequence begins 5, 11, 23, 41, 65, … What is the next term?",
+        verifiedAnswer: 95,
+        answerWasWrong: true,
+      },
+    );
+    const red = spans.find((s) => s.label === "flawed");
+    expect(red, "the n² premise is reddened").toBeTruthy();
+    // Granular: the red span is the premise phrase, not the whole sentence.
+    expect(red!.excerpt).toContain("n\u00b2");
+    expect(red!.excerpt.length).toBeLessThan(
+      "The sequence is just n\u00b2, so the next term is 6\u00b2 = 36.".length,
+    );
+    // Content-referential: quotes the user's own words, nudges without the answer.
+    expect(red!.why).toContain("n\u00b2");
+    expect(red!.why).not.toContain("95");
+    expect(red!.why.toLowerCase()).not.toContain("load-bearing");
+  });
+
   it("localizes an independence-abuse premise on a without-replacement problem", () => {
     const spans = annotateReasoning(
       "The draws are independent, so P(both red) = p × p = (5/8)(5/8) = 25/64.",
@@ -134,5 +164,71 @@ describe("annotateReasoning — ROOT-CAUSE localization (premise flaws)", () => 
     expect(flawed.some((s) => /independent|dependent|without replacement/i.test(s.why))).toBe(
       true,
     );
+  });
+});
+
+describe("annotateReasoning — GRANULAR highlighting, not blanket (Problem 1)", () => {
+  it("a thorough CORRECT derivation → tight green on key steps only, zero red", () => {
+    const text =
+      "First I look at the gaps between the terms. The first differences are 6, 12, 18, 24, a constant second difference of 6, so the pattern is quadratic. Adding the next gap of 30 gives 65 + 30 = 95, so the next term is 95.";
+    const spans = annotateReasoning(text, {
+      verifiedAnswer: 95,
+      mechanismSignals: ["second difference", "quadratic", "first difference"],
+    });
+    expect(spans.some((s) => s.label === "flawed")).toBe(false);
+    const green = spans.filter((s) => s.label === "good");
+    expect(green.length).toBeGreaterThan(0);
+    const covered = green.reduce((n, s) => n + (s.end - s.start), 0);
+    // NOT a wall of green — only the load-bearing bits are colored.
+    expect(covered / text.length).toBeLessThan(0.6);
+  });
+
+  it("a wrong-premise answer → red only on the specific claim (a minority)", () => {
+    const text = "The sequence is just n\u00b2, so the next term is 6\u00b2 = 36.";
+    const spans = annotateReasoning(text, {
+      prompt: "The sequence begins 5, 11, 23, 41, 65, … What is the next term?",
+      verifiedAnswer: 95,
+      answerWasWrong: true,
+    });
+    const red = spans.filter((s) => s.label === "flawed");
+    expect(red.length).toBeGreaterThanOrEqual(1);
+    const covered = red.reduce((n, s) => n + (s.end - s.start), 0);
+    expect(covered / text.length).toBeLessThan(0.7); // not the whole blob
+  });
+});
+
+describe("annotateReasoning — feedback has no banned generic phrases (Problem 2)", () => {
+  const BANNED = ["load-bearing", "load bearing", "locate the broken step"];
+  it("never emits a banned template phrase across good & flawed spans", () => {
+    const samples: [string, Parameters<typeof annotateReasoning>[1]][] = [
+      [
+        "There is a 50% chance that one die is 3 or less. So the answer is 4.25.",
+        {
+          prompt:
+            "Two fair six-sided dice are rolled. Expected value of the LARGER (the maximum)?",
+          verifiedAnswer: 4.4722,
+          answerWasWrong: true,
+        },
+      ],
+      [
+        "The two dice are independent so I'll just guess the answer is 5.",
+        {
+          prompt: "Use E[max] + E[min] = E[sum] to check — state E[max] + E[min].",
+          verifiedAnswer: 7,
+          answerWasWrong: true,
+        },
+      ],
+      [
+        "24 + 6 = 30, so the next term is 95.",
+        { verifiedAnswer: 95, mechanismSignals: ["second difference"] },
+      ],
+    ];
+    for (const [text, opts] of samples) {
+      for (const s of annotateReasoning(text, opts)) {
+        for (const b of BANNED) {
+          expect(s.why.toLowerCase(), `"${s.why}"`).not.toContain(b);
+        }
+      }
+    }
   });
 });

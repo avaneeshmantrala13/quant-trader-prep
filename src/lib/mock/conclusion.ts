@@ -256,13 +256,16 @@ function words(text: string): number {
  *  • `strict: true` (the CLARIFY round) collapses any would-be `"clarify"` to
  *    `"missed"` — there is no second clarify; unresolved ⇒ missed.
  *
- * Decision order (conservative — never passes an ambiguous/contradictory answer):
+ * Decision order (conservative — never passes an ambiguous/contradictory answer).
+ * STRICT GATE: clarify (a second chance) fires ONLY when genuine CORRECT content
+ * is present and just a small part is wrong/ambiguous; otherwise commit to WRONG.
  *   1. empty / non-substantive        → missed
- *   2. hedged / both-sides            → clarify (strict → missed)
+ *   2. hedged WITH correct footing    → clarify (strict → missed);
+ *      hedged with NO correct content → missed (no second chance)
  *   3. correct-signal AND wrong-signal (mixed/contradiction) → clarify (→ missed)
  *   4. wrong-signal only              → missed (committed to the wrong side)
- *   5. correct-signal satisfied       → correct
- *   6. verifiable but unsatisfied     → clarify (safe default; strict → missed)
+ *   5. correct-signal satisfied       → correct (mechanism-gated → clarify)
+ *   6. verifiable but unsatisfied / garbled → missed (nothing correct to confirm)
  *   7. nothing to verify + substantive→ correct (substantive-answer gate)
  */
 export function gradeConclusion(
@@ -334,6 +337,12 @@ export function gradeConclusion(
   }
   const wrongSignal = wrongKwHit || wrongValHit || polarityWrong;
 
+  // Genuine CORRECT, load-bearing content present? This is the STRICT-GATE key:
+  // the confirm/clarify (second-chance) path may fire ONLY when the candidate
+  // has real correct content and just a small part is wrong/ambiguous. With no
+  // correct footing we commit to a WRONG verdict — no "couldn't confirm" retry.
+  const correctPresent = correctSignal === true || polarityRight;
+
   // Human-readable side names for a specific clarify prompt.
   const correctSide =
     (correctKeywords[0]?.[0] ??
@@ -343,17 +352,25 @@ export function gradeConclusion(
     (wrongKeywords[0]?.[0] ??
       (spec.expectedPolarity === "deny" ? "yes / it's the same" : "no")) as string;
 
-  // --- 2) hedged / both-sides → clarify ----------------------------------
+  // --- 2) hedged / both-sides → clarify ONLY with correct footing ---------
+  // STRICT GATE: a hedge earns a second chance ONLY when genuine correct content
+  // is also present (mostly-right, just non-committal). A footingless hedge
+  // ("could be either / not sure" with nothing correct) is graded WRONG directly.
   if (isHedged(text, spec)) {
-    return clarifyOr(
-      "Hedged / both-sides: no single committed answer.",
-      "hedge",
-      { concluded: "both/either", suggests: correctSide },
-    );
+    if (correctPresent) {
+      return clarifyOr(
+        "Hedged / both-sides: no single committed answer.",
+        "hedge",
+        { concluded: "both/either", suggests: correctSide },
+      );
+    }
+    return {
+      verdict: "missed",
+      reason: "Hedged with no correct, committed content to build on.",
+    };
   }
 
   // --- 3) correct AND wrong signal → contradiction / mixed → clarify -------
-  const correctPresent = correctSignal === true || polarityRight;
   if (correctPresent && wrongSignal) {
     return clarifyOr(
       "Mixed: a correct part and a contradictory wrong-side commitment.",
@@ -386,21 +403,18 @@ export function gradeConclusion(
     return { verdict: "correct", reason: "Committed to the correct conclusion." };
   }
 
-  // --- 6) verifiable but unsatisfied → clarify (safe default) -------------
+  // --- 6) verifiable but unsatisfied → graded WRONG (STRICT GATE) ---------
+  // No correct, committed conclusion was found. There is NOTHING correct to
+  // confirm, so we do NOT offer a "couldn't confirm — commit below" retry: we
+  // commit to a WRONG verdict directly. Garbled/uninterpretable input is graded
+  // wrong the same way, with an accurate not-understood reason.
   if (correctSignal === false || (hasSpec && !correctPresent)) {
-    // GARBLED text (keyboard-mash / symbol-soup) that cannot be parsed into a
-    // claim gets an accurate "Response not understood" clarify, distinct from a
-    // both-sides / contradiction message.
-    const kind: ClarifyKind = isUninterpretable(text)
-      ? "uninterpretable"
-      : "unconfirmed";
-    return clarifyOr(
-      kind === "uninterpretable"
-        ? "Response not understood — the text could not be parsed into a claim."
-        : "Could not confirm a correct committed conclusion.",
-      kind,
-      { concluded: kind === "uninterpretable" ? "not understood" : "unclear", suggests: correctSide },
-    );
+    return {
+      verdict: "missed",
+      reason: isUninterpretable(text)
+        ? "Response not understood — no committed claim about the problem to build on."
+        : "No correct, committed conclusion — nothing correct to confirm.",
+    };
   }
 
   // --- 7) nothing to verify + substantive → correct -----------------------

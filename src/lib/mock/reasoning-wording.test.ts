@@ -2,12 +2,18 @@
  * mock/reasoning-wording.test.ts — the VERDICT-WORDING branch suite.
  *
  * Proves the reported wording bug is fixed and can never regress: a garbled /
- * nonsensical response reads "Response not understood" (its OWN verdict), and is
+ * nonsensical response reads "Response not understood" (its OWN quality), and is
  * kept DISTINCT from a genuine hedge (both-sides) and a genuine contradiction.
- *   (a) uninterpretable / garbled → `uninterpretable` quality / `uninterpretable`
- *       clarify kind → a not-understood prompt;
- *   (b) self-contradictory        → `contradiction` clarify kind;
- *   (c) hedging / both-sides      → `hedge` clarify kind.
+ *
+ * It ALSO locks the STRICT confirm/clarify gate: the second-chance (clarify) path
+ * fires ONLY when there is genuine CORRECT, load-bearing content and just a small
+ * part is wrong/ambiguous. Garbled input, a footingless hedge, "I don't know",
+ * and a fully-wrong answer are all graded WRONG directly — no clarify:
+ *   (a) uninterpretable / garbled → graded `missed`, not-understood reason;
+ *   (b) correct part + wrong-side commit → `contradiction` clarify;
+ *   (c) hedge WITH correct content       → `hedge` clarify (the only hedge that
+ *       earns a clarify); (d) footingless hedge / "I don't know" → `missed`;
+ *   (e) fully-wrong committed answer     → `missed`.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -63,28 +69,41 @@ describe("reasoning wording — deterministic grader emits the right quality", (
     expect(g.quality).toBe("vague");
   });
 
-  it("both-sides readable reasoning stays `ambiguous`", () => {
+  it("a both-sides hedge WITH correct footing stays `ambiguous` (earns a clarify)", () => {
+    // STRICT GATE: the verified value 0.1333 is present, so there is genuine
+    // correct content — a hedge on top of it is the mostly-right case → clarify.
+    const g = gradeReasoningDeterministic({
+      ...base,
+      reasoning: "it could be either 0.1333 or 0.5 — hard to say honestly",
+    });
+    expect(g.quality).toBe("ambiguous");
+  });
+
+  it("a FOOTINGLESS both-sides hedge is NOT ambiguous (no second chance)", () => {
+    // STRICT GATE: nothing correct to build on ⇒ commit to a wrong verdict, not a
+    // lenient clarify. It must NOT read `ambiguous` (which would trigger clarify).
     const g = gradeReasoningDeterministic({
       ...base,
       reasoning: "it could be either the same or different, hard to say honestly",
     });
-    expect(g.quality).toBe("ambiguous");
+    expect(g.quality).not.toBe("ambiguous");
   });
 });
 
-describe("reasoning wording — conclusion grader tags an accurate clarifyKind", () => {
-  it("(a) garbled → clarifyKind 'uninterpretable' + a not-understood prompt", () => {
+describe("reasoning wording — conclusion grader clarifyKind + strict gate", () => {
+  it("(a) garbled → graded WRONG directly (no second chance), not-understood reason", () => {
+    // STRICT GATE: garbled input has nothing correct to confirm ⇒ `missed`, NOT a
+    // "couldn't confirm — restate below" clarify.
     const r = gradeConclusion("zxcvbnm qwrtp hjkl sdfgh", {
       correctValues: [0.5],
     });
-    expect(r.verdict).toBe("clarify");
-    expect(r.clarifyKind).toBe("uninterpretable");
-    expect(buildClarifyPrompt(r)).toMatch(/couldn't understand/i);
-    // Crucially NOT a both-sides / contradiction message.
-    expect(buildClarifyPrompt(r)).not.toMatch(/both ways|contradict/i);
+    expect(r.verdict).toBe("missed");
+    expect(r.reason).toMatch(/not understood|couldn't|could not/i);
   });
 
-  it("(b) contradiction (correct part + wrong-side commit) → 'contradiction'", () => {
+  it("(b) contradiction (correct part + wrong-side commit) → 'contradiction' clarify", () => {
+    // Genuine correct content ("different") + a wrong-side commit ("the same") is
+    // the mostly-right-with-a-flaw case ⇒ the clarify path is allowed.
     const r = gradeConclusion("it is different but also exactly the same", {
       correctKeywords: [["different"]],
       wrongKeywords: [["the same"]],
@@ -93,16 +112,39 @@ describe("reasoning wording — conclusion grader tags an accurate clarifyKind",
     expect(r.clarifyKind).toBe("contradiction");
   });
 
-  it("(c) hedging / both-sides → 'hedge'", () => {
-    const r = gradeConclusion("honestly it could be either one, not sure", {
+  it("(c) hedge WITH correct content → 'hedge' clarify (the only hedge that clarifies)", () => {
+    const r = gradeConclusion("it's different, but honestly it could be either, not sure", {
       correctKeywords: [["different"]],
     });
     expect(r.verdict).toBe("clarify");
     expect(r.clarifyKind).toBe("hedge");
+    expect(buildClarifyPrompt(r)).toMatch(/both ways|commit/i);
+  });
+
+  it("(d) FOOTINGLESS hedge / 'I don't know' → graded WRONG, no clarify", () => {
+    // STRICT GATE: no correct load-bearing content ⇒ commit to wrong directly.
+    const hedge = gradeConclusion("honestly it could be either one, not sure", {
+      correctKeywords: [["different"]],
+    });
+    expect(hedge.verdict).toBe("missed");
+    const idk = gradeConclusion("I don't know", { correctKeywords: [["different"]] });
+    expect(idk.verdict).toBe("missed");
+  });
+
+  it("(e) a fully-wrong committed answer → graded WRONG, no clarify", () => {
+    const r = gradeConclusion("it's exactly the same", {
+      correctKeywords: [["different"]],
+      wrongKeywords: [["the same"]],
+    });
+    expect(r.verdict).toBe("missed");
   });
 
   it("strict mode (the clarify round) collapses any clarify to missed", () => {
-    const r = gradeConclusion("zxcvbnm qwrtp hjkl sdfgh", { correctValues: [0.5] }, { strict: true });
+    const r = gradeConclusion(
+      "it's different, but honestly it could be either, not sure",
+      { correctKeywords: [["different"]] },
+      { strict: true },
+    );
     expect(r.verdict).toBe("missed");
   });
 });

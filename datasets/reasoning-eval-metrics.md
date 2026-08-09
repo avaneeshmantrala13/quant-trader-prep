@@ -54,7 +54,38 @@ about the correct misconception — and never reddens a correct derivation.
 | `pev-max2dice` | sequential-order-abuse | ✓ | ✓ | ✓ |
 | `pev-urn` | independence-abuse | ✓ | ✓ | ✓ |
 | `pev-monty` | false-5050 | ✓ | ✓ | ✓ |
+| `seqn-quadratic` | oversimplified-pattern | ✓ | ✓ | ✓ |
 
-**Localized (span correct): 3/3 (100.0%)** · **Why correct: 3/3 (100.0%)** · **Controls clean (no false red): 3/3 (100.0%)**
+**Localized (span correct): 4/4 (100.0%)** · **Why correct: 4/4 (100.0%)** · **Controls clean (no false red): 4/4 (100.0%)**
 
 No false reds on correct derivations.
+
+## Granularity + feedback specificity — tight, human highlights
+
+The annotator emits TIGHT, minimal, disjoint spans (not blanket color) and
+every `why` QUOTES the candidate's own words — never a generic template.
+
+- **Max green coverage on a CORRECT answer:** 6.5% (a correct answer is never a wall of green; only the key steps are green).
+- **Red on a correct answer:** none.
+- **Max red coverage on a FLAWED answer:** 43.4% (only the specific flawed claim is red, not the whole blob).
+- **Feedback references the candidate's own words:** always.
+- **Banned generic phrases in feedback:** none.
+
+## Strict confirm/clarify gate — second chance only when mostly-right
+
+Clarify (the second chance) fires ONLY when there is genuine correct,
+load-carrying content and just a small part is wrong/ambiguous. Everything
+else — fully wrong, footingless hedge, "I don't know", garbled — is graded
+WRONG directly.
+
+| Case | Expected | Got | OK |
+|---|---|---|---|
+| mostly-right, minor contradiction → clarify | `clarify` | `clarify` | ✓ |
+| correct side, missing mechanism → clarify | `clarify` | `clarify` | ✓ |
+| hedge WITH correct content → clarify | `clarify` | `clarify` | ✓ |
+| 'I don't know' → missed (no second chance) | `missed` | `missed` | ✓ |
+| fully-wrong committed answer → missed | `missed` | `missed` | ✓ |
+| footingless hedge → missed | `missed` | `missed` | ✓ |
+| garbled → missed (not-understood) | `missed` | `missed` | ✓ |
+
+**Gate correctness: 7/7 (100.0%)**

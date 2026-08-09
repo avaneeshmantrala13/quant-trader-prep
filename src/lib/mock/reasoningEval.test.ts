@@ -19,6 +19,10 @@ import {
   renderReportMarkdown,
   runLocalizationEval,
   renderLocalizationMarkdown,
+  runGranularityEval,
+  runGateEval,
+  renderQualityMarkdown,
+  GATE_CASES,
   LOCALIZATION_CASES,
   derivationsForQuestion,
   type LabeledDerivation,
@@ -66,14 +70,27 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
         `controlsClean=${loc.controlsClean}/${loc.controls}`,
     );
 
-    // Emit the reproducible, checked-in metrics summary (grader QA + localization).
+    // ---- Granularity + feedback specificity, and the strict clarify gate ----
+    const gran = runGranularityEval();
+    const gate = runGateEval();
+    // eslint-disable-next-line no-console
+    console.log(
+      `[gran] maxGreenOnCorrect=${(gran.maxGreenCoverageCorrect * 100).toFixed(1)}% ` +
+        `maxRedOnFlawed=${(gran.maxRedCoverageFlawed * 100).toFixed(1)}% ` +
+        `banned=${gran.bannedPhraseHits.length} [gate] ${gate.correct}/${gate.total}`,
+    );
+
+    // Emit the reproducible, checked-in metrics summary (grader QA + localization
+    // + granularity/feedback + strict gate).
     const md =
       renderReportMarkdown(
         report,
         `Corpus: ${corpus.length} labeled derivations over ${SEEDS.length} seeds ` +
           `× the full question bank (probability/EV, sequences, estimation) + pinned ` +
           `firm archetypes.`,
-      ) + renderLocalizationMarkdown(loc);
+      ) +
+      renderLocalizationMarkdown(loc) +
+      renderQualityMarkdown(gran, gate);
     try {
       writeFileSync(
         resolve(process.cwd(), "datasets/reasoning-eval-metrics.md"),
@@ -93,6 +110,38 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
       loc.total,
     );
     expect(loc.controlsClean, "correct derivations get NO false red").toBe(loc.controls);
+
+    // ---- Granularity + feedback-specificity acceptance gates ----
+    // A CORRECT answer is never a wall of green (only key steps), and never red.
+    expect(gran.anyRedOnCorrect, "no red on a correct answer").toBe(false);
+    expect(
+      gran.maxGreenCoverageCorrect,
+      "correct answers are granular green, not blanket",
+    ).toBeLessThan(0.8);
+    // A FLAWED answer reds ONLY the specific claim — a minority of the text.
+    expect(
+      gran.maxRedCoverageFlawed,
+      "flawed cases red-highlight only the specific claim, not the whole blob",
+    ).toBeLessThan(0.85);
+    // Feedback is content-referential and free of banned generic phrases.
+    expect(
+      gran.allFeedbackReferencesContent,
+      "every flawed span quotes the candidate's own words",
+    ).toBe(true);
+    expect(
+      gran.bannedPhraseHits,
+      `banned generic phrases leaked into feedback:\n${gran.bannedPhraseHits.join("\n")}`,
+    ).toEqual([]);
+
+    // ---- Strict confirm/clarify gate acceptance ----
+    expect(gate.total).toBe(GATE_CASES.length);
+    expect(
+      gate.correct,
+      `strict gate mismatches:\n${gate.perCase
+        .filter((c) => !c.ok)
+        .map((c) => `${c.label}: expected ${c.expect}, got ${c.got}`)
+        .join("\n")}`,
+    ).toBe(gate.total);
 
     // ---- Hard acceptance gates (per-archetype and total) ----
     for (const m of report.perArchetype) {

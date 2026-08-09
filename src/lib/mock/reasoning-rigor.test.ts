@@ -166,6 +166,31 @@ describe("gradeReasoningDeterministic — the dice-MAX wrong-premise repro is FL
   });
 });
 
+describe("gradeReasoningDeterministic — the 'sequence is just n²' repro is FLAWED", () => {
+  // The reported oversimplified-pattern opener: assuming a simpler closed form
+  // than the real one. A wrong premise ⇒ `flawed`, never a lenient `partial`.
+  const SEQ = {
+    prompt: "The sequence begins 5, 11, 23, 41, 65, … What is the next term?",
+    correctAnswer: "95",
+    correct: false,
+    reasoning: "The sequence is just n\u00b2, so the next term is 6\u00b2 = 36.",
+    isMentalMath: false,
+  };
+
+  it("grades the oversimplified-pattern premise as flawed, not partial", () => {
+    const g = gradeReasoningDeterministic(SEQ);
+    expect(g.quality).toBe("flawed");
+    expect(g.quality).not.toBe("partial");
+  });
+
+  it("references the candidate's own 'n²' premise (content-specific, no template)", () => {
+    const g = gradeReasoningDeterministic(SEQ);
+    const joined = g.issues.join(" ");
+    expect(joined).toContain("n\u00b2");
+    expect(joined.toLowerCase()).not.toContain("load-bearing");
+  });
+});
+
 describe("normalizeReasoningPayload — accepts the new 'flawed' quality", () => {
   it("passes through a valid 'flawed' verdict from the AI grader", () => {
     const g = normalizeReasoningPayload({

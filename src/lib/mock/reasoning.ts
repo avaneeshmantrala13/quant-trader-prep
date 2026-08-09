@@ -654,8 +654,29 @@ const HEDGE_PATTERNS: RegExp[] = [
  * answer is exactly what the clarifying follow-up exists to resolve. Pure/total.
  */
 export function isHedgedReasoning(text: string): boolean {
-  const lower = (text ?? "").toLowerCase();
-  return HEDGE_PATTERNS.some((re) => re.test(lower));
+  return findHedgePhrase(text) !== null;
+}
+
+/**
+ * Locate the EARLIEST both-sides / hedging phrase in the text (char offsets into
+ * the original), or `null` when none is present. The span-level annotator uses
+ * this to RED-highlight only the hedge phrase itself (not the whole clause), so a
+ * hedge is called out granularly with the candidate's actual words. Pure/total.
+ */
+export function findHedgePhrase(
+  text: string,
+): { start: number; end: number } | null {
+  const s = text ?? "";
+  let best: { start: number; end: number } | null = null;
+  for (const re of HEDGE_PATTERNS) {
+    const flags = re.flags.includes("g") ? re.flags : re.flags + "g";
+    const g = new RegExp(re.source, flags);
+    const m = g.exec(s);
+    if (m && (best === null || m.index < best.start)) {
+      best = { start: m.index, end: m.index + m[0].length };
+    }
+  }
+  return best;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -740,8 +761,24 @@ interface PremiseFlawRule {
   appliesToPrompt: (promptLower: string) => boolean;
   /** Fires when a CLAUSE contains this signal (the flawed premise phrasing). */
   signal: RegExp;
-  /** Build the specific explanation (may cite the stated vs verified values). */
-  why: (ctx: { statedStr: string | null; verifiedStr: string | null }) => string;
+  /**
+   * Build the CONTENT-REFERENTIAL explanation: it quotes `claim` (the candidate's
+   * own offending clause) so the feedback references what they actually said, then
+   * says why it's the wrong premise and nudges toward the fix WITHOUT giving the
+   * answer. May cite the stated-vs-verified values. NEVER a generic template.
+   */
+  why: (ctx: {
+    claim: string;
+    statedStr: string | null;
+    verifiedStr: string | null;
+  }) => string;
+}
+
+/** Quote the candidate's own words compactly (trim trailing punctuation/length). */
+function quoteClaim(claim: string): string {
+  let c = (claim ?? "").trim().replace(/[.,;:\u2014-]+$/, "").trim();
+  if (c.length > 120) c = c.slice(0, 117).trimEnd() + "\u2026";
+  return c;
 }
 
 /** Append a "…lands at X instead of Y" tail only when both values are known. */
@@ -775,14 +812,15 @@ const PREMISE_FLAW_RULES: PremiseFlawRule[] = [
       ),
     signal:
       /\bone die\b|\b(next|other|first|second|either|that)\s+die\b|\bthe die\s+(rolls?|shows?|is|lands?)\b|\b50\s?%|\b50\/50\b|\bhalf(?:\s+the\s+time)?\b|\bthe larger is\b|\bthe (max(?:imum)?|min(?:imum)?) is (just|simply|only)\b/i,
-    why: ({ statedStr, verifiedStr }) =>
-      "This imposes a sequential \u201cfirst die / next die\u201d ordering on two dice that are rolled at the same time. " +
-      "There is no ordered \u201cfirst\u201d versus \u201cnext\u201d die, so the 50/50 case split \u2014 and treating the larger value as just one die\u2019s expected value \u2014 are invalid: the maximum depends on BOTH dice jointly, and larger values are weighted more heavily. " +
+    why: ({ claim, statedStr, verifiedStr }) =>
+      `Here, you treated the two dice as a sequence \u2014 \u201c${quoteClaim(claim)}\u201d imposes a \u201cfirst die / next die\u201d ordering \u2014 but the dice are rolled at the same time, with no first-vs-next. ` +
+      "The larger value depends on BOTH dice together, not on one die\u2019s average, and bigger values come up more often. " +
       landsTail(
         statedStr,
         verifiedStr,
-        "That broken decomposition invalidates every step built on it.",
-      ),
+        "That decomposition is what breaks the rest of the chain.",
+      ) +
+      " Re-count how often the maximum is a high number.",
   },
   {
     // Dependent setup (without replacement / conditioning) treated as independent.
@@ -793,14 +831,14 @@ const PREMISE_FLAW_RULES: PremiseFlawRule[] = [
       ),
     signal:
       /\bindependent\b|\bindependence\b|\bmultiply(?:ing)? the (?:two )?probabilit|\btreat(?:ed|ing)?[^.]*as independent\b|\bassume(?:d|s)? independence\b|\bp\s*[×*x]\s*p\b/i,
-    why: ({ statedStr, verifiedStr }) =>
-      "This assumes the events are independent, but the setup makes them dependent \u2014 drawing without replacement (or conditioning on what happened) changes the later probabilities. " +
-      "Multiplying the raw probabilities as if they were independent is the load-bearing error here. " +
+    why: ({ claim, statedStr, verifiedStr }) =>
+      `You assumed independence here \u2014 \u201c${quoteClaim(claim)}\u201d multiplies the probabilities as if the draws don\u2019t affect each other \u2014 but this setup is dependent: drawing without replacement (or conditioning on what already happened) changes the later probability. ` +
       landsTail(
         statedStr,
         verifiedStr,
-        "Every step built on that independence assumption is invalid.",
-      ),
+        "Every step built on that independence assumption is off.",
+      ) +
+      " Recompute the second probability GIVEN the first draw.",
   },
   {
     // Monty-Hall / informed-reveal problems collapsed to a naive 50/50.
@@ -809,14 +847,28 @@ const PREMISE_FLAW_RULES: PremiseFlawRule[] = [
       /\bmonty\b|\bswitch\b|\bdoors?\b|\bhost\b|\breveal|\bgoat|\bprize\b/.test(p),
     signal:
       /\b50\/50\b|\b50\s?%|\bfifty[-\s]?fifty\b|\bequally likely\b|\bdoesn'?t matter\b|\bno difference\b|\bsame (?:either way|chance|odds)\b|\bcoin ?flip\b/i,
-    why: ({ statedStr, verifiedStr }) =>
-      "Treating the remaining options as a 50/50 coin-flip ignores that the reveal is INFORMED \u2014 the host deliberately avoids the prize, so the outcomes are not equally likely and switching is not a wash. " +
-      "This even-split premise is the root error. " +
+    why: ({ claim, statedStr, verifiedStr }) =>
+      `Calling it a 50/50 here \u2014 \u201c${quoteClaim(claim)}\u201d \u2014 treats the remaining options as equally likely, but the reveal is INFORMED: the host deliberately avoids the prize, so the doors are not a coin-flip and switching is not a wash. ` +
       landsTail(
         statedStr,
         verifiedStr,
-        "The whole conclusion inherits that wrong assumption.",
-      ),
+        "The whole conclusion inherits that even-split assumption.",
+      ) +
+      " Re-count which door the host was forced to leave closed.",
+  },
+  {
+    // Sequences: assuming a SIMPLER closed form / pattern than the real one
+    // (the reported "the sequence is just n\u00b2" opener) — the premise that
+    // sets the whole answer up wrong.
+    kind: "oversimplified-pattern",
+    appliesToPrompt: (p) =>
+      /\bnext term\b|\bsequence\b|\bpattern\b|\bseries\b/.test(p) ||
+      /\d+\s*,\s*\d+\s*,\s*\d+/.test(p),
+    signal:
+      /\b(?:just|simply|only|it'?s|is|assume[ds]?)\s+n\s*(?:\^\s*2|2|\u00b2|squared)(?![\d.])|\bn\s*(?:\^\s*2|\u00b2|squared)\s+(?:sequence|pattern|series)\b|\b(?:just|simply|only)\s+(?:linear|arithmetic|geometric)\b/i,
+    why: ({ claim }) =>
+      `Here, you assumed the sequence is \u201c${quoteClaim(claim)}\u201d, which is what set your answer up to be wrong. ` +
+      "Take another look at the actual terms and the gaps between them \u2014 the real pattern isn\u2019t that simple, so re-derive the rule before plugging in.",
   },
 ];
 
@@ -852,18 +904,50 @@ export function findPremiseFlaw(
   if (applicable.length === 0) return null;
   for (const c of clauses) {
     for (const rule of applicable) {
-      if (rule.signal.test(c.text)) {
+      const m = rule.signal.exec(c.text);
+      if (m) {
+        // GRANULAR: narrow the flaw span to the comma-delimited SEGMENT of the
+        // clause that actually contains the misconception phrase, not the whole
+        // clause — so the red highlight is the specific broken premise, while
+        // still covering the offending claim.
+        const seg = commaSegment(c.text, m.index);
+        const claim = c.text.slice(seg.start, seg.end);
         return {
           kind: rule.kind,
-          claim: c.text,
-          start: c.start,
-          end: c.end,
-          why: rule.why({ statedStr, verifiedStr }),
+          claim,
+          start: c.start + seg.start,
+          end: c.start + seg.end,
+          why: rule.why({ claim, statedStr, verifiedStr }),
         };
       }
     }
   }
   return null;
+}
+
+/**
+ * The comma-delimited segment of `text` that contains char index `idx`, trimmed
+ * of surrounding whitespace. Used to narrow a premise-flaw span to the specific
+ * offending phrase rather than the whole clause.
+ */
+function commaSegment(text: string, idx: number): { start: number; end: number } {
+  let start = 0;
+  for (let i = Math.min(idx, text.length - 1); i >= 0; i--) {
+    if (text[i] === ",") {
+      start = i + 1;
+      break;
+    }
+  }
+  let end = text.length;
+  for (let i = idx; i < text.length; i++) {
+    if (text[i] === ",") {
+      end = i;
+      break;
+    }
+  }
+  while (start < end && /\s/.test(text[start])) start++;
+  while (end > start && /\s/.test(text[end - 1])) end--;
+  return { start, end };
 }
 
 /**
@@ -1052,11 +1136,21 @@ export function gradeReasoningDeterministic(
     issues.push(
       "I couldn't understand that response — it doesn't read as a claim about the problem. Restate your reasoning in plain words and commit to ONE answer.",
     );
-  } else if (isHedgedReasoning(text)) {
-    // MIXED / both-sides / hedged reasoning: the candidate points both ways
-    // instead of committing. NEVER treat this as sound and NEVER silently mark
-    // it wrong — it triggers a CLARIFYING follow-up (the caller reads the
-    // `ambiguous` quality and forces a single committed answer).
+  } else if (
+    isHedgedReasoning(text) &&
+    (input.correct ||
+      reachesVerified ||
+      hasMechanism ||
+      (verifiedAnswer !== null &&
+        allValues.some((v) => Math.abs(v - verifiedAnswer) <= answerTol)))
+  ) {
+    // MIXED / both-sides / hedged reasoning WITH genuine correct footing (the
+    // right value is present, a valid mechanism is named, or the verifier marked
+    // the answer correct). Only THIS earns a clarifying second chance: the
+    // candidate has real correct content and only needs to commit to one side.
+    // A footingless hedge ("could be either, not sure" with nothing correct) is
+    // NOT ambiguous — it falls through to a WRONG verdict below (no second
+    // chance), per the strict confirm/clarify gate.
     quality = "ambiguous";
     issues.push(
       "Your explanation points both ways instead of committing — pick ONE answer and give the single reason it's correct.",

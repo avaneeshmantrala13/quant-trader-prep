@@ -28,7 +28,7 @@ const QUALITY_META: Record<
     label: "Flawed",
     tone: "border-bear text-bear",
     blurb:
-      "A load-bearing step is false or invalid — a wrong premise, decomposition, or arithmetic step (highlighted in red above) breaks the chain, even if a number happens to match.",
+      "A key step is false or invalid — a wrong premise, decomposition, or arithmetic step (highlighted in red above) breaks the chain, even if a number happens to match.",
   },
   ambiguous: {
     label: "Needs a commit",

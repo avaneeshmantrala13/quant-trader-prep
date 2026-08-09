@@ -33,6 +33,11 @@ import {
 import { matchesMechanismSignal, type ReasoningInput } from "./reasoning";
 import { annotateReasoning, type ReasoningSpan } from "./annotate";
 import {
+  gradeConclusion,
+  type ConclusionSpec,
+  type ConclusionVerdict,
+} from "./conclusion";
+import {
   extractClaimsDeterministic,
   gradeReasoningFromClaims,
   type ClaimSet,
@@ -511,6 +516,17 @@ export const LOCALIZATION_CASES: LocalizationCase[] = [
     rootCause: "it's 50/50 and switching doesn't matter",
     whyPattern: /informed|50\/50|equally likely|reveal|coin-?flip/i,
   },
+  {
+    // The reported "the sequence is just n²" opener — an oversimplified pattern.
+    archetype: "seqn-quadratic",
+    kind: "oversimplified-pattern",
+    prompt: "The sequence begins 5, 11, 23, 41, 65, … What is the next term?",
+    reasoning:
+      "The sequence is just n\u00b2, so the next term is 6\u00b2 = 36.",
+    verifiedAnswer: 95,
+    rootCause: "The sequence is just n\u00b2",
+    whyPattern: /pattern|terms|gaps|re-derive|n\u00b2/i,
+  },
 ];
 
 /** Correct derivations that must produce NO false red (localization precision). */
@@ -538,6 +554,13 @@ export const LOCALIZATION_CONTROLS: LocalizationControl[] = [
     reasoning:
       "The host's reveal is informed, so your original 1/3 door stays 1/3 and the other door holds the remaining 2/3. Switching wins 2/3 ≈ 0.6667.",
     verifiedAnswer: 0.6667,
+  },
+  {
+    archetype: "seqn-quadratic",
+    prompt: "The sequence begins 5, 11, 23, 41, 65, … What is the next term?",
+    reasoning:
+      "The first differences are 6, 12, 18, 24 — a constant second difference of 6 — so the next gap is 30 and 65 + 30 = 95.",
+    verifiedAnswer: 95,
   },
 ];
 
@@ -686,6 +709,250 @@ export function renderLocalizationMarkdown(m: LocalizationMetrics): string {
     m.falseReds.length > 0
       ? `False reds: ${m.falseReds.join("; ")}`
       : "No false reds on correct derivations.",
+    "",
+  ].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Granularity + feedback-specificity — tight spans, human content-referential */
+/* -------------------------------------------------------------------------- */
+
+/** Generic templated phrases that must NEVER appear in user-facing feedback. */
+export const BANNED_FEEDBACK_PHRASES = [
+  "load-bearing",
+  "load bearing",
+  "locate the broken step",
+];
+
+/** Fraction of the text covered by the UNION of spans of a given label [0..1]. */
+function labelCoverage(
+  spans: ReasoningSpan[],
+  label: "good" | "flawed",
+  len: number,
+): number {
+  if (len <= 0) return 0;
+  const ranges = spans
+    .filter((s) => s.label === label)
+    .map((s) => [s.start, s.end] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  let total = 0;
+  let curEnd = -1;
+  for (const [s, e] of ranges) {
+    const start = Math.max(s, curEnd);
+    if (e > start) total += e - start;
+    if (e > curEnd) curEnd = e;
+  }
+  return total / len;
+}
+
+export interface GranularityMetrics {
+  /** Worst (highest) GREEN coverage over the correct controls (want < 1). */
+  maxGreenCoverageCorrect: number;
+  /** Any correct control got a red span (must be false). */
+  anyRedOnCorrect: boolean;
+  /** Worst (highest) RED coverage over flawed cases with a specific misconception. */
+  maxRedCoverageFlawed: number;
+  /** Every flawed span's `why` quotes the candidate's own words. */
+  allFeedbackReferencesContent: boolean;
+  /** Any user-facing feedback string contained a banned generic phrase. */
+  bannedPhraseHits: string[];
+  perControl: { archetype: string; greenCoverage: number; redCount: number }[];
+  perCase: { archetype: string; redCoverage: number; referencesContent: boolean }[];
+}
+
+/**
+ * Measure HIGHLIGHT GRANULARITY and FEEDBACK SPECIFICITY of the annotator:
+ *   • correct controls must NOT be a wall of green (coverage well under 100%) and
+ *     get ZERO red;
+ *   • flawed cases must red-highlight only the specific claim (a MINORITY of the
+ *     text), never the whole blob;
+ *   • every span `why` must QUOTE the candidate's own words (content-referential),
+ *     and no feedback may contain a banned generic phrase.
+ */
+export function runGranularityEval(
+  cases: LocalizationCase[] = LOCALIZATION_CASES,
+  controls: LocalizationControl[] = LOCALIZATION_CONTROLS,
+  annotate: Annotator = annotateReasoning,
+): GranularityMetrics {
+  const bannedPhraseHits: string[] = [];
+  const checkBanned = (why: string) => {
+    for (const p of BANNED_FEEDBACK_PHRASES) {
+      if (why.toLowerCase().includes(p)) bannedPhraseHits.push(why);
+    }
+  };
+
+  const perControl: GranularityMetrics["perControl"] = [];
+  let maxGreenCoverageCorrect = 0;
+  let anyRedOnCorrect = false;
+  for (const ctrl of controls) {
+    const spans = annotate(ctrl.reasoning, {
+      prompt: ctrl.prompt,
+      verifiedAnswer: ctrl.verifiedAnswer,
+      answerWasWrong: false,
+    });
+    spans.forEach((s) => checkBanned(s.why));
+    const green = labelCoverage(spans, "good", ctrl.reasoning.length);
+    const redCount = spans.filter((s) => s.label === "flawed").length;
+    if (green > maxGreenCoverageCorrect) maxGreenCoverageCorrect = green;
+    if (redCount > 0) anyRedOnCorrect = true;
+    perControl.push({ archetype: ctrl.archetype, greenCoverage: green, redCount });
+  }
+
+  const perCase: GranularityMetrics["perCase"] = [];
+  let maxRedCoverageFlawed = 0;
+  let allFeedbackReferencesContent = true;
+  for (const c of cases) {
+    const spans = annotate(c.reasoning, {
+      prompt: c.prompt,
+      verifiedAnswer: c.verifiedAnswer,
+      answerWasWrong: true,
+    });
+    spans.forEach((s) => checkBanned(s.why));
+    const red = labelCoverage(spans, "flawed", c.reasoning.length);
+    if (red > maxRedCoverageFlawed) maxRedCoverageFlawed = red;
+    // The covering red span must QUOTE the candidate's own words: its `why`
+    // contains its own excerpt (minus trailing punctuation).
+    const idx = c.reasoning.indexOf(c.rootCause);
+    const cover = coveringFlawedSpan(spans, idx, c.rootCause.length);
+    const excerpt = (cover?.excerpt ?? "").trim().replace(/[.,;:]+$/, "");
+    const references =
+      cover !== null && excerpt.length > 0 && cover.why.includes(excerpt);
+    if (!references) allFeedbackReferencesContent = false;
+    perCase.push({ archetype: c.archetype, redCoverage: red, referencesContent: references });
+  }
+
+  return {
+    maxGreenCoverageCorrect,
+    anyRedOnCorrect,
+    maxRedCoverageFlawed,
+    allFeedbackReferencesContent,
+    bannedPhraseHits,
+    perControl,
+    perCase,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Strict confirm/clarify gate — second chance ONLY for mostly-right answers   */
+/* -------------------------------------------------------------------------- */
+
+/** One labeled gate case: an answer + spec with the EXPECTED strict verdict. */
+export interface GateCase {
+  label: string;
+  raw: string;
+  spec: ConclusionSpec;
+  /** The verdict the STRICT gate must return. */
+  expect: ConclusionVerdict;
+}
+
+/**
+ * The strict-gate corpus. The clarify (second-chance) path may fire ONLY for a
+ * mostly-right answer (genuine correct content + a small flaw/ambiguity); "I
+ * don't know", a fully-wrong answer, a footingless hedge, and garbled input must
+ * all be graded WRONG directly (no clarify).
+ */
+export const GATE_CASES: GateCase[] = [
+  {
+    label: "mostly-right, minor contradiction → clarify",
+    raw: "It's different — but also kind of the same, honestly.",
+    spec: { correctKeywords: [["different"]], wrongKeywords: [["the same"]] },
+    expect: "clarify",
+  },
+  {
+    label: "correct side, missing mechanism → clarify",
+    raw: "Pass, I'd decline the bet.",
+    spec: {
+      correctKeywords: [["pass", "decline"]],
+      mechanismSignals: ["ev", "negative", "expected value"],
+    },
+    expect: "clarify",
+  },
+  {
+    label: "hedge WITH correct content → clarify",
+    raw: "It's different, but honestly it could be either, not sure.",
+    spec: { correctKeywords: [["different"]] },
+    expect: "clarify",
+  },
+  {
+    label: "'I don't know' → missed (no second chance)",
+    raw: "I don't know.",
+    spec: { correctKeywords: [["different"]] },
+    expect: "missed",
+  },
+  {
+    label: "fully-wrong committed answer → missed",
+    raw: "It's exactly the same, unchanged.",
+    spec: { correctKeywords: [["different"]], wrongKeywords: [["the same", "unchanged"]] },
+    expect: "missed",
+  },
+  {
+    label: "footingless hedge → missed",
+    raw: "Could be either one, hard to say, not sure.",
+    spec: { correctKeywords: [["different"]] },
+    expect: "missed",
+  },
+  {
+    label: "garbled → missed (not-understood)",
+    raw: "zxcvbnm qwrtp hjkl sdfgh",
+    spec: { correctValues: [0.5] },
+    expect: "missed",
+  },
+];
+
+export interface GateMetrics {
+  total: number;
+  correct: number;
+  perCase: { label: string; expect: ConclusionVerdict; got: ConclusionVerdict; ok: boolean }[];
+}
+
+/** Measure how faithfully the strict confirm/clarify gate matches expectations. */
+export function runGateEval(cases: GateCase[] = GATE_CASES): GateMetrics {
+  let correct = 0;
+  const perCase = cases.map((c) => {
+    const got = gradeConclusion(c.raw, c.spec).verdict;
+    const ok = got === c.expect;
+    if (ok) correct++;
+    return { label: c.label, expect: c.expect, got, ok };
+  });
+  return { total: cases.length, correct, perCase };
+}
+
+/** Render the granularity + gate metrics as a Markdown section. */
+export function renderQualityMarkdown(
+  gran: GranularityMetrics,
+  gate: GateMetrics,
+): string {
+  const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+  const gateRows = gate.perCase
+    .map((c) => `| ${c.label} | \`${c.expect}\` | \`${c.got}\` | ${c.ok ? "✓" : "✗"} |`)
+    .join("\n");
+  return [
+    "",
+    "## Granularity + feedback specificity — tight, human highlights",
+    "",
+    "The annotator emits TIGHT, minimal, disjoint spans (not blanket color) and",
+    "every `why` QUOTES the candidate's own words — never a generic template.",
+    "",
+    `- **Max green coverage on a CORRECT answer:** ${pct(gran.maxGreenCoverageCorrect)} ` +
+      "(a correct answer is never a wall of green; only the key steps are green).",
+    `- **Red on a correct answer:** ${gran.anyRedOnCorrect ? "SOME (bug!)" : "none"}.`,
+    `- **Max red coverage on a FLAWED answer:** ${pct(gran.maxRedCoverageFlawed)} ` +
+      "(only the specific flawed claim is red, not the whole blob).",
+    `- **Feedback references the candidate's own words:** ${gran.allFeedbackReferencesContent ? "always" : "NOT always (bug!)"}.`,
+    `- **Banned generic phrases in feedback:** ${gran.bannedPhraseHits.length === 0 ? "none" : gran.bannedPhraseHits.length}.`,
+    "",
+    "## Strict confirm/clarify gate — second chance only when mostly-right",
+    "",
+    "Clarify (the second chance) fires ONLY when there is genuine correct,",
+    "load-carrying content and just a small part is wrong/ambiguous. Everything",
+    "else — fully wrong, footingless hedge, \"I don't know\", garbled — is graded",
+    "WRONG directly.",
+    "",
+    "| Case | Expected | Got | OK |",
+    "|---|---|---|---|",
+    gateRows,
+    "",
+    `**Gate correctness: ${gate.correct}/${gate.total} (${pct(gate.total > 0 ? gate.correct / gate.total : 1)})**`,
     "",
   ].join("\n");
 }

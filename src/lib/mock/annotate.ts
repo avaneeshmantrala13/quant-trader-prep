@@ -8,6 +8,13 @@
  * these spans so a learner SEES exactly which parts of their own words were
  * right and which were wrong.
  *
+ * GRANULAR, NOT BLANKET: spans are TIGHT and MINIMAL — only the load-bearing bit
+ * is colored (the correct value, the correct equation, the named mechanism; or
+ * the specific false step / hedge / root premise), leaving connective filler
+ * UNHIGHLIGHTED. A correct answer is never a wall of green, and a wrong one is
+ * never a wall of red. Every `why` is CONTENT-REFERENTIAL — it quotes what the
+ * candidate actually wrote — never a generic template.
+ *
  * DESIGN (mirrors the extract-and-verify philosophy of `claims.ts`):
  *   • The DETERMINISTIC verdict stays AUTHORITATIVE — annotations only DECORATE
  *     the text; they never change the graded `quality` (passed in, or computed
@@ -24,11 +31,10 @@ import {
   allValuesIn,
   evalArithmetic,
   findFalseArithmetic,
+  findHedgePhrase,
   findPremiseFlaw,
   hasArithmeticContradiction,
-  isHedgedReasoning,
   isUninterpretable,
-  matchesMechanismSignal,
   parseNumericValue,
   statedResultValues,
   toClauses,
@@ -76,70 +82,191 @@ function fmt(n: number): string {
   return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4)));
 }
 
-/** Does the clause contain a stated `<expr> = <expr>` equality that HOLDS? */
-function hasCorrectArithmetic(clause: string): boolean {
-  if (clause.indexOf("=") < 0) return false;
-  const segs = clause.split("=");
-  for (let k = 0; k + 1 < segs.length; k++) {
-    const a = evalArithmetic(segs[k]);
-    const b = evalArithmetic(segs[k + 1]);
-    if (a === null || b === null) continue;
-    const tol = 1e-6 + Math.abs(b) * 1e-6;
-    if (Math.abs(a - b) <= tol) return true;
-  }
-  return false;
+/** A local {start,end} range within a clause (offsets are clause-relative). */
+type Range = { start: number; end: number };
+
+/** Trim whitespace off a clause-relative range. */
+function trimRange(text: string, r: Range): Range {
+  let { start, end } = r;
+  while (start < end && /\s/.test(text[start])) start++;
+  while (end > start && /\s/.test(text[end - 1])) end--;
+  return { start, end };
 }
 
 /**
- * Classify ONE clause into an annotation, or `null` when it carries no clear
- * good/flawed signal. FLAWED takes precedence over GOOD within a clause.
+ * Locate the FIRST stated `<expr> = <expr>` equality in the clause that HOLDS,
+ * returning its tight range (just the equation, no surrounding prose), or `null`.
+ * This is what lets a CORRECT step be highlighted GREEN granularly — only the
+ * arithmetic itself, not the whole sentence around it.
  */
-function classifyClause(
+function findCorrectArithRange(text: string): Range | null {
+  const isArith = (ch: string) => /[0-9.+\-*/×÷() ]/.test(ch);
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "=") continue;
+    let l = i;
+    while (l > 0 && isArith(text[l - 1])) l--;
+    let r = i + 1;
+    while (r < text.length && (isArith(text[r]) || text[r] === "=")) r++;
+    const a = evalArithmetic(text.slice(l, i));
+    const b = evalArithmetic(text.slice(i + 1, r));
+    if (a === null || b === null) continue;
+    const tol = 1e-6 + Math.abs(b) * 1e-6;
+    if (Math.abs(a - b) <= tol) return trimRange(text, { start: l, end: r });
+  }
+  return null;
+}
+
+/**
+ * Locate the LAST numeric token in the clause whose value matches `verified`
+ * (within tol), returning its tight range — so ONLY the correct final value is
+ * greened, not the whole concluding sentence. `null` when none matches.
+ */
+function findValueRange(text: string, verified: number, tol: number): Range | null {
+  const re =
+    /[+-]?\d+(?:\.\d+)?\s*\/\s*\d+(?:\.\d+)?|[+-]?\d+(?:[.,]\d+)?\s*%|[+-]?\d[\d,]*(?:\.\d+)?/g;
+  let m: RegExpExecArray | null;
+  let best: Range | null = null;
+  while ((m = re.exec(text)) !== null) {
+    const v = parseNumericValue(m[0].replace(/\s+/g, ""));
+    if (v !== null && Math.abs(v - verified) <= tol) {
+      best = { start: m.index, end: m.index + m[0].length };
+    }
+  }
+  return best;
+}
+
+/**
+ * Locate the earliest LITERAL occurrence of any mechanism signal phrase in the
+ * clause (case-insensitive), returning its tight range — so only the key idea is
+ * greened. Tiny/answer-value-ish signals are skipped so a bare number can never
+ * paint a phrase green. `null` when no phrase is found literally.
+ */
+function findMechanismRange(text: string, signals: string[]): Range | null {
+  const lower = text.toLowerCase();
+  let best: Range | null = null;
+  for (const sig of signals) {
+    const s = sig.toLowerCase().trim();
+    if (s.length < 4 || /^[\d.\s/%+-]+$/.test(s)) continue;
+    const idx = lower.indexOf(s);
+    if (idx >= 0 && (best === null || idx < best.start)) {
+      best = { start: idx, end: idx + s.length };
+    }
+  }
+  return best;
+}
+
+/** Does a candidate range overlap any range already collected for this clause? */
+function overlapsAny(r: Range, taken: Range[]): boolean {
+  return taken.some((t) => !(r.end <= t.start || r.start >= t.end));
+}
+
+/**
+ * Collect TIGHT, minimal, content-referential spans for ONE clause. Instead of
+ * blanket-coloring the whole clause, this highlights ONLY the load-bearing bits:
+ * the specific false step / hedge (red), or the correct value / correct equation
+ * / named mechanism (green) — leaving connective filler unhighlighted. Each `why`
+ * quotes the candidate's ACTUAL words. FLAWED wins over GOOD on any overlap.
+ */
+function collectClauseSpans(
   clause: Clause,
   opts: AnnotateOptions,
-): ReasoningSpan | null {
+  out: ReasoningSpan[],
+): void {
   const { text } = clause;
-  const span = (label: SpanLabel, why: string): ReasoningSpan => ({
-    start: clause.start,
-    end: clause.end,
-    excerpt: text,
-    label,
-    why,
-  });
+  const taken: Range[] = [];
+  const push = (r: Range, label: SpanLabel, why: string) => {
+    const tr = trimRange(text, r);
+    if (tr.end <= tr.start) return;
+    taken.push(tr);
+    out.push({
+      start: clause.start + tr.start,
+      end: clause.start + tr.end,
+      excerpt: text.slice(tr.start, tr.end),
+      label,
+      why,
+    });
+  };
 
-  // --- FLAWED (red) -------------------------------------------------------
+  // --- FLAWED (red), tight ------------------------------------------------
   const falseArith = findFalseArithmetic(text);
   if (falseArith) {
-    return span(
+    const idx = text.toLowerCase().indexOf(falseArith.claim.toLowerCase().trim());
+    const r =
+      idx >= 0
+        ? { start: idx, end: idx + falseArith.claim.trim().length }
+        : { start: 0, end: text.length };
+    push(
+      r,
       "flawed",
-      `Incorrect step: ${falseArith.claim} — should be ${fmt(falseArith.correct)}, not ${fmt(falseArith.stated)}.`,
+      `Incorrect step — you wrote “${falseArith.claim.trim()}”, but that works out to ${fmt(falseArith.correct)}, not ${fmt(falseArith.stated)}. Recompute this before building on it.`,
     );
+    return; // a broken step clause isn't also greened
   }
   if (hasArithmeticContradiction(text)) {
-    return span("flawed", "This stated equality doesn't hold — recheck the arithmetic.");
+    const eq = findEqualityRange(text) ?? { start: 0, end: text.length };
+    push(
+      eq,
+      "flawed",
+      `This equality doesn't hold — “${text.slice(eq.start, eq.end).trim()}” — the numbers you wrote don't produce that result.`,
+    );
+    return;
   }
-  if (isHedgedReasoning(text)) {
-    return span("flawed", "Hedging — this points both ways instead of committing to one answer.");
+  const hedge = findHedgePhrase(text);
+  if (hedge) {
+    push(
+      hedge,
+      "flawed",
+      `You hedge here (“${text.slice(hedge.start, hedge.end).trim()}”) — this points both ways instead of committing to one answer.`,
+    );
   }
 
-  // --- GOOD (green) -------------------------------------------------------
+  // --- GOOD (green), tight ------------------------------------------------
   const verified = opts.verifiedAnswer ?? null;
   if (verified !== null) {
     const tol = 1e-3 + Math.abs(verified) * 1e-6;
-    const results = statedResultValues(text);
-    if (results.some((v) => Math.abs(v - verified) <= tol)) {
-      return span("good", `Reaches the correct value (${fmt(verified)}).`);
+    const v = findValueRange(text, verified, tol);
+    if (v && !overlapsAny(v, taken)) {
+      push(
+        v,
+        "good",
+        `You reach the correct value here (${fmt(verified)}) — this is where the work lands right.`,
+      );
     }
   }
-  if (hasCorrectArithmetic(text)) {
-    return span("good", "Correct arithmetic — this step checks out.");
+  const eq = findCorrectArithRange(text);
+  if (eq && !overlapsAny(eq, taken)) {
+    push(
+      eq,
+      "good",
+      `This step checks out — “${text.slice(eq.start, eq.end).trim()}” is correct.`,
+    );
   }
-  if (
-    opts.mechanismSignals &&
-    opts.mechanismSignals.length > 0 &&
-    matchesMechanismSignal(text, opts.mechanismSignals)
-  ) {
-    return span("good", "Names the key mechanism that justifies the answer.");
+  if (opts.mechanismSignals && opts.mechanismSignals.length > 0) {
+    const mech = findMechanismRange(text, opts.mechanismSignals);
+    if (mech && !overlapsAny(mech, taken)) {
+      push(
+        mech,
+        "good",
+        `You name the key mechanism here (“${text.slice(mech.start, mech.end).trim()}”) — that's what the result actually turns on.`,
+      );
+    }
+  }
+}
+
+/**
+ * Locate the tight range of the FIRST `<expr> = <expr>` equality (holding or not)
+ * so a CONTRADICTORY equality can be reddened granularly. `null` when there's no
+ * arithmetic equality in the text.
+ */
+function findEqualityRange(text: string): Range | null {
+  const isArith = (ch: string) => /[0-9.+\-*/×÷() ]/.test(ch);
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "=") continue;
+    let l = i;
+    while (l > 0 && isArith(text[l - 1])) l--;
+    let r = i + 1;
+    while (r < text.length && (isArith(text[r]) || text[r] === "=")) r++;
+    return trimRange(text, { start: l, end: r });
   }
   return null;
 }
@@ -160,12 +287,41 @@ export function annotateReasoning(
   if (isUninterpretable(text)) return [];
   const spans: ReasoningSpan[] = [];
   for (const clause of toClauses(text)) {
-    const s = classifyClause(clause, opts);
-    if (s) spans.push(s);
+    collectClauseSpans(clause, opts, spans);
   }
   localizeRootCause(text, spans, opts);
-  spans.sort((a, b) => a.start - b.start);
-  return spans;
+  return dedupeSpans(spans);
+}
+
+/**
+ * Sort spans by position and drop overlaps so the highlighted runs are DISJOINT
+ * (the UI renders neutral text between them). On overlap, FLAWED (red) wins over
+ * GOOD (green) — a broken step is never painted green — and the earlier span wins
+ * among same-label overlaps.
+ */
+function dedupeSpans(spans: ReasoningSpan[]): ReasoningSpan[] {
+  const ordered = [...spans].sort((a, b) =>
+    a.start !== b.start
+      ? a.start - b.start
+      : a.label === b.label
+        ? a.end - b.end
+        : a.label === "flawed"
+          ? -1
+          : 1,
+  );
+  const out: ReasoningSpan[] = [];
+  for (const s of ordered) {
+    const clash = out.find((k) => !(s.end <= k.start || s.start >= k.end));
+    if (!clash) {
+      out.push(s);
+      continue;
+    }
+    // Prefer a flawed span over a green one it overlaps.
+    if (clash.label === "good" && s.label === "flawed") {
+      out.splice(out.indexOf(clash), 1, s);
+    }
+  }
+  return out.sort((a, b) => a.start - b.start);
 }
 
 /**
@@ -221,19 +377,24 @@ function localizeRootCause(
     return;
   }
 
-  // Generic fallback: nothing specific matched, but the chain is wrong. Point at
-  // the earliest substantive, not-yet-highlighted clause instead of punting.
+  // Generic fallback: no specific misconception matched, but the chain is wrong.
+  // Point at the earliest substantive, not-yet-highlighted clause and QUOTE it,
+  // so the learner still sees exactly where it goes off — never a template.
   if (spans.some((s) => s.label === "flawed")) return;
   for (const c of toClauses(text)) {
     if (c.text.trim().split(/\s+/).filter(Boolean).length < 3) continue;
     if (spans.some((s) => !(c.end <= s.start || c.start >= s.end))) continue;
+    const claim = c.text.trim().replace(/[.,;:]+$/, "");
+    const tail =
+      landing !== null && verified !== null
+        ? ` it's what steers the chain to ${fmt(landing)} instead of ${fmt(verified)}.`
+        : " the rest of the chain is built on it and inherits the error.";
     spans.push({
       start: c.start,
       end: c.end,
       excerpt: c.text,
       label: "flawed",
-      why:
-        "This is the earliest load-bearing step, and the chain built on it reaches the wrong result — the error originates here and the later steps carry it forward. Recheck this assumption against the setup.",
+      why: `This is where it goes off — you wrote “${claim}”, and${tail} Re-check this step against the setup.`,
     });
     return;
   }
