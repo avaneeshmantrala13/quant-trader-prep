@@ -419,9 +419,22 @@ export const INTERVIEW_BLUEPRINT_2026: Record<string, FirmBlueprint> = {
         difficultyBands: ["stretch"],
         hardArchetypes: ["lattice-paths"],
       },
+      {
+        // The DRW signature (per 2026 research): a brainteaser/hard-result round
+        // that PIVOTS into "now make a market on it" — defend the number by
+        // quoting a two-way market the interviewer trades against.
+        round: "market-making",
+        timingRegime: "reasoning",
+        perQuestionSec: [180, 300],
+        families: ["market-making"],
+        difficultyBands: ["hard", "stretch"],
+        hardArchetypes: [],
+      },
     ],
-    signatureAdversarial: "Leave-it-blank triage; defend a hard result under grilling.",
-    followupPatterns: ["generalize-n", "change-regime", "adversarial-trap"],
+    signatureAdversarial:
+      "Leave-it-blank triage; defend a hard result, then PIVOT it into 'now make " +
+      "a market on your answer' and trade against your quote.",
+    followupPatterns: ["generalize-n", "change-regime", "adversarial-trap", "act-on-it"],
     sources: ["datasets/FIRM_INTERVIEW_LIVE_RESEARCH_2026.md (DRW)"],
   },
 
