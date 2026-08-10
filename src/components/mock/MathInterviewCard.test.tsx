@@ -14,16 +14,12 @@ import type { UseMockSpeech } from "./useMockSpeech";
 afterEach(cleanup);
 
 const noopSpeech: UseMockSpeech = {
-  support: { recognition: false, synthesis: false },
+  support: { recognition: false },
   canListen: false,
-  canSpeak: false,
   listening: false,
   interim: "",
-  speak: () => {},
-  prefetch: () => {},
   startListening: () => {},
   stopListening: () => {},
-  cancelSpeech: () => {},
 };
 
 /** A minimal sequences step (answer 95) with an authored mechanism signal. */

@@ -204,17 +204,12 @@ export {
   createSpeechController,
   detectSpeechSupport,
   isSpeechRecognitionSupported,
-  isSpeechSynthesisSupported,
-  pickBestVoice,
-  scoreVoice,
-  chunkForSpeech,
 } from "./speech";
 export type {
   SpeechController,
   SpeechSupport,
   ListenHandlers,
   SpeechControllerOptions,
-  VoiceLike,
 } from "./speech";
 export {
   MOCK_ACTIVE_KEY,

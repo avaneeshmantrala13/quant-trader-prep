@@ -43,8 +43,7 @@ import type { StageComponentProps } from "../stageRegistry";
  *     scored numeric card (`MathInterviewCard` — clarify flow, strict reasoning
  *     grading, model-answer-on-flaw) and `MarketMakingCard`; brainteaser +
  *     behavioral steps render through the same graders (`gradeReasoning`,
- *     `ClarifyBlock`, `ReasoningPanel`);
- *   • the neural-TTS voice speaks each prompt (best-effort, via `useMockSpeech`).
+ *     `ClarifyBlock`, `ReasoningPanel`).
  *
  * When the interview finishes it computes the mock's `scorePct` + `wouldPass`
  * verdict via `buildMockResult` (which REUSES `computePerformance` +
@@ -103,18 +102,6 @@ export default function MockStage({ onComplete }: StageComponentProps) {
     const id = setInterval(() => setElapsedSec((s) => s + 1), 1000);
     return () => clearInterval(id);
   }, [session.status]);
-
-  // Speak each prompt aloud as it appears (best-effort; silent if unsupported).
-  const spokenKey = `${session.status}:${session.index}`;
-  const lastSpokenRef = useRef<string>("");
-  useEffect(() => {
-    if (!speech.canSpeak) return;
-    if (session.status !== "running" || !step) return;
-    if (lastSpokenRef.current === spokenKey) return;
-    lastSpokenRef.current = spokenKey;
-    speech.speak(step.prompt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spokenKey, session.status]);
 
   // Compute the result once the interview reaches its summary (pure + reused).
   const result = useMemo(

@@ -10,29 +10,19 @@ import {
  * transient "listening" UI state and forwards recognition results, but stores
  * NOTHING beyond the current utterance's interim text (which is cleared as soon
  * as the caller consumes the final transcript). If the browser lacks the Web
- * Speech APIs, `support` reflects that and all actions no-op — the caller falls
- * back to the typed input path.
+ * Speech recognition API, `support` reflects that and all actions no-op — the
+ * caller falls back to the typed input path.
  */
 export interface UseMockSpeech {
   support: SpeechSupport;
   /** Convenience: can we listen for spoken answers? */
   canListen: boolean;
-  /** Convenience: can we speak prompts aloud? */
-  canSpeak: boolean;
   listening: boolean;
   /** Live interim transcript for the current utterance (display only). */
   interim: string;
-  speak: (text: string) => void;
-  /**
-   * Warm the neural-voice cache for an upcoming prompt (low-latency prefetch).
-   * Safe no-op when neural TTS is unavailable. Additive — existing callers can
-   * ignore it entirely.
-   */
-  prefetch: (text: string) => void;
   /** Begin listening; `onFinal` fires once with the final transcript. */
   startListening: (onFinal: (text: string) => void) => void;
   stopListening: () => void;
-  cancelSpeech: () => void;
 }
 
 export function useMockSpeech(): UseMockSpeech {
@@ -78,24 +68,10 @@ export function useMockSpeech(): UseMockSpeech {
     [controller],
   );
 
-  const speak = useCallback(
-    (text: string) => controller.speak(text),
-    [controller],
-  );
-  const prefetch = useCallback(
-    (text: string) => controller.prefetch(text),
-    [controller],
-  );
-  const cancelSpeech = useCallback(
-    () => controller.cancelSpeech(),
-    [controller],
-  );
-
-  // Stop any in-flight recognition / speech when the consumer unmounts.
+  // Stop any in-flight recognition when the consumer unmounts.
   useEffect(() => {
     return () => {
       controller.stop();
-      controller.cancelSpeech();
     };
   }, [controller]);
 
@@ -103,24 +79,11 @@ export function useMockSpeech(): UseMockSpeech {
     () => ({
       support: controller.support,
       canListen: controller.support.recognition,
-      canSpeak: controller.support.synthesis,
       listening,
       interim,
-      speak,
-      prefetch,
       startListening,
       stopListening,
-      cancelSpeech,
     }),
-    [
-      controller,
-      listening,
-      interim,
-      speak,
-      prefetch,
-      startListening,
-      stopListening,
-      cancelSpeech,
-    ],
+    [controller, listening, interim, startListening, stopListening],
   );
 }

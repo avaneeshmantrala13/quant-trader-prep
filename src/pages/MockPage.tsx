@@ -38,10 +38,11 @@ import { DiagnosisReport } from "@/components/mock/DiagnosisReport";
  *
  * A self-contained, full-screen themed page (its own layout, like FermiPage). It
  * is a thin renderer over the pure engine in `@/lib/mock`: it builds a seeded
- * interview, drives the state machine via `mockReducer`, and speaks/listens
- * through the feature-detected wrapper. With no microphone / SpeechRecognition
- * the mic affordances simply vanish and the drill runs entirely on typed input.
- * No transcript is ever persisted — only the PII-free summary is derived.
+ * interview, drives the state machine via `mockReducer`, and optionally listens
+ * for dictated answers through the feature-detected wrapper. With no microphone
+ * / SpeechRecognition the mic affordances simply vanish and the drill runs
+ * entirely on typed input. No transcript is ever persisted — only the PII-free
+ * summary is derived.
  */
 
 const DEFAULT_PRESET: PresetId = "optiver";
@@ -115,7 +116,6 @@ export function MockPage() {
   const [presetId, setPresetId] = useState<PresetId>(
     initialRef.current.script.presetId ?? DEFAULT_PRESET,
   );
-  const [voiceOn, setVoiceOn] = useState(true);
   const [session, setSession] = useState<MockSession>(initialRef.current);
   // Which confirmation dialog (if any) is open while an interview is running:
   // "end" (the header End button) or "back" (the back arrow). `null` = closed.
@@ -149,7 +149,6 @@ export function MockPage() {
   };
 
   const newInterview = () => {
-    speech.cancelSpeech();
     const script = buildInterview({ seed: randomSeed(), preset: presetId });
     setSession(createSession(script, { speechSupported: speech.canListen }));
   };
@@ -164,7 +163,6 @@ export function MockPage() {
       setConfirm("back");
       return;
     }
-    speech.cancelSpeech();
     navigate("/");
   };
 
@@ -179,7 +177,6 @@ export function MockPage() {
 
   // "End interview" from the back dialog: discard AND leave the page.
   const endAndExit = () => {
-    speech.cancelSpeech();
     clearActiveSession(username);
     setConfirm(null);
     navigate("/");
@@ -188,22 +185,9 @@ export function MockPage() {
   // "Resume later" from the back dialog: keep the saved session and leave; it
   // resumes on the next visit to `/mock`.
   const resumeLater = () => {
-    speech.cancelSpeech();
     setConfirm(null);
     navigate("/");
   };
-
-  // Speak each prompt aloud as it appears (best-effort; silent if unsupported).
-  const spokenKey = `${session.status}:${session.index}`;
-  const lastSpokenRef = useRef<string>("");
-  useEffect(() => {
-    if (!voiceOn || !speech.canSpeak) return;
-    if (session.status !== "running" || !step) return;
-    if (lastSpokenRef.current === spokenKey) return;
-    lastSpokenRef.current = spokenKey;
-    speech.speak(step.prompt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spokenKey, voiceOn, session.status]);
 
   return (
     <GameChrome
@@ -237,10 +221,7 @@ export function MockPage() {
           <MockIntro
             presetId={presetId}
             setPresetId={setPresetId}
-            canSpeak={speech.canSpeak}
             canListen={speech.canListen}
-            voiceOn={voiceOn}
-            setVoiceOn={setVoiceOn}
             onStart={beginInterview}
           />
         )}
@@ -403,21 +384,14 @@ function ConfirmDialog({
 function MockIntro({
   presetId,
   setPresetId,
-  canSpeak,
   canListen,
-  voiceOn,
-  setVoiceOn,
   onStart,
 }: {
   presetId: PresetId;
   setPresetId: (p: PresetId) => void;
-  canSpeak: boolean;
   canListen: boolean;
-  voiceOn: boolean;
-  setVoiceOn: (v: boolean) => void;
   onStart: () => void;
 }) {
-  const speechAvailable = canSpeak || canListen;
   return (
     <div className="animate-print-in mx-auto max-w-2xl space-y-8">
       {/* Heading + one-line explanation */}
@@ -495,18 +469,7 @@ function MockIntro({
 
       {/* Secondary, tucked-away details */}
       <div className="space-y-2 text-center text-xs leading-relaxed text-muted">
-        {speechAvailable && canSpeak && (
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm text-secondary">
-            <input
-              type="checkbox"
-              checked={voiceOn}
-              onChange={(e) => setVoiceOn(e.target.checked)}
-              className="h-4 w-4 accent-[var(--tw-accent,currentColor)]"
-            />
-            Read questions aloud
-          </label>
-        )}
-        {!speechAvailable && (
+        {!canListen && (
           <p>Speech isn't available here, so you'll type your answers.</p>
         )}
         <p>
