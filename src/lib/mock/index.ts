@@ -181,6 +181,7 @@ export {
   reviewReasoning,
   reconcileReviewSpans,
   normalizeReviewPayload,
+  aiReviewActive,
 } from "./aiMock";
 export type { ReasoningReview, ReviewContext } from "./aiMock";
 export {

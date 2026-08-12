@@ -27,6 +27,9 @@ import {
   findFalseArithmetic,
   findFalseResidualClaim,
   gradeReasoningDeterministic,
+  hasNewMechanismContent,
+  isCircularJustification,
+  isStemRestatement,
   parseCommittedClosedForm,
   parseSequenceTerms,
   parseNumericValue,
@@ -164,6 +167,22 @@ function fmtNum(n: number): string {
 }
 
 /**
+ * Is the REAL-LLM reasoning review path active right now (AI layer on + not the
+ * stub)? The UI uses this to show a "reviewing…" pending state ONLY when the
+ * grade genuinely round-trips to the hosted model (~1–3s), and to skip that
+ * spinner entirely when the deterministic floor answers instantly (AI off /
+ * stub / tests). Never throws.
+ */
+export function aiReviewActive(): boolean {
+  try {
+    const cfg = readAiConfig(env());
+    return !!cfg && !cfg.stub;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Does `excerpt` contain an arithmetic equality that actually HOLDS? Used to keep
  * a genuinely-correct equation green even on a wrong final answer.
  */
@@ -233,6 +252,8 @@ export function reconcileReviewSpans(
     verifiedAnswer?: number | null;
     answerWasWrong?: boolean;
     mechanismSignals?: string[];
+    /** The question prompt — enables stem-echo / circular discounting of greens. */
+    prompt?: string;
   } = {},
 ): ReasoningSpan[] {
   const verified = opts.verifiedAnswer ?? null;
@@ -262,7 +283,25 @@ export function reconcileReviewSpans(
         // The LLM greened a demonstrably false step → the verifier FLIPS it red.
         label = "flawed";
         why = `Incorrect step — you wrote \u201c${fa.claim.trim()}\u201d, but that works out to ${fmtNum(fa.correct)}, not ${fmtNum(fa.stated)}. Recompute this before building on it.`;
-      } else if (!isGreenGrounded(excerpt, verified, wrong, opts.mechanismSignals)) {
+      } else if (
+        isCircularJustification(excerpt) ||
+        isStemRestatement(excerpt, opts.prompt)
+      ) {
+        // A circular ("because that is enough") or parroted-stem restatement
+        // ("three terms … because it is quadratic") explains NOTHING — never let
+        // the model green it, even on a correct answer.
+        continue;
+      } else if (
+        !isGreenGrounded(excerpt, verified, wrong, opts.mechanismSignals) &&
+        // Allow a FULL-CLAUSE explanation green on a CONFIRMED-correct answer even
+        // when it holds no equation/number, provided it introduces genuine
+        // mechanism content (not a bare keyword/echo) — so the load-bearing
+        // reasoning clause is kept whole instead of shrunk away.
+        !(
+          opts.answerWasWrong === false &&
+          hasNewMechanismContent(excerpt, opts.prompt, opts.mechanismSignals)
+        )
+      ) {
         // Ungrounded / coincidental green (e.g. the "2" in "(n+1)²") → DROP it.
         continue;
       }
@@ -463,6 +502,7 @@ export async function reviewReasoning(
   const grounded = reconcileReviewSpans(input.reasoning ?? "", rawSpans, {
     verifiedAnswer,
     answerWasWrong: ctx.answerWasWrong,
+    prompt: input.prompt,
     // Ground GREEN mechanism spans only on signals that don't merely ECHO the
     // stem of an explanation-required ("why") prompt — so the LLM can't green a
     // parroted stem phrase ("three terms") as a named mechanism.

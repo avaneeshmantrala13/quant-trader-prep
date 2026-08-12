@@ -623,6 +623,66 @@ export function isCircularJustification(text: string): boolean {
 }
 
 /**
+ * The "reason" portion of a clause — the text AFTER a causal connective
+ * (because / since / as / so that / due to) — or the whole clause when there is
+ * no explicit connective. Lets the stem-echo test judge whether a justification
+ * introduces a real mechanism or merely repeats the question. Pure/total.
+ */
+function reasonPortion(text: string): string {
+  const m = /\b(?:because|since|so that|due to|for the reason that)\b/i.exec(
+    text ?? "",
+  );
+  return m ? (text ?? "").slice(m.index + m[0].length) : text ?? "";
+}
+
+/**
+ * Does a whole clause merely RESTATE the question on an explanation-required
+ * ("why") prompt — i.e. its justification introduces no content word the stem
+ * didn't already give ("three terms are enough … because it is quadratic", where
+ * "quadratic" is lifted straight from the stem)? Such a clause explains NOTHING
+ * and must NOT be greened; it should read as flawed. A clause that names a genuine
+ * mechanism absent from the stem ("second difference", "three equations", "linear
+ * system") is NOT a restatement. No-op for non-"why" prompts. Pure/total.
+ */
+export function isStemRestatement(
+  text: string,
+  prompt: string | undefined,
+): boolean {
+  if (!isExplanationRequiredPrompt(prompt)) return false;
+  return isStemEchoSignal(reasonPortion(text), prompt);
+}
+
+/**
+ * Does a clause introduce GENUINE mechanism content — a creditable (non-stem-echo)
+ * mechanism SIGNAL stated literally, or a content-bearing quant term that the stem
+ * did NOT already supply — as opposed to a bare restatement/echo? Used to green a
+ * whole EXPLANATION clause (not just a keyword) in the deterministic fallback, and
+ * to keep a substantive full-clause green on the real-LLM review path. Pure/total.
+ */
+export function hasNewMechanismContent(
+  text: string,
+  prompt: string | undefined,
+  signals: string[] | undefined,
+): boolean {
+  const lower = normalizeForMatch(text);
+  if (lower === "") return false;
+  // A creditable (non-stem-echo) mechanism signal, present literally.
+  const creditable = creditableMechanismSignals(signals ?? [], prompt);
+  if (
+    creditable.some((sig) => {
+      const s = normalizeForMatch(sig);
+      return s.length >= 4 && !/^[\d.\s/%+-]+$/.test(sig) && lower.includes(s);
+    })
+  )
+    return true;
+  // A content-bearing quant term the stem did NOT already state.
+  const stem = new Set(stemContentTokens(prompt ?? ""));
+  return CONTENT_MARKERS.some(
+    (m) => lower.includes(m) && !stem.has(m.split(/\s+/)[0]),
+  );
+}
+
+/**
  * Is the reasoning DOMINATED by hand-wave / bare assertions — i.e. it asserts
  * correctness (or per-question banned phrases) but, once those and any restated
  * numbers/operators are stripped, carries NO substantive mechanism content? Used

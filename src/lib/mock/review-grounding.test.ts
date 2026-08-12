@@ -138,4 +138,41 @@ describe("reconcileReviewSpans — deterministic grounding gate", () => {
     const out = reconcileReviewSpans(text, llm, { verifiedAnswer: 30, answerWasWrong: false });
     expect(out.some((s) => s.label === "good" && s.excerpt.includes("24 + 6 = 30"))).toBe(true);
   });
+
+  it("KEEPS a FULL-CLAUSE mechanism green on a correct answer (no number, no listed signal)", () => {
+    // The load-bearing explanation clause has no holding equation and no committed
+    // value in it, but it introduces genuine mechanism content ("linear equation")
+    // — on a CONFIRMED-correct answer it must be kept WHOLE, not shrunk away.
+    const text =
+      "Once we know a, the rest is solving a linear equation for b and c which can be done with any two of the three terms.";
+    const llm: ReasoningSpan[] = [
+      { start: 0, end: text.length, excerpt: text, label: "good", why: "Correct system reasoning." },
+    ];
+    const out = reconcileReviewSpans(text, llm, {
+      verifiedAnswer: 2,
+      answerWasWrong: false,
+      prompt:
+        "Why do just three of the shown terms pin all three coefficients a, b, c down?",
+      mechanismSignals: ["second difference", "three equations"],
+    });
+    expect(
+      out.some((s) => s.label === "good" && /linear equation for b and c/i.test(s.excerpt)),
+    ).toBe(true);
+  });
+
+  it("DROPS a circular 'because it is quadratic' green even on a correct answer", () => {
+    const text = "Three terms are enough to get the equation because it is quadratic.";
+    const llm: ReasoningSpan[] = [
+      { start: 0, end: text.length, excerpt: text, label: "good", why: "Right, it's quadratic." },
+    ];
+    const out = reconcileReviewSpans(text, llm, {
+      verifiedAnswer: 2,
+      answerWasWrong: false,
+      prompt:
+        "Now take a sequence that is also quadratic, aₙ = a·n² + b·n + c — why do just three terms pin all three down?",
+      mechanismSignals: ["second difference", "three equations"],
+    });
+    // A parroted-stem restatement is never greened, even though the answer is right.
+    expect(out.some((s) => s.label === "good")).toBe(false);
+  });
 });

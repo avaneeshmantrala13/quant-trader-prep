@@ -123,11 +123,11 @@ describe("annotateReasoning — GOOD (green) spans", () => {
     expect(red!.why.toLowerCase()).not.toContain("load-bearing");
   });
 
-  it("does NOT falsely redden a CORRECT multi-coefficient commit (verifier-confirmed)", () => {
+  it("greens the correct coefficient but does NOT falsely redden it (no 'instead of' nonsense)", () => {
     // The reported clarify repro: the adversarial grades on `a` (verified 2), but
     // the answer legitimately also states b = −1 and c = 3, so the LAST value (3)
     // isn't the graded target. With the verifier CONFIRMING the answer correct
-    // (`answerWasWrong: false`), the correct coefficients must never be reddened
+    // (`answerWasWrong: false`), the correct COEFFICIENTS must never be reddened
     // with a nonsensical "steers the chain to 3 instead of 2" — and the graded
     // coefficient (2) is greened even though it's stated mid-sentence.
     const text =
@@ -139,8 +139,6 @@ describe("annotateReasoning — GOOD (green) spans", () => {
       mechanismSignals: ["three points", "three equations", "system"],
       answerWasWrong: false,
     });
-    // No red at all on a verifier-confirmed correct commit.
-    expect(spans.some((s) => s.label === "flawed")).toBe(false);
     // No "3 instead of 2" nonsense anywhere.
     for (const s of spans) {
       expect(s.why).not.toMatch(/instead of/i);
@@ -149,6 +147,67 @@ describe("annotateReasoning — GOOD (green) spans", () => {
     const green = spans.find((s) => s.label === "good");
     expect(green, "the correct coefficient is greened").toBeTruthy();
     expect(green!.excerpt).toContain("2");
+    // The correct coefficient clause itself is never reddened.
+    const coeffRedded = spans.some(
+      (s) => s.label === "flawed" && s.excerpt.includes("a is 2"),
+    );
+    expect(coeffRedded).toBe(false);
+  });
+
+  it("REDS a circular 'because that is enough' justification even on a correct answer", () => {
+    // The screenshot bug: the answer is right (a=2) but "because that is enough"
+    // explains nothing on an explanation-required prompt — it must read as flawed,
+    // not silently pass as a clean commit.
+    const text =
+      "a is 2, b is -1, and c is 3. You only need three terms because that is enough information.";
+    const spans = annotateReasoning(text, {
+      prompt:
+        "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … aₙ = a·n² + b·n + c. What are a, b, and c — and why do just three of the shown terms pin all three down?",
+      verifiedAnswer: 2,
+      mechanismSignals: ["three points", "three equations", "system"],
+      answerWasWrong: false,
+    });
+    const red = spans.find(
+      (s) => s.label === "flawed" && /because that is enough/i.test(s.excerpt),
+    );
+    expect(red, "the circular tail is reddened").toBeTruthy();
+    expect(red!.why).toMatch(/repeats the question|never says why|mechanism/i);
+  });
+
+  it("REDS a 'because it is quadratic' stem restatement, GREENS the genuine mechanism clauses (full clause)", () => {
+    // The clarify screenshot: full-clause green on the real mechanism, red on the
+    // circular restatement — not a lone keyword / stray token.
+    const prompt =
+      "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … It is also quadratic, aₙ = a·n² + b·n + c. What are a, b, and c — and why do just three of the shown terms pin all three down?";
+    const circular = annotateReasoning(
+      "a = 2, b = -1, and c = 3. Three terms are enough to get the equation because it is quadratic.",
+      { prompt, verifiedAnswer: 2, answerWasWrong: false },
+    );
+    expect(
+      circular.some(
+        (s) => s.label === "flawed" && /quadratic/i.test(s.excerpt),
+      ),
+      "the 'because it is quadratic' clause is reddened",
+    ).toBe(true);
+
+    const genuine = annotateReasoning(
+      "a = 2, b = -1, c = 3. The constant second difference can be determined and then divided by 2 to get a. Once we know a, the rest is solving a linear equation for b and c which can be done with any 2 of the three terms.",
+      {
+        prompt,
+        verifiedAnswer: 2,
+        answerWasWrong: false,
+        mechanismSignals: ["second difference", "three equations", "system"],
+      },
+    );
+    // Whole mechanistic clauses are greened (not a lone "second difference" token).
+    const secondDiff = genuine.find(
+      (s) => s.label === "good" && /second difference can be determined/i.test(s.excerpt),
+    );
+    expect(secondDiff, "the whole second-difference clause is green").toBeTruthy();
+    const linear = genuine.find(
+      (s) => s.label === "good" && /linear equation for b and c/i.test(s.excerpt),
+    );
+    expect(linear, "the whole linear-system clause is green").toBeTruthy();
   });
 });
 

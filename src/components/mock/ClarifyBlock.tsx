@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { AnswerField } from "./AnswerField";
 import { SubmittedReasoning } from "./SubmittedReasoning";
-import { reviewReasoning, type ClarifyState, type ReasoningSpan } from "@/lib/mock";
+import {
+  reviewReasoning,
+  aiReviewActive,
+  type ClarifyState,
+  type ReasoningSpan,
+} from "@/lib/mock";
 import type { UseMockSpeech } from "./useMockSpeech";
 
 /**
@@ -62,11 +67,13 @@ export function ClarifyBlock({
   // returns the deterministic annotator floor, so the highlight is identical
   // either way and never depends on the network.
   const [spans, setSpans] = useState<ReasoningSpan[] | undefined>(undefined);
+  const [reviewPending, setReviewPending] = useState(false);
   const reviewRef = useRef(false);
   useEffect(() => {
     if (!canReview || reviewRef.current) return;
     reviewRef.current = true;
     let cancelled = false;
+    if (aiReviewActive()) setReviewPending(true);
     reviewReasoning(
       {
         prompt: prompt!,
@@ -90,6 +97,9 @@ export function ClarifyBlock({
       })
       .catch(() => {
         /* reviewReasoning never rejects; belt-and-suspenders */
+      })
+      .finally(() => {
+        if (!cancelled) setReviewPending(false);
       });
     return () => {
       cancelled = true;
@@ -140,6 +150,7 @@ export function ClarifyBlock({
                 prompt={prompt}
                 answerWasWrong={committedWrong}
                 spans={spans}
+                reviewing={reviewPending}
                 testId="clarify-submitted-reasoning"
               />
             </div>

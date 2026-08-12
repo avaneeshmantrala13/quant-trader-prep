@@ -62,6 +62,7 @@ export function SubmittedReasoning({
   prompt,
   answerWasWrong,
   spans: injectedSpans,
+  reviewing,
   testId = "submitted-reasoning",
 }: {
   text: string | undefined;
@@ -79,11 +80,24 @@ export function SubmittedReasoning({
    * offline floor — so the highlight path is identical whether or not the LLM ran.
    */
   spans?: ReasoningSpan[];
+  /**
+   * True while the REAL-LLM review is still round-tripping to the hosted model.
+   * When set (and no grounded spans have arrived yet) the panel shows a clear
+   * "Reviewing your reasoning…" pending state instead of flashing the offline
+   * floor and then swapping — so the learner sees that grading is actually
+   * processing. Off (instant) when the deterministic floor answers.
+   */
+  reviewing?: boolean;
   /** Test hook so the base and the follow-up highlight panels are addressable. */
   testId?: string;
 }) {
   const trimmed = (text ?? "").trim();
   if (trimmed === "") return null;
+  // While the real-LLM review is still round-tripping (~1–3s) we surface a clear
+  // "reviewing…" pill so the learner sees grading is actually processing — but we
+  // STILL render the deterministic floor beneath it so the panel is never blank
+  // and the highlights simply upgrade in place when the grounded spans arrive.
+  const pending = reviewing === true && injectedSpans === undefined;
   const spans =
     injectedSpans ??
     annotateReasoning(text ?? "", {
@@ -100,6 +114,18 @@ export function SubmittedReasoning({
     <div className="aside" data-testid={testId}>
       <div className="flex items-center justify-between">
         <div className="label text-accent">Your reasoning</div>
+        {pending && (
+          <span
+            data-testid={`${testId}-reviewing`}
+            className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-accent"
+          >
+            <span
+              aria-hidden
+              className="inline-block h-2 w-2 animate-pulse rounded-full bg-accent"
+            />
+            Reviewing…
+          </span>
+        )}
         {(goodCount > 0 || flawedCount > 0) && (
           <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-wider">
             {goodCount > 0 && (
@@ -150,6 +176,16 @@ export function SubmittedReasoning({
         )}
       </p>
 
+      {pending && (
+        <p className="mt-3 flex items-center gap-2 text-xs text-muted">
+          <span
+            aria-hidden
+            className="inline-block h-3 w-3 animate-spin rounded-full border border-subtle border-t-accent"
+          />
+          Grading your reasoning against the model — highlighting the load-bearing
+          steps…
+        </p>
+      )}
       {spans.length > 0 ? (
         <ul className="mt-3 space-y-1.5 text-xs">
           {dedupeReasons(spans).map((s, i) => (

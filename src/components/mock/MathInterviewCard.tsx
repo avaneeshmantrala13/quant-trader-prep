@@ -3,6 +3,7 @@ import {
   gradeReasoning,
   generateFollowup,
   reviewReasoning,
+  aiReviewActive,
   buildReasoningClarifyPrompt,
   type FollowupRecord,
   type MathStep,
@@ -59,6 +60,8 @@ export function MathInterviewCard({
   const [reviewSpans, setReviewSpans] = useState<ReasoningSpan[] | undefined>(
     undefined,
   );
+  // True while the real-LLM review of the BASE reasoning is round-tripping.
+  const [reviewPending, setReviewPending] = useState(false);
   const [mainClarify, setMainClarify] = useState("");
   const [probeClarify, setProbeClarify] = useState("");
   const [advClarify, setAdvClarify] = useState("");
@@ -138,6 +141,7 @@ export function MathInterviewCard({
     if (raw.trim() === "") return;
     reviewRef.current = true;
     let cancelled = false;
+    if (aiReviewActive()) setReviewPending(true);
     reviewReasoning(
       {
         prompt: step.prompt,
@@ -160,6 +164,9 @@ export function MathInterviewCard({
       })
       .catch(() => {
         /* reviewReasoning never rejects; belt-and-suspenders */
+      })
+      .finally(() => {
+        if (!cancelled) setReviewPending(false);
       });
     return () => {
       cancelled = true;
@@ -429,6 +436,7 @@ export function MathInterviewCard({
               prompt={step.prompt}
               answerWasWrong={!score.correct}
               spans={reviewSpans}
+              reviewing={reviewPending}
             />
           )}
 
@@ -592,6 +600,7 @@ function FollowupBlock({
   // layer off it returns the deterministic annotator floor, so the highlight is
   // identical either way and never depends on the network.
   const [fuSpans, setFuSpans] = useState<ReasoningSpan[] | undefined>(undefined);
+  const [fuReviewPending, setFuReviewPending] = useState(false);
   const fuReviewRef = useRef(false);
   const pres = followup?.presentation ?? null;
   const rawFollowup = followup?.raw ?? "";
@@ -607,6 +616,7 @@ function FollowupBlock({
     if (fuReviewRef.current) return;
     fuReviewRef.current = true;
     let cancelled = false;
+    if (aiReviewActive()) setFuReviewPending(true);
     reviewReasoning(
       {
         prompt: pres.prompt,
@@ -629,6 +639,9 @@ function FollowupBlock({
       })
       .catch(() => {
         /* reviewReasoning never rejects; belt-and-suspenders */
+      })
+      .finally(() => {
+        if (!cancelled) setFuReviewPending(false);
       });
     return () => {
       cancelled = true;
@@ -729,6 +742,7 @@ function FollowupBlock({
                 prompt={p.prompt}
                 answerWasWrong={followupWrong}
                 spans={fuSpans}
+                reviewing={fuReviewPending}
                 testId="followup-submitted-reasoning"
               />
             </div>

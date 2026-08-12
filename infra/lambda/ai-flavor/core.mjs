@@ -354,6 +354,32 @@ export function mockReviewReasoningMessages(body) {
     "answer (e.g. a coincidental digit). When the reasoning is wrong, point a 'bad' " +
     "span at the SPECIFIC broken premise or mis-identified pattern and explain WHY " +
     "against the actual quantities, WITHOUT revealing the final answer. " +
+    "COVER EVERYTHING LOAD-BEARING, AS WHOLE CLAUSES: mark EVERY correct " +
+    "load-bearing step or explanation good and EVERY flawed/unjustified step bad — " +
+    "do not stop after one span and do not leave the meat of a correct explanation " +
+    "un-highlighted. Prefer WHOLE CLAUSES/PHRASES over single tokens: green the " +
+    "entire mechanistic clause (e.g. the whole 'the constant second difference can " +
+    "be determined and then divided by 2 to get a' and the whole 'solving a linear " +
+    "equation for b and c which can be done with any two of the three terms'), not " +
+    "just a keyword or a lone number inside it. Do NOT green a bare number token on " +
+    "its own (e.g. the '2' in 'any 2 of the three terms') — only green a number when " +
+    "it is the committed final answer stated as such. " +
+    "NEVER GREEN A RESTATEMENT OR A CIRCULAR JUSTIFICATION: a clause that merely " +
+    "repeats the question's own words, or 'justifies' a claim with the claim itself " +
+    "('three terms are enough because it is quadratic', 'because that is enough', " +
+    "'because that's how it works'), explains NOTHING and MUST be tagged bad — even " +
+    "when the final answer is correct — with feedback that names what a real reason " +
+    "would say (e.g. 'a quadratic has three unknowns a, b, c, so three terms give " +
+    "three equations that pin them down; naming the degree is not the reason'). " +
+    "DO NOT MANUFACTURE FLAWS: a substantially-correct load-bearing explanation is " +
+    "GOOD even if terse or slightly loose in WORDING — do NOT redden it for a minor " +
+    "imprecision that does not change the method (e.g. saying 'a linear equation' " +
+    "for a small 2x2 linear system, 'divide by 2' for the second-difference step, " +
+    "or 'any two terms' for two chosen equations are all acceptable and GOOD). " +
+    "Reserve 'bad' for a GENUINELY broken step: false arithmetic, a non-sequitur, a " +
+    "mis-identified pattern/formula, a circular restatement, a hedge, or a wrong " +
+    "conclusion. When in doubt on a CORRECT answer, prefer 'good' for a clause that " +
+    "conveys the right mechanism. " +
     "VERIFIER-GROUNDED LOCALIZATION (when 'Verifier-computed facts' are provided): " +
     "critique the candidate's ACTUAL committed formula, NEVER a re-read or mid-word " +
     "substring, and NEVER invent or evaluate an expression the candidate did not " +

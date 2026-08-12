@@ -38,6 +38,10 @@ import {
   findHedgePhrase,
   findPremiseFlaw,
   hasArithmeticContradiction,
+  hasNewMechanismContent,
+  isCircularJustification,
+  isExplanationRequiredPrompt,
+  isStemRestatement,
   isUninterpretable,
   parseNumericValue,
   statedResultValues,
@@ -334,6 +338,70 @@ function findEqualityRange(text: string): Range | null {
 }
 
 /**
+ * WHOLE-CLAUSE explanation grading for an explanation-required ("why …?") prompt.
+ * For each clause the candidate wrote:
+ *   • a CIRCULAR justification ("because that is enough") or a STEM RESTATEMENT
+ *     ("three terms … because it is quadratic", which lifts "quadratic" straight
+ *     from the stem) is reddened as a NON-explanation — even when the final answer
+ *     is correct — with feedback naming what a real reason would say; else
+ *   • a clause that introduces a GENUINE mechanism (a creditable signal, or a
+ *     content term the stem didn't already give) is greened AS A WHOLE CLAUSE, so
+ *     the load-bearing reasoning is covered fully instead of as a lone keyword.
+ * Skips short connective fragments and any clause already carrying a flawed span
+ * (a false step wins). Full-clause GREEN is withheld when the verifier marked the
+ * answer wrong (the root-cause localizer reddens instead). Mutates `spans`.
+ */
+function annotateExplanationClauses(
+  text: string,
+  spans: ReasoningSpan[],
+  opts: AnnotateOptions,
+  signals: string[] | undefined,
+): void {
+  const prompt = opts.prompt;
+  const evictOverlappingGood = (start: number, end: number) => {
+    for (let i = spans.length - 1; i >= 0; i--) {
+      if (spans[i].label === "good" && !(spans[i].end <= start || spans[i].start >= end))
+        spans.splice(i, 1);
+    }
+  };
+  for (const c of toClauses(text)) {
+    const claim = c.text.trim().replace(/[.,;:]+$/, "");
+    if (claim.split(/\s+/).filter(Boolean).length < 3) continue;
+    // A false step already reddened this clause — that critique wins.
+    if (spans.some((s) => s.label === "flawed" && !(c.end <= s.start || c.start >= s.end)))
+      continue;
+    // RED: circular or a bare restatement of the stem — it explains nothing.
+    if (isCircularJustification(c.text) || isStemRestatement(c.text, prompt)) {
+      evictOverlappingGood(c.start, c.end);
+      spans.push({
+        start: c.start,
+        end: c.end,
+        excerpt: c.text,
+        label: "flawed",
+        why: `This repeats the question rather than answering it — “${claim}” names the property but never says WHY it forces the answer. Give the actual mechanism (e.g. three unknowns need three equations, or the constant second difference fixes the leading coefficient).`,
+      });
+      continue;
+    }
+    // GREEN (whole clause): a genuine mechanism, on a not-wrong answer. Supersede
+    // any tight keyword green already collected inside this clause.
+    if (
+      opts.answerWasWrong !== true &&
+      hasNewMechanismContent(c.text, prompt, signals)
+    ) {
+      evictOverlappingGood(c.start, c.end);
+      if (spans.some((s) => !(c.end <= s.start || c.start >= s.end))) continue;
+      spans.push({
+        start: c.start,
+        end: c.end,
+        excerpt: c.text,
+        label: "good",
+        why: `This is a real, load-bearing explanation — “${claim}” names the mechanism the answer actually turns on.`,
+      });
+    }
+  }
+}
+
+/**
  * Produce SPAN-LEVEL good/flawed annotations for the candidate's reasoning. The
  * spans are disjoint and ordered by position. Garbled / empty text yields NO
  * spans (the UI shows a "not understood" / "no reasoning" state instead). Pure
@@ -361,6 +429,13 @@ export function annotateReasoning(
   const spans: ReasoningSpan[] = [];
   for (const clause of toClauses(text)) {
     collectClauseSpans(clause, greenOpts, spans);
+  }
+  // On an explanation-required ("why …?") prompt, grade whole EXPLANATION clauses
+  // (not just keywords): GREEN a clause that introduces a genuine mechanism, RED a
+  // clause that is circular or merely restates the stem. This is what turns the
+  // "tiny random chunk" fallback into full-clause coverage.
+  if (isExplanationRequiredPrompt(opts.prompt)) {
+    annotateExplanationClauses(text, spans, opts, greenOpts.mechanismSignals);
   }
   addCommittedValueSpan(text, spans, opts);
   localizeRootCause(text, spans, opts);

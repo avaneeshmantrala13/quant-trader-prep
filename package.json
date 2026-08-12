@@ -9,6 +9,7 @@
     "ai:dev": "node scripts/ai-dev-server.mjs",
     "dev:ai": "node scripts/ai-dev-server.mjs & vite",
     "build": "tsc -b && vite build",
+    "build:prod": "bash infra/build-prod.sh",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
