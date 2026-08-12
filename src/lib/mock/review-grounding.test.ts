@@ -23,7 +23,12 @@ vi.mock("@/lib/aiFlavor", () => ({
   postAi: vi.fn(async () => nextPayload),
 }));
 
-import { reviewReasoning, reconcileReviewSpans } from "./aiMock";
+import {
+  reviewReasoning,
+  reconcileReviewSpans,
+  resolveQuoteSpan,
+  type RawReviewSpan,
+} from "./aiMock";
 import type { ReasoningSpan } from "./annotate";
 
 afterEach(() => {
@@ -100,6 +105,51 @@ describe("reviewReasoning — LLM localizes, verifier grounds", () => {
     expect(red!.excerpt).toContain("(n+1)^2");
     void fStart;
   });
+
+  it("(c) QUOTE contract — reddens the circular clause, keeps the correct answer green", async () => {
+    const reasoning =
+      "a = 2, b = -1, c = 3. Three terms are enough because the equation is quadratic.";
+    // The model returns verbatim QUOTES (no offsets) per the new contract.
+    nextPayload = {
+      assessment: "Right coefficients, but the justification is circular.",
+      spans: [
+        {
+          quote: "a = 2, b = -1, c = 3",
+          label: "good",
+          why: "You commit to the correct coefficients.",
+        },
+        {
+          quote: "because the equation is quadratic",
+          label: "bad",
+          why: "This restates the question rather than giving the reason.",
+        },
+      ],
+    };
+
+    const res = await reviewReasoning(
+      {
+        prompt:
+          "For a quadratic aₙ = a·n² + b·n + c, why do just three terms pin a, b, c down?",
+        correctAnswer: "2",
+        correct: true,
+        reasoning,
+      },
+      { verifiedAnswer: 2, answerWasWrong: false },
+    );
+
+    expect(res.source).toBe("ai");
+    // Red lands on the circular clause…
+    const red = res.spans.find((s) => s.label === "flawed");
+    expect(red, "circular clause reddened").toBeTruthy();
+    expect(red!.excerpt).toContain("because the equation is quadratic");
+    // …and NEVER on the correct committed answer.
+    const aStart = reasoning.indexOf("a = 2");
+    const aEnd = aStart + "a = 2, b = -1, c = 3".length;
+    expect(
+      res.spans.some((s) => s.label === "flawed" && s.start < aEnd && s.end > aStart),
+    ).toBe(false);
+    expect(res.spans.some((s) => s.label === "good" && /a = 2/.test(s.excerpt))).toBe(true);
+  });
 });
 
 describe("reconcileReviewSpans — deterministic grounding gate", () => {
@@ -174,5 +224,96 @@ describe("reconcileReviewSpans — deterministic grounding gate", () => {
     });
     // A parroted-stem restatement is never greened, even though the answer is right.
     expect(out.some((s) => s.label === "good")).toBe(false);
+  });
+});
+
+describe("resolveQuoteSpan — verbatim quote → {start,end}", () => {
+  const text =
+    "a = 2, b = -1, c = 3. Three terms are enough because the equation is quadratic.";
+
+  it("finds an EXACT substring", () => {
+    const r = resolveQuoteSpan(text, "because the equation is quadratic");
+    expect(r).not.toBeNull();
+    expect(text.slice(r!.start, r!.end)).toBe("because the equation is quadratic");
+  });
+
+  it("finds the committed-answer substring exactly (never mislocated)", () => {
+    const r = resolveQuoteSpan(text, "a = 2, b = -1, c = 3");
+    expect(r).not.toBeNull();
+    expect(text.slice(r!.start, r!.end)).toBe("a = 2, b = -1, c = 3");
+  });
+
+  it("is whitespace/case tolerant when the copy isn't byte-exact", () => {
+    const r = resolveQuoteSpan(text, "Because  the   Equation is QUADRATIC");
+    expect(r).not.toBeNull();
+    expect(text.slice(r!.start, r!.end).toLowerCase()).toBe(
+      "because the equation is quadratic",
+    );
+  });
+
+  it("returns null for a quote that isn't present", () => {
+    expect(resolveQuoteSpan(text, "second difference is constant")).toBeNull();
+    expect(resolveQuoteSpan(text, "")).toBeNull();
+  });
+});
+
+describe("reconcileReviewSpans — QUOTE contract (recalibration)", () => {
+  const text =
+    "a = 2, b = -1, c = 3. Three terms are enough because the equation is quadratic.";
+  const prompt =
+    "For a quadratic aₙ = a·n² + b·n + c, why do just three terms pin all three coefficients down?";
+
+  it("reddens the CIRCULAR clause via quote, NOT the correct committed answer", () => {
+    // The model now returns verbatim quotes instead of offsets it can't count.
+    const raw: RawReviewSpan[] = [
+      {
+        quote: "a = 2, b = -1, c = 3",
+        label: "good",
+        why: "You commit to the correct coefficients.",
+      },
+      {
+        quote: "because the equation is quadratic",
+        label: "flawed",
+        why: "This restates the question — naming the degree isn't the reason.",
+      },
+    ];
+    const out = reconcileReviewSpans(text, raw, {
+      verifiedAnswer: 2,
+      answerWasWrong: false,
+      prompt,
+    });
+
+    const red = out.find((s) => s.label === "flawed");
+    expect(red, "the circular clause is reddened").toBeTruthy();
+    expect(red!.excerpt).toContain("because the equation is quadratic");
+
+    // The correct committed answer stays GREEN and is NEVER reddened.
+    const answerStart = text.indexOf("a = 2");
+    const answerEnd = answerStart + "a = 2, b = -1, c = 3".length;
+    expect(
+      out.some((s) => s.label === "flawed" && s.start < answerEnd && s.end > answerStart),
+      "the correct answer is not reddened",
+    ).toBe(false);
+    expect(
+      out.some((s) => s.label === "good" && /a = 2/.test(s.excerpt)),
+      "the correct answer stays green",
+    ).toBe(true);
+  });
+
+  it("falls back to legacy offsets when a span carries no quote", () => {
+    const i = text.indexOf("because the equation is quadratic");
+    const raw: RawReviewSpan[] = [
+      { start: i, end: i + "because the equation is quadratic".length, label: "flawed", why: "circular" },
+    ];
+    const out = reconcileReviewSpans(text, raw, { verifiedAnswer: 2, answerWasWrong: false, prompt });
+    expect(out.some((s) => s.label === "flawed" && s.excerpt.includes("quadratic"))).toBe(true);
+  });
+
+  it("DROPS an ungrounded quote that can't be located (no mislocation)", () => {
+    const raw: RawReviewSpan[] = [
+      { quote: "a phrase the candidate never wrote", label: "flawed", why: "nope" },
+    ];
+    const out = reconcileReviewSpans(text, raw, { verifiedAnswer: 2, answerWasWrong: false, prompt });
+    expect(out).toHaveLength(0);
   });
 });

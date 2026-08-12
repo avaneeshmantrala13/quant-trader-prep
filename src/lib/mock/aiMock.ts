@@ -233,6 +233,62 @@ function isGreenGrounded(
 }
 
 /**
+ * A RAW review span as it arrives from the model (before grounding). The model
+ * now returns a verbatim `quote` (the exact substring it refers to) because LLMs
+ * cannot count character offsets reliably; the legacy `{start,end}` offsets are
+ * still accepted as a FALLBACK so older payloads keep working.
+ */
+export interface RawReviewSpan {
+  /** The EXACT verbatim substring of the candidate reasoning (preferred). */
+  quote?: string;
+  /** Legacy character offsets — used only when no `quote` resolves. */
+  start?: number;
+  end?: number;
+  excerpt?: string;
+  label: ReasoningSpan["label"];
+  why?: string;
+}
+
+/** Escape a string for use as a literal inside a RegExp. */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * Resolve a model-supplied verbatim `quote` to a `{start,end}` range in `text`.
+ * Tries, in order: (1) an EXACT substring match, (2) a trimmed exact match, then
+ * (3) a whitespace-and-case-TOLERANT match (collapsing internal whitespace runs).
+ * Picks the FIRST occurrence. Returns `null` when the quote can't be grounded, so
+ * the caller can fall back to offsets or drop the span rather than mislocate it.
+ */
+export function resolveQuoteSpan(
+  text: string,
+  quote: string,
+): { start: number; end: number } | null {
+  if (typeof quote !== "string" || quote.trim() === "") return null;
+  // (1) Exact substring.
+  let idx = text.indexOf(quote);
+  if (idx >= 0) return { start: idx, end: idx + quote.length };
+  // (2) Trimmed exact substring.
+  const trimmed = quote.trim();
+  if (trimmed !== quote) {
+    idx = text.indexOf(trimmed);
+    if (idx >= 0) return { start: idx, end: idx + trimmed.length };
+  }
+  // (3) Whitespace/case-tolerant: match the token sequence with flexible spacing.
+  const tokens = trimmed.split(/\s+/).filter(Boolean).map(escapeRegExp);
+  if (tokens.length === 0) return null;
+  try {
+    const re = new RegExp(tokens.join("\\s+"), "i");
+    const m = re.exec(text);
+    if (m) return { start: m.index, end: m.index + m[0].length };
+  } catch {
+    /* malformed pattern — fall through to null */
+  }
+  return null;
+}
+
+/**
  * RECONCILE raw LLM review spans against the DETERMINISTIC verifier — the
  * anti-jailbreak core. The LLM supplies localization + human `why` wording, but
  * it can NEVER fabricate correctness:
@@ -247,7 +303,7 @@ function isGreenGrounded(
  */
 export function reconcileReviewSpans(
   text: string,
-  rawSpans: ReasoningSpan[],
+  rawSpans: RawReviewSpan[],
   opts: {
     verifiedAnswer?: number | null;
     answerWasWrong?: boolean;
@@ -261,15 +317,36 @@ export function reconcileReviewSpans(
   const n = text.length;
   const out: ReasoningSpan[] = [];
   for (const s of rawSpans) {
-    const rawStart = Math.max(0, Math.min(n, Math.floor(s.start)));
-    const rawEnd = Math.max(0, Math.min(n, Math.floor(s.end)));
+    // Resolve geometry: PREFER the verbatim quote (LLMs can't count offsets), and
+    // fall back to legacy start/end only when a quote is absent or can't be found.
+    let rawStart: number | null = null;
+    let rawEnd: number | null = null;
+    if (typeof s.quote === "string" && s.quote.trim() !== "") {
+      const q = resolveQuoteSpan(text, s.quote);
+      if (q) {
+        rawStart = q.start;
+        rawEnd = q.end;
+      }
+    }
+    if (
+      rawStart === null &&
+      Number.isFinite(s.start as number) &&
+      Number.isFinite(s.end as number)
+    ) {
+      rawStart = Math.max(0, Math.min(n, Math.floor(s.start as number)));
+      rawEnd = Math.max(0, Math.min(n, Math.floor(s.end as number)));
+    }
+    // An ungrounded quote with no usable offsets is dropped (never mislocated).
+    if (rawStart === null || rawEnd === null) continue;
     if (rawEnd <= rawStart) continue;
     // Snap to WORD BOUNDARIES first so an LLM offset that landed mid-word (the
     // reported `n 3n^2` bleed) is corrected before we ground/label the excerpt.
     const snapped = snapSpanToWordBoundaries(text, {
-      ...s,
       start: rawStart,
       end: rawEnd,
+      excerpt: text.slice(rawStart, rawEnd),
+      label: s.label,
+      why: s.why ?? "",
     });
     const start = snapped.start;
     const end = snapped.end;
@@ -342,17 +419,14 @@ export function reconcileReviewSpans(
  */
 export function normalizeReviewPayload(
   payload: Record<string, unknown> | null,
-): { spans: ReasoningSpan[]; assessment: string } {
-  const spans: ReasoningSpan[] = [];
+): { spans: RawReviewSpan[]; assessment: string } {
+  const spans: RawReviewSpan[] = [];
   const raw = payload?.["spans"];
   if (Array.isArray(raw)) {
     for (const c of raw) {
       if (!c || typeof c !== "object") continue;
       const obj = c as Record<string, unknown>;
-      const start = Number(obj["start"]);
-      const end = Number(obj["end"]);
       const rawLabel = obj["label"];
-      if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
       // The server emits "flawed"; tolerate a raw model "bad" too.
       const label: ReasoningSpan["label"] | null =
         rawLabel === "good"
@@ -361,10 +435,21 @@ export function normalizeReviewPayload(
             ? "flawed"
             : null;
       if (label === null) continue;
+      // PREFER a verbatim quote (the model can't count offsets); keep numeric
+      // start/end only as a legacy fallback. Drop a span with neither.
+      const quote =
+        typeof obj["quote"] === "string" && (obj["quote"] as string).trim() !== ""
+          ? (obj["quote"] as string)
+          : undefined;
+      const start = Number(obj["start"]);
+      const end = Number(obj["end"]);
+      const hasOffsets = Number.isFinite(start) && Number.isFinite(end);
+      if (!quote && !hasOffsets) continue;
       const why = typeof obj["why"] === "string" ? (obj["why"] as string) : "";
       spans.push({
-        start,
-        end,
+        quote,
+        start: hasOffsets ? start : undefined,
+        end: hasOffsets ? end : undefined,
         excerpt: typeof obj["excerpt"] === "string" ? (obj["excerpt"] as string) : "",
         label,
         why,

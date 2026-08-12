@@ -283,7 +283,7 @@ describe("shared AI core — every mode returns contract-shaped JSON", () => {
     expect(res.payload.claims[1]).toMatchObject({ kind: "final-answer", value: 2 });
   });
 
-  it("mock-review-reasoning → { ok, spans[], assessment } and maps bad→flawed", async () => {
+  it("mock-review-reasoning → { ok, spans[], assessment } and maps bad→flawed (legacy offsets)", async () => {
     const res = await core.routeAiRequest({
       body: { mode: "mock-review-reasoning", prompt: "Q", correctAnswer: "2", reasoning: "abc" },
       callLLM: mockCaller('{"spans":[{"start":0,"end":3,"label":"bad","why":"nope"}],"assessment":"ok"}'),
@@ -291,7 +291,34 @@ describe("shared AI core — every mode returns contract-shaped JSON", () => {
     expect(res.payload.ok).toBe(true);
     expect(res.payload.spans).toHaveLength(1);
     expect(res.payload.spans[0].label).toBe("flawed");
+    // Legacy offsets are preserved as a fallback.
+    expect(res.payload.spans[0].start).toBe(0);
+    expect(res.payload.spans[0].end).toBe(3);
     expect(res.payload.assessment).toBe("ok");
+  });
+
+  it("mock-review-reasoning → passes through a verbatim QUOTE (preferred contract)", async () => {
+    const res = await core.routeAiRequest({
+      body: { mode: "mock-review-reasoning", prompt: "Q", correctAnswer: "2", reasoning: "a = 2 because it is quadratic" },
+      callLLM: mockCaller(
+        '{"spans":[{"quote":"because it is quadratic","label":"bad","why":"circular"}],"assessment":"ok"}',
+      ),
+    });
+    expect(res.payload.ok).toBe(true);
+    expect(res.payload.spans).toHaveLength(1);
+    expect(res.payload.spans[0].label).toBe("flawed");
+    expect(res.payload.spans[0].quote).toBe("because it is quadratic");
+    // No offsets were fabricated for a quote-only span.
+    expect(res.payload.spans[0].start).toBeUndefined();
+  });
+
+  it("mock-review-reasoning → drops a span with neither quote nor offsets", async () => {
+    const res = await core.routeAiRequest({
+      body: { mode: "mock-review-reasoning", prompt: "Q", correctAnswer: "2", reasoning: "abc" },
+      callLLM: mockCaller('{"spans":[{"label":"good","why":"no anchor"}],"assessment":"ok"}'),
+    });
+    expect(res.payload.ok).toBe(true);
+    expect(res.payload.spans).toHaveLength(0);
   });
 
   it("mock-clarify-grade → { ok, resolved, issues[] }", async () => {

@@ -344,8 +344,11 @@ export function mockReviewReasoningMessages(body) {
     "reasoning. A deterministic verifier ALREADY knows the correct answer (given " +
     "to you as context) and will RE-CHECK everything you return — you must NEVER " +
     "state a pass/fail verdict, a score, or the word 'correct' as a judgement. " +
-    "Your job is to LOCALIZE and EXPLAIN. Return DISJOINT character spans over the " +
-    "EXACT candidate reasoning string (0-based [start,end) offsets into it), each " +
+    "Your job is to LOCALIZE and EXPLAIN. Return DISJOINT spans over the candidate's " +
+    "reasoning. For EACH span, return the EXACT verbatim substring it refers to as " +
+    "`quote`: copy it CHARACTER-FOR-CHARACTER out of the candidate's reasoning (same " +
+    "words, same punctuation, same casing) — do NOT paraphrase, summarize, or " +
+    "re-spell it, and do NOT compute or return character offsets. Each span is " +
     "tagged good or bad with SPECIFIC, human feedback that QUOTES the candidate's " +
     "own words. GROUND every 'good' span: only mark a step good if it is a " +
     "genuinely correct load-bearing step (a computation that actually holds, a " +
@@ -387,10 +390,15 @@ export function mockReviewReasoningMessages(body) {
     "span MUST map to that exact literal text in the candidate's reasoning. Phrase " +
     "every counterexample using the verifier's real numbers (the candidate " +
     "formula's own value at that n vs the true term) — do not compute your own. " +
+    "IMPORTANT: your primary 'bad' span must QUOTE the circular/restatement " +
+    "JUSTIFICATION clause itself (e.g. \"because it is quadratic\"), NEVER the " +
+    "candidate's correct committed answer values (e.g. \"a = 2, b = -1, c = 3\") — a " +
+    "correct committed answer is never reddened just for lacking a stated reason. " +
     "Respond as " +
-    'strict JSON with EXACTLY these keys: "spans" (array of {"start":int, "end":int, ' +
-    '"label":"good"|"bad", "why":string}) and "assessment" (one or two sentences of ' +
-    "overall, advisory feedback). No markdown, no extra keys.";
+    'strict JSON with EXACTLY these keys: "spans" (array of {"quote":string, ' +
+    '"label":"good"|"bad", "why":string} where "quote" is the EXACT verbatim ' +
+    "substring copied from the candidate's reasoning) and \"assessment\" (one or two " +
+    "sentences of overall, advisory feedback). No markdown, no extra keys.";
   const f = body.verifierFacts && typeof body.verifierFacts === "object" ? body.verifierFacts : null;
   const factsBlock = f
     ? "Verifier-computed facts (AUTHORITATIVE — highlight/critique ONLY within these):\n" +
@@ -422,7 +430,7 @@ export function mockReviewReasoningMessages(body) {
       ? `Accepted mechanism phrasings: ${body.mechanismSignals.join(", ")}\n`
       : "") +
     (factsBlock ? `\n${factsBlock}` : "") +
-    `\nCandidate's reasoning (offsets are into THIS exact string):\n${body.reasoning || "(none)"}\n\n` +
+    `\nCandidate's reasoning (quote EXACT substrings copied verbatim from THIS text):\n${body.reasoning || "(none)"}\n\n` +
     "Return the JSON now (localize + explain; do NOT state a correctness verdict):";
   return { sys, user };
 }
@@ -824,9 +832,6 @@ export async function routeAiRequest({ body, callLLM }) {
       const spans = [];
       for (const s of rawSpans) {
         if (!s || typeof s !== "object") continue;
-        const start = Number(s.start);
-        const end = Number(s.end);
-        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
         // Normalize the model's "bad" onto the client's "flawed" vocabulary.
         const label =
           s.label === "good"
@@ -835,7 +840,20 @@ export async function routeAiRequest({ body, callLLM }) {
               ? "flawed"
               : null;
         if (!label) continue;
-        spans.push({ start, end, label, why: asString(s.why, "") });
+        // PREFER a verbatim quote (LLMs can't count character offsets reliably);
+        // keep optional numeric start/end only as a legacy fallback.
+        const quote = typeof s.quote === "string" && s.quote.trim() ? s.quote : "";
+        const start = Number(s.start);
+        const end = Number(s.end);
+        const hasOffsets = Number.isFinite(start) && Number.isFinite(end);
+        if (!quote && !hasOffsets) continue;
+        const span = { label, why: asString(s.why, "") };
+        if (quote) span.quote = quote;
+        if (hasOffsets) {
+          span.start = start;
+          span.end = end;
+        }
+        spans.push(span);
       }
       return {
         status: 200,
