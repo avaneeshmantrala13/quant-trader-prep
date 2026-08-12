@@ -128,3 +128,23 @@ model-explanation content so the “See model explanation” reveal can show.
 **Verdicts: 3/3 (100.0%)** · **Red localization: 3/3 (100.0%)** · **False-reds on correct claims: 0** · **Missing model content: 0**
 
 No false reds on correct load-bearing claims.
+
+## Explanation-required (“why”) follow-ups — stem-echo / circular parrot guard
+
+A “why do k terms pin all k coefficients?” follow-up is NOT satisfied by the
+correct value plus a keyword LIFTED FROM THE STEM (“three terms”) or a CIRCULAR
+non-reason (“because that is enough”). The candidate must name the actual
+mechanism (k equations / k unknowns / degrees of freedom, or the variance).
+The stem-echo phrase is also never greened as “the key mechanism.”
+
+| Case | Verdict | Sound OK | No false-green | Green OK |
+|---|---|---|---|---|
+| quad-abc: parrot 'three terms because that is enough' → NOT sound, no green on stem echo | not sound | ✓ | ✓ | ✓ |
+| quad-abc: genuine 'three equations in three unknowns' → sound | sound | ✓ | ✓ | ✓ |
+| quad-abc: genuine 'half the second difference' → sound | sound | ✓ | ✓ | ✓ |
+| variance-why: parrot 'larger because that is just how it works' → NOT sound | not sound | ✓ | ✓ | ✓ |
+| variance-why: genuine 'because of the variance' → sound | sound | ✓ | ✓ | ✓ |
+
+**Sound classification: 5/5 (100.0%)** · **False-greens on stem echoes: 0**
+
+No stem-echo phrase greened as a mechanism.

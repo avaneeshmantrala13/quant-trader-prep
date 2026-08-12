@@ -336,6 +336,9 @@ function firstValueIn(text: string): number | null {
  */
 export function specFromPresentation(p: FollowupPresentation): ConclusionSpec {
   return {
+    // Carry the prompt so the grader can detect an explanation-required ("why")
+    // follow-up and discount mechanism signals that merely echo the stem.
+    ...(p.prompt ? { prompt: p.prompt } : {}),
     ...(p.conclusionKeywords ? { correctKeywords: p.conclusionKeywords } : {}),
     ...(p.conclusionTargets ? { correctValues: p.conclusionTargets } : {}),
     ...(p.conclusionMode ? { mode: p.conclusionMode } : {}),

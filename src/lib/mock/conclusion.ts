@@ -35,6 +35,9 @@ import {
   matchesMechanismSignal,
   isHandWaveOnly,
   isUninterpretable,
+  creditableMechanismSignals,
+  isExplanationRequiredPrompt,
+  isCircularJustification,
 } from "./reasoning";
 import type { ClarifyKind, ConclusionMode } from "./types";
 
@@ -79,6 +82,13 @@ export interface ConclusionSpec {
   mechanismSignals?: string[];
   /** Extra pure hand-waves that can never alone justify this question. */
   bannedAsSoleJustification?: string[];
+  /**
+   * The question prompt/stem. Used to (a) detect an explanation-required ("why")
+   * follow-up and (b) discount mechanism signals that merely ECHO the stem, so a
+   * committed value + a parroted stem word ("three terms") no longer passes the
+   * mechanism gate. Optional/back-compat: when absent, no echo-discounting runs.
+   */
+  prompt?: string;
 }
 
 /** The grader's result: a verdict plus a human reason and an optional clarify. */
@@ -294,8 +304,17 @@ export function gradeConclusion(
   const mode = spec.mode ?? "all";
   const mechanismSignals = spec.mechanismSignals ?? [];
   const requiresMechanism = mechanismSignals.length > 0;
+  const explanationRequired = isExplanationRequiredPrompt(spec.prompt);
+  // For an explanation-required ("why") prompt, discount mechanism signals that
+  // merely ECHO the question stem ("three terms") — a parroted stem word proves
+  // no understanding. What remains are signals that name the actual reason.
+  const creditableSignals = creditableMechanismSignals(mechanismSignals, spec.prompt);
   const hasMechanism =
-    requiresMechanism && matchesMechanismSignal(text, mechanismSignals);
+    requiresMechanism &&
+    matchesMechanismSignal(text, creditableSignals) &&
+    // A circular / vacuous "reason" ("…because that is enough") never counts as
+    // naming the mechanism on a why-prompt, even if a stray keyword matched.
+    !(explanationRequired && isCircularJustification(text));
   const handWaveOnly = isHandWaveOnly(text, spec.bannedAsSoleJustification ?? []);
 
   // --- 1) empty → missed --------------------------------------------------
@@ -449,7 +468,12 @@ export function gradeConclusion(
   // A PURE hand-wave ("the math checks out / it's obvious / trust me") is never
   // a substantive answer, even without an authored spec (the universal guard).
   const substantive =
-    text !== "" && !handWaveOnly && (vals.length > 0 || words(text) >= 6);
+    text !== "" &&
+    !handWaveOnly &&
+    // On a why-prompt, a purely CIRCULAR "reason" is not a substantive answer,
+    // even when it clears the word-count floor.
+    !(explanationRequired && isCircularJustification(text)) &&
+    (vals.length > 0 || words(text) >= 6);
   if (substantive && requiresMechanism && !hasMechanism) {
     return clarifyOr(
       "Substantive but did not state the required mechanism/justification.",

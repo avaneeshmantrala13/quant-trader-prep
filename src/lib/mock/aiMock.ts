@@ -21,6 +21,7 @@ import { env, postAi } from "@/lib/aiFlavor";
 import {
   allValuesIn,
   checkCommittedFormula,
+  creditableMechanismSignals,
   evalArithmetic,
   evalInN,
   findFalseArithmetic,
@@ -462,7 +463,13 @@ export async function reviewReasoning(
   const grounded = reconcileReviewSpans(input.reasoning ?? "", rawSpans, {
     verifiedAnswer,
     answerWasWrong: ctx.answerWasWrong,
-    mechanismSignals,
+    // Ground GREEN mechanism spans only on signals that don't merely ECHO the
+    // stem of an explanation-required ("why") prompt — so the LLM can't green a
+    // parroted stem phrase ("three terms") as a named mechanism.
+    mechanismSignals: creditableMechanismSignals(
+      mechanismSignals ?? [],
+      input.prompt,
+    ),
   });
   // Nothing usable survived grounding → keep the deterministic floor.
   if (grounded.length === 0) return floor();

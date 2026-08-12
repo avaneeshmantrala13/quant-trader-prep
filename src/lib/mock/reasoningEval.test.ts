@@ -25,10 +25,13 @@ import {
   renderQualityMarkdown,
   runFollowupReasoningEval,
   renderFollowupReasoningMarkdown,
+  runExplanationFollowupEval,
+  renderExplanationFollowupMarkdown,
   GATE_CASES,
   LOCALIZATION_CASES,
   REVIEW_GROUNDING_CASES,
   FOLLOWUP_REASONING_CASES,
+  EXPLANATION_FOLLOWUP_CASES,
   derivationsForQuestion,
   type LabeledDerivation,
 } from "./reasoningEval";
@@ -36,7 +39,12 @@ import { attachRequiredReasoning, drawArchetype } from "./questionPools";
 import { extractClaimsDeterministic, gradeReasoningFromClaims } from "./claims";
 import { rubricForId } from "./rubrics";
 import { Rng } from "@/lib/rng";
-import type { ReasoningInput } from "./reasoning";
+import { gradeReasoningDeterministic, type ReasoningInput } from "./reasoning";
+import {
+  buildFollowupPresentations,
+  gradeReasoningConclusion,
+} from "./followups";
+import { annotateReasoning } from "./annotate";
 
 const SEEDS = Array.from({ length: 30 }, (_, i) => 1000 + i * 7);
 
@@ -80,6 +88,7 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
     const gate = runGateEval();
     const review = runReviewGroundingEval();
     const fuReason = runFollowupReasoningEval();
+    const explFu = runExplanationFollowupEval();
     // eslint-disable-next-line no-console
     console.log(
       `[gran] maxGreenOnCorrect=${(gran.maxGreenCoverageCorrect * 100).toFixed(1)}% ` +
@@ -101,7 +110,8 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
       ) +
       renderLocalizationMarkdown(loc) +
       renderQualityMarkdown(gran, gate, review) +
-      renderFollowupReasoningMarkdown(fuReason);
+      renderFollowupReasoningMarkdown(fuReason) +
+      renderExplanationFollowupMarkdown(explFu);
     try {
       writeFileSync(
         resolve(process.cwd(), "datasets/reasoning-eval-metrics.md"),
@@ -196,6 +206,27 @@ describe("reasoning grader — extract-and-verify evaluation harness", () => {
     expect(
       fuReason.missingModel,
       `follow-ups missing model-explanation content:\n${fuReason.missingModel.join("\n")}`,
+    ).toEqual([]);
+
+    // ---- Explanation-required ("why") follow-ups: stem-echo / circular guard ----
+    // A parrot (correct value + stem word "three terms" + "because that is
+    // enough") is NOT sound and its stem echo is never greened; a genuine
+    // mechanistic explanation (k equations / k unknowns / variance) IS sound.
+    expect(explFu.total).toBe(EXPLANATION_FOLLOWUP_CASES.length);
+    expect(
+      explFu.soundCorrect,
+      `explanation follow-up sound mismatches:\n${explFu.perCase
+        .filter((c) => !c.soundOk)
+        .map((c) => `${c.label}: sound=${c.sound}`)
+        .join("\n")}`,
+    ).toBe(explFu.total);
+    expect(
+      explFu.falseGreens,
+      `stem-echo phrases wrongly greened:\n${explFu.falseGreens.join("\n")}`,
+    ).toEqual([]);
+    expect(
+      explFu.perCase.filter((c) => !c.greenOk).map((c) => c.label),
+      "genuine mechanism phrases should be greened when sound",
     ).toEqual([]);
 
     // ---- Hard acceptance gates (per-archetype and total) ----
@@ -311,5 +342,72 @@ describe("extract-and-verify — verdict is deterministic & non-jailbreakable", 
     expect(ds.some((d) => d.label === "positive" && d.canonical)).toBe(true);
     expect(ds.some((d) => d.label === "negative" && d.category === "false-arith")).toBe(true);
     expect(ds.filter((d) => d.label === "positive").length).toBeGreaterThan(1);
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/*  Reported bug: "why do k terms pin all k coefficients?" parrot / circular    */
+/* -------------------------------------------------------------------------- */
+
+describe("explanation-required follow-up — parrot/circular answers are NOT sound", () => {
+  const demo = drawArchetype(new Rng(1), "optiver-quadratic-demo");
+  const adversarial = buildFollowupPresentations(demo.followups!, 20000).adversarial;
+
+  it("is the reported screenshot-1 adversarial (why do three terms pin a,b,c?)", () => {
+    expect(adversarial.answerKind).toBe("reasoning");
+    expect(adversarial.prompt).toMatch(/why do just three of the shown terms/i);
+    expect(adversarial.mechanismSignals ?? []).toContain("three terms");
+  });
+
+  it("REJECTS the exact parrot 'three terms because that is enough' (was wrongly SOUND)", () => {
+    const raw =
+      "a = 2, b = -1, and c = 3. We only need three terms because that is enough.";
+    const score = gradeReasoningConclusion(adversarial, raw, 5000);
+    // The bug marked this "correct"; it must now NOT be sound.
+    expect(score.correct).toBe(false);
+    expect(score.verdict).not.toBe("correct");
+
+    // And the stem echo "three terms" must NOT be greened as the key mechanism.
+    const spans = annotateReasoning(raw, {
+      prompt: adversarial.prompt,
+      verifiedAnswer: adversarial.conclusionTargets?.[0] ?? null,
+      mechanismSignals: adversarial.mechanismSignals,
+      answerWasWrong: score.verdict === "missed",
+    });
+    const idx = raw.indexOf("three terms");
+    const greenedStemEcho = spans.some(
+      (s) => s.label === "good" && !(s.end <= idx || s.start >= idx + "three terms".length),
+    );
+    expect(greenedStemEcho, "parroted stem phrase greened as mechanism").toBe(false);
+  });
+
+  it("ACCEPTS a genuine 'three equations in three unknowns' explanation as sound", () => {
+    const raw =
+      "a = 2, b = -1, c = 3. Three data points give three equations in three unknowns, so a, b and c are uniquely determined.";
+    const score = gradeReasoningConclusion(adversarial, raw, 5000);
+    expect(score.correct).toBe(true);
+    expect(score.verdict).toBe("correct");
+  });
+
+  it("ACCEPTS the second-difference shortcut as a genuine mechanism", () => {
+    const raw =
+      "a = 2 because a is half the constant second difference (4/2 = 2); the three unknowns need three terms to also fix b = -1 and c = 3.";
+    expect(gradeReasoningConclusion(adversarial, raw, 5000).correct).toBe(true);
+  });
+
+  it("keeps screenshot-2's base 'second difference \u2192 95' answer SOUND", () => {
+    // The base "next term" question is NOT explanation-required, so naming the
+    // constant-second-difference mechanism + committing to 95 stays sound. Base
+    // mechanism signals live under requiredReasoning after attach.
+    const withReq = attachRequiredReasoning(demo);
+    const grade = gradeReasoningDeterministic({
+      prompt: withReq.prompt,
+      correctAnswer: String(withReq.answer),
+      correct: true,
+      reasoning: "The second difference is constant at 6 so the next term is 95.",
+      isMentalMath: false,
+      mechanismSignals: withReq.requiredReasoning?.mechanismSignals,
+    });
+    expect(grade.quality).toBe("sound");
   });
 });

@@ -30,6 +30,7 @@
 import {
   allValuesIn,
   checkCommittedFormula,
+  creditableMechanismSignals,
   evalArithmetic,
   findClosedFormMismatch,
   findFalseArithmetic,
@@ -346,9 +347,20 @@ export function annotateReasoning(
   if (text.trim() === "") return [];
   // Genuinely garbled text has no meaningful spans to highlight.
   if (isUninterpretable(text)) return [];
+  // For the GREEN "you name the key mechanism" attribution, only credit signals
+  // that don't merely ECHO the stem on an explanation-required ("why") prompt —
+  // so a parroted stem phrase ("three terms") is never greened as "the key
+  // mechanism" when no genuine reason was given. A no-op for non-why prompts.
+  const greenOpts: AnnotateOptions = {
+    ...opts,
+    mechanismSignals: creditableMechanismSignals(
+      opts.mechanismSignals ?? [],
+      opts.prompt,
+    ),
+  };
   const spans: ReasoningSpan[] = [];
   for (const clause of toClauses(text)) {
-    collectClauseSpans(clause, opts, spans);
+    collectClauseSpans(clause, greenOpts, spans);
   }
   addCommittedValueSpan(text, spans, opts);
   localizeRootCause(text, spans, opts);

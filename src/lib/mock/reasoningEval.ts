@@ -38,7 +38,11 @@ import {
   type ConclusionSpec,
   type ConclusionVerdict,
 } from "./conclusion";
-import { buildAiFollowup, gradeReasoningConclusion } from "./followups";
+import {
+  buildAiFollowup,
+  buildFollowupPresentations,
+  gradeReasoningConclusion,
+} from "./followups";
 import type { FollowupPresentation } from "./types";
 import {
   extractClaimsDeterministic,
@@ -692,6 +696,7 @@ export type Annotator = (
     prompt?: string;
     verifiedAnswer?: number | null;
     answerWasWrong?: boolean;
+    mechanismSignals?: string[];
   },
 ) => ReasoningSpan[];
 
@@ -1406,6 +1411,216 @@ export function renderFollowupReasoningMarkdown(m: FollowupReasoningMetrics): st
       `**Missing model content: ${m.missingModel.length}**`,
     "",
     m.falseReds.length > 0 ? `False reds: ${m.falseReds.join("; ")}` : "No false reds on correct load-bearing claims.",
+    "",
+  ].join("\n");
+}
+
+/* -------------------------------------------------------------------------- */
+/*  EXPLANATION-REQUIRED ("why") FOLLOW-UPS — stem-echo / circular parrot guard */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * A "why do k terms/points pin all k parameters" (or any explanation-required)
+ * follow-up. The candidate must convey the ACTUAL reason (k equations / k
+ * unknowns / degrees of freedom), not merely commit to the value plus a keyword
+ * LIFTED FROM THE STEM ("three terms") or a CIRCULAR non-reason ("because that
+ * is enough"). This corpus reproduces the reported screenshot-1 bug and proves
+ * the fix generalizes beyond the one sequence.
+ */
+export interface ExplanationFollowupCase {
+  label: string;
+  presentation: FollowupPresentation;
+  raw: string;
+  /** Must the grader mark this SOUND (verdict "correct")? */
+  sound: boolean;
+  /** A parroted stem phrase that must NOT be greened as "the key mechanism". */
+  noGreenPhrase?: string;
+  /** A genuine mechanism phrase that SHOULD be greened when present + sound. */
+  greenPhrase?: string;
+}
+
+/** The REAL authored demo adversarial presentation (4,9,18,31,48 → a,b,c). */
+function demoQuadraticAdversarial(): FollowupPresentation {
+  const demo = drawArchetype(new Rng(1), "optiver-quadratic-demo");
+  return buildFollowupPresentations(demo.followups!, 20000).adversarial;
+}
+
+/**
+ * A NON-SEQUENCE explanation-required follow-up to prove generality: "is E[X²]
+ * larger…and why?" One correct keyword ("larger") is ALSO in the stem (a stem
+ * echo that must not count as a mechanism); the genuine mechanism is "variance"
+ * / "spread" / "Jensen". A committed-right-side + stem-echo/circular non-reason
+ * must NOT pass; a real variance explanation must.
+ */
+function varianceWhyAdversarial(): FollowupPresentation {
+  return {
+    prompt:
+      "Is E[X\u00b2] larger or smaller than (E[X])\u00b2 for a non-constant X, and why? Commit to a side and explain.",
+    source: "authored",
+    role: "adversarial",
+    label: "Follow-up 2 of 2 \u00b7 Adversarial",
+    answerKind: "reasoning",
+    conclusionKeywords: [["larger", "bigger", "greater"]],
+    conclusionMode: "all",
+    mechanismSignals: [
+      "larger", "bigger", "greater", "variance", "var(x)", "spread",
+      "jensen", "non-negative", "square of the deviation",
+    ],
+    targetMs: 20000,
+  };
+}
+
+export const EXPLANATION_FOLLOWUP_CASES: ExplanationFollowupCase[] = [
+  {
+    // THE REPORTED BUG (screenshot 1): correct a/b/c values + the stem word
+    // "three terms" + a CIRCULAR non-reason. Must NOT be sound, and "three
+    // terms" must NOT be greened as the key mechanism.
+    label: "quad-abc: parrot 'three terms because that is enough' \u2192 NOT sound, no green on stem echo",
+    presentation: demoQuadraticAdversarial(),
+    raw: "a = 2, b = -1, and c = 3. We only need three terms because that is enough.",
+    sound: false,
+    noGreenPhrase: "three terms",
+  },
+  {
+    // A GENUINE explanation of the same archetype (three data points → three
+    // equations in three unknowns) → sound.
+    label: "quad-abc: genuine 'three equations in three unknowns' \u2192 sound",
+    presentation: demoQuadraticAdversarial(),
+    raw: "a = 2, b = -1, c = 3. Three data points give three equations in three unknowns, so a, b and c are uniquely determined.",
+    sound: true,
+    greenPhrase: "three equations",
+  },
+  {
+    // The second-difference shortcut is also a genuine mechanism → sound.
+    label: "quad-abc: genuine 'half the second difference' \u2192 sound",
+    presentation: demoQuadraticAdversarial(),
+    raw: "a = 2 because a is half the constant second difference (4/2 = 2); with three unknowns you need three terms to fit b = -1 and c = 3.",
+    sound: true,
+    greenPhrase: "second difference",
+  },
+  {
+    // NON-SEQUENCE parrot: commits to the right side ("larger") but the only
+    // "reason" is the stem word + a circular non-reason → NOT sound.
+    label: "variance-why: parrot 'larger because that is just how it works' \u2192 NOT sound",
+    presentation: varianceWhyAdversarial(),
+    raw: "E[X\u00b2] is larger than (E[X])\u00b2 because that is just how it works.",
+    sound: false,
+    noGreenPhrase: "larger",
+  },
+  {
+    // NON-SEQUENCE genuine: the variance mechanism → sound.
+    label: "variance-why: genuine 'because of the variance' \u2192 sound",
+    presentation: varianceWhyAdversarial(),
+    raw: "It's larger because E[X\u00b2] - (E[X])\u00b2 is the variance, which is non-negative and strictly positive for a non-constant X.",
+    sound: true,
+    greenPhrase: "variance",
+  },
+];
+
+export interface ExplanationFollowupCaseResult {
+  label: string;
+  sound: boolean;
+  soundOk: boolean;
+  /** The stem-echo phrase was NOT greened (false-green guard). */
+  noGreenOk: boolean;
+  /** The genuine mechanism phrase WAS greened when expected. */
+  greenOk: boolean;
+}
+
+export interface ExplanationFollowupMetrics {
+  total: number;
+  soundCorrect: number;
+  /** Stem-echo phrases wrongly greened (must be 0). */
+  falseGreens: string[];
+  perCase: ExplanationFollowupCaseResult[];
+}
+
+/**
+ * Grade + annotate every explanation-required follow-up case through the REAL
+ * committed-conclusion grader (`gradeReasoningConclusion`) and the deterministic
+ * annotator (the offline floor of `reviewReasoning`). Asserts: the parrot / stem
+ * -echo / circular answers are NOT sound while genuine mechanistic explanations
+ * ARE, and a parroted stem phrase is never greened as "the key mechanism".
+ */
+export function runExplanationFollowupEval(
+  cases: ExplanationFollowupCase[] = EXPLANATION_FOLLOWUP_CASES,
+  annotate: Annotator = annotateReasoning,
+): ExplanationFollowupMetrics {
+  const perCase: ExplanationFollowupCaseResult[] = [];
+  let soundCorrect = 0;
+  const falseGreens: string[] = [];
+  for (const c of cases) {
+    const score = gradeReasoningConclusion(c.presentation, c.raw, 5000);
+    const sound = score.verdict === "correct";
+    const soundOk = sound === c.sound;
+
+    const spans = annotate(c.raw, {
+      prompt: c.presentation.prompt,
+      verifiedAnswer: c.presentation.conclusionTargets?.[0] ?? null,
+      answerWasWrong: score.verdict === "missed",
+      // The follow-up carries mechanism signals on the presentation (mirrors the
+      // UI wiring of `reviewReasoning`).
+      mechanismSignals: c.presentation.mechanismSignals,
+    });
+
+    let noGreenOk = true;
+    if (c.noGreenPhrase) {
+      const idx = c.raw.toLowerCase().indexOf(c.noGreenPhrase.toLowerCase());
+      if (idx >= 0) {
+        const end = idx + c.noGreenPhrase.length;
+        noGreenOk = !spans.some(
+          (s) => s.label === "good" && !(s.end <= idx || s.start >= end),
+        );
+      }
+      if (!noGreenOk) falseGreens.push(`[${c.label}] ${c.noGreenPhrase}`);
+    }
+
+    // A SOUND genuine explanation must earn at least one GREEN span — a credited
+    // (non-stem-echo) mechanism / correct step — so the learner sees what landed
+    // right. (We don't pin the exact phrase: several genuine signals may match;
+    // the annotator greens the earliest.)
+    let greenOk = true;
+    if (c.sound) {
+      greenOk = spans.some((s) => s.label === "good");
+    }
+
+    if (soundOk) soundCorrect++;
+    perCase.push({ label: c.label, sound, soundOk, noGreenOk, greenOk });
+  }
+  return { total: cases.length, soundCorrect, falseGreens, perCase };
+}
+
+/** Render the explanation-follow-up metrics as a Markdown section. */
+export function renderExplanationFollowupMarkdown(
+  m: ExplanationFollowupMetrics,
+): string {
+  const pct = (n: number, d: number) => `${d > 0 ? ((n / d) * 100).toFixed(1) : "100.0"}%`;
+  const rows = m.perCase
+    .map(
+      (c) =>
+        `| ${c.label} | ${c.sound ? "sound" : "not sound"} | ${c.soundOk ? "\u2713" : "\u2717"} | ${c.noGreenOk ? "\u2713" : "\u2717"} | ${c.greenOk ? "\u2713" : "\u2717"} |`,
+    )
+    .join("\n");
+  return [
+    "",
+    "## Explanation-required (\u201cwhy\u201d) follow-ups \u2014 stem-echo / circular parrot guard",
+    "",
+    "A \u201cwhy do k terms pin all k coefficients?\u201d follow-up is NOT satisfied by the",
+    "correct value plus a keyword LIFTED FROM THE STEM (\u201cthree terms\u201d) or a CIRCULAR",
+    "non-reason (\u201cbecause that is enough\u201d). The candidate must name the actual",
+    "mechanism (k equations / k unknowns / degrees of freedom, or the variance).",
+    "The stem-echo phrase is also never greened as \u201cthe key mechanism.\u201d",
+    "",
+    "| Case | Verdict | Sound OK | No false-green | Green OK |",
+    "|---|---|---|---|---|",
+    rows,
+    "",
+    `**Sound classification: ${m.soundCorrect}/${m.total} (${pct(m.soundCorrect, m.total)})** \u00b7 ` +
+      `**False-greens on stem echoes: ${m.falseGreens.length}**`,
+    "",
+    m.falseGreens.length > 0
+      ? `False greens: ${m.falseGreens.join("; ")}`
+      : "No stem-echo phrase greened as a mechanism.",
     "",
   ].join("\n");
 }

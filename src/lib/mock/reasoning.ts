@@ -513,6 +513,115 @@ export function mechanismSignalsSansAnswerValue(
   return signals.filter((s) => !isBareAnswerValueSignal(s, verifiedAnswer));
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Explanation-required ("why") gating: stem-echo + circular-justification     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Does this prompt REQUIRE a causal explanation — a "why / explain / justify /
+ * defend / prove" ask — rather than just a value or a named result? On such a
+ * follow-up, committing to the right value plus a keyword LIFTED FROM THE STEM is
+ * NOT sufficient: the candidate must convey the actual reason. Deliberately
+ * targeted so an ordinary "what is …?" ask (or a "next term" question) is never
+ * treated as explanation-required. Pure/total.
+ */
+export function isExplanationRequiredPrompt(prompt: string | undefined): boolean {
+  const p = (prompt ?? "").toLowerCase();
+  if (p === "") return false;
+  return /\bwhy\b|\bexplain\b|\bjustif(?:y|ies|ied|ication)\b|\bdefend\b|\bhow come\b|\bwhat makes\b|\bwhat lets\b|\breasons?\s+(?:why|that|it|is|for)\b|\bprove\b|\bshow\s+(?:that|why|how)\b/.test(
+    p,
+  );
+}
+
+/** Small spelled-number → digit map, so "three" and "3" compare as equal. */
+const SMALL_NUMBER_WORDS: Record<string, string> = {
+  zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6",
+  seven: "7", eight: "8", nine: "9", ten: "10", eleven: "11", twelve: "12",
+};
+
+/** Tiny function words ignored when comparing a signal's content to the stem. */
+const STEM_ECHO_STOPWORDS = new Set<string>([
+  "the", "a", "an", "of", "to", "in", "on", "for", "and", "or", "is", "are",
+  "be", "by", "with", "that", "this", "it", "its", "we", "you", "do", "does",
+  "did", "just", "only", "all", "as", "at", "so", "if", "then", "than", "from",
+  "was", "were", "have", "has",
+]);
+
+/** Content tokens of a phrase (number-words → digits, stopwords dropped). */
+function stemContentTokens(s: string): string[] {
+  return normalizeForMatch(s)
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t !== "")
+    .map((t) => SMALL_NUMBER_WORDS[t] ?? t)
+    .filter((t) => !STEM_ECHO_STOPWORDS.has(t));
+}
+
+/**
+ * Is `signal` merely an ECHO of the question stem — i.e. every content word of
+ * the signal already appears in the prompt? Such a signal restates the question
+ * (e.g. "three terms" for "…why do just three of the shown terms pin all three
+ * down?") and proves no mechanistic understanding, so it must NOT satisfy the
+ * mechanism gate on an explanation-required follow-up. A signal that introduces a
+ * genuine mechanism word absent from the stem ("three equations", "three
+ * unknowns", "second difference", "degrees of freedom") is NOT an echo. Numbers
+ * spelled out and as digits compare equal ("three" ≡ "3"). Pure/total.
+ */
+export function isStemEchoSignal(signal: string, prompt: string | undefined): boolean {
+  const promptTokens = new Set(stemContentTokens(prompt ?? ""));
+  if (promptTokens.size === 0) return false;
+  const sig = stemContentTokens(signal);
+  if (sig.length === 0) return false;
+  return sig.every((t) => promptTokens.has(t));
+}
+
+/**
+ * The mechanism signals that genuinely COUNT for a given prompt. For an
+ * explanation-required ("why") prompt, signals that merely ECHO the stem
+ * (see {@link isStemEchoSignal}) are dropped — a candidate cannot earn
+ * "mechanism understood" by parroting the question's own words; they must
+ * introduce the actual reason. For every other prompt all signals count
+ * (back-compat: this is a no-op unless the prompt asks for an explanation).
+ * Pure/total.
+ */
+export function creditableMechanismSignals(
+  signals: string[],
+  prompt: string | undefined,
+): string[] {
+  if (!isExplanationRequiredPrompt(prompt)) return signals;
+  return signals.filter((s) => !isStemEchoSignal(s, prompt));
+}
+
+/**
+ * CIRCULAR / vacuous "justifications" that restate the claim as its own reason
+ * ("because that is enough", "because that's how it works", "because it just
+ * does", "that's all you need") instead of naming a mechanism. Used to reject a
+ * "why" answer that commits to a value but explains nothing. Deliberately
+ * targeted so a genuine reason ("because three equations fix three unknowns")
+ * never matches.
+ */
+const CIRCULAR_JUSTIFICATION_PATTERNS: RegExp[] = [
+  /\bbecause\s+(?:that|it|this|that'?s|it'?s)\s*(?:is|was)?\s*(?:just\s+)?enough\b/i,
+  /\b(?:that|it|this)(?:'?s| is| was)?\s+(?:just\s+)?enough\b/i,
+  /\bjust\s+enough\b/i,
+  /\bbecause\s+(?:that'?s|it'?s)\s+(?:just\s+)?(?:how|what)\s+(?:it|things?)\s+(?:is|are|works?)\b/i,
+  /\bbecause\s+it\s+just\s+(?:does|is|works?)\b/i,
+  /\bbecause\s+(?:that'?s|it'?s)\s+(?:the\s+)?(?:rule|way|way\s+it\s+is|case|point)\b/i,
+  /\bbecause\s+(?:that|it|this)\s+(?:has\s+to|must|should)\b/i,
+  /\bthat'?s\s+all\s+(?:you\s+need|it\s+takes|(?:that'?s\s+)?needed)\b/i,
+  /\bbecause\s+(?:that'?s|it'?s)\s+(?:obvious|given|true|correct|right)\b/i,
+];
+
+/**
+ * Does the text's justification read as CIRCULAR / vacuous — it asserts the
+ * conclusion is its own reason ("…because that is enough") instead of naming a
+ * mechanism? A guard for explanation-required follow-ups: such an answer must
+ * not pass on a substantive-length heuristic alone. Pure/total.
+ */
+export function isCircularJustification(text: string): boolean {
+  const t = (text ?? "").toLowerCase();
+  return CIRCULAR_JUSTIFICATION_PATTERNS.some((re) => re.test(t));
+}
+
 /**
  * Is the reasoning DOMINATED by hand-wave / bare assertions — i.e. it asserts
  * correctness (or per-question banned phrases) but, once those and any restated
@@ -1615,9 +1724,22 @@ export function gradeReasoningDeterministic(
   const requiresMechanism = signals.length > 0;
   // Drop any BARE-ANSWER-VALUE "signal" (e.g. "0.75"/"3/4" for a 0.75 answer):
   // restating the numeric answer must never, by itself, satisfy the mechanism
-  // gate. Formulaic signals with letters (e.g. "3n^2", "2m-1") are kept.
-  const mechSignals = mechanismSignalsSansAnswerValue(signals, verifiedAnswer);
-  const hasMechanism = requiresMechanism && matchesMechanismSignal(text, mechSignals);
+  // gate. Formulaic signals with letters (e.g. "3n^2", "2m-1") are kept. THEN,
+  // for an explanation-required ("why") prompt, drop signals that merely ECHO the
+  // question stem ("three terms" for "…why do just three terms pin all three
+  // down?"): a parroted stem word is not a mechanism. What remains are signals
+  // that introduce the actual reason (three equations / unknowns / etc).
+  const mechSignals = creditableMechanismSignals(
+    mechanismSignalsSansAnswerValue(signals, verifiedAnswer),
+    input.prompt,
+  );
+  const explanationRequired = isExplanationRequiredPrompt(input.prompt);
+  const hasMechanism =
+    requiresMechanism &&
+    matchesMechanismSignal(text, mechSignals) &&
+    // A circular / vacuous "reason" ("…because that is enough") never counts as
+    // naming the mechanism on a why-prompt, even if a stray keyword matched.
+    !(explanationRequired && isCircularJustification(text));
   const handWaveOnly = isHandWaveOnly(text, input.bannedAsSoleJustification ?? []);
 
   // A broken PREMISE / decomposition / independence-abuse — the ROOT conceptual
