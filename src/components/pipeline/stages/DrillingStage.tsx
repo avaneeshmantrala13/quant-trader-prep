@@ -40,7 +40,13 @@ import {
   type MaterializedBrainteaserItem,
   type MaterializedNumericItem,
 } from "@/lib/diagnostic/untimedRun";
+import {
+  buildTimedDrillSection,
+  TIMED_DRILL_BUDGET_MS,
+  TIMED_DRILL_ROUND_SIZE,
+} from "@/lib/pipeline/timedDrill";
 import { stationForSubtopic } from "./gameOa/battery";
+import { TimerBar, useShotClock } from "./gameOa/kit";
 
 /**
  * ============================================================================
@@ -54,6 +60,10 @@ import { stationForSubtopic } from "./gameOa/battery";
  *     answer-withholding HINT LADDER; a correct answer's credit DECAYS with the
  *     highest rung used (`buildContentDrillAttempt`), so mastery is earned with
  *     progressively less help.
+ *   • timed-weak topic → a SHOT-CLOCKED retake (`TimedDrillRound`) of the same
+ *     bank under a per-question clock; a passing section rewrites
+ *     `pipeline.timed` (via `recordTimedDrillSection`) so the 0.90 timed gate
+ *     can genuinely clear — the fix for the "good untimed / bad timed" stall.
  *   • brainteaser competency → the brainteaser flashcards (hybrid grading).
  *   • trading SUBTOPIC        → re-mounts that subtopic's Game-OA battery
  *     station (the exact game), which folds into the subtopic's Beta itself.
@@ -69,12 +79,13 @@ import { stationForSubtopic } from "./gameOa/battery";
 /** The active drill round the stage is serving (frozen at round start). */
 type ActiveRound =
   | { serve: "numeric"; target: DrillTarget; items: MaterializedNumericItem[] }
+  | { serve: "timed-drill"; target: DrillTarget; items: MaterializedNumericItem[] }
   | { serve: "brainteaser"; target: DrillTarget; items: MaterializedBrainteaserItem[] }
   | { serve: "trading"; target: DrillTarget }
   | { serve: "timed-info"; target: DrillTarget };
 
 export default function DrillingStage({ onComplete }: StageComponentProps) {
-  const { progress, recordItemAttempt } = useProgress();
+  const { progress, recordItemAttempt, recordTimedDrillSection } = useProgress();
 
   const rngRef = useRef<Rng>(new Rng(Math.floor(Math.random() * 1e9)));
   const [round, setRound] = useState<ActiveRound | null>(null);
@@ -89,6 +100,15 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
   const record = useCallback(
     (attempt: ItemAttempt) => recordItemAttempt(attempt),
     [recordItemAttempt],
+  );
+
+  // Merge a finished timed-drill section into `pipeline.timed` (superseding the
+  // topic's prior failing per-topic section) so a passing shot-clocked retake
+  // can flip the 0.90 timed gate.
+  const recordTimed = useCallback(
+    (topicKey: string, correct: number, total: number) =>
+      recordTimedDrillSection(buildTimedDrillSection(topicKey, correct, total)),
+    [recordTimedDrillSection],
   );
 
   // Freeze the next round from LIVE progress (target + materialized items).
@@ -116,6 +136,21 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
         if (items.length === 0) continue; // dry topic ⇒ round-robin to next weak target
         for (const it of items) seenSigRef.current.add(contentSignature(it));
         setRound({ serve: "numeric", target, items });
+        return;
+      }
+      if (target.serve === "timed-drill" && target.topicKey) {
+        // A timed-weak topic: re-draw its bank UNDER A CLOCK (same untimed
+        // materializer as content, but shot-clocked). A passing section rewrites
+        // `pipeline.timed`. A dry topic round-robins on to the next weak target.
+        const items = drawContentDrill(
+          target.topicKey,
+          seed,
+          TIMED_DRILL_ROUND_SIZE,
+          seenSigRef.current,
+        );
+        if (items.length === 0) continue;
+        for (const it of items) seenSigRef.current.add(contentSignature(it));
+        setRound({ serve: "timed-drill", target, items });
         return;
       }
       if (target.serve === "brainteaser") {
@@ -187,6 +222,14 @@ export default function DrillingStage({ onComplete }: StageComponentProps) {
           target={round.target}
           items={round.items}
           record={record}
+          onDone={onRoundDone}
+        />
+      ) : round.serve === "timed-drill" ? (
+        <TimedDrillRound
+          key={`timed-${round.target.topicKey}-${round.items[0]?.question.id}`}
+          target={round.target}
+          items={round.items}
+          recordTimed={recordTimed}
           onDone={onRoundDone}
         />
       ) : round.serve === "brainteaser" ? (
@@ -456,6 +499,147 @@ function NumericDrillItem({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ========================================================================== */
+/*  Timed drill (shot-clocked per-topic retake → rewrites pipeline.timed)      */
+/* ========================================================================== */
+
+/**
+ * A SHOT-CLOCKED, per-topic timed retake for a content-mastered-but-slow topic.
+ * It streams the SAME untimed-materializer free-response items (drawn by
+ * `drawContentDrill`) but under a per-question clock reusing the Game-OA kit's
+ * {@link useShotClock} / {@link TimerBar} — a timeout auto-advances and counts
+ * as a MISS, exactly like the timed diagnostic. On completion it reports the
+ * topic's `correct/total` up via `recordTimed`, which merges a per-topic timed
+ * section into `pipeline.timed` (superseding the topic's failing section) so a
+ * genuinely fast+accurate retake can flip the 0.90 timed gate. No hints here:
+ * this measures the speed of correct thinking, not scaffolded recovery.
+ */
+function TimedDrillRound({
+  target,
+  items,
+  recordTimed,
+  onDone,
+}: {
+  target: DrillTarget;
+  items: MaterializedNumericItem[];
+  recordTimed: (topicKey: string, correct: number, total: number) => void;
+  onDone: () => void;
+}) {
+  const topicKey = target.topicKey as string;
+  const total = items.length;
+  const [index, setIndex] = useState(0);
+  const [raw, setRaw] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [finished, setFinished] = useState(false);
+  const correctRef = useRef(0);
+  const doneRef = useRef(false);
+
+  const item = items[index];
+
+  const finish = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    setFinished(true);
+    recordTimed(topicKey, correctRef.current, total);
+    onDone();
+  }, [recordTimed, topicKey, total, onDone]);
+
+  // Advance to the next item (or finish after the last). Shared by a manual
+  // submit and a shot-clock timeout so both paths stay in lockstep.
+  const advance = useCallback(() => {
+    setRaw("");
+    setError(null);
+    if (index + 1 >= total) finish();
+    else setIndex((i) => i + 1);
+  }, [index, total, finish]);
+
+  // A miss on timeout — do NOT credit, then advance the same way a submit does.
+  const onTimeout = useCallback(() => {
+    if (doneRef.current) return;
+    advance();
+  }, [advance]);
+
+  const { remainingMs } = useShotClock({
+    durationMs: TIMED_DRILL_BUDGET_MS,
+    running: !finished,
+    onExpire: onTimeout,
+    resetKey: index,
+  });
+
+  const submit = () => {
+    if (doneRef.current) return;
+    const g = gradeFreeResponse(item.question, raw);
+    if (g.parsed === null) {
+      setError("Enter a number, fraction, or expression (e.g. 2.8 or 1/3).");
+      return;
+    }
+    if (g.correct) correctRef.current += 1;
+    advance();
+  };
+
+  if (!item) return null;
+
+  return (
+    <div className="space-y-3" data-testid="drilling-timed-drill">
+      <TimerBar remainingMs={remainingMs} durationMs={TIMED_DRILL_BUDGET_MS} />
+      <div className="rule-row">
+        <span className="label text-muted">
+          {target.label} · timed item{" "}
+          <span className="num text-primary">{index + 1}</span> /{" "}
+          <span className="num">{total}</span>
+        </span>
+        <span className="chip num border-bull text-bull">
+          {correctRef.current} correct
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {item.question.concept && (
+          <span className="chip border-subtle text-secondary">
+            {item.question.concept}
+          </span>
+        )}
+        <p className="font-display text-lg font-semibold leading-relaxed text-primary">
+          {item.question.prompt}
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        <input
+          autoFocus
+          key={item.question.id + index}
+          inputMode={item.question.decimals != null ? "decimal" : "numeric"}
+          value={raw}
+          onChange={(e) => {
+            setRaw(e.target.value);
+            if (error) setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          placeholder="Beat the clock — type your answer"
+          aria-label="Your answer"
+          className="input"
+        />
+        {error && <p className="text-sm text-bear">{error}</p>}
+        <button
+          type="button"
+          className="btn-primary w-full"
+          onClick={submit}
+          disabled={raw.trim() === ""}
+        >
+          {index + 1 >= total ? "Finish timed round ▸" : "Submit ▸"}
+        </button>
+      </div>
+
+      <p className="text-center text-xs text-muted">
+        Under the clock — a timeout counts as a miss. Clear ≥ 90% to pass the
+        timed gate for this topic.
+      </p>
     </div>
   );
 }

@@ -120,6 +120,25 @@ describe("DrillingStage — completion is governed by passesDrillingGate", () =>
     expect(screen.queryByTestId("drilling-numeric")).toBeNull();
   });
 
+  it("serves a SHOT-CLOCKED timed drill for a content-mastered but timed-weak topic", () => {
+    // All content + competencies mastered, but a recorded timed section for a
+    // content topic is below 0.90 — the "good untimed / bad timed" case. It must
+    // be practiced under a clock (not the untimed numeric path), and NOT complete.
+    const p = fullyClearedProgress();
+    const EV = "probability::Expected Value";
+    p.pipeline!.timed = {
+      correct: 5,
+      total: 10,
+      sections: [{ label: "EV", correct: 5, total: 10, topicKeys: [EV] }],
+    };
+    CURRENT = p;
+    const onComplete = vi.fn();
+    renderStage(onComplete);
+    expect(screen.getByTestId("drilling-timed-drill")).toBeTruthy();
+    expect(screen.queryByTestId("drilling-numeric")).toBeNull();
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
   it("does NOT complete while any bar is still open", () => {
     // Everything mastered EXCEPT the brainteaser competency ⇒ gate open.
     const p = fullyClearedProgress();

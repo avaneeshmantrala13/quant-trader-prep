@@ -91,7 +91,7 @@ describe("drilling — next-target selection (weakest-first)", () => {
     expect(t?.topicKey).toBe(weakKey);
   });
 
-  it("re-drills a content-mastered but timed-weak topic via the numeric path", () => {
+  it("re-drills a content-mastered but timed-weak topic via the SHOT-CLOCKED timed path", () => {
     const p = allMastered();
     p.pipeline!.timed = {
       correct: 0,
@@ -100,7 +100,9 @@ describe("drilling — next-target selection (weakest-first)", () => {
     };
     const t = pickNextDrillTarget(p);
     expect(t?.kind).toBe("timed");
-    expect(t?.serve).toBe("numeric");
+    // A timed-weak topic is now practiced UNDER A CLOCK (not the untimed numeric
+    // hint-ladder), so succeeding rewrites `pipeline.timed` and can clear 0.90.
+    expect(t?.serve).toBe("timed-drill");
     expect(t?.topicKey).toBe(COND);
   });
 

@@ -26,10 +26,12 @@ import {
   type PipelineStage,
   type PipelineState,
   type ResumeState,
+  type TimedSectionResult,
   type UserProgress,
 } from "@/types/progress";
 import { FIRST_STAGE, resolveStage } from "@/lib/pipeline/stateMachine";
 import { passesDrillingGate, passesMockGate } from "@/lib/pipeline/gates";
+import { mergeTimedSection } from "@/lib/pipeline/timedDrill";
 import {
   appendOaResult,
   clearActiveSession,
@@ -241,6 +243,16 @@ interface ProgressContextValue {
    * optional payload (its shape is stage-specific; see the stage components).
    */
   completePipelineStage: (stage: PipelineStage, result?: unknown) => void;
+  /**
+   * Record ONE finished in-loop TIMED DRILL section into `pipeline.timed`,
+   * SUPERSEDING the prior single-topic section for the same topicKey (via
+   * `mergeTimedSection`) so a genuinely passing shot-clocked retake REPLACES the
+   * diagnostic's failing per-topic section and can flip `allTimedSectionsClear`.
+   * Additive & focused: it only rewrites `pipeline.timed` (never mastery, the
+   * `*DoneAt` stamps, or the v-migration). The drilling stage's normal
+   * completion path re-derives the stage once `passesDrillingGate` truly holds.
+   */
+  recordTimedDrillSection: (section: TimedSectionResult) => void;
 }
 
 /**
@@ -741,6 +753,20 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     [update],
   );
 
+  const recordTimedDrillSection = useCallback(
+    (section: TimedSectionResult) => {
+      update((p) => {
+        const pipeline: PipelineState = {
+          ...(p.pipeline ?? { stage: FIRST_STAGE }),
+        };
+        pipeline.timed = mergeTimedSection(pipeline.timed, section);
+        p.pipeline = pipeline;
+        return p;
+      });
+    },
+    [update],
+  );
+
   const value = useMemo<ProgressContextValue>(
     () => ({
       progress,
@@ -767,6 +793,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       ensureSrsCardsSeeded,
       gradeSrsCard,
       completePipelineStage,
+      recordTimedDrillSection,
     }),
     [
       progress,
@@ -793,6 +820,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       ensureSrsCardsSeeded,
       gradeSrsCard,
       completePipelineStage,
+      recordTimedDrillSection,
     ],
   );
 

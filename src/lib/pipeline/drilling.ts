@@ -65,6 +65,7 @@ export const DRILL_ROUND_SIZE = 5;
 /** How the drilling stage should SERVE a target's items. */
 export type DrillServe =
   | "numeric" // content hint-ladder free-response items
+  | "timed-drill" // shot-clocked per-topic timed retake (rewrites pipeline.timed)
   | "brainteaser" // competency flashcards (hybrid grading)
   | "trading" // make-a-market rounds
   | "timed-info"; // no per-topic route left; a strict timed section is owed
@@ -85,9 +86,14 @@ export interface DrillTarget {
 /* -------------------------------------------------------------------------- */
 
 /**
- * Map the metric of a drill-plan entry to how the stage serves it: content /
- * timed-weak topics are re-drilled through the numeric hint-ladder path (which
- * also folds into content mastery); the competencies route to flashcards / MM.
+ * Map the metric of a drill-plan entry to how the stage serves it:
+ *  - `content` → the untimed numeric hint-ladder path (folds content mastery),
+ *  - `timed`   → a SHOT-CLOCKED per-topic timed retake (`"timed-drill"`) that
+ *    rewrites `pipeline.timed.sections` so the 0.90 timed gate can genuinely
+ *    clear — a content-mastered-but-slow topic is practiced UNDER A CLOCK, not
+ *    through the untimed hint ladder (which never touched the timed evidence and
+ *    left a "good untimed / bad timed" learner stuck in drilling forever),
+ *  - the competencies route to flashcards / the make-a-market game.
  */
 function serveFor(metric: DiagnosisMetric): DrillServe {
   switch (metric) {
@@ -95,8 +101,9 @@ function serveFor(metric: DiagnosisMetric): DrillServe {
       return "brainteaser";
     case "trading":
       return "trading";
-    case "content":
     case "timed":
+      return "timed-drill";
+    case "content":
       return "numeric";
   }
 }
