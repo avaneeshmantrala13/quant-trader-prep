@@ -122,6 +122,34 @@ describe("annotateReasoning — GOOD (green) spans", () => {
     expect(red!.why).toMatch(/gives|closed form|doesn.t fit/i);
     expect(red!.why.toLowerCase()).not.toContain("load-bearing");
   });
+
+  it("does NOT falsely redden a CORRECT multi-coefficient commit (verifier-confirmed)", () => {
+    // The reported clarify repro: the adversarial grades on `a` (verified 2), but
+    // the answer legitimately also states b = −1 and c = 3, so the LAST value (3)
+    // isn't the graded target. With the verifier CONFIRMING the answer correct
+    // (`answerWasWrong: false`), the correct coefficients must never be reddened
+    // with a nonsensical "steers the chain to 3 instead of 2" — and the graded
+    // coefficient (2) is greened even though it's stated mid-sentence.
+    const text =
+      "a is 2, b is -1, and c is 3. You only need three terms because that is enough information.";
+    const spans = annotateReasoning(text, {
+      prompt:
+        "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … aₙ = a·n² + b·n + c. What are a, b, and c — and why do just three of the shown terms pin all three down?",
+      verifiedAnswer: 2,
+      mechanismSignals: ["three points", "three equations", "system"],
+      answerWasWrong: false,
+    });
+    // No red at all on a verifier-confirmed correct commit.
+    expect(spans.some((s) => s.label === "flawed")).toBe(false);
+    // No "3 instead of 2" nonsense anywhere.
+    for (const s of spans) {
+      expect(s.why).not.toMatch(/instead of/i);
+    }
+    // The graded coefficient (2) is greened where it's stated ("a is 2").
+    const green = spans.find((s) => s.label === "good");
+    expect(green, "the correct coefficient is greened").toBeTruthy();
+    expect(green!.excerpt).toContain("2");
+  });
 });
 
 describe("annotateReasoning — FLAWED (red) spans", () => {

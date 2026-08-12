@@ -444,6 +444,12 @@ export function MathInterviewCard({
                 submitClarify("main", mainClarify, mainClarifyStartRef.current)
               }
               speech={speech}
+              prompt={step.prompt}
+              verifiedAnswer={step.answer}
+              correctAnswer={correctAnswer}
+              mechanismSignals={step.requiredReasoning?.mechanismSignals}
+              canonicalDerivation={step.explanation}
+              concept={step.concept}
             />
           )}
 
@@ -486,6 +492,13 @@ export function MathInterviewCard({
                     submitClarify("probe", probeClarify, probeClarifyStartRef.current)
                   }
                   speech={speech}
+                  prompt={probe.presentation.prompt}
+                  verifiedAnswer={probe.presentation.conclusionTargets?.[0] ?? null}
+                  mechanismSignals={probe.presentation.mechanismSignals}
+                  canonicalDerivation={
+                    probe.presentation.modelReasoning ?? probe.presentation.referenceNote
+                  }
+                  concept={step.concept}
                 />
               )}
             </>
@@ -510,6 +523,14 @@ export function MathInterviewCard({
                     submitClarify("adversarial", advClarify, advClarifyStartRef.current)
                   }
                   speech={speech}
+                  prompt={adversarial.presentation.prompt}
+                  verifiedAnswer={adversarial.presentation.conclusionTargets?.[0] ?? null}
+                  mechanismSignals={adversarial.presentation.mechanismSignals}
+                  canonicalDerivation={
+                    adversarial.presentation.modelReasoning ??
+                    adversarial.presentation.referenceNote
+                  }
+                  concept={step.concept}
                 />
               )}
             </>

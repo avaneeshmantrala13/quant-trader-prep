@@ -259,6 +259,172 @@ describe("MathInterviewCard — reasoning review UX", () => {
     expect(screen.queryByTestId("model-explanation-toggle")).toBeNull();
   });
 
+  it("renders the committed MAIN clarification with green/red highlight spans", () => {
+    // After the candidate COMMITS to the ambiguous main reasoning, the committed
+    // text is shown back with the SAME green/red span+feedback UI as the base
+    // question (not just a one-line verdict).
+    const resp = answeredResponse("It's 95, but maybe 131 — I'm not sure.");
+    resp.reasoningGrade = {
+      quality: "ambiguous",
+      issues: ["Points both ways."],
+      probe: "",
+      source: "deterministic",
+    };
+    resp.clarify = {
+      prompt: "Commit to ONE answer and give the single reason it's correct.",
+      raw: "The second difference is constant at 6, so the next term is 95.",
+      viaSpeech: false,
+      graded: true,
+      score: {
+        parsed: 95,
+        correct: true,
+        elapsedMs: 6000,
+        targetMs: 45000,
+        timing: "ok",
+        score: 1,
+        verdict: "correct",
+      },
+    };
+    render(
+      <MathInterviewCard
+        step={seqStep()}
+        response={resp}
+        speech={noopSpeech}
+        isLast
+        dispatch={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    const panel = screen.getByTestId("clarify-submitted-reasoning");
+    expect(panel).toBeTruthy();
+    expect(panel.textContent).toContain("the next term is 95");
+    // The committed correct answer / mechanism is greened.
+    expect(within(panel).getAllByTestId("reasoning-span-good").length).toBeGreaterThanOrEqual(1);
+    // The verdict banner still renders below the highlighted commit.
+    expect(screen.getByText(/Committed — correct/i)).toBeTruthy();
+  });
+
+  it("does NOT false-red a CORRECT multi-coefficient adversarial clarification", () => {
+    // The exact reported repro: the adversarial grades on `a` (conclusionTargets
+    // [2]); the candidate commits "a is 2, b is -1, and c is 3" (all correct).
+    // The committed clarification must render WITHOUT a red span on the correct
+    // coefficients (no "3 instead of 2"), and green the graded coefficient.
+    const step: MathStep = {
+      kind: "math",
+      id: "test-adv-clarify",
+      qtype: "sequences",
+      regime: "reasoning",
+      prompt: "5, 11, 23, 41, 65, … what is the next term?",
+      answer: 95,
+      family: "sequences",
+      explanation: "Second differences are constant at 6, so the next gap is 30 → 95.",
+      followUps: [],
+      requiredReasoning: {
+        mechanismSignals: ["second difference is constant"],
+      },
+      authoredProbe: {
+        prompt: "What is the second difference of this sequence?",
+        source: "authored",
+        role: "probe",
+        label: "Follow-up 1 of 2 · Probe",
+        answerKind: "numeric",
+        answer: 6,
+        targetMs: 30000,
+      },
+      authoredAdversarial: {
+        prompt:
+          "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … aₙ = a·n² + b·n + c. What are a, b, and c — and why do just three of the shown terms pin all three down?",
+        source: "authored",
+        role: "adversarial",
+        label: "Follow-up 2 of 2 · Adversarial",
+        answerKind: "reasoning",
+        conclusionTargets: [2],
+        mechanismSignals: ["three points", "three equations", "system"],
+        targetMs: 30000,
+      },
+      targetMs: 45000,
+    };
+
+    const okScore = {
+      parsed: 95,
+      correct: true,
+      elapsedMs: 10000,
+      targetMs: 45000,
+      timing: "ok" as const,
+      score: 1,
+    };
+    const response: MockResponse = {
+      stepId: step.id,
+      stage: "math",
+      raw: "95",
+      viaSpeech: false,
+      reasoningRaw: "Second difference is constant at 6, so 95.",
+      reasoningGrade: { quality: "sound", issues: [], probe: "", source: "deterministic" },
+      score: okScore,
+      followups: {
+        probe: {
+          presentation: step.authoredProbe!,
+          raw: "6",
+          viaSpeech: false,
+          graded: true,
+          score: { ...okScore, parsed: 6 },
+        },
+        adversarial: {
+          presentation: step.authoredAdversarial!,
+          raw: "a is 2, b is -1, and c is 3. You only need three terms because that is enough information.",
+          viaSpeech: false,
+          graded: true,
+          score: {
+            parsed: 2,
+            correct: false,
+            elapsedMs: 8000,
+            targetMs: 30000,
+            timing: "ok",
+            score: 0,
+            verdict: "clarify",
+            clarifyKind: "hedge",
+          },
+          clarify: {
+            prompt: "Commit to ONE answer and give the single reason it's correct.",
+            raw: "a is 2, b is -1, and c is 3. Three equations from three points pin the coefficients.",
+            viaSpeech: false,
+            graded: true,
+            score: {
+              parsed: 2,
+              correct: true,
+              elapsedMs: 5000,
+              targetMs: 30000,
+              timing: "ok",
+              score: 1,
+              verdict: "correct",
+            },
+          },
+        },
+      },
+    };
+
+    render(
+      <MathInterviewCard
+        step={step}
+        response={response}
+        speech={noopSpeech}
+        isLast
+        dispatch={vi.fn()}
+        onNext={vi.fn()}
+      />,
+    );
+
+    const panel = screen.getByTestId("clarify-submitted-reasoning");
+    expect(panel).toBeTruthy();
+    // No red on a verifier-confirmed correct commit — and no "3 instead of 2".
+    expect(within(panel).queryAllByTestId("reasoning-span-flawed")).toHaveLength(0);
+    expect(panel.textContent).not.toMatch(/instead of/i);
+    // The graded coefficient (2) is greened.
+    expect(within(panel).getAllByTestId("reasoning-span-good").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Committed — correct/i)).toBeTruthy();
+  });
+
   it("does not crash when there is no submitted reasoning", () => {
     const resp = answeredResponse("");
     render(

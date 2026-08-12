@@ -390,7 +390,16 @@ function addCommittedValueSpan(
   // equal the verified answer — otherwise there is no correct committed value.
   const results = statedResultValues(text);
   const committed = results.length > 0 ? results[results.length - 1] : null;
-  if (committed === null || Math.abs(committed - verified) > tol) return;
+  const committedMatches =
+    committed !== null && Math.abs(committed - verified) <= tol;
+  // When the verifier EXPLICITLY confirmed the answer correct
+  // (`answerWasWrong === false`), the committed answer IS the verified one, so
+  // the graded value is grounded wherever the candidate states it — green it
+  // even when it isn't the final token. This surfaces the load-bearing correct
+  // value in multi-part / prose answers ("a is 2, b is -1, and c is 3", where 2
+  // is the graded coefficient) instead of leaving a correct commit unhighlighted.
+  const verifierConfirmed = opts.answerWasWrong === false;
+  if (!committedMatches && !verifierConfirmed) return;
   // Highlight the LAST verified-matching token (the conclusion), tightly.
   const r = findValueRange(text, verified, tol);
   if (!r) return;
@@ -463,7 +472,16 @@ function localizeRootCause(
     verified !== null &&
     landing !== null &&
     Math.abs(landing - verified) > tol;
-  const wrong = opts.answerWasWrong === true || contradicts;
+  // The verifier is AUTHORITATIVE. When it explicitly CONFIRMED the committed
+  // answer correct (`answerWasWrong === false`), never invent a root-cause red
+  // from a scalar landing mismatch: a multi-part answer ("a = 2, b = −1, c = 3")
+  // legitimately ends on a value (3) that isn't the single graded target (2),
+  // and reddening the correct coefficients with a nonsensical "steers the chain
+  // to 3 instead of 2" is exactly the reported bug. The `contradicts` heuristic
+  // is only a FALLBACK for when the verifier verdict wasn't supplied.
+  const wrong =
+    opts.answerWasWrong === true ||
+    (opts.answerWasWrong === undefined && contradicts);
   if (!wrong) return;
 
   // Redden a localized root-cause span, evicting any overlapping decoration so

@@ -69,7 +69,7 @@ No false reds on correct derivations.
 The annotator emits TIGHT, minimal, disjoint spans (not blanket color) and
 every `why` QUOTES the candidate's own words — never a generic template.
 
-- **Max green coverage on a CORRECT answer:** 6.5% (a correct answer is never a wall of green; only the key steps are green).
+- **Max green coverage on a CORRECT answer:** 6.7% (a correct answer is never a wall of green; only the key steps are green).
 - **Red on a correct answer:** none.
 - **Max red coverage on a FLAWED answer:** 43.4% (only the specific flawed claim is red, not the whole blob).
 - **Feedback references the candidate's own words:** always.
