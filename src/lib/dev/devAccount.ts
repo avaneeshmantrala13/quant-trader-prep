@@ -24,6 +24,27 @@ export const DEV_USERNAME = "developer";
 export const DEV_PASSWORD = "123456";
 
 /**
+ * The REAL Cognito user backing the developer demo (see `AuthContext`'s
+ * `enterDeveloperMode`). Typing the client-facing `developer`/`123456` creds
+ * ALSO performs a genuine Cognito sign-in as THIS throwaway demo account so the
+ * dev session obtains a valid User-Pool ID token — which the JWT-gated `/ai`
+ * grading endpoint requires (see `readCognitoIdToken` in `aiFlavor.ts`) and
+ * which scopes DynamoDB persistence to a real identity.
+ *
+ * SECURITY NOTE. This password is intentionally bundled into the client. That
+ * is acceptable ONLY because it belongs to a dedicated, zero-privilege demo
+ * account whose entire capability is "use the app like any signed-in learner":
+ * it grants no admin rights and holds no real user's data. It is NOT a provider
+ * API key or any real secret (those live server-side in SSM / Lambda env and
+ * must never ship in the bundle). Rotating it is a one-liner:
+ * `aws cognito-idp admin-set-user-password --permanent`.
+ */
+export const DEV_COGNITO_USERNAME = "developer-demo";
+
+/** The (demo-only, deliberately client-bundled) password for {@link DEV_COGNITO_USERNAME}. */
+export const DEV_COGNITO_PASSWORD = "QuantDemo#2026";
+
+/**
  * The stable userId the developer session runs under. Progress is namespaced by
  * this handle (`qtp.progress.developer`), so the demo has its OWN independent
  * progress that never bleeds into a real user's.
