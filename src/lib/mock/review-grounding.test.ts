@@ -29,7 +29,7 @@ import {
   resolveQuoteSpan,
   type RawReviewSpan,
 } from "./aiMock";
-import type { ReasoningSpan } from "./annotate";
+import { annotateReasoning, type ReasoningSpan } from "./annotate";
 
 afterEach(() => {
   nextPayload = null;
@@ -210,6 +210,69 @@ describe("reconcileReviewSpans — deterministic grounding gate", () => {
     ).toBe(true);
   });
 
+  it("KEEPS verifier-grounded PARTIAL greens on a MISSED answer, reddening only the circular clause", () => {
+    // The screenshot case: the candidate committed the WHOLE correct coefficient
+    // set (a = 2, b = −1, c = 3) but the explanation is circular. The verdict is
+    // MISSED (answerWasWrong=true), yet the correct committed values earn GREEN
+    // (partial credit) while the circular clause stays RED.
+    const text =
+      "a = 2, b = -1, and c = 3. Three of the shown terms pin all three down because it is quadratic.";
+    const prompt =
+      "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … It is also quadratic, aₙ = a·n² + b·n + c (with n = 1 for the first term). What are a, b, and c — and why do just three of the shown terms pin all three down?";
+    const raw: RawReviewSpan[] = [
+      {
+        quote: "a = 2, b = -1, and c = 3",
+        label: "good",
+        why: "You commit to the correct coefficients a = 2, b = −1, c = 3.",
+      },
+      {
+        quote: "because it is quadratic",
+        label: "flawed",
+        why: "This restates the stem — naming the degree isn't the reason three terms pin the coefficients.",
+      },
+    ];
+    const out = reconcileReviewSpans(text, raw, {
+      verifiedAnswer: 2,
+      verifiedValues: [2, -1, 3],
+      answerWasWrong: true,
+      prompt,
+    });
+    // Partial GREEN survives over the correct committed values, even though missed.
+    expect(
+      out.some((s) => s.label === "good" && /a = 2, b = -1, and c = 3/.test(s.excerpt)),
+      "the correct committed coefficients stay green (partial credit)",
+    ).toBe(true);
+    // RED lands on the circular clause…
+    const red = out.find((s) => s.label === "flawed");
+    expect(red, "the circular clause is reddened").toBeTruthy();
+    expect(red!.excerpt).toContain("because it is quadratic");
+    // …and NEVER on the correct committed values.
+    const aStart = text.indexOf("a = 2");
+    const aEnd = aStart + "a = 2, b = -1, and c = 3".length;
+    expect(
+      out.some((s) => s.label === "flawed" && s.start < aEnd && s.end > aStart),
+      "the correct coefficients are not reddened",
+    ).toBe(false);
+  });
+
+  it("DROPS a COINCIDENTAL green on a MISSED answer whose committed set is WRONG", () => {
+    // The candidate's committed triple (1, 2, 1) is WRONG; only the "2" happens to
+    // match a=2. The partial-credit path must NOT fire (the committed set does not
+    // match the verifier's {2, −1, 3}), so the coincidental green is dropped.
+    const text = "The sequence is just (n+1)^2, so a, b, c are 1, 2, 1.";
+    const raw: RawReviewSpan[] = [
+      { quote: "1, 2, 1", label: "good", why: "You correctly found a, b, c." },
+    ];
+    const out = reconcileReviewSpans(text, raw, {
+      verifiedAnswer: 2,
+      verifiedValues: [2, -1, 3],
+      answerWasWrong: true,
+      prompt:
+        "The sequence 4, 9, 18, 31, 48 fits a quadratic a·n² + b·n + c; find a, b, c.",
+    });
+    expect(out.some((s) => s.label === "good")).toBe(false);
+  });
+
   it("DROPS a circular 'because it is quadratic' green even on a correct answer", () => {
     const text = "Three terms are enough to get the equation because it is quadratic.";
     const llm: ReasoningSpan[] = [
@@ -224,6 +287,73 @@ describe("reconcileReviewSpans — deterministic grounding gate", () => {
     });
     // A parroted-stem restatement is never greened, even though the answer is right.
     expect(out.some((s) => s.label === "good")).toBe(false);
+  });
+});
+
+describe("annotateReasoning (deterministic floor) — partial greens on a missed answer", () => {
+  const prompt =
+    "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … It is also quadratic, aₙ = a·n² + b·n + c (with n = 1 for the first term). What are a, b, and c — and why do just three of the shown terms pin all three down?";
+  const mechanismSignals = [
+    "three points",
+    "three equations",
+    "three unknowns",
+    "second difference",
+    "system",
+    "degrees of freedom",
+  ];
+
+  it("GREENS the correct committed values and REDS the circular clause (MISSED)", () => {
+    const text =
+      "a = 2, b = -1, and c = 3. Three of the shown terms pin all three down because it is quadratic.";
+    const spans = annotateReasoning(text, {
+      verifiedAnswer: 2,
+      verifiedValues: [2, -1, 3],
+      answerWasWrong: true,
+      prompt,
+      mechanismSignals,
+    });
+    // Each correct committed value earns a green — partial credit despite MISSED.
+    const greens = spans.filter((s) => s.label === "good");
+    expect(greens.some((s) => s.excerpt.includes("2"))).toBe(true);
+    expect(greens.some((s) => s.excerpt.includes("-1"))).toBe(true);
+    expect(greens.some((s) => s.excerpt.includes("3"))).toBe(true);
+    // The circular clause is reddened…
+    const red = spans.find((s) => s.label === "flawed");
+    expect(red, "the circular clause is reddened").toBeTruthy();
+    expect(red!.excerpt).toContain("because it is quadratic");
+    // …and no green overlaps the reddened circular clause.
+    const cStart = text.indexOf("because it is quadratic");
+    const cEnd = cStart + "because it is quadratic".length;
+    expect(
+      greens.some((s) => s.start < cEnd && s.end > cStart),
+      "no green over the circular clause",
+    ).toBe(false);
+  });
+
+  it("does NOT green a coincidental value on a MISSED answer with a WRONG committed set", () => {
+    // Committed (1, 2, 1) ≠ verifier {2, −1, 3}; the coincidental "2" is not greened.
+    const text = "The sequence is just (n+1)^2, so a, b, c are 1, 2, 1.";
+    const spans = annotateReasoning(text, {
+      verifiedAnswer: 2,
+      verifiedValues: [2, -1, 3],
+      answerWasWrong: true,
+      prompt: "The sequence 4, 9, 18, 31, 48 fits a·n² + b·n + c; find a, b, c.",
+    });
+    expect(spans.some((s) => s.label === "good")).toBe(false);
+  });
+
+  it("leaves a CONFIRMED-correct multi-part answer unchanged (green, no red)", () => {
+    const text =
+      "a = 2, b = -1, and c = 3. Three data points give three equations in three unknowns.";
+    const spans = annotateReasoning(text, {
+      verifiedAnswer: 2,
+      verifiedValues: [2, -1, 3],
+      answerWasWrong: false,
+      prompt,
+      mechanismSignals,
+    });
+    expect(spans.some((s) => s.label === "good")).toBe(true);
+    expect(spans.some((s) => s.label === "flawed")).toBe(false);
   });
 });
 

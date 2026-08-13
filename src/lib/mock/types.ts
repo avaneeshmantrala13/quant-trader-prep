@@ -251,6 +251,15 @@ export interface FollowupPresentation {
    */
   conclusionTargets?: number[];
   /**
+   * Reasoning follow-ups: the FULL set of the verifier's correct values for a
+   * MULTI-PART answer (e.g. `[2, −1, 3]` for "a = 2, b = −1, c = 3"), beyond the
+   * single graded `conclusionTargets`. Used ONLY to GROUND partial greens in the
+   * review — every genuinely-correct committed value is highlighted even when the
+   * overall answer is missed — never to decide correctness. Absent ⇒ the review
+   * grounds greens on `conclusionTargets` alone (unchanged for other archetypes).
+   */
+  correctValues?: number[];
+  /**
    * Reasoning follow-ups: groups of acceptable conclusion words; a correct
    * answer must contain ≥1 word from EACH group (case-insensitive), e.g.
    * `[["overround","inconsistent","not consistent"]]`.
@@ -373,6 +382,13 @@ export interface FollowupSeed {
   commonErrors?: { value: number; feedback: string; misconception?: string }[];
   /** Reasoning seeds: key numeric conclusion(s) the answer must reach. */
   conclusionTargets?: number[];
+  /**
+   * Reasoning seeds: the FULL set of correct values for a MULTI-PART answer
+   * (e.g. `[2, −1, 3]`), beyond the single graded `conclusionTargets`. Used only
+   * to GROUND partial greens in the review (highlight every genuinely-correct
+   * committed value even on a missed answer), never to decide correctness.
+   */
+  correctValues?: number[];
   /** Reasoning seeds: groups of acceptable conclusion words (≥1 per group). */
   conclusionKeywords?: string[][];
   /**

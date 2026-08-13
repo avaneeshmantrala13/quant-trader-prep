@@ -58,6 +58,7 @@ function toParts(text: string, spans: ReasoningSpan[]): Part[] {
 export function SubmittedReasoning({
   text,
   verifiedAnswer,
+  verifiedValues,
   mechanismSignals,
   prompt,
   answerWasWrong,
@@ -67,6 +68,8 @@ export function SubmittedReasoning({
 }: {
   text: string | undefined;
   verifiedAnswer?: number | null;
+  /** The FULL correct value set (grounds partial greens on a missed answer). */
+  verifiedValues?: number[];
   mechanismSignals?: string[];
   /** The question prompt — enables root-cause / premise-flaw localization. */
   prompt?: string;
@@ -102,6 +105,7 @@ export function SubmittedReasoning({
     injectedSpans ??
     annotateReasoning(text ?? "", {
       verifiedAnswer,
+      verifiedValues,
       mechanismSignals,
       prompt,
       answerWasWrong,

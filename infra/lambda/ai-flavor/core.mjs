@@ -374,6 +374,20 @@ export function mockReviewReasoningMessages(body) {
     "when the final answer is correct — with feedback that names what a real reason " +
     "would say (e.g. 'a quadratic has three unknowns a, b, c, so three terms give " +
     "three equations that pin them down; naming the degree is not the reason'). " +
+    "AWARD PARTIAL CREDIT — GREEN THE CORRECT PARTS EVEN WHEN THE ANSWER IS WRONG: " +
+    "when the candidate's OVERALL answer is ultimately wrong or insufficient (e.g. " +
+    "the explanation is missing or circular), you MUST STILL mark good the " +
+    "genuinely-correct, load-bearing spans — committed values that match the " +
+    "verifier's correct values, and any computation that holds or valid named " +
+    "mechanism — WHILE marking bad the flawed/circular clause. Do NOT withhold all " +
+    "greens just because the answer was missed. Concretely, for 'a = 2, b = -1, and " +
+    "c = 3. ... because it is quadratic' where the verifier's correct values are " +
+    "2, -1, 3, green 'a = 2, b = -1, and c = 3' (each value is correct) and red the " +
+    "circular 'because it is quadratic' clause. Every green must still be GROUNDED " +
+    "in the verifier facts (a value equal to one of the verifier's correct values, " +
+    "a holding computation, or a valid named mechanism); never green a coincidental " +
+    "number, a restatement, or a circular justification, and never reveal the final " +
+    "answer. " +
     "DO NOT MANUFACTURE FLAWS: a substantially-correct load-bearing explanation is " +
     "GOOD even if terse or slightly loose in WORDING — do NOT redden it for a minor " +
     "imprecision that does not change the method (e.g. saying 'a linear equation' " +
@@ -423,6 +437,9 @@ export function mockReviewReasoningMessages(body) {
     `Question:\n${body.prompt || ""}\n\n` +
     (body.concept ? `Concept: ${body.concept}\n` : "") +
     `Verified answer (FINAL, authoritative context): ${body.correctAnswer ?? body.verifiedAnswer ?? ""}\n` +
+    (Array.isArray(body.verifiedValues) && body.verifiedValues.length
+      ? `Verifier's correct values (ground 'good' value spans on these; a committed value equal to one of these is CORRECT and earns a green even when the overall answer is missed — but never reveal them as the final answer): ${body.verifiedValues.join(", ")}\n`
+      : "") +
     (body.canonicalDerivation ? `Canonical derivation: ${body.canonicalDerivation}\n` : "") +
     (body.closedForm ? `Closed form: ${body.closedForm}\n` : "") +
     (body.keyShortcut ? `Key shortcut: ${body.keyShortcut}\n` : "") +

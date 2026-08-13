@@ -83,6 +83,7 @@ function presentationFromSeed(
       ...base,
       answerKind: "reasoning",
       ...(seed.conclusionTargets ? { conclusionTargets: seed.conclusionTargets } : {}),
+      ...(seed.correctValues ? { correctValues: seed.correctValues } : {}),
       ...(seed.conclusionKeywords ? { conclusionKeywords: seed.conclusionKeywords } : {}),
       ...(seed.conclusionMode ? { conclusionMode: seed.conclusionMode } : {}),
       ...(seed.wrongKeywords ? { wrongKeywords: seed.wrongKeywords } : {}),

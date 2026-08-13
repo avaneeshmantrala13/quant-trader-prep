@@ -502,6 +502,11 @@ export function MathInterviewCard({
                   speech={speech}
                   prompt={probe.presentation.prompt}
                   verifiedAnswer={probe.presentation.conclusionTargets?.[0] ?? null}
+                  verifiedValues={
+                    probe.presentation.correctValues ??
+                    probe.presentation.conclusionTargets ??
+                    undefined
+                  }
                   mechanismSignals={probe.presentation.mechanismSignals}
                   canonicalDerivation={
                     probe.presentation.modelReasoning ?? probe.presentation.referenceNote
@@ -533,6 +538,11 @@ export function MathInterviewCard({
                   speech={speech}
                   prompt={adversarial.presentation.prompt}
                   verifiedAnswer={adversarial.presentation.conclusionTargets?.[0] ?? null}
+                  verifiedValues={
+                    adversarial.presentation.correctValues ??
+                    adversarial.presentation.conclusionTargets ??
+                    undefined
+                  }
                   mechanismSignals={adversarial.presentation.mechanismSignals}
                   canonicalDerivation={
                     adversarial.presentation.modelReasoning ??
@@ -629,6 +639,10 @@ function FollowupBlock({
       },
       {
         verifiedAnswer: pres.conclusionTargets?.[0] ?? null,
+        // The FULL correct value set grounds partial greens over a multi-part
+        // committed answer (e.g. a = 2, b = −1, c = 3) even when the answer is
+        // missed; falls back to the single graded target for other follow-ups.
+        verifiedValues: pres.correctValues ?? pres.conclusionTargets ?? undefined,
         answerWasWrong: followupWrong,
         mechanismSignals: pres.mechanismSignals,
         canonicalDerivation: pres.modelReasoning ?? pres.referenceNote,
@@ -738,6 +752,7 @@ function FollowupBlock({
               <SubmittedReasoning
                 text={followup.raw}
                 verifiedAnswer={p.conclusionTargets?.[0] ?? null}
+                verifiedValues={p.correctValues ?? p.conclusionTargets ?? undefined}
                 mechanismSignals={p.mechanismSignals}
                 prompt={p.prompt}
                 answerWasWrong={followupWrong}

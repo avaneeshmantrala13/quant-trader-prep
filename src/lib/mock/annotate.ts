@@ -30,6 +30,7 @@
 import {
   allValuesIn,
   checkCommittedFormula,
+  committedValuesMatchVerifiedSet,
   creditableMechanismSignals,
   evalArithmetic,
   findClosedFormMismatch,
@@ -134,6 +135,14 @@ export function snapSpanToWordBoundaries(
 export interface AnnotateOptions {
   /** The verifier's ground-truth answer, if numeric (drives the "reaches" span). */
   verifiedAnswer?: number | null;
+  /**
+   * The FULL set of the verifier's correct values, if the answer is multi-part
+   * (e.g. `[2, −1, 3]` for "a = 2, b = −1, c = 3"). Grounds PARTIAL greens over
+   * each genuinely-correct committed value even when the overall answer is
+   * missed. Defaults to `[verifiedAnswer]` when absent — a single-value answer is
+   * unchanged.
+   */
+  verifiedValues?: number[];
   /** Accepted mechanism phrasings (question signals + rubric classes). */
   mechanismSignals?: string[];
   /** The question prompt — enables PREMISE / decomposition flaw localization. */
@@ -370,6 +379,12 @@ function annotateExplanationClauses(
     // A false step already reddened this clause — that critique wins.
     if (spans.some((s) => s.label === "flawed" && !(c.end <= s.start || c.start >= s.end)))
       continue;
+    // A pure CORRECT VALUE COMMITMENT ("a = 2, b = −1, c = 3") is NOT a vacuous
+    // restatement even when its tokens (a/b/c and the coefficient digits) happen
+    // to echo the stem — never redden it here; its correct values are greened
+    // separately (partial credit). Only fires when the FULL correct value set is
+    // known, so other archetypes are unaffected.
+    if (isCorrectValueCommitClause(c.text, opts)) continue;
     // RED: circular or a bare restatement of the stem — it explains nothing.
     if (isCircularJustification(c.text) || isStemRestatement(c.text, prompt)) {
       evictOverlappingGood(c.start, c.end);
@@ -458,8 +473,19 @@ function addCommittedValueSpan(
   spans: ReasoningSpan[],
   opts: AnnotateOptions,
 ): void {
+  // PARTIAL CREDIT on a graded-wrong answer: when the candidate committed the
+  // WHOLE correct value set (all right, none wrong — e.g. "a = 2, b = −1, c = 3"
+  // on a missed "why" explanation), green EACH correct committed value even
+  // though the overall answer was missed. The load-bearing flaw (the circular /
+  // stem-restatement clause, or a false step) is reddened separately, and a
+  // coincidental token (the "2" in "(n+1)²") never qualifies because the
+  // committed set there does not match the verifier's set.
+  if (opts.answerWasWrong === true) {
+    addPartialCorrectValueSpans(text, spans, opts);
+    return;
+  }
   const verified = opts.verifiedAnswer ?? null;
-  if (verified === null || opts.answerWasWrong === true) return;
+  if (verified === null) return;
   const tol = 1e-3 + Math.abs(verified) * 1e-6;
   // The committed conclusion must actually be the LAST stated result value AND
   // equal the verified answer — otherwise there is no correct committed value.
@@ -486,6 +512,62 @@ function addCommittedValueSpan(
     label: "good",
     why: `You commit to the correct answer here (${fmt(verified)}) — this is where the work lands right.`,
   });
+}
+
+/** The verifier's correct value SET (explicit multi-value set, or the scalar). */
+function verifiedValueSet(opts: AnnotateOptions): number[] {
+  if (opts.verifiedValues && opts.verifiedValues.length > 0)
+    return opts.verifiedValues;
+  return opts.verifiedAnswer != null ? [opts.verifiedAnswer] : [];
+}
+
+/**
+ * Is a clause a pure CORRECT VALUE COMMITMENT — it states numeric value(s) that
+ * are ALL in the verifier's correct set (e.g. "a = 2, b = −1, c = 3"), with no
+ * causal "because/since" reason? Such a clause is a committed answer, NOT a
+ * vacuous stem restatement, so the explanation grader must not redden it even if
+ * its bare tokens echo the stem. Requires the FULL correct value set (≥2 values,
+ * so a single-answer archetype is unaffected). Pure and total.
+ */
+function isCorrectValueCommitClause(text: string, opts: AnnotateOptions): boolean {
+  const verified = verifiedValueSet(opts);
+  if (verified.length < 2) return false;
+  if (/\b(?:because|since|so that|due to|for the reason that)\b/i.test(text))
+    return false;
+  const vals = allValuesIn(text);
+  if (vals.length === 0) return false;
+  return vals.every((v) =>
+    verified.some((vv) => Math.abs(v - vv) <= 1e-3 + Math.abs(vv) * 1e-6),
+  );
+}
+
+/**
+ * PARTIAL-CREDIT greens for a graded-wrong answer: green each correct committed
+ * value the candidate stated, BUT only when they committed the WHOLE correct
+ * value set (see {@link committedValuesMatchVerifiedSet}) — so a coincidental
+ * token is never greened. Each value's tight token is greened where it doesn't
+ * overlap an existing (e.g. reddened circular-clause) span. Mutates `spans`.
+ */
+function addPartialCorrectValueSpans(
+  text: string,
+  spans: ReasoningSpan[],
+  opts: AnnotateOptions,
+): void {
+  const verified = verifiedValueSet(opts);
+  if (!committedValuesMatchVerifiedSet(text, verified)) return;
+  for (const v of verified) {
+    const tol = 1e-3 + Math.abs(v) * 1e-6;
+    const r = findValueRange(text, v, tol);
+    if (!r) continue;
+    if (spans.some((s) => !(r.end <= s.start || r.start >= s.end))) continue;
+    spans.push({
+      start: r.start,
+      end: r.end,
+      excerpt: text.slice(r.start, r.end),
+      label: "good",
+      why: `This value is correct (${fmt(v)}) — it matches the verified answer; the miss is in the reasoning, not this number.`,
+    });
+  }
 }
 
 /**

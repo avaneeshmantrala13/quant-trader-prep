@@ -1683,6 +1683,11 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
         // the live AI layer (see FollowupSeed.lockAuthored).
         lockAuthored: true,
         conclusionTargets: [2],
+        // The FULL correct coefficient set (a = 2, b = −1, c = 3) so the review
+        // can partial-green EVERY correct committed value — not just the single
+        // graded target `a` — when the explanation is missed. Grounding only;
+        // correctness is still decided by `conclusionTargets` + the mechanism gate.
+        correctValues: [2, -1, 3],
         conclusionKeywords: [[
           "three points",
           "3 points",

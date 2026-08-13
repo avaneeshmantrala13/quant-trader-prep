@@ -122,6 +122,33 @@ export function statedResultValues(text: string): number[] {
   return out;
 }
 
+/** Are two numeric values equal within the standard grader tolerance? */
+function valuesNear(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-3 + Math.abs(b) * 1e-6;
+}
+
+/**
+ * Did the candidate commit the WHOLE correct value SET — every verified value
+ * stated as a result, AND no wrong result value mixed in? This is the GATE that
+ * lets the review award PARTIAL GREENS on an answer the verifier marked wrong:
+ * when the committed values are all right (e.g. "a = 2, b = −1, c = 3") but the
+ * EXPLANATION missed, the correct committed values earn green while the flaw is
+ * reddened separately. It deliberately refuses a COINCIDENTAL token: the "2" in
+ * "(n+1)²" (committed set "1, 2, 1") never qualifies because that set does not
+ * match the verified {2, −1, 3}. Pure and total; `false` for an empty set.
+ */
+export function committedValuesMatchVerifiedSet(
+  text: string,
+  verified: number[],
+): boolean {
+  if (!verified || verified.length === 0) return false;
+  const results = statedResultValues(text);
+  if (results.length === 0) return false;
+  const allPresent = verified.every((v) => results.some((r) => valuesNear(r, v)));
+  const noWrong = results.every((r) => verified.some((v) => valuesNear(r, v)));
+  return allPresent && noWrong;
+}
+
 /**
  * Safely evaluate a PURELY-NUMERIC arithmetic expression — digits, decimal
  * points, thousands separators, parentheses and the operators `+ - * /` (the

@@ -21,6 +21,7 @@ import { env, postAi } from "@/lib/aiFlavor";
 import {
   allValuesIn,
   checkCommittedFormula,
+  committedValuesMatchVerifiedSet,
   creditableMechanismSignals,
   evalArithmetic,
   evalInN,
@@ -134,6 +135,13 @@ export interface ReviewContext {
   concept?: string;
   /** The verifier's answer, if numeric (grounds every "good" value span). */
   verifiedAnswer?: number | null;
+  /**
+   * The FULL set of the verifier's correct values (grounds partial greens over a
+   * multi-part committed answer like "a = 2, b = −1, c = 3", so every genuinely
+   * correct value earns green even when the overall answer is missed). Defaults
+   * to `[verifiedAnswer]` when absent — a single-value answer is unchanged.
+   */
+  verifiedValues?: number[];
   /** Whether the verifier marked the committed ANSWER wrong (authoritative). */
   answerWasWrong?: boolean;
   /** Accepted mechanism phrasings (question signals + rubric classes). */
@@ -207,8 +215,9 @@ function holdsEquation(excerpt: string): boolean {
 /** Is a candidate GREEN span genuinely grounded (not a coincidental token)? */
 function isGreenGrounded(
   excerpt: string,
-  verified: number | null,
+  verifiedValues: number[],
   answerWasWrong: boolean,
+  allowWrongValueGreen: boolean,
   signals: string[] | undefined,
 ): boolean {
   // A holding equation is a genuinely-correct load-bearing step.
@@ -222,11 +231,17 @@ function isGreenGrounded(
     })
   )
     return true;
-  // The committed conclusion value — ONLY when the verifier did NOT mark the
-  // answer wrong. This is what drops a coincidental "2" green on a wrong answer.
-  if (!answerWasWrong && verified !== null) {
-    const tol = 1e-3 + Math.abs(verified) * 1e-6;
-    if (allValuesIn(excerpt).some((v) => Math.abs(v - verified) <= tol))
+  const near = (a: number, b: number) => Math.abs(a - b) <= 1e-3 + Math.abs(b) * 1e-6;
+  const vals = allValuesIn(excerpt);
+  if (!answerWasWrong) {
+    // A committed value matching any verified value on a not-wrong answer.
+    if (verifiedValues.some((vv) => vals.some((v) => near(v, vv)))) return true;
+  } else if (allowWrongValueGreen) {
+    // PARTIAL CREDIT on a graded-wrong answer: the candidate committed the whole
+    // correct value set, so a span whose numeric tokens are ALL correct verified
+    // values (e.g. "a = 2, b = −1, c = 3") is genuinely grounded and stays green
+    // — while a coincidental token mixed with wrong values does NOT qualify.
+    if (vals.length > 0 && vals.every((v) => verifiedValues.some((vv) => near(v, vv))))
       return true;
   }
   return false;
@@ -306,6 +321,8 @@ export function reconcileReviewSpans(
   rawSpans: RawReviewSpan[],
   opts: {
     verifiedAnswer?: number | null;
+    /** The FULL set of correct values (defaults to `[verifiedAnswer]`). */
+    verifiedValues?: number[];
     answerWasWrong?: boolean;
     mechanismSignals?: string[];
     /** The question prompt — enables stem-echo / circular discounting of greens. */
@@ -314,6 +331,20 @@ export function reconcileReviewSpans(
 ): ReasoningSpan[] {
   const verified = opts.verifiedAnswer ?? null;
   const wrong = opts.answerWasWrong === true;
+  // The correct value SET grounds greens: an explicit multi-value set (e.g.
+  // [2, −1, 3]) when supplied, otherwise the single verified answer.
+  const verifiedValues =
+    opts.verifiedValues && opts.verifiedValues.length > 0
+      ? opts.verifiedValues
+      : verified !== null
+        ? [verified]
+        : [];
+  // On a graded-wrong answer, partial greens over committed values are allowed
+  // ONLY when the candidate committed the WHOLE correct value set (no coincidental
+  // token) — this is what keeps genuinely-correct values green without reviving
+  // the coincidental-green bug.
+  const allowWrongValueGreen =
+    wrong && committedValuesMatchVerifiedSet(text, verifiedValues);
   const n = text.length;
   const out: ReasoningSpan[] = [];
   for (const s of rawSpans) {
@@ -360,27 +391,44 @@ export function reconcileReviewSpans(
         // The LLM greened a demonstrably false step → the verifier FLIPS it red.
         label = "flawed";
         why = `Incorrect step — you wrote \u201c${fa.claim.trim()}\u201d, but that works out to ${fmtNum(fa.correct)}, not ${fmtNum(fa.stated)}. Recompute this before building on it.`;
-      } else if (
-        isCircularJustification(excerpt) ||
-        isStemRestatement(excerpt, opts.prompt)
-      ) {
-        // A circular ("because that is enough") or parroted-stem restatement
-        // ("three terms … because it is quadratic") explains NOTHING — never let
-        // the model green it, even on a correct answer.
-        continue;
-      } else if (
-        !isGreenGrounded(excerpt, verified, wrong, opts.mechanismSignals) &&
-        // Allow a FULL-CLAUSE explanation green on a CONFIRMED-correct answer even
-        // when it holds no equation/number, provided it introduces genuine
-        // mechanism content (not a bare keyword/echo) — so the load-bearing
-        // reasoning clause is kept whole instead of shrunk away.
-        !(
-          opts.answerWasWrong === false &&
-          hasNewMechanismContent(excerpt, opts.prompt, opts.mechanismSignals)
-        )
-      ) {
-        // Ungrounded / coincidental green (e.g. the "2" in "(n+1)²") → DROP it.
-        continue;
+      } else {
+        // GROUND the green FIRST: a holding computation, a valid named mechanism,
+        // or committed value(s) matching the verifier's correct set (incl. the
+        // PARTIAL-credit set on a missed answer). A grounded value commit — e.g.
+        // "a = 2, b = −1, c = 3" — is genuinely correct and is kept even if its
+        // tokens superficially ECHO the stem; only an UNGROUNDED green is subject
+        // to the circular / stem-restatement drop.
+        const grounded = isGreenGrounded(
+          excerpt,
+          verifiedValues,
+          wrong,
+          allowWrongValueGreen,
+          opts.mechanismSignals,
+        );
+        if (!grounded) {
+          if (
+            isCircularJustification(excerpt) ||
+            isStemRestatement(excerpt, opts.prompt)
+          ) {
+            // A circular ("because that is enough") or parroted-stem restatement
+            // ("three terms … because it is quadratic") explains NOTHING — never
+            // let the model green it, even on a correct answer.
+            continue;
+          }
+          // Allow a FULL-CLAUSE explanation green on a CONFIRMED-correct answer
+          // even when it holds no equation/number, provided it introduces genuine
+          // mechanism content (not a bare keyword/echo) — so the load-bearing
+          // reasoning clause is kept whole instead of shrunk away.
+          if (
+            !(
+              opts.answerWasWrong === false &&
+              hasNewMechanismContent(excerpt, opts.prompt, opts.mechanismSignals)
+            )
+          ) {
+            // Ungrounded / coincidental green (e.g. the "2" in "(n+1)²") → DROP it.
+            continue;
+          }
+        }
       }
     }
     if (why === "") {
@@ -544,9 +592,19 @@ export async function reviewReasoning(
   const verifiedAnswer =
     ctx.verifiedAnswer ?? parseNumericValue(input.correctAnswer);
   const mechanismSignals = ctx.mechanismSignals ?? input.mechanismSignals;
+  // The FULL correct value set — an explicit multi-value set (e.g. the demo's
+  // [2, −1, 3]) grounds partial greens over a multi-part committed answer;
+  // otherwise the single verified answer.
+  const verifiedValues =
+    ctx.verifiedValues && ctx.verifiedValues.length > 0
+      ? ctx.verifiedValues
+      : verifiedAnswer !== null && verifiedAnswer !== undefined
+        ? [verifiedAnswer]
+        : [];
   const floor = (): ReasoningReview => ({
     spans: annotateReasoning(input.reasoning ?? "", {
       verifiedAnswer,
+      verifiedValues,
       mechanismSignals,
       prompt: input.prompt,
       answerWasWrong: ctx.answerWasWrong,
@@ -567,6 +625,10 @@ export async function reviewReasoning(
       prompt: input.prompt,
       correctAnswer: input.correctAnswer,
       verifiedAnswer,
+      // The FULL correct value set so the reviewer can partial-green EVERY
+      // genuinely-correct committed value (a, b AND c), not just the single
+      // graded target — grounded, never revealing the final answer.
+      verifiedValues,
       canonicalDerivation: ctx.canonicalDerivation ?? null,
       closedForm: ctx.closedForm ?? null,
       keyShortcut: ctx.keyShortcut ?? null,
@@ -586,6 +648,7 @@ export async function reviewReasoning(
   const { spans: rawSpans, assessment } = normalizeReviewPayload(payload);
   const grounded = reconcileReviewSpans(input.reasoning ?? "", rawSpans, {
     verifiedAnswer,
+    verifiedValues,
     answerWasWrong: ctx.answerWasWrong,
     prompt: input.prompt,
     // Ground GREEN mechanism spans only on signals that don't merely ECHO the

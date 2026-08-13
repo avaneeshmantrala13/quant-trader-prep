@@ -31,6 +31,7 @@ export function ClarifyBlock({
   speech,
   prompt,
   verifiedAnswer,
+  verifiedValues,
   correctAnswer,
   mechanismSignals,
   canonicalDerivation,
@@ -45,6 +46,8 @@ export function ClarifyBlock({
   prompt?: string;
   /** The verifier's answer, if numeric (grounds every "good" value span). */
   verifiedAnswer?: number | null;
+  /** The FULL correct value set (grounds partial greens on a missed commit). */
+  verifiedValues?: number[];
   /** The verifier's answer as a string, when not a bare number. */
   correctAnswer?: string;
   /** Accepted mechanism phrasings (question signals + rubric classes). */
@@ -86,6 +89,7 @@ export function ClarifyBlock({
       },
       {
         verifiedAnswer: verifiedAnswer ?? null,
+        verifiedValues,
         answerWasWrong: committedWrong,
         mechanismSignals,
         canonicalDerivation,
@@ -146,6 +150,7 @@ export function ClarifyBlock({
               <SubmittedReasoning
                 text={clarify.raw}
                 verifiedAnswer={verifiedAnswer ?? null}
+                verifiedValues={verifiedValues}
                 mechanismSignals={mechanismSignals}
                 prompt={prompt}
                 answerWasWrong={committedWrong}
