@@ -296,6 +296,16 @@ export interface FollowupPresentation {
   /** AI's `idealAnswerNote`, stored for client-side deterministic grading. */
   referenceNote?: string;
   /**
+   * When true, the adaptive AI layer must NOT regenerate/replace this follow-up:
+   * `generateFollowup` returns this authored presentation verbatim even when the
+   * live AI is active. Used to PIN a carefully-authored reasoning adversarial
+   * (with its conclusion targets / mechanism signals / model answer) so the AI
+   * can never downgrade it to a numeric ask — e.g. the Optiver quadratic demo's
+   * "find a, b, c and why three terms pin them" adversarial that leads the demo
+   * mock. Absent ⇒ the follow-up is adaptive as before.
+   */
+  lockAuthored?: boolean;
+  /**
    * The CANONICAL answer / committed stance to reveal when the candidate's
    * answer to this follow-up is not fully correct (missed / caved). For a
    * reasoning follow-up this is the human-readable position (e.g. `"Larger"` or
@@ -386,6 +396,13 @@ export interface FollowupSeed {
   mechanismSignals?: string[];
   /** Reasoning seeds: extra pure hand-waves that can never alone justify it. */
   bannedAsSoleJustification?: string[];
+  /**
+   * PIN this authored follow-up so the adaptive AI layer never regenerates or
+   * replaces it (see `FollowupPresentation.lockAuthored`). Set on the Optiver
+   * quadratic-demo adversarial so the demo mock's first question always leads
+   * with the authored REASONING adversarial, even on the live (AI-active) site.
+   */
+  lockAuthored?: boolean;
   /**
    * The CANONICAL answer / position to SHOW the candidate when their reasoning
    * on this follow-up is anything less than fully correct (they miss it or cave

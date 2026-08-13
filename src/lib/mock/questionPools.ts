@@ -1678,6 +1678,10 @@ function genOptiverQuadraticDemo(): MockNumericQuestion {
         prompt:
           "Now take a DIFFERENT sequence: 4, 9, 18, 31, 48, … It is also quadratic, aₙ = a·n² + b·n + c (with n = 1 for the first term). What are a, b, and c — and why do just three of the shown terms pin all three down?",
         answerKind: "reasoning",
+        // PIN this against AI regeneration: this demo leads the first mock, and
+        // its reasoning adversarial must never be downgraded to a numeric ask by
+        // the live AI layer (see FollowupSeed.lockAuthored).
+        lockAuthored: true,
         conclusionTargets: [2],
         conclusionKeywords: [[
           "three points",

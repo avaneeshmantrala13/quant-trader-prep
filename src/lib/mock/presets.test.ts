@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { buildInterview } from "./engine";
 import { computePerformance } from "./diagnosis";
+import { generateFollowup } from "./aiMock";
 import { MOCK_PRESETS, PRESET_ORDER } from "./presets";
+import { presetForMockIndex } from "@/lib/pipeline/mockLoop";
 import type { MockSession } from "./engine";
 import type { MathStep, MockStep, PresetId } from "./types";
 
@@ -177,9 +179,41 @@ describe("Optiver preset — pinned first question (demo)", () => {
       expect(st.concept).toBe("Polynomial sequence (constant second difference)");
       // Its cascade: probe → 131 (numeric), adversarial → an²+bn+c (reasoning).
       expect(st.authoredProbe?.answer).toBe(131);
+      expect(st.authoredProbe?.answerKind).toBe("numeric");
       expect(st.authoredAdversarial?.answerKind).toBe("reasoning");
       expect(st.authoredAdversarial?.prompt).toMatch(/a·n² \+ b·n \+ c|a, b, and c/);
+      // PINNED against AI regeneration so the demo's first-question adversarial
+      // stays a reasoning follow-up even on the live (AI-active) site.
+      expect(st.authoredAdversarial?.lockAuthored).toBe(true);
     }
+  });
+
+  it("is the FIRST mock the pipeline serves (mock index 0 → Optiver)", () => {
+    // The developer/demo account starts a fresh streak, so the first mock the
+    // demo runs cycles to Optiver — whose pinned first question is this demo.
+    expect(presetForMockIndex(0)).toBe("optiver");
+  });
+
+  it("keeps the first-question adversarial REASONING through the AI layer (lockAuthored)", async () => {
+    const script = buildInterview({ seed: 99, preset: "optiver" });
+    const st = script.steps[0] as MathStep;
+    const authored = st.authoredAdversarial!;
+    expect(authored.answerKind).toBe("reasoning");
+    // `generateFollowup` is the adaptive path the mock card uses for the
+    // adversarial. A locked authored follow-up must come back verbatim (never a
+    // numeric AI ask), regardless of whether the live AI is active.
+    const fp = await generateFollowup({
+      prompt: st.prompt,
+      correctAnswer: String(st.answer),
+      reasoning: "second difference is constant, a = half of it",
+      concept: st.concept,
+      difficulty: "harder",
+      authored,
+    });
+    expect(fp).toBe(authored);
+    expect(fp.answerKind).toBe("reasoning");
+    expect(fp.source).toBe("authored");
+    expect(fp.conclusionTargets).toEqual([2]);
   });
 });
 

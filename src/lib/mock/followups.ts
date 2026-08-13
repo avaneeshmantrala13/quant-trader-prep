@@ -73,6 +73,9 @@ function presentationFromSeed(
     // correct (the candidate misses it or caves under pressure).
     ...(seed.modelAnswer ? { modelAnswer: seed.modelAnswer } : {}),
     ...(seed.modelReasoning ? { modelReasoning: seed.modelReasoning } : {}),
+    // Pin the authored follow-up against AI regeneration when the seed asks for
+    // it (keeps a hand-authored reasoning adversarial reasoning-graded on live).
+    ...(seed.lockAuthored ? { lockAuthored: true } : {}),
     targetMs,
   };
   if (seed.answerKind === "reasoning") {
