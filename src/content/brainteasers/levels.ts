@@ -18,6 +18,13 @@ import {
   trailingZerosFamily,
   twoBallsFamily,
 } from "./techniqueGenerators";
+import {
+  genLastAmongK,
+  genQueryTheMax,
+  genSecretaryStop,
+  genWeighFakeUnknown,
+  genWeighKnownHeavier,
+} from "./infoTrapGenerators";
 
 /**
  * Brainteasers, hand-authored from famous, well-established puzzles (fresh
@@ -565,6 +572,89 @@ const gamesInductionLateral: Flashcard[] = [
   },
 ];
 
+/**
+ * Level "Information & Adversarial Traps", information-theoretic lower bounds,
+ * optimal stopping, ternary weighings, and the symmetry/exchangeability trap.
+ * These are TRAP puzzles: each hand-authored card names the tempting wrong
+ * answer and WHY it fails, mirroring the parametric families in
+ * `./infoTrapGenerators.ts`.
+ */
+const infoAdversarial: Flashcard[] = [
+  {
+    id: "bt-info-query-max",
+    prompt:
+      "A dealer lays out 10 face-down cards of DISTINCT rank. You flip them one at a time; each flip tells you only the new card's rank RELATIVE to the cards already flipped (e.g. '3rd-highest so far'). What is the minimum number of flips that GUARANTEES you can point to the single highest card?",
+    answer:
+      "10 — you must flip every card. Any card you never look at could be the maximum, so skipping even one breaks the guarantee.",
+    explanation:
+      "This is an INFORMATION lower bound. A flip constrains a card's rank only among the cards ALREADY seen, so an un-flipped card is completely unconstrained — an adversary is free to make it the global maximum. If you stop after 9 flips, the one card you skipped is the true max exactly 1/10 of the time, so 9 flips cannot GUARANTEE the answer. Conversely 10 flips always work: reveal all and track the running best. Hence the minimum is n = 10.\n\nTraps to resist: '9' ('the last card adds no new comparison' — false, it can be the max); '⌈log₂ 10⌉ = 4' (a binary-search reflex — but you can't compare cards you're forbidden to look at); '⌈log₃ 10⌉ = 3' (confusing this with a three-outcome weighing). All under-count because unqueried cards carry ZERO information.",
+    difficulty: "medium",
+    concept: "Information-theoretic guarantee (adversary argument)",
+    source: "Brainteasers · Information & Adversarial Traps",
+    gradable: true,
+    numericAnswer: 10,
+    tolerance: 0,
+  },
+  {
+    id: "bt-info-weigh-heavier",
+    prompt:
+      "You have 9 identical-looking coins; exactly one is counterfeit and KNOWN to be heavier. Using only a two-pan balance scale (no weights), what is the guaranteed minimum number of weighings to find the heavy coin?",
+    answer:
+      "2 weighings. A balance has THREE outcomes, so each weighing thirds the suspects: the minimum is ⌈log₃ 9⌉ = 2.",
+    explanation:
+      "Count the OUTCOMES, not the coins. A balance can tip left, tip right, or balance — three outcomes — so k weighings distinguish at most 3^k cases. To separate 9 coins you need 3^k ≥ 9, i.e. k = ⌈log₃ 9⌉ = 2. Each weighing: split the coins into three equal piles of 3, weigh two of them; the heavy coin is in the heavier pan, or in the set-aside pile if they balance.\n\nTrap to resist: '⌈log₂ 9⌉ = 4'. That treats the scale as a yes/no device and IGNORES the informative 'balanced' outcome, over-counting. The scale's third outcome is exactly why log base 3 — not base 2 — is right.",
+    difficulty: "medium",
+    concept: "Information counting (balance scale = log base 3)",
+    source: "Brainteasers · Information & Adversarial Traps",
+    gradable: true,
+    numericAnswer: 2,
+    tolerance: 0,
+  },
+  {
+    id: "bt-info-secretary",
+    prompt:
+      "You interview 100 candidates one at a time in random order; each hire/reject decision is irrevocable and you only ever learn how a candidate RANKS against those already seen. The optimal rule is to reject the first r, then hire the next candidate better than all before them. What reject-count r maximizes your chance of hiring the single BEST candidate, and roughly what is that chance?",
+    answer:
+      "Reject the first ≈ 100/e ≈ 37 candidates, then take the next record-beater. The win probability is ≈ 1/e ≈ 37%.",
+    explanation:
+      "The threshold rule wins with probability P(r) = (r/n)·Σ_{i=r+1}^{n} 1/(i−1). Maximizing exactly over r for n = 100 gives r* = 37, with win probability ≈ 0.371. As n → ∞ the optimum settles at r* ≈ n/e and the success probability at 1/e ≈ 0.368 — the famous '37% rule'.\n\nTrap to resist: rejecting the first HALF (50). Observing half throws away too many strong early candidates; the calibration sample should be only ~37% of the field, not 50%.",
+    difficulty: "hard",
+    concept: "Optimal stopping (secretary ≈ n/e threshold)",
+    source: "Brainteasers · Information & Adversarial Traps",
+    gradable: true,
+    numericAnswer: 37,
+    tolerance: 0,
+  },
+  {
+    id: "bt-info-last-among-k",
+    prompt:
+      "A shuffled deck contains 4 special cards, one of which is the Joker, dealt out in uniformly-random order. A game pays $100 if the Joker is the LAST of those 4 special cards to appear. What is the probability the Joker is last, and what is the payout's expected value?",
+    answer:
+      "Probability = 1/4 by symmetry; expected value = $100 · 1/4 = $25. Every one of the 4 special cards is equally likely to be last.",
+    explanation:
+      "Use SYMMETRY, not a permutation product. Look only at the relative order of the 4 special cards among themselves; all 4! orderings are equally likely, and by symmetry each specific card is equally likely to sit in each of the 4 positions. So the Joker is last with probability exactly 1/4. The EV of the $100 payout is $100 · (1/4) = $25.\n\nTraps to resist: '1/4! = 1/24' (computing one SPECIFIC full ordering rather than just the last slot); '1/2^3 = 1/8' (chaining 3 independent 'loses a coin-flip' comparisons); and '1/2' (the naive 'it's last or it isn't'). All ignore that the 4 cards are exchangeable, which collapses the answer to a clean 1/k.",
+    difficulty: "medium",
+    concept: "Symmetry / exchangeability (P(specific is last) = 1/k)",
+    source: "Brainteasers · Information & Adversarial Traps",
+    gradable: false,
+  },
+  {
+    id: "bt-info-weigh-fake",
+    prompt:
+      "You have 12 identical-looking coins; exactly one is fake, but you do NOT know whether it is heavier or lighter than a genuine coin. Using only a balance scale, what is the minimum number of weighings that GUARANTEES you find the fake AND determine whether it is heavy or light?",
+    answer:
+      "3 weighings. With direction unknown, k weighings resolve at most (3^k − 3)/2 coins; the smallest k with (3^k − 3)/2 ≥ 12 is 3 (capacity 12).",
+    explanation:
+      "A balance still has three outcomes, but now each coin has TWO possible defect states (heavy or light), giving 2·12 = 24 'coin + direction' cases to tell apart, and you never get a fully free reference coin. The exact worst-case bound is that k weighings resolve at most (3^k − 3)/2 coins, so you need the smallest k with (3^k − 3)/2 ≥ 12: here k = 3 since (3^3 − 3)/2 = 12. This is why the celebrated TWELVE-coin puzzle takes exactly 3 weighings.\n\nTrap to resist: '⌈log₃ 12⌉ = 3' looks the same here by coincidence, but for other n the known-heavier count under-counts — discovering the DIRECTION costs extra information, so each weighing separates fewer than three fresh cases.",
+    difficulty: "hard",
+    concept: "Information counting (unknown-direction coin weighing)",
+    source: "Brainteasers · Information & Adversarial Traps",
+    gradable: true,
+    numericAnswer: 3,
+    tolerance: 0,
+  },
+];
+
 const levels: Level[] = [
   {
     id: "bt-1",
@@ -808,6 +898,53 @@ const levels: Level[] = [
           "Playing forward by intuition instead of labeling positions from the end.",
           "In percentage 'traps', tracking the changing quantity rather than the fixed one.",
           "Assuming voters accept any offer rather than comparing it to their fallback if the proposer is removed.",
+        ],
+      },
+    },
+  },
+  {
+    id: "bt-7",
+    section: "Techniques Toolkit",
+    title: "Information & Adversarial Traps",
+    subtitle:
+      "Information lower bounds, optimal stopping, ternary weighings, and symmetry",
+    blurb:
+      "Trap puzzles where intuition misfires: query-the-max needs all n, the secretary cutoff is ≈ n/e, balance weighings use log base 3, and 'last among k' is 1/k.",
+    difficulty: "hard",
+    mode: "flashcard",
+    masteryThreshold: 0.7,
+    flashcards: infoAdversarial,
+    // Five parametric information/adversarial-trap families generate infinitely
+    // (bonus only); the hand-authored trap one-offs above are the fixed deck.
+    flashcardGenerators: [
+      genQueryTheMax,
+      genSecretaryStop,
+      genWeighKnownHeavier,
+      genWeighFakeUnknown,
+      genLastAmongK,
+    ],
+    lesson: {
+      paragraphs: [
+        "The nastiest teasers are TRAPS: the fast, intuitive answer is wrong, and the interviewer is watching whether you catch it. Four recurring traps: (1) an INFORMATION lower bound, if a card/object is never observed, no strategy can pin it down, so 'query the max' needs ALL n reveals, not a clever log-many; (2) OPTIMAL STOPPING, the secretary threshold is ≈ n/e (reject ~37%), not the tempting n/2.",
+        "The other two: (3) a balance scale has THREE outcomes, so a known-heavier coin among n needs ⌈log₃ n⌉ weighings (log base 3, not 2), and finding a fake of unknown direction obeys (3^k − 3)/2 ≥ n; and (4) SYMMETRY/exchangeability, a specific one of k shuffled cards is last with probability exactly 1/k, no permutation product required. Name the trap, then derive the real answer.",
+      ],
+      keyIdea:
+        "Spot the trap: unobserved ⇒ zero information; count scale outcomes as base 3; use symmetry, not permutations.",
+      whyInterviewers:
+        "These separate candidates who pattern-match a slick-but-wrong formula from those who reason about information and symmetry.",
+      deepDive: {
+        whyItWorks:
+          "Each puzzle has a tempting shortcut that quietly discards information or over-counts it. Query-the-max fails any log-many strategy because an unobserved card is unconstrained; the secretary problem rewards a ~37% sample, not 50%; a balance scale's third ('balanced') outcome makes log base 3 the right measure; and exchangeability makes 'last among k' a clean 1/k. Naming the trap first keeps you from anchoring on the wrong formula.",
+        approach: [
+          "Ask what each action actually OBSERVES — an unobserved object carries zero information.",
+          "For stopping problems, compare taking now against the continuation value; the secretary optimum is ≈ n/e.",
+          "Count a balance's THREE outcomes; the minimum weighings is ⌈log₃ n⌉ (known direction) or the smallest k with (3^k − 3)/2 ≥ n (unknown direction).",
+          "For 'which one is last / first', use symmetry: a specific one of k is equally likely in each slot ⇒ 1/k.",
+        ],
+        pitfalls: [
+          "Applying a binary-search / log₂ reflex to a problem with no comparisons or a three-outcome scale.",
+          "Rejecting the first HALF in the secretary problem instead of ~n/e.",
+          "Computing a full permutation product (1/k!) instead of using exchangeability (1/k).",
         ],
       },
     },

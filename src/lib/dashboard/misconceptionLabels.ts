@@ -44,6 +44,15 @@ export const MISCONCEPTION_LABELS: Record<string, string> = {
   n_vs_n_minus_one: "Dividing by n instead of n − 1",
   forgot_divide_by_two: "Forgetting to divide by 2 (ordered vs. unordered)",
 
+  // ── Information & adversarial-trap brainteasers (query-the-max / weighings /
+  //    symmetry). Extra keys are safe (coverage test only enforces the enum).
+  skip_last_card_zero_info:
+    "An unobserved item can still be the maximum",
+  binary_search_reflex_no_comparisons:
+    "Using binary search where no comparisons are allowed",
+  ternary_weighing_confusion:
+    "Confusing an information bound with a 3-outcome weighing",
+
   // ── Phase-2 conversion tags (per-family error modes authored by the section
   //    sub-workers). Additive: these give the dashboard specific labels; the
   //    coverage test only enforces the MISCONCEPTION enum, so extra keys are safe.

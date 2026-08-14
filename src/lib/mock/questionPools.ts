@@ -44,6 +44,10 @@ import {
   hiddenCompositionNextBlack,
   kellyFraction,
 } from "./archetypes/verifiers";
+import {
+  queryTheMaxMinQueries,
+  queryTheMaxTraps,
+} from "@/content/brainteasers/infoTrapSolvers";
 
 /** A scored numeric question with its two concept-specific follow-ups. */
 export interface MockNumericQuestion extends NumericQuestion {
@@ -1061,6 +1065,93 @@ function genCitadelStones(): MockNumericQuestion {
         conclusionKeywords: [["pass", "decline", "reject", "don't take", "do not take", "won't take", "no"]],
         modelAnswer: `PASS — the bet's EV is −$0.50 per $1.`,
         modelReasoning: `You think it's white with probability only 0.25, so betting on white pays EV = 0.25·(+1) + 0.75·(−1) = −0.5 per dollar. A negative-EV bet against your own posterior should be declined.`,
+      },
+    },
+  };
+}
+
+/**
+ * "Query-the-max / must reveal all" — an INFORMATION-theoretic adversarial trap
+ * (the new brainteaser family), promoted to a harder mock archetype with real
+ * follow-ups. The base answer is n (you must query EVERY card, since an
+ * unobserved card is unconstrained and an adversary can make it the maximum).
+ * The PROBE generalizes to 2n cards (still 2n queries); the ADVERSARIAL springs
+ * the log-many trap (⌈log₂ n⌉ / binary-search reflex) and demands the candidate
+ * hold the exact `n` and justify it with the adversary / information argument.
+ * Every number is produced by the exact verifier (`queryTheMax*`), never eyeballed.
+ */
+function genQueryTheMaxReveal(rng: Rng): MockNumericQuestion {
+  const n = rng.pick([7, 8, 9, 11, 13]);
+  const answer = queryTheMaxMinQueries(n); // = n (exact)
+  const doubled = queryTheMaxMinQueries(2 * n); // = 2n (probe target)
+  const { skipLast, binarySearch, ternarySearch } = queryTheMaxTraps(n);
+  return {
+    id: `bt-querymax-reveal-${n}`,
+    prompt: `A dealer lays out ${n} face-down cards of DISTINCT rank. You flip them one at a time; each flip reveals only the new card's rank RELATIVE to the cards already flipped (e.g. "3rd-highest so far"), and tells you NOTHING about the cards you haven't flipped. What is the minimum number of flips that GUARANTEES you can identify the single highest card?`,
+    answer,
+    decimals: 0,
+    difficulty: "hard",
+    concept: "Information-theoretic lower bound (adversary argument)",
+    explanation: `This is an information lower bound, not a search. A flip constrains a card's rank only among the cards ALREADY seen, so any card you never flip is completely unconstrained — an adversary can set it to be the global maximum. If you stop after ${skipLast} flips, the one card you skipped is the true max exactly 1/${n} of the time, so ${skipLast} flips cannot GUARANTEE the answer. Flipping all ${n} (tracking the running best) always works, so the minimum is n = ${answer}. Binary-search-style answers (⌈log₂ ${n}⌉ = ${binarySearch}) fail because you are forbidden from directly comparing cards you haven't flipped.`,
+    unit: "",
+    commonErrors: [
+      { value: skipLast, feedback: `${skipLast} = n − 1 skips the last card, but that card can be the maximum (it is, 1/${n} of the time). You must flip all ${n}.`, misconception: "skip_last_card_zero_info" },
+      { value: binarySearch, feedback: `⌈log₂ ${n}⌉ = ${binarySearch} is a binary-search reflex, but you cannot compare cards you are forbidden to flip — unobserved cards carry ZERO information.`, misconception: "binary_search_reflex_no_comparisons" },
+      { value: ternarySearch, feedback: `⌈log₃ ${n}⌉ = ${ternarySearch} confuses this with a three-outcome weighing; there is no ternary information here.`, misconception: "ternary_weighing_confusion" },
+    ],
+    // The traps are the values a shallow solver "already computed"; listing them
+    // (plus the answer) keeps a numeric follow-up from re-asking any of them.
+    baseIntermediates: [answer, skipLast, binarySearch, ternarySearch],
+    family: "brainteaser",
+    requiredReasoning: {
+      mechanismSignals: [
+        "unqueried", "un-queried", "unobserved", "not flipped", "never flip",
+        "never flipped", "haven't flipped", "have not flipped", "zero information",
+        "no information", "carries no information", "adversary", "worst case",
+        "worst-case", "could be the max", "guarantee", "all n", "every card",
+        "all of them", "must flip all", "cannot skip", "can't skip",
+      ],
+    },
+    source: "mock brainteaser (information & adversarial traps)",
+    followups: {
+      probe: {
+        // GENERALIZE-N: same argument at 2n cards ⇒ 2n flips. A new value (2n),
+        // never a base sub-step.
+        type: "generalize-n",
+        difficulty: "hard",
+        prompt: `Now the dealer uses ${2 * n} such cards instead of ${n}, same rules. What is the minimum number of flips that GUARANTEES you find the highest card?`,
+        answerKind: "numeric",
+        answer: doubled,
+        decimals: 0,
+        modelAnswer: `${doubled} — you must flip all ${2 * n}.`,
+        modelReasoning: `The argument doesn't change with size: any un-flipped card is unconstrained and could be the maximum, so you must flip every one of the ${2 * n} cards. The minimum is n = ${doubled}.`,
+        commonErrors: [
+          { value: 2 * n - 1, feedback: `Skipping the last card still fails — it can be the max. You need all ${2 * n}.`, misconception: "skip_last_card_zero_info" },
+        ],
+      },
+      adversarial: {
+        // ADVERSARIAL-TRAP: challenge the correct n with the slick log-many
+        // "answer"; credit only if they HOLD n and justify with the info/adversary
+        // argument. Reasoning-graded.
+        type: "adversarial-trap",
+        difficulty: "expert",
+        prompt: `A candidate insists you can do it in just ⌈log₂ ${n}⌉ = ${binarySearch} flips by "binary searching" like a tournament. Are they right? State the true minimum for ${n} cards and defend WHY a logarithmic strategy cannot GUARANTEE finding the maximum.`,
+        answerKind: "reasoning",
+        conclusionTargets: [answer],
+        wrongValues: [binarySearch, ternarySearch, skipLast],
+        conclusionKeywords: [[
+          "unobserved", "unqueried", "un-queried", "not flipped", "never flip",
+          "zero information", "no information", "adversary", "could be the max",
+          "must flip all", "every card", "all n", "cannot skip", "can't skip",
+        ]],
+        expectedPolarity: "deny",
+        mechanismSignals: [
+          "unobserved", "unqueried", "un-queried", "not flipped", "never flip",
+          "zero information", "no information", "adversary", "worst case",
+          "worst-case", "could be the max", "every card", "all n", "cannot skip",
+        ],
+        modelAnswer: `No — the minimum is ${answer} (you must flip every card).`,
+        modelReasoning: `Binary search needs to compare elements, but here you only learn a flipped card's rank among cards ALREADY flipped — you can't compare a card you never flip. Any un-flipped card is unconstrained, so an adversary makes it the maximum and a log-many strategy misses it. Only flipping all ${n} cards guarantees you find the max.`,
       },
     },
   };
@@ -2144,7 +2235,8 @@ export type ArchetypeId =
   | "sig-confidence-bet" // SIG confidence → bet-size
   | "monty-hold-firm" // IMC challenge-a-correct-answer
   | "citadel-bet" // Citadel bet-on-your-own-probability
-  | "optiver-quadratic-demo"; // Optiver demo pin: fixed 5,11,23,41,65 quadratic
+  | "optiver-quadratic-demo" // Optiver demo pin: fixed 5,11,23,41,65 quadratic
+  | "query-the-max"; // Info & adversarial trap: must-reveal-all lower bound
 
 const ARCHETYPE_GENS: Record<ArchetypeId, Gen> = {
   "lattice-paths": (rng) => genLatticePaths(rng),
@@ -2153,6 +2245,7 @@ const ARCHETYPE_GENS: Record<ArchetypeId, Gen> = {
   "monty-hold-firm": () => genMontyHall(),
   "citadel-bet": () => genCitadelStones(),
   "optiver-quadratic-demo": () => genOptiverQuadraticDemo(),
+  "query-the-max": (rng) => genQueryTheMaxReveal(rng),
 };
 
 /** The topic-family each pinned archetype belongs to (for assembler diversity). */
@@ -2163,6 +2256,7 @@ const ARCHETYPE_FAMILY: Record<ArchetypeId, TopicFamily> = {
   "monty-hold-firm": "monty",
   "citadel-bet": "bayes",
   "optiver-quadratic-demo": "sequences",
+  "query-the-max": "brainteaser",
 };
 
 /** The topic-family of a pinned archetype id. */

@@ -9,6 +9,7 @@ import { COMPETENCY_BRAINTEASER } from "@/lib/roadmap/skillGraph";
 import type { MentalMathSubtopic } from "@/content/mentalMath/subtopics";
 import { ALL_BRAINTEASER_FAMILIES } from "@/content/brainteasers/generators";
 import { ALL_TECHNIQUE_FAMILIES } from "@/content/brainteasers/techniqueGenerators";
+import { ALL_INFOTRAP_FAMILIES } from "@/content/brainteasers/infoTrapGenerators";
 import { topicForHardFamily } from "@/lib/oa/hardContent/attribution";
 import { MISCONCEPTION } from "@/lib/tutor/misconception";
 import { combinedRatesFloorGenerator } from "./floorGenerators";
@@ -1063,10 +1064,11 @@ export function adapterCeilingCountsByTopic(): Record<string, number> {
 /*  BRAINTEASER FLASHCARDS (hybrid grading — decision §10.3)                    */
 /* ========================================================================== */
 
-/** Every exact-verified brainteaser family (house originals + technique toolkit). */
+/** Every exact-verified brainteaser family (house originals + technique toolkit + info/adversarial traps). */
 const BRAINTEASER_FAMILIES: [string, FlashcardGenerator][] = [
   ...ALL_BRAINTEASER_FAMILIES,
   ...ALL_TECHNIQUE_FAMILIES,
+  ...ALL_INFOTRAP_FAMILIES,
 ];
 
 /**
