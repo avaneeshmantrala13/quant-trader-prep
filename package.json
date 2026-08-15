@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Quant Trader Prep — a beginner→expert quant-trading interview prep course with Candy-Crush-style level maps.",
+  "description": "The Quant Factory — a guided, adaptive quant-trading interview prep platform with diagnostics, a verifier-backed question bank, trading-intuition games, and an LLM mock interviewer.",
   "scripts": {
     "dev": "vite",
     "ai:dev": "node scripts/ai-dev-server.mjs",
